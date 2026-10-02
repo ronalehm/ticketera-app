@@ -28,6 +28,8 @@ Read `docs/SETUP.md` before writing code. It is the source of truth for:
 2. Best practices — SOLID/DRY/KISS/YAGNI; before creating any component, hook or function, check it doesn't already exist in the project or in shadcn/ui.
 3. Methodology — build mode vs SDD, spec template, reviewer checklist, which code needs unit tests.
 
+Visual source of truth: `design-system/ticketera/MASTER.md` (Mentec theme tokens, typography, components) — read it before creating any UI.
+
 ## Workflow: SDD agents (`.claude/agents/`)
 
 | Agent | Role |
