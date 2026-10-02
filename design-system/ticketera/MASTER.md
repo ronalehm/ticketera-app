@@ -2,7 +2,7 @@
 
 > Fuente de verdad visual del proyecto. Al construir una página nueva: leer este archivo y, si existe, `design-system/ticketera/pages/<page>.md` (sus reglas sobrescriben a este MASTER).
 
-- Marca: colores y tipografía del manual de marca Mentec (`brand/Manual_Mentec.pdf`, 2026).
+- Marca: colores y tipografía del manual de marca Mentec (`Brand/Manual_Mentec.pdf`, 2026).
 - Referencias visuales: Ticketmaster (rails por categoría, buscador prominente) y Joinnus (hero slider, tarjetas con fecha/lugar/precio "Desde S/").
 - Generado con `ui-ux-pro-max` (`--design-system "event ticketing marketplace entertainment" --motion 4 --density 5`). La recomendación base de la herramienta (paleta oscura + Inter/Playfair) se **descarta** a favor de la marca Mentec y la petición de fondo claro; se conservan patrón, estilo, motion y checklist.
 
@@ -12,7 +12,7 @@
 
 | Aspecto | Decisión |
 |---|---|
-| Patrón de landing | **Marketplace / Directory**: Hero (destacados + buscador) → Categorías → Rails de eventos → Grid filtrable → Banner organizadores → Confianza → Footer |
+| Patrón de landing | **Marketplace / Directory**: Título → Hero slider (destacados) → Buscador → Categorías → Rails de eventos → Grid filtrable → Banner organizadores → Confianza → Footer |
 | Estilo | **Vibrant & Block-based + Flat**, sobre fondo claro. Bloques de imagen grandes, tarjetas limpias, color de marca solo en acciones y acentos |
 | Modo | **Solo claro** en esta etapa. Footer y overlays de hero en navy de marca para contraste |
 | Personalidad | Confiable (azul), enérgica (degradado azul→cian del isotipo), directa |
@@ -132,17 +132,21 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 
 ```
 ┌──────────────────────────┐
-│ [imagen 4:3]   [Badge]   │  Badge: categoría (secondary) o estado (warning/destructive)
+│ [imagen 4:3]   [Badge]   │  Badge: siempre categoría (secondary)
 ├──────────────────────────┤
 │ SÁB 15 NOV · 20:00       │  overline, text-primary-strong
-│ Nombre del evento (2 l.) │  H3
+│ Nombre del evento (2 l.) │  H3, enlace al detalle
 │ ◎ Estadio Nacional, Lima │  small, muted-foreground, icono MapPin
-│ Desde S/ 120.00          │  small medium; precio en bold
+│                          │
+│ Desde S/ 120  [Disponible]│  precio bold + badge de estado (abajo, mt-auto)
+│ [    Ver entradas    ]   │  outline: fondo blanco, text-primary-strong, h-11
 └──────────────────────────┘
 ```
-- Toda la tarjeta es un enlace (`<Link>` envolvente) con `focus-visible:ring-2 ring-ring`.
-- Hover: imagen `scale-105` (300ms), sombra suave. Sin desplazar layout.
-- Agotado: badge `destructive` "Agotado" + precio reemplazado por "Agotado".
+- Estado siempre visible: "Disponible" (`bg-accent`), "Últimas entradas" (`bg-warning`), "Agotado" (`bg-destructive`, texto navy).
+- Enlaces: título e imagen llevan a `/eventos/<slug>` (la imagen con `tabIndex={-1}` para no duplicar foco); el CTA "Ver entradas" es el enlace principal. Nunca envolver la tarjeta entera en un enlace si contiene un botón.
+- Agotado: precio atenuado y tachado; "Ver entradas" como `<button disabled>` (sin href, no enfocable).
+- Bloque precio + botón alineado abajo (`Card h-full flex flex-col`) para que las tarjetas de una fila coincidan.
+- Hover: imagen `motion-safe:scale-105` (300ms), sombra suave. Sin desplazar layout.
 
 ### Botones
 
@@ -154,9 +158,10 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 ## 8. Layout de la landing
 
 ```
-Header sticky  [logo] [buscador md+] [Conciertos Teatro Deportes …] [Iniciar sesión]  ☰ móvil
-Hero slider    imagen full-bleed + overlay navy, título, fecha, lugar, CTA "Comprar entradas"
-Buscador       barra flotante sobre el borde inferior del hero: texto + ciudad + fecha + Buscar
+Header sticky  [logo] [categorías xl+] [Iniciar sesión] [Crear cuenta] (sm+)  ☰ menú < xl (categorías + ambos botones)
+Título         h1 "Encuentra tu próximo plan en vivo" + subtítulo (dentro de HeroCarousel)
+Hero slider    imagen full-bleed + overlay navy, título (h2), fecha, lugar, CTA "Comprar entradas"
+Buscador       barra: texto + ciudad + fecha + precio + Buscar
 Categorías     6 tiles con icono (scroll horizontal en móvil)
 Destacados     rail (carousel) de EventCard
 Próximos       chips de categoría + grilla 1/2/3/4 columnas + "Ver todos"
@@ -189,7 +194,7 @@ Breakpoints verificados: 375, 768, 1024, 1440. Sin scroll horizontal de página.
 
 - Contraste texto ≥ 4.5:1 (ver tabla de color); focus visible en todo lo interactivo.
 - Carousel: botones anterior/siguiente con etiqueta, navegable con flechas (shadcn ya lo trae), autoplay pausable.
-- Un solo `<h1>` por página (título del primer slide o título oculto de la home).
+- Un solo `<h1>` por página. Home: "Encuentra tu próximo plan en vivo" sobre el carrusel (en `HeroCarousel`); los títulos de slide son `<h2>`.
 - Targets táctiles ≥ 44×44px.
 
 ---

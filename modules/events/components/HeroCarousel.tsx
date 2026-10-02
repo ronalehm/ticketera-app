@@ -53,8 +53,15 @@ export function HeroCarousel({ events }: { events: Event[] }) {
   );
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pt-4 md:px-6 md:pt-6 lg:px-8">
-      <h1 className="sr-only">Mentec Tickets: entradas para conciertos, teatro, deportes y más</h1>
+    <section aria-labelledby="home-title" className="mx-auto max-w-7xl px-4 pt-8 md:px-6 md:pt-12 lg:px-8">
+      <div className="mb-6 md:mb-8">
+        <h1 id="home-title" className="text-3xl leading-[1.05] font-extrabold tracking-tight text-foreground md:text-5xl">
+          Encuentra tu próximo plan <span className="text-primary">en vivo</span>
+        </h1>
+        <p className="mt-2 text-base text-muted-foreground md:mt-3 md:text-lg">
+          Conciertos, teatro, deportes y más en todo el Perú.
+        </p>
+      </div>
       <Carousel
         opts={{ loop: true }}
         plugins={[autoplay]}
@@ -75,7 +82,7 @@ export function HeroCarousel({ events }: { events: Event[] }) {
                   className="-z-10 object-cover"
                 />
                 <div className="absolute inset-0 -z-10 bg-gradient-to-t from-brand-navy/90 via-brand-navy/40 to-transparent" />
-                <div className="flex max-w-2xl flex-col items-start gap-3 p-6 pb-24 text-white md:gap-4 md:p-10 md:pb-28">
+                <div className="flex max-w-2xl flex-col items-start gap-3 p-6 pb-16 text-white md:gap-4 md:p-10 md:pb-16">
                   <Badge className="h-6 bg-highlight px-2.5 font-bold text-highlight-foreground">
                     {EVENT_CATEGORY_LABELS[event.category]}
                   </Badge>
@@ -108,8 +115,8 @@ export function HeroCarousel({ events }: { events: Event[] }) {
         </CarouselContent>
         <CarouselPrevious aria-label="Slide anterior" className={cn(navButtonClassName, "left-4")} />
         <CarouselNext aria-label="Slide siguiente" className={cn(navButtonClassName, "right-4")} />
-        {/* Puntos en bottom-10/12: el buscador (app/page.tsx) solapa 32/40px del borde inferior; el texto deja pb-24/28 para no pisarlos. */}
-        <div className="absolute inset-x-0 bottom-10 flex justify-center md:bottom-12">
+        {/* El texto deja pb-16 para no pisar los puntos (size-11 en bottom-4). */}
+        <div className="absolute inset-x-0 bottom-4 flex justify-center">
           {events.map((event, index) => (
             <button
               key={event.id}
