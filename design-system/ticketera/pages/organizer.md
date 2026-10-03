@@ -160,10 +160,11 @@ Móvil: <ul> de tarjetas (img + h3 + fecha · ciudad + badge / vendidas + ingres
 ### Layout
 
 ```
+← Volver al resumen                                   → /organizador, ~8 px sobre el h1
 h1 "Crear evento"
 ┌──────────────────────────────────┬──────────────┐
 │ Información básica               │ VISTA PREVIA │  lg: grilla 1fr | 340px, gap-8
-│ Nombre del evento                │ [tarjeta]    │  vista previa sticky lg:top-24
+│ Nombre del evento                │ [tarjeta]    │  vista previa sticky lg:top-10
 │ Categoría | Edad mínima          │ Así verán tu │
 │ Descripción · Organizador        │ evento…      │
 ├──────────────────────────────────┤              │
@@ -187,11 +188,12 @@ h1 "Crear evento"
 Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Guardar borrador | Publicar]
 ```
 
-- Secciones en `Card rounded-2xl` con h2 `text-lg font-bold`. Sin enlace "volver": "Resumen" está siempre en la navegación del panel.
+- **"Volver al resumen"** (equivale al "← Mis eventos" del diseño: la lista vive en Resumen): el h1 va dentro de `<div className="flex flex-col gap-2">`, precedido de un `Link` a `/organizador` con `ArrowLeft size-4` (`aria-hidden`) y clases `inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`. Así queda pegado al h1 y no separado por el `gap` de la raíz. El h1 y su clase no cambian.
+- Secciones en `Card rounded-2xl` con h2 `text-lg font-bold` (blancas sobre el `bg-muted` del panel).
 - **Tipos de entrada**: subtítulo "Cada tipo es una zona con su precio: general (de pie) o numerada (con filas y asientos).". Cada tipo es un bloque `<fieldset>` en todos los anchos (ver "Bloque por tipo de entrada"). Una fila inicial, no dos. "Agregar tipo de entrada" lleva el foco al Nombre de la nueva; al quitar, el foco pasa a "Agregar tipo de entrada". Pie "Capacidad total" (ver "Precio y capacidad").
-- **Barra de acciones** (Decisión 12): por debajo de `lg`, `sticky bottom-0` (no `fixed`) con `border-t bg-background` y `env(safe-area-inset-bottom)`; se queda abajo mientras se rellena y no tapa el footer. Los controles llevan `scroll-mb-28 lg:scroll-mb-0` para no quedar tapados al enfocarlos. El primario muestra "Publicar" en móvil con nombre accesible "Publicar evento".
+- **Barra de acciones** (Decisión 12): por debajo de `lg`, `sticky bottom-0` (no `fixed`) con `border-t bg-background` y `env(safe-area-inset-bottom)`; se queda abajo mientras se rellena. Sus márgenes negativos (`-mx-4 md:-mx-6`) coinciden con el `px-4 md:px-6` del `<main>` del panel. Los controles llevan `scroll-mb-28 lg:scroll-mb-0` para no quedar tapados al enfocarlos. El primario muestra "Publicar" en móvil con nombre accesible "Publicar evento".
 - **Imagen de portada** (dropzone): `<label>` con borde discontinuo `border-primary/40 bg-accent rounded-2xl` (`h-36` móvil / `h-44` `lg`, `ImagePlus`), input file `sr-only` (PNG/JPEG) cuyo foco se ve en la zona; admite arrastrar y soltar. Error "Sube una imagen en formato JPG o PNG.". Con imagen: vista previa `aspect-video` + "Cambiar imagen" / "Quitar imagen" (`h-11`). Solo vista previa local: no se guarda.
-- **Vista previa** (Decisión 4): `<aside>` con overline "Vista previa" y `EventPreviewCard` (anatomía de EventCard sin enlaces ni elementos enfocables; "Ver entradas" es un falso botón `aria-hidden`). Marcadores en `text-muted-foreground`: "Nombre del evento", "Fecha por definir", "Lugar, Ciudad", "Desde S/ —"; precio 0 → "Entrada libre". Móvil: tarjeta horizontal; `lg`: vertical.
+- **Vista previa** (Decisión 4): `<aside>` sticky en `lg` a `lg:top-10` (ya no hay header global de 64 px que compensar) con overline "Vista previa" y `EventPreviewCard` (anatomía de EventCard sin enlaces ni elementos enfocables; "Ver entradas" es un falso botón `aria-hidden`). Marcadores en `text-muted-foreground`: "Nombre del evento", "Fecha por definir", "Lugar, Ciudad", "Desde S/ —"; precio 0 → "Entrada libre". Móvil: tarjeta horizontal; `lg`: vertical.
 - Categorías: las 6 del proyecto (por defecto "Conciertos").
 - Metadata: `Crear evento | Mentec Tickets`.
 
