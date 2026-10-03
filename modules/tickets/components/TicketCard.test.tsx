@@ -69,6 +69,19 @@ describe("TicketCard", () => {
     expect(card.getByRole("button", { name: "Entrada anterior" }).getAttribute("aria-disabled")).not.toBe("true");
   });
 
+  it("usa el paginador compartido: ArrowRight con el foco en Entrada siguiente avanza a la entrada 2", () => {
+    const card = renderCard();
+    const next = card.getByRole("button", { name: "Entrada siguiente" });
+    next.focus();
+
+    fireEvent.keyDown(next, { key: "ArrowRight" });
+
+    expect(card.getByRole("group", { name: "Entradas del pedido" })).toBeTruthy();
+    expect(card.getByText("Entrada 2 de 2")).toBeTruthy();
+    expect(detail(card, "Código")).toBe("MT-7Q4K2P-02");
+    expect(document.activeElement).toBe(next);
+  });
+
   it("muestra Asiento solo si la entrada tiene seatLabel", () => {
     const seated = renderCard(SEATED);
     expect(detail(seated, "Zona")).toBe("Occidente");
