@@ -200,6 +200,74 @@ describe("OrderConfirmation", () => {
     expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
   });
 
+  it("el talón muestra código y titular de la entrada actual y recorre todas las entradas del pedido", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    const pager = within(card).getByRole("group", { name: "Entradas del pedido" });
+    const previous = within(pager).getByRole("button", { name: "Entrada anterior" });
+    const next = within(pager).getByRole("button", { name: "Entrada siguiente" });
+
+    expect(pager.className).toContain("print:hidden");
+    expect(within(card).getByText(`${CODE}-01`).textContent).toBe(`Código de entrada: ${CODE}-01`);
+    expect(within(card).getByText("Titular: Luis Pérez")).toBeTruthy();
+    expect(previous.getAttribute("aria-disabled")).toBe("true");
+
+    next.focus();
+    fireEvent.click(next);
+    expect(within(card).getByRole("img", { name: `Código QR de la entrada ${CODE}-02` })).toBeTruthy();
+    expect(within(card).getByText(`${CODE}-02`).textContent).toBe(`Código de entrada: ${CODE}-02`);
+    expect(within(card).getByText("Entrada 2 de 3")).toBeTruthy();
+
+    fireEvent.click(next);
+    expect(within(card).getByRole("img", { name: `Código QR de la entrada ${CODE}-03` })).toBeTruthy();
+    expect(within(card).getByText(`${CODE}-03`).textContent).toBe(`Código de entrada: ${CODE}-03`);
+    expect(within(card).getByText("Entrada 3 de 3")).toBeTruthy();
+    expect(next.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(next);
+
+    // El cuerpo de la tarjeta no cambia al navegar.
+    expect(within(card).getByText("Entradas").nextElementSibling?.textContent).toBe("3");
+  });
+
+  it("el talón no muestra la línea Titular si el titular está vacío", async () => {
+    saveOrder({ ...ORDER, tickets: ORDER.tickets.map((ticket) => ({ ...ticket, holderName: " " })) });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).getByText(`${CODE}-01`).textContent).toBe(`Código de entrada: ${CODE}-01`);
+    expect(within(card).queryByText(/Titular/)).toBeNull();
+  });
+
+  it("con una sola entrada muestra Entrada 1 de 1 con ambas flechas deshabilitadas", async () => {
+    saveOrder({ ...ORDER, ticketCount: 1, tickets: ORDER.tickets.slice(0, 1) });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).getByText("Entrada 1 de 1")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Entrada anterior" }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(card).getByRole("button", { name: "Entrada siguiente" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("Descargar PDF incluye todas las entradas del pedido aunque se vea otra entrada", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    fireEvent.click(screen.getByRole("button", { name: "Entrada siguiente" }));
+    expect(screen.getByText("Entrada 2 de 3")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
+
+    expect(downloadTicketsPdf).toHaveBeenCalledTimes(1);
+    const [input] = vi.mocked(downloadTicketsPdf).mock.calls[0];
+    expect(input.tickets.map(({ code }) => code)).toEqual(ORDER.tickets.map(({ code }) => code));
+    expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
+  });
+
   it("no renderiza la región solo-impresión Tus entradas", async () => {
     saveOrder(ORDER);
     renderConfirmation();

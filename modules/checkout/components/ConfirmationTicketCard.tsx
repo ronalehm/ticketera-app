@@ -1,6 +1,7 @@
 import Image from "next/image";
-import { useId } from "react";
+import { useId, useState } from "react";
 
+import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { cn } from "@/lib/utils";
 import { EVENT_CATEGORY_LABELS, formatEventPrice, formatLongDayMonth } from "@/modules/events/format";
@@ -13,13 +14,17 @@ type ConfirmationTicketCardProps = {
 
 const NOTCH_CLASS = "absolute size-6 rounded-full bg-background ring-1 ring-border";
 
-/** Tarjeta-entrada de la confirmación: vertical en móvil y horizontal con el talón a la derecha desde `md`. */
+/**
+ * Tarjeta-entrada de la confirmación: vertical en móvil y horizontal con el talón a la derecha desde `md`.
+ * El talón recorre las entradas del pedido (QR, código y titular de la actual).
+ */
 export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
   const { event, items, ticketCount, total, tickets } = order;
   const titleId = useId();
   const zones = items.map((item) => item.name).join(", ");
   const itemsWithSeats = items.filter((item) => item.seats && item.seats.length > 0);
-  const [firstTicket] = tickets;
+  const [ticketIndex, setTicketIndex] = useState(0);
+  const ticket = tickets[ticketIndex];
 
   return (
     <article
@@ -62,15 +67,29 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
         </dl>
       </div>
 
-      {firstTicket && (
+      {ticket && (
         <div className="relative flex shrink-0 flex-col items-center justify-center gap-3 border-t-2 border-dashed border-input p-6 md:w-56 md:border-t-0 md:border-l-2">
           <span aria-hidden className={cn(NOTCH_CLASS, "-top-3 -left-3")} />
           <span
             aria-hidden
             className={cn(NOTCH_CLASS, "-top-3 -right-3 md:top-auto md:right-auto md:-bottom-3 md:-left-3")}
           />
-          <TicketQr value={firstTicket.code} className="size-40 md:size-32" />
-          <p className="text-sm text-muted-foreground">Entrada 1 de {tickets.length}</p>
+          <TicketQr value={ticket.code} className="size-40 md:size-32" />
+          <div className="flex w-full min-w-0 flex-col items-center gap-0.5 text-center">
+            <p className="text-sm font-semibold tabular-nums">
+              <span className="sr-only">Código de entrada: </span>
+              {ticket.code}
+            </p>
+            {ticket.holderName.trim() && (
+              <p className="text-sm break-words text-muted-foreground">Titular: {ticket.holderName}</p>
+            )}
+          </div>
+          <TicketPager
+            index={ticketIndex}
+            count={tickets.length}
+            onIndexChange={setTicketIndex}
+            className="print:hidden"
+          />
         </div>
       )}
     </article>
