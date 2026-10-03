@@ -1353,33 +1353,33 @@ No hay API: son datos mock.
 - **F6 y checkout:** F6 es independiente de la Fase 7 de `checkout-mock-payment.md`, que genera el enlace. El criterio de ida y vuelta necesita las dos.
 
 ### Fase 2. Escala de tonos por precio (2 tareas, 5 archivos)
-- [ ] T1. 5 tonos en `getZoneTones` y `ZONE_TONE_CLASSES` (`label` con clase SVG + HTML), con tests (requisito 9).
+- [x] T1. 5 tonos en `getZoneTones` y `ZONE_TONE_CLASSES` (`label` con clase SVG + HTML), con tests (requisito 9).
   - Archivos: `modules/seating/utils/zoneTone.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/seating/types/seating.types.ts`.
   - Depende de: Fase 1.
   - Secuencial (base).
-- [ ] T2. Tonos del festival en el test del service y tabla "Tonos por precio" del diseño de página.
+- [x] T2. Tonos del festival en el test del service y tabla "Tonos por precio" del diseño de página.
   - Archivos: `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1.
   - Secuencial.
 
 ### Fase 3. Sub-paso 1 con el diseño de la captura, sub-paso 2 y resumen móvil (5 tareas, 15 archivos)
-- [ ] T1. `parseViewBox` con test; hook con `closeZone` y `selectZone` que ignora las agotadas, con test (requisito 19).
+- [x] T1. `parseViewBox` con test; hook con `closeZone` y `selectZone` que ignora las agotadas, con test (requisito 19).
   - Archivos: `modules/seating/utils/viewBox.ts`, `modules/seating/utils/viewBox.test.ts`, `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 2.
   - Secuencial (base).
-- [ ] T2. Mapa con etiquetas HTML, luces, separación, resaltado e insignias, y tarjetas de zona (requisitos 12 y 13).
+- [x] T2. Mapa con etiquetas HTML, luces, separación, resaltado e insignias, y tarjetas de zona (requisitos 12 y 13).
   - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
   - Depende de: T1.
   - En paralelo con T3 y T4.
-- [ ] T3. Cabecera de zona, panel de cantidad con subtotal, `PurchaseSummaryContent` y barra móvil con hoja inferior (requisitos 14, 15, 17 y 18).
+- [x] T3. Cabecera de zona, panel de cantidad con subtotal, `PurchaseSummaryContent` y barra móvil con hoja inferior (requisitos 14, 15, 17 y 18).
   - Archivos: `modules/seating/components/ZoneStepHeader.tsx`, `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
   - Depende de: T1 (orden de la fase).
   - En paralelo con T2 y T4.
-- [ ] T4. `SeatPlan` como sub-paso 2: sin `Card` ni h2, ayuda arriba, `headingId` externo y `parseViewBox` (requisito 16).
+- [x] T4. `SeatPlan` como sub-paso 2: sin `Card` ni h2, ayuda arriba, `headingId` externo y `parseViewBox` (requisito 16).
   - Archivos: `modules/seating/components/SeatPlan.tsx`.
   - Depende de: T1.
   - En paralelo con T2 y T3.
-- [ ] T5. `TicketSelection` con la tarjeta única, sub-pasos, foco, resaltado y transición; test reescrito; eliminar `ZoneList`; diseño de página (requisitos 10 y 11).
+- [x] T5. `TicketSelection` con la tarjeta única, sub-pasos, foco, resaltado y transición; test reescrito; eliminar `ZoneList`; diseño de página (requisitos 10 y 11).
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/ZoneList.tsx` (se elimina), `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2, T3 y T4.
   - Secuencial.
