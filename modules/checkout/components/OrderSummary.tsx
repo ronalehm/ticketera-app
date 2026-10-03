@@ -46,6 +46,13 @@ export function OrderSummary({ order }: { order: CheckoutOrder }) {
                 <span className="text-sm text-muted-foreground tabular-nums">
                   {item.quantity} × {formatEventPrice(item.unitPrice)}
                 </span>
+                {item.seats && (
+                  <ul aria-label={`Asientos de ${item.name}`} className="text-sm text-muted-foreground">
+                    {item.seats.map((seat) => (
+                      <li key={seat.id}>{seat.label}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <span className="font-bold tabular-nums">{formatEventPrice(item.unitPrice * item.quantity)}</span>
             </li>

@@ -1,6 +1,13 @@
 import type { EventDetail } from "@/modules/events";
 
-export type CheckoutOrderItem = { ticketTypeId: string; name: string; unitPrice: number; quantity: number };
+export type CheckoutOrderItem = {
+  ticketTypeId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  /** Solo en tipos de zonas numeradas, en el orden de `asientos`. */
+  seats?: { id: string; label: string }[];
+};
 
 export type CheckoutOrder = {
   event: Pick<EventDetail, "slug" | "title" | "startsAt" | "venue" | "city" | "imageUrl">;
