@@ -1,8 +1,10 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { getVenueMapBySlug, type Seat } from "@/modules/seating";
 import { getCheckoutOrder, resolveCheckoutOrder } from "./checkout.service";
 
-describe("checkout.service", () => {
+describeWithDb("checkout.service", () => {
   describe("getCheckoutOrder", () => {
     it("pedido válido → ok con total 910", async () => {
       const result = await getCheckoutOrder({ evento: "noche-de-sintetizadores-lima", general: "2", vip: "1" });

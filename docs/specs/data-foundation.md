@@ -170,7 +170,7 @@ Hoy la app lee todo de mocks en memoria. F1 (`docs/architecture/system-design.md
 - [ ] Dado cada slug de `EVENTS_MOCK`, cuando se llama a `getEventBySlug(slug)`, entonces el resultado es igual a `eventDetailSchema.parse(mock)` con las mismas excepciones, incluido el orden de `ticketTypes`. Con `"feria-familiar-de-verano"` (borrador) y `"no-existe"`, devuelve `null`.
 - [ ] Dados los tests existentes de `getFeaturedEvents` y `getRelatedEvents`, cuando se ejecutan contra la BD, entonces pasan sin cambiar sus aserciones.
 - [ ] Dados los 3 slugs con mapa, cuando se llama a `getVenueMapBySlug`, entonces devuelve el mismo `VenueMap` que con el mock (`viewBox`, `stage`, orden de zonas, filas, asientos con `x`/`y` y estado, nombre, precio y estado de cada zona). Con `clasico-del-pacifico`, `no-existe` y el borrador, devuelve `null` (`seating.service.test.ts`).
-- [ ] Dados `checkout.service.test.ts`, `organizer.service.test.ts`, `zoneTone.test.ts` y `demoOrders.test.ts`, cuando se ejecutan con `DATABASE_URL_TEST`, entonces pasan con sus aserciones actuales; y sin `DATABASE_URL_TEST` sus bloques que usan la BD se omiten.
+- [ ] Dados `checkout.service.test.ts`, `organizer.service.test.ts`, `zoneTone.test.ts` y `demoOrders.test.ts`, cuando se ejecutan con `DATABASE_URL_TEST`, entonces pasan; y sin `DATABASE_URL_TEST` sus bloques que usan la BD se omiten. Se mantienen sus aserciones salvo dos ajustes que impone la Decisión 13 (ids UUID y fechas `toISOString()`): en `organizer.service.test.ts` los eventos publicados se identifican por `slug` (o por un id que sea UUID) en lugar de `"evt-001"`/`"evt-003"`/`"evt-011"`; en cualquiera de estos 4 archivos, las fechas que vienen de la BD (`startsAt`, `doorsOpenAt`) se comparan como instante (`Date.parse` o `new Date(...).toISOString()`) en lugar de como texto. Ninguna otra aserción cambia.
 - [ ] Dada la Fase 3, cuando se ejecuta `git diff --stat main`, entonces no hay cambios en `app/`, `components/` ni en `modules/*/index.ts`.
 - [ ] Dada la rama `dev` sembrada, cuando se ejecutan `npm run build` y `npm run dev`, entonces `/`, `/eventos`, `/eventos/noche-de-sintetizadores-lima`, `/eventos/noche-de-sintetizadores-lima/entradas` y `/eventos/clasico-del-pacifico` se ven igual que antes (verificación manual del reviewer).
 - [ ] Dada la Fase 3 terminada, cuando se ejecutan `npm run lint`, `npx vitest run` (con y sin `DATABASE_URL_TEST`) y `npm run build`, entonces pasan sin errores.
@@ -222,7 +222,7 @@ Ninguno nuevo ni modificado (sin UI; no aplica shadcn).
 | `modules/seating/utils/venueLayoutRecords.test.ts` | nuevo | Unit tests. |
 | `modules/seating/services/seating.service.ts` | modificar | `getVenueMapBySlug` desde la BD; `hasVenueMap` igual. |
 | `modules/seating/services/seating.service.test.ts` | modificar | Integración; los tests que mutaban el mock pasan a `venueLayoutRecords.test.ts`. |
-| `modules/checkout/services/checkout.service.test.ts`, `modules/organizer/services/organizer.service.test.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/tickets/data/demoOrders.test.ts` | modificar | `describeWithDb` en los bloques que llaman a services de BD y `// @vitest-environment node`. Sin cambiar aserciones. |
+| `modules/checkout/services/checkout.service.test.ts`, `modules/organizer/services/organizer.service.test.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/tickets/data/demoOrders.test.ts` | modificar | `describeWithDb` en los bloques que llaman a services de BD y `// @vitest-environment node`. Sin cambiar aserciones, salvo los dos ajustes del criterio de T5 (ids por `slug`/UUID en organizer, fechas de la BD comparadas como instante). |
 
 ### Consultas (Fase 3)
 - **`getEvents`:** `events` ⋈ `categories` ⋈ `venues` ⋈ `ticket_types` ⟕ `event_seats`, `WHERE events.status = 'published'`, `GROUP BY` evento, con `min(price_cents)`, `count(event_seats.id)` y `count(*) FILTER (WHERE <disponible>)`. `ORDER BY events.created_at, events.id`.
@@ -335,7 +335,7 @@ Ningún agente escribe ni lee esos valores.
   - `MAX_TICKETS_PER_ORDER` (`@/modules/events/purchase`) para `max_per_order`;
   - `EventStatus` como tipo de retorno de `getAvailabilityStatus`.
 - **Lógica de los services:** `getFeaturedEvents` y `getRelatedEvents`, y en `getVenueMapBySlug` la fusión con los tipos de entrada, sin cambios.
-- **Tests existentes como prueba de equivalencia:** sus aserciones se mantienen y ahora corren contra la BD sembrada.
+- **Tests existentes como prueba de equivalencia:** sus aserciones se mantienen y ahora corren contra la BD sembrada (excepto los dos ajustes de id y fecha descritos en el criterio de T5).
 - **Ya instalado:** zod v4 (`z.url`, `z.email`, `z.prettifyError`), `vite` (`loadEnv`, dependencia de Vitest) y `node:crypto` (`seedUuid`).
 - **Nuevo:** solo las 6 dependencias de la Decisión 1. Ninguna para cargar `.env` (se usan `process.loadEnvFile` y `--env-file-if-exists` de Node, y `loadEnv` de Vite).
 
@@ -404,11 +404,11 @@ Ningún agente escribe ni lee esos valores.
 - [x] T4 — Infraestructura de integración (config de Vitest, `describeWithDb`, `globalSetup`) y tests de seed y restricciones · archivos: `vitest.config.mts`, `lib/db/testDb.ts`, `lib/db/testGlobalSetup.ts`, `lib/db/seed/seed.test.ts`, `lib/db/constraints.test.ts` · depende de: T3 · secuencial
 
 ### Fase 3 — `events` y `seating` leen de la BD (12 archivos)
-- [ ] T1 — Mappers de eventos con unit tests · archivos: `modules/events/utils/eventRecords.ts`, `modules/events/utils/eventRecords.test.ts` · depende de: Fase 2 · paralelo con T2
-- [ ] T2 — Mapper del layout con unit tests · archivos: `modules/seating/utils/venueLayoutRecords.ts`, `modules/seating/utils/venueLayoutRecords.test.ts` · depende de: Fase 2 · paralelo con T1
-- [ ] T3 — `events.service` desde la BD y su test de equivalencia · archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts` · depende de: T1 · paralelo con T4
-- [ ] T4 — `seating.service` (`getVenueMapBySlug`) desde la BD y su test de equivalencia · archivos: `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts` · depende de: T2 · paralelo con T3 (usa `getEventBySlug` por su firma pública, que no cambia)
-- [ ] T5 — Marcar con `describeWithDb` y entorno `node` los tests de otros módulos que llaman a estos services · archivos: `modules/checkout/services/checkout.service.test.ts`, `modules/organizer/services/organizer.service.test.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/tickets/data/demoOrders.test.ts` · depende de: T3, T4 · secuencial (cierre; el reviewer ejecuta el build y la verificación manual)
+- [x] T1 — Mappers de eventos con unit tests · archivos: `modules/events/utils/eventRecords.ts`, `modules/events/utils/eventRecords.test.ts` · depende de: Fase 2 · paralelo con T2
+- [x] T2 — Mapper del layout con unit tests · archivos: `modules/seating/utils/venueLayoutRecords.ts`, `modules/seating/utils/venueLayoutRecords.test.ts` · depende de: Fase 2 · paralelo con T1
+- [x] T3 — `events.service` desde la BD y su test de equivalencia · archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts` · depende de: T1 · paralelo con T4
+- [x] T4 — `seating.service` (`getVenueMapBySlug`) desde la BD y su test de equivalencia · archivos: `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts` · depende de: T2 · paralelo con T3 (usa `getEventBySlug` por su firma pública, que no cambia)
+- [x] T5 — Marcar con `describeWithDb` y entorno `node` los tests de otros módulos que llaman a estos services · archivos: `modules/checkout/services/checkout.service.test.ts`, `modules/organizer/services/organizer.service.test.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/tickets/data/demoOrders.test.ts` · depende de: T3, T4 · secuencial (cierre; el reviewer ejecuta el build y la verificación manual)
 
 ## Preguntas abiertas
 1. **`ticket_types.sort_order` (Decisión 6):** es una columna que no está en el ERD aprobado. Sin ella, la lista de tipos de entrada de `noche-de-sintetizadores-lima` y `risas-sin-filtro` cambiaría de orden. Por defecto se añade. La alternativa es ordenar los tipos por el orden de su sección y aceptar ese cambio visual.
