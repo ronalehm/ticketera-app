@@ -381,9 +381,9 @@ Coordinación:
   Depende de: T1 · secuencial (`app/layout.tsx`; los movimientos y el root layout deben cambiar a la vez)
 
 ### Fase 2 — Acceso a pantalla completa (10 archivos)
-- [ ] T1 — Panel de marca a toda la altura con logo enlazado, y pestañas segmentadas · archivos: `modules/auth/components/AuthBrandPanel.tsx`, `modules/auth/components/AuthTabs.tsx` · depende de: Fase 1 · paralelo con T2
-- [ ] T2 — Formularios sin `Card`, con los títulos, subtítulos y enlaces del diseño, y sus tests actualizados · archivos: `modules/auth/components/LoginForm.tsx`, `modules/auth/components/LoginForm.test.tsx`, `modules/auth/components/RegisterForm.tsx`, `modules/auth/components/RegisterForm.test.tsx` · depende de: Fase 1 · paralelo con T1
-- [ ] T3 — Layout `(auth)` a pantalla completa (sin `SiteShell`), páginas con columna `max-w-md` y página de diseño · archivos: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `app/(auth)/registro/page.tsx`, `design-system/ticketera/pages/auth.md` · depende de: T1, T2 · secuencial
+- [x] T1 — Panel de marca a toda la altura con logo enlazado, y pestañas segmentadas · archivos: `modules/auth/components/AuthBrandPanel.tsx`, `modules/auth/components/AuthTabs.tsx` · depende de: Fase 1 · paralelo con T2
+- [x] T2 — Formularios sin `Card`, con los títulos, subtítulos y enlaces del diseño, y sus tests actualizados · archivos: `modules/auth/components/LoginForm.tsx`, `modules/auth/components/LoginForm.test.tsx`, `modules/auth/components/RegisterForm.tsx`, `modules/auth/components/RegisterForm.test.tsx` · depende de: Fase 1 · paralelo con T1
+- [x] T3 — Layout `(auth)` a pantalla completa (sin `SiteShell`), páginas con columna `max-w-md` y página de diseño · archivos: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `app/(auth)/registro/page.tsx`, `design-system/ticketera/pages/auth.md` · depende de: T1, T2 · secuencial
 
 ### Fase 3 — Shell del organizador (15 archivos)
 - [ ] T1 — Instalar `avatar` de shadcn · archivos: `components/ui/avatar.tsx` (y `package.json`/`package-lock.json` solo si el CLI los cambia) · depende de: Fase 2 y organizer-dashboard Fases 2–3 cerradas · secuencial (base, `components/ui/`)

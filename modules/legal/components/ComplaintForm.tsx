@@ -410,12 +410,12 @@ export function ComplaintForm() {
             </Field>
             <Field data-invalid={!!errors.detail}>
               {label("detail", "Detalle")}
-              <Textarea {...textProps("detail")} rows={5} className="field-sizing-fixed resize-y text-base" />
+              <Textarea {...textProps("detail")} rows={5} className="field-sizing-fixed resize-y" />
               {fieldError("detail")}
             </Field>
             <Field data-invalid={!!errors.request}>
               {label("request", "Pedido")}
-              <Textarea {...textProps("request", true)} rows={3} className="field-sizing-fixed resize-y text-base" />
+              <Textarea {...textProps("request", true)} rows={3} className="field-sizing-fixed resize-y" />
               <FieldDescription id={descriptionId("request")}>Qué solución esperas del proveedor.</FieldDescription>
               {fieldError("request")}
             </Field>
