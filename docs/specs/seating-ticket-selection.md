@@ -1,7 +1,7 @@
 # Selección de entradas con mapa de zonas y asientos (paso 1 de la compra)
 
 - Módulo: seating
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Que el comprador elija sus entradas sobre el mapa del recinto en `/eventos/<slug>/entradas` (paso 1 de 3 de la compra): zonas de pie por cantidad (Campo, General) y, en zonas numeradas (Tribunas, Platea, Mezanine), asientos individuales sobre un plano con zoom. Al continuar se pasa a `/checkout` con la selección. El detalle del evento enlaza a esta pantalla cuando el evento tiene mapa. Solo UI/UX con datos mock (sin backend ni reserva real), español (Perú), PEN.
