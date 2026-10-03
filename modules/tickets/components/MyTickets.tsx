@@ -47,11 +47,12 @@ export function MyTickets() {
   const state = useMyOrders();
 
   return (
-    <section className="bg-muted">
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12 lg:px-8">
+    <section className="bg-muted print:bg-transparent">
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12 lg:px-8 print:p-0">
         {state.status === "ready" ? (
           <Tabs defaultValue="upcoming" className="gap-6 md:gap-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            {/* Al imprimir ("Descargar PDF") solo queda la tarjeta de la entrada: se ocultan h1, pestañas y lista. */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between print:hidden">
               {PAGE_TITLE}
               <TabsList className="grid w-full grid-cols-2 gap-1 rounded-xl bg-background p-1 ring-1 ring-border group-data-horizontal/tabs:h-auto md:w-auto">
                 {TIMEFRAMES.map(({ value, label }) => (
@@ -109,8 +110,10 @@ function OrdersPanel({ orders, timeframe }: OrdersPanelProps) {
   const selected = orders.find((order) => order.code === selectedCode) ?? orders[0];
 
   return (
-    <div className={PANEL_GRID}>
-      <OrderList orders={orders} selectedCode={selected.code} onSelect={setSelectedCode} />
+    <div className={cn(PANEL_GRID, "print:block")}>
+      <div className="min-w-0 print:hidden">
+        <OrderList orders={orders} selectedCode={selected.code} onSelect={setSelectedCode} />
+      </div>
       <TicketCard key={selected.code} order={selected} timeframe={timeframe} />
     </div>
   );

@@ -48,7 +48,7 @@ export const ticketTypeFormSchema = z.object({
 // "en-CA" formatea como YYYY-MM-DD, comparable como string con el valor del input date.
 const limaDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" });
 
-function getTodayInLima(): string {
+export function getTodayInLima(): string {
   return limaDateFormatter.format(new Date());
 }
 
