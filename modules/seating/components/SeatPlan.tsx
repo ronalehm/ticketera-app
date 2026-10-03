@@ -417,120 +417,124 @@ export function SeatPlan({
             className="relative max-h-[70vh] w-full touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border"
             style={{ aspectRatio: `${width} / ${height}` }}
           >
-            <TransformComponent wrapperStyle={FILL_STYLE} contentStyle={FILL_STYLE} contentClass="sm:pb-16">
-              <svg
-                ref={svgRef}
-                viewBox={zone.seatViewBox}
-                role="group"
-                aria-label={`Plano de asientos de ${zone.name}`}
-                aria-describedby={helpId}
-                className="group/plan block size-full select-none"
-              >
-                <g aria-hidden className="pointer-events-none">
-                  {!isArc && (
-                    <>
-                      <rect
-                        x={SEAT_PLAN_MARGIN.x}
-                        y={STAGE_TOP}
-                        width={stageWidth}
-                        height={STAGE_HEIGHT}
-                        rx={8}
-                        className="fill-foreground"
-                      />
-                      <text
-                        x={SEAT_PLAN_MARGIN.x + stageWidth / 2}
-                        y={STAGE_TOP + STAGE_HEIGHT / 2}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fontSize={STAGE_FONT_SIZE}
-                        className="fill-background font-bold tracking-widest uppercase"
-                      >
-                        {stageLabel}
-                      </text>
-                    </>
-                  )}
-                  {zone.rows.flatMap((row) => {
-                    const { start, end } = isArc
-                      ? getRowEdgeLabelPoints(row)
-                      : {
-                          start: { x: SEAT_PLAN_MARGIN.x / 2, y: row.seats[0].y },
-                          end: { x: width - SEAT_PLAN_MARGIN.x / 2, y: row.seats[0].y },
-                        };
-                    return [start, end].map((point, index) => (
-                      <text
-                        key={`${row.label}-${index}`}
-                        x={point.x}
-                        y={point.y}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fontSize={ROW_LABEL_FONT_SIZE}
-                        className="fill-muted-foreground font-bold"
-                      >
-                        {row.label}
-                      </text>
-                    ));
-                  })}
-                </g>
-
-                <g
-                  ref={seatsRef}
-                  onClick={handleClick}
-                  onKeyDown={handleKeyDown}
-                  onPointerDown={(event) => {
-                    pointerTypeRef.current = event.pointerType;
-                  }}
-                  onPointerOver={handlePointerOver}
-                  onPointerOut={handlePointerOut}
-                  onFocus={handleFocus}
-                  onBlur={hideTooltip}
+            <TransformComponent wrapperStyle={FILL_STYLE} contentStyle={FILL_STYLE}>
+              {/* Desde `sm`, franja inferior libre para la pastilla de zoom superpuesta (requisito 27). Va en este
+                  contenedor y no en `contentClass`: el CSS sin capa de la librería (`padding: 0`) gana a la utilidad. */}
+              <div className="size-full sm:pb-16">
+                <svg
+                  ref={svgRef}
+                  viewBox={zone.seatViewBox}
+                  role="group"
+                  aria-label={`Plano de asientos de ${zone.name}`}
+                  aria-describedby={helpId}
+                  className="group/plan block size-full select-none"
                 >
-                  {seats.map((seat) => {
-                    const isSelected = selected.has(seat.id);
-                    const isOccupied = seat.status === "occupied";
-                    const isAccessible = seat.status === "accessible";
-
-                    return (
-                      <g
-                        key={seat.id}
-                        role="checkbox"
-                        data-seat-id={seat.id}
-                        tabIndex={seat.id === tabbableSeatId ? 0 : -1}
-                        aria-checked={isSelected}
-                        aria-disabled={isOccupied || undefined}
-                        aria-label={getSeatAriaLabel(seat, priceLabel)}
-                        transform={`translate(${seat.x} ${seat.y})`}
-                        className={cn("group/seat outline-none", isOccupied ? "cursor-not-allowed" : "cursor-pointer")}
-                      >
+                  <g aria-hidden className="pointer-events-none">
+                    {!isArc && (
+                      <>
                         <rect
-                          x={-SEAT_HIT_SIZE / 2}
-                          y={-SEAT_HIT_SIZE / 2}
-                          width={SEAT_HIT_SIZE}
-                          height={SEAT_HIT_SIZE}
-                          className="fill-transparent"
+                          x={SEAT_PLAN_MARGIN.x}
+                          y={STAGE_TOP}
+                          width={stageWidth}
+                          height={STAGE_HEIGHT}
+                          rx={8}
+                          className="fill-foreground"
                         />
-                        <g aria-hidden>
-                          <SeatShape status={seat.status} selected={isSelected} number={seat.number} />
-                          {isAccessible ? (
-                            <rect
-                              x={-15}
-                              y={-15}
-                              width={30}
-                              height={30}
-                              rx={8}
-                              className="fill-none stroke-ring stroke-3 opacity-0 group-focus-visible/seat:opacity-100"
-                            />
-                          ) : (
-                            <circle
-                              r={15}
-                              className="fill-none stroke-ring stroke-3 opacity-0 group-focus-visible/seat:opacity-100"
-                            />
-                          )}
+                        <text
+                          x={SEAT_PLAN_MARGIN.x + stageWidth / 2}
+                          y={STAGE_TOP + STAGE_HEIGHT / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={STAGE_FONT_SIZE}
+                          className="fill-background font-bold tracking-widest uppercase"
+                        >
+                          {stageLabel}
+                        </text>
+                      </>
+                    )}
+                    {zone.rows.flatMap((row) => {
+                      const { start, end } = isArc
+                        ? getRowEdgeLabelPoints(row)
+                        : {
+                            start: { x: SEAT_PLAN_MARGIN.x / 2, y: row.seats[0].y },
+                            end: { x: width - SEAT_PLAN_MARGIN.x / 2, y: row.seats[0].y },
+                          };
+                      return [start, end].map((point, index) => (
+                        <text
+                          key={`${row.label}-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={ROW_LABEL_FONT_SIZE}
+                          className="fill-muted-foreground font-bold"
+                        >
+                          {row.label}
+                        </text>
+                      ));
+                    })}
+                  </g>
+
+                  <g
+                    ref={seatsRef}
+                    onClick={handleClick}
+                    onKeyDown={handleKeyDown}
+                    onPointerDown={(event) => {
+                      pointerTypeRef.current = event.pointerType;
+                    }}
+                    onPointerOver={handlePointerOver}
+                    onPointerOut={handlePointerOut}
+                    onFocus={handleFocus}
+                    onBlur={hideTooltip}
+                  >
+                    {seats.map((seat) => {
+                      const isSelected = selected.has(seat.id);
+                      const isOccupied = seat.status === "occupied";
+                      const isAccessible = seat.status === "accessible";
+
+                      return (
+                        <g
+                          key={seat.id}
+                          role="checkbox"
+                          data-seat-id={seat.id}
+                          tabIndex={seat.id === tabbableSeatId ? 0 : -1}
+                          aria-checked={isSelected}
+                          aria-disabled={isOccupied || undefined}
+                          aria-label={getSeatAriaLabel(seat, priceLabel)}
+                          transform={`translate(${seat.x} ${seat.y})`}
+                          className={cn("group/seat outline-none", isOccupied ? "cursor-not-allowed" : "cursor-pointer")}
+                        >
+                          <rect
+                            x={-SEAT_HIT_SIZE / 2}
+                            y={-SEAT_HIT_SIZE / 2}
+                            width={SEAT_HIT_SIZE}
+                            height={SEAT_HIT_SIZE}
+                            className="fill-transparent"
+                          />
+                          <g aria-hidden>
+                            <SeatShape status={seat.status} selected={isSelected} number={seat.number} />
+                            {isAccessible ? (
+                              <rect
+                                x={-15}
+                                y={-15}
+                                width={30}
+                                height={30}
+                                rx={8}
+                                className="fill-none stroke-ring stroke-3 opacity-0 group-focus-visible/seat:opacity-100"
+                              />
+                            ) : (
+                              <circle
+                                r={15}
+                                className="fill-none stroke-ring stroke-3 opacity-0 group-focus-visible/seat:opacity-100"
+                              />
+                            )}
+                          </g>
                         </g>
-                      </g>
-                    );
-                  })}
-                </g>
-              </svg>
+                      );
+                    })}
+                  </g>
+                </svg>
+              </div>
             </TransformComponent>
 
             <SeatTooltip tooltip={tooltip} />
