@@ -109,7 +109,7 @@ describe("OrderConfirmation", () => {
     expect(screen.getByText("Stepper de prueba")).toBeTruthy();
     expect(screen.getByText(/Pedido N\.º/).textContent).toBe(`Pedido N.º${CODE}`);
 
-    const card = screen.getByRole("article");
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).getByText("Conciertos")).toBeTruthy();
     expect(within(card).getByRole("heading", { name: "Noche de Sintetizadores" })).toBeTruthy();
     expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
@@ -119,7 +119,51 @@ describe("OrderConfirmation", () => {
     expect(within(card).getByText("Entrada 1 de 3")).toBeTruthy();
 
     expect(screen.getByRole("link", { name: "Ver mis entradas" }).getAttribute("href")).toBe("/mis-entradas");
-    expect(screen.getByRole("heading", { level: 2, name: "Qué sigue" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Qué sigue" }).className).toContain("sr-only");
+  });
+
+  it("muestra el correo del comprador en negrita en la cabecera", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const email = screen.getByText("luis@correo.pe");
+    expect(email.tagName).toBe("STRONG");
+    expect(email.className).toContain("break-all");
+    expect(email.parentElement?.textContent).toBe(
+      "Enviamos tus entradas a luis@correo.pe. También las tienes siempre en Mis entradas.",
+    );
+  });
+
+  it("la tarjeta-entrada muestra la fecha sin año ni hora y los asientos compactos por zona, sin Asientos", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    const date = within(card).getByText("sábado 14 de noviembre");
+    expect(date.tagName).toBe("TIME");
+    expect(date.getAttribute("datetime")).toBe(ORDER.event.startsAt);
+    expect(date.parentElement?.textContent).toBe("sábado 14 de noviembre · Estadio, Lima");
+    expect(within(card).getByText("General: Fila A · 1, 2")).toBeTruthy();
+    expect(within(card).getByText("VIP: Fila B · 5")).toBeTruthy();
+    expect(within(card).queryByText("Asientos")).toBeNull();
+    expect(within(card).queryByText(/2026|21:00|9:00/)).toBeNull();
+  });
+
+  it("con una orden sin asientos la tarjeta-entrada no muestra líneas de asientos", async () => {
+    saveOrder({
+      ...ORDER,
+      items: ORDER.items.map((item) => ({ ...item, seats: undefined })),
+      tickets: ORDER.tickets.map((ticket) => ({ ...ticket, seatLabel: undefined })),
+    });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).queryByText(/Fila/)).toBeNull();
+    expect(within(card).queryByText(/^(General|VIP):/)).toBeNull();
+    expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
   });
 
   it("Agregar al calendario descarga <slug>.ics con el título del evento", async () => {

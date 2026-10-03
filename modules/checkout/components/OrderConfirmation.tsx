@@ -65,7 +65,7 @@ export function OrderConfirmation({ code, stepper }: OrderConfirmationProps) {
     <>
       <div className="w-full print:hidden">{stepper}</div>
       <div className={CONTAINER_CLASS}>
-        <ConfirmationHeader code={order.code} />
+        <ConfirmationHeader code={order.code} email={order.buyer.email} />
         <ConfirmationTicketCard order={order} />
         <ConfirmationActions order={order} />
         <NextSteps />
@@ -74,7 +74,7 @@ export function OrderConfirmation({ code, stepper }: OrderConfirmationProps) {
   );
 }
 
-function ConfirmationHeader({ code }: { code: string }) {
+function ConfirmationHeader({ code, email }: { code: string; email: string }) {
   return (
     <div className="flex flex-col items-center gap-3 text-center md:gap-4">
       <span className="flex size-16 items-center justify-center rounded-full bg-accent text-primary md:size-20">
@@ -82,7 +82,8 @@ function ConfirmationHeader({ code }: { code: string }) {
       </span>
       <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">¡Compra confirmada!</h1>
       <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-        Enviamos tus entradas a tu correo. También las tienes siempre en Mis entradas.
+        Enviamos tus entradas a <strong className="font-semibold break-all text-foreground">{email}</strong>. También
+        las tienes siempre en Mis entradas.
       </p>
       <p className="flex h-9 items-center rounded-full px-4 text-sm text-muted-foreground ring-1 ring-border">
         Pedido N.º
@@ -144,7 +145,7 @@ function ConfirmationActions({ order }: { order: Order }) {
 function NextSteps() {
   return (
     <section aria-labelledby="order-next-steps" className="flex w-full flex-col gap-4 print:hidden">
-      <h2 id="order-next-steps" className="text-xl font-bold tracking-tight">
+      <h2 id="order-next-steps" className="sr-only">
         Qué sigue
       </h2>
       <ol className="grid gap-3 md:grid-cols-3">
