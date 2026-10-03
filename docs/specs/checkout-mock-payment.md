@@ -318,10 +318,10 @@ Coordinación:
 - [x] T3 — Utils de orden y service mock de pago, con tests · archivos: `modules/checkout/utils/order.ts`, `modules/checkout/utils/order.test.ts`, `modules/checkout/services/payment.service.ts`, `modules/checkout/services/payment.service.test.ts` · depende de: T1 · paralelo con T2
 
 ### Fase 3 — Paso 2 `/checkout`
-- [ ] T1 — Piezas presentacionales: banner y `retryHref` en `ReservationTimer`, `changeHref` en `OrderSummary`, `CheckoutSummaryPanel` · archivos: `modules/checkout/components/ReservationTimer.tsx`, `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: Fase 2 · paralelo con T2
-- [ ] T2 — `PaymentMethodFields` (radio cards, campos de tarjeta, textos Yape/PagoEfectivo, aviso de simulación) · archivos: `modules/checkout/components/PaymentMethodFields.tsx` · depende de: Fase 2 · paralelo con T1
-- [ ] T3 — `CheckoutForm` (comprador, Términos, envío, error, precarga, layout, barra móvil) con test · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx` · depende de: T1, T2 · secuencial
-- [ ] T4 — Página `/checkout`, barrel y diseño de página (sección `/checkout`) · archivos: `app/checkout/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T3 · secuencial
+- [x] T1 — Piezas presentacionales: banner y `retryHref` en `ReservationTimer`, `changeHref` en `OrderSummary`, `CheckoutSummaryPanel` · archivos: `modules/checkout/components/ReservationTimer.tsx`, `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: Fase 2 · paralelo con T2
+- [x] T2 — `PaymentMethodFields` (radio cards, campos de tarjeta, textos Yape/PagoEfectivo, aviso de simulación) · archivos: `modules/checkout/components/PaymentMethodFields.tsx` · depende de: Fase 2 · paralelo con T1
+- [x] T3 — `CheckoutForm` (comprador, Términos, envío, error, precarga, layout, barra móvil) con test · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx` · depende de: T1, T2 · secuencial
+- [x] T4 — Página `/checkout`, barrel y diseño de página (sección `/checkout`) · archivos: `app/checkout/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T3 · secuencial
 
 ### Fase 4 — Paso 3 `/checkout/confirmacion`
 - [ ] T1 — `print:hidden` en header y footer del sitio · archivos: `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx` · depende de: Fase 3 · secuencial (`components/shared/`)
