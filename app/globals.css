@@ -108,5 +108,7 @@
     }
   html {
     @apply font-sans;
+    /* < lg: al enfocar (Tab) o hacer scrollIntoView, deja 7rem libres abajo para que las barras sticky inferiores (Publicar, pago, compra) no tapen el control. */
+    @apply max-lg:scroll-pb-28;
     }
 }
