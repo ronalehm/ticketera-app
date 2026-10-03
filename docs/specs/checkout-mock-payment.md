@@ -1,12 +1,14 @@
 # Checkout con pago simulado y confirmación de compra
 
 - Módulo: checkout
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Completar los pasos 2 ("Datos y pago") y 3 ("Confirmación") del flujo de compra con un **pago simulado** (sin pasarela, sin backend), para que quien compra pueda introducir sus datos, elegir un método de pago (Tarjeta, Yape o PagoEfectivo), "pagar" y ver la confirmación con su entrada y su QR. La orden se guarda en el navegador (`useOrdersStore`) para que "Mis entradas" (spec tickets) la muestre después. Esta spec también crea la base compartida que usan otras specs: `useZodForm` en `hooks/`, validadores de persona en `lib/`, la entrada pública de sesión, `TicketQr` y `lib/calendar.ts`.
 
 Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Creato Display, a11y §11) y `design-system/ticketera/pages/checkout.md`. Del diseño de referencia ("5 · Checkout y pago": `Checkout.dc.html` / `CheckoutMobile.dc.html`; "6 · Confirmación de compra": `Confirmation.dc.html` / `ConfirmationMobile.dc.html`) se toman estructura, textos y patrones móviles, **no** sus colores, fuente ni marca ("Ticketera" → "Mentec Tickets"). Español (Perú), PEN.
+
+**Ampliación (Fases 5 y 6):** con las Fases 1–4 ya implementadas, el usuario compartió capturas de "Datos y pago", "Confirmación" y de la entrada con QR que debe salir al "Descargar PDF". La Fase 5 alinea el paso 2 (h1 solo para lectores de pantalla, campos obligatorios con `*`, documento de identidad agrupado, nota corta de demo y resumen compacto con el botón "Pagar" dentro). La Fase 6 alinea el paso 3 (correo del comprador, fecha sin año ni hora, asientos compactos) y sustituye la lista de impresión por una **entrada imprimible por página** (`components/shared/PrintableTicket.tsx`), reutilizable por "Mis entradas". Se mantiene la marca Mentec (tokens; "Pagar" en primario azul), "Nombres" + "Apellidos" separados y el contrato E sin cambios.
 
 ## Alcance
 - Incluye:
@@ -15,6 +17,9 @@ Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Cre
   - **Fase 3 — Paso 2 `/checkout`:** stepper, banner del temporizador, "Datos del comprador", "Método de pago" (radio cards + campos de tarjeta propios de la simulación + textos de Yape/PagoEfectivo), Términos, resumen sticky en `lg` con "Cambiar entradas" y "Pagar S/ X", resumen plegable y barra inferior con "Pagar" en móvil.
   - **Fase 4 — Paso 3 `/checkout/confirmacion`:** confirmación leída del store, tarjeta-entrada con talón y `TicketQr`, "Ver mis entradas", "Agregar al calendario" (.ics), "Descargar PDF" (impresión), "Qué sigue" y estado "No encontramos tu compra".
   - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 3 y 4).
+  - **Fase 5 — Alinear "Datos y pago" a las capturas:** formateadores de fecha `formatShortDayMonth` / `formatLongDayMonth` en `events` (vía `modules/events/format.ts`); formateo compacto de asientos en `modules/checkout/utils/seatSummary.ts`; h1 `sr-only`; `*` en los campos obligatorios; "Documento de identidad" como un grupo (tipo + número) junto a "Celular"; nota "Demo: no se realiza ningún cobro real." al pie de "Método de pago"; resumen compacto con "Pagar S/ X" dentro de la tarjeta (solo `lg`).
+  - **Fase 6 — Alinear "Confirmación" y la entrada imprimible:** correo del comprador en el texto, fecha "lunes 5 de octubre · Lugar, Ciudad", asientos compactos por zona, "Qué sigue" como h2 `sr-only`; componente compartido `PrintableTicket` (props planas) y `buildPrintableTickets(order)`; al imprimir solo salen las entradas, una por página.
+  - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 5 y 6).
   - **Reemplazo funcional de `docs/specs/checkout-purchase.md`:** su Fase 1 (ya implementada) se conserva; sus Fases 2–3 (Stripe) **no se implementan**: esta spec las sustituye. Ese archivo no se edita (sigue aprobado; sus casillas de Fases 2–3 quedan sin marcar).
 - No incluye:
   - Pasarela real (Stripe u otra), Server Actions, Route Handlers, webhooks, claves o variables de entorno, dependencias de pago.
