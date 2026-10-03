@@ -419,14 +419,14 @@ describe("seating.service", () => {
       });
     });
 
-    it("festival-vive-latino-lima: Campo VIP tier-1, Campo General tier-2, Occidente tier-3, Oriente y Norte tier-4", async () => {
+    it("festival-vive-latino-lima: Campo VIP tier-1, Campo General tier-2, Occidente tier-3, Oriente tier-4 y Norte tier-5", async () => {
       const map = await getMap(STADIUM_SLUG);
       expect(getZoneTones(map.zones)).toEqual({
         "campo-vip": "tier-1",
         "campo-general": "tier-2",
         occidente: "tier-3",
         oriente: "tier-4",
-        norte: "tier-4",
+        norte: "tier-5",
       });
     });
 

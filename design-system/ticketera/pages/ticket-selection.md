@@ -45,15 +45,18 @@ Footer            (igual que la landing)
 
 ## Tonos por precio (mapa y listas)
 
-Se asignan por rango de precio entre las zonas **no agotadas**, de mayor a menor (`getZoneTones`). Precios iguales comparten tono; desde el 4.º precio distinto todos usan `tier-4`. El texto siempre acompaña al color (nombre y precio o "Agotado").
+Se asignan por rango de precio entre las zonas **no agotadas**, de mayor a menor (`getZoneTones`). Precios iguales comparten tono; desde el 5.º precio distinto todos usan `tier-5`. Es una escala monocroma de azules Mentec (más oscuro = más caro), hecha con tokens y opacidad, sin hex ni tokens nuevos. El texto siempre acompaña al color (nombre y precio o "Agotado").
 
 | Tono | Forma (SVG) | Texto en el mapa | Muestra en listas |
 |---|---|---|---|
-| `tier-1` (más caro) | `fill-brand-navy` | `fill-background` | `bg-brand-navy` |
-| `tier-2` | `fill-primary-strong` | `fill-primary-foreground` | `bg-primary-strong` |
-| `tier-3` | `fill-highlight` | `fill-highlight-foreground` | `bg-highlight` |
-| `tier-4` | `fill-accent stroke-primary/40` | `fill-foreground` | `bg-accent ring-1 ring-primary/40` |
-| `sold-out` | `fill-secondary` | `fill-muted-foreground` + "Agotado" | `bg-secondary ring-1 ring-input` |
+| `tier-1` (más caro) | `fill-brand-navy` | `fill-background text-background` | `bg-brand-navy` |
+| `tier-2` | `fill-primary-strong` | `fill-primary-foreground text-primary-foreground` | `bg-primary-strong` |
+| `tier-3` | `fill-primary/65` | `fill-foreground text-foreground` | `bg-primary/65` |
+| `tier-4` | `fill-primary/40` | `fill-foreground text-foreground` | `bg-primary/40` |
+| `tier-5` | `fill-primary/20` | `fill-foreground text-foreground` | `bg-primary/20` |
+| `sold-out` | `fill-secondary` | `fill-muted-foreground text-muted-foreground` + "Agotado" | `bg-secondary ring-1 ring-input` |
+
+La columna "Texto en el mapa" lleva la clase SVG (`fill-`) y la HTML (`text-`). Contraste del texto ≥ 4.5:1 (navy sobre `tier-3` ~7:1; blanco sobre `primary-strong` 5.6:1). El cian (`highlight`) ya no es un tono de zona: queda para las luces del escenario y las butacas accesibles.
 
 Muestra en listas: `size-3.5 rounded-sm`, `aria-hidden`.
 
