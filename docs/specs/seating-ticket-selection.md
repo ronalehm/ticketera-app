@@ -800,15 +800,15 @@ Coordinación con las otras specs de la ronda (orden: seating → checkout → t
   - Secuencial.
 
 ### Fase 3. Lógica de asientos y checkout con asientos
-- [ ] T1. "Mejor asiento disponible" y navegación entre asientos, con tests.
+- [x] T1. "Mejor asiento disponible" y navegación entre asientos, con tests.
   - Archivos: `modules/seating/utils/bestSeats.ts`, `modules/seating/utils/bestSeats.test.ts`, `modules/seating/utils/seatNavigation.ts`, `modules/seating/utils/seatNavigation.test.ts`.
   - Depende de: Fase 2.
   - En paralelo con T3.
-- [ ] T2. Acciones de asientos en `useSeatSelection` (`toggleSeat`, `removeSeat`, `pickBestSeats`, `notice`), con test ampliado.
+- [x] T2. Acciones de asientos en `useSeatSelection` (`toggleSeat`, `removeSeat`, `pickBestSeats`, `notice`), con test ampliado.
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: T1.
   - En paralelo con T3.
-- [ ] T3. Checkout acepta y valida `asientos` (contrato C) y los muestra en `OrderSummary`, con tests.
+- [x] T3. Checkout acepta y valida `asientos` (contrato C) y los muestra en `OrderSummary`, con tests.
   - Archivos: `modules/checkout/types/checkout.types.ts`, `modules/checkout/utils/checkoutOrder.ts`, `modules/checkout/utils/checkoutOrder.test.ts`, `modules/checkout/services/checkout.service.ts`, `modules/checkout/services/checkout.service.test.ts`, `modules/checkout/components/OrderSummary.tsx`.
   - Depende de: Fase 1.
   - En paralelo con T1 y T2.
