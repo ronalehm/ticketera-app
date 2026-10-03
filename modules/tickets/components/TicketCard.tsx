@@ -2,16 +2,17 @@
 
 import { type ReactNode, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, Download, MapPin } from "lucide-react";
 
 import { TicketQr } from "@/components/shared/TicketQr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/modules/checkout/orders";
 import { formatLongDate, formatTime } from "@/modules/events/format";
 import type { OrderTimeframe } from "../types/tickets.types";
-import { getDateChipParts } from "../utils/myOrders";
+import { formatTicketCount, getDateChipParts } from "../utils/myOrders";
 
 type TicketCardProps = {
   order: Order;
@@ -23,9 +24,15 @@ const NOTCH_CLASS = "absolute -top-3 size-6 rounded-full bg-muted ring-1 ring-bo
 const NAV_BUTTON_CLASS =
   "size-11 cursor-pointer duration-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-background";
 
+const ACTION_CLASS =
+  "h-11 w-full cursor-pointer gap-2 px-4 font-semibold text-primary-strong duration-200 hover:bg-accent hover:text-primary-strong sm:w-auto [&_svg:not([class*='size-'])]:size-5";
+
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** Entrada seleccionada como boleto: imagen con chip de fecha, datos del evento, talón y QR con navegación entre entradas. */
+/**
+ * Entrada seleccionada como boleto: imagen con chip de fecha, datos del evento, talón, QR con navegación entre entradas
+ * y acciones (imprimir / calendario). Al imprimir solo queda el boleto de la entrada mostrada.
+ */
 export function TicketCard({ order, timeframe }: TicketCardProps) {
   const [ticketIndex, setTicketIndex] = useState(0);
   const { event, tickets } = order;
@@ -34,8 +41,20 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
   const isLast = ticketIndex === tickets.length - 1;
   const chip = getDateChipParts(event.startsAt);
 
+  function handleAddToCalendar() {
+    downloadIcs(
+      `${event.slug}.ics`,
+      buildIcsEvent({
+        title: event.title,
+        startsAt: event.startsAt,
+        location: `${event.venue}, ${event.city}`,
+        description: `Pedido ${order.code} · ${formatTicketCount(order.ticketCount)}`,
+      }),
+    );
+  }
+
   return (
-    <article className="overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border">
+    <article className="overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border print:break-inside-avoid print:ring-0">
       <div className="relative h-36 bg-muted md:h-48">
         <Image
           src={event.imageUrl}
@@ -82,7 +101,7 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
         </div>
 
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 print:hidden">
             <p aria-live="polite" className="text-lg font-bold">
               Entrada {ticketIndex + 1} de {tickets.length}
             </p>
@@ -133,6 +152,19 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
               )}
             </TicketDetail>
           </dl>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap print:hidden">
+            <Button type="button" variant="outline" onClick={() => window.print()} className={ACTION_CLASS}>
+              <Download aria-hidden />
+              Descargar PDF
+            </Button>
+            {timeframe === "upcoming" && (
+              <Button type="button" variant="outline" onClick={handleAddToCalendar} className={ACTION_CLASS}>
+                <CalendarPlus aria-hidden />
+                Agregar al calendario
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </article>

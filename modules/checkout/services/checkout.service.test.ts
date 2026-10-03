@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { getVenueMapBySlug, type Seat } from "@/modules/seating";
+import { describe, expect, it, vi } from "vitest";
+import { getEventBySlug } from "@/modules/events";
+import { getVenueMapBySlug, type Seat } from "@/modules/seating/seats";
 import { getCheckoutOrder, resolveCheckoutOrder } from "./checkout.service";
+
+// `getEventBySlug` real, envuelto en un `vi.fn` para contar las cargas del evento.
+vi.mock("@/modules/events", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/events")>();
+  return { ...actual, getEventBySlug: vi.fn(actual.getEventBySlug) };
+});
 
 describe("checkout.service", () => {
   describe("getCheckoutOrder", () => {
@@ -144,6 +151,27 @@ describe("checkout.service", () => {
       expect(result.status).toBe("ok");
       if (result.status !== "ok") return;
       expect(result.order.items.every((item) => item.seats === undefined)).toBe(true);
+    });
+
+    it("resolveCheckoutOrder con un asiento disponible de norte carga el evento 1 sola vez → ok", async () => {
+      const [seat] = await getNorteSeats("available");
+      vi.mocked(getEventBySlug).mockClear();
+
+      const result = await resolveCheckoutOrder(slug, { norte: 1 }, [seat.id]);
+
+      expect(getEventBySlug).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("ok");
+      if (result.status !== "ok") return;
+      expect(result.order.total).toBe(220);
+      expect(result.order.items).toEqual([
+        {
+          ticketTypeId: "norte",
+          name: "Tribuna Norte",
+          unitPrice: 220,
+          quantity: 1,
+          seats: [{ id: seat.id, label: `Tribuna Norte · Fila ${seat.row} · Asiento ${seat.number}` }],
+        },
+      ]);
     });
 
     it("resolveCheckoutOrder con una zona numerada y sin seatIds → invalid-tickets", async () => {

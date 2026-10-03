@@ -3,7 +3,7 @@ import { getEventBySlug } from "@/modules/events";
 import { VENUE_LAYOUTS_MOCK } from "../data/venueMaps.mock";
 import type { VenueMap } from "../types/seating.types";
 import { getZoneTones } from "../utils/zoneTone";
-import { getVenueMapBySlug, hasVenueMap } from "./seating.service";
+import { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./seating.service";
 
 const MAP_SLUGS = ["noche-de-sintetizadores-lima", "la-casa-de-los-espejos", "risas-sin-filtro"];
 
@@ -85,6 +85,37 @@ describe("seating.service", () => {
       VENUE_LAYOUTS_MOCK[0] = { ...original, viewBox: "600 560" };
       try {
         await expect(getVenueMapBySlug(original.eventSlug)).rejects.toThrow();
+      } finally {
+        VENUE_LAYOUTS_MOCK[0] = original;
+      }
+    });
+  });
+
+  describe("getVenueMapForEvent", () => {
+    async function getEvent(slug: string) {
+      const event = await getEventBySlug(slug);
+      if (!event) throw new Error(`Sin evento: ${slug}`);
+      return event;
+    }
+
+    it.each(MAP_SLUGS)("%s: da lo mismo que getVenueMapBySlug", async (slug) => {
+      expect(await getVenueMapForEvent(await getEvent(slug))).toEqual(await getVenueMapBySlug(slug));
+    });
+
+    it("devuelve null para un evento sin mapa", async () => {
+      expect(await getVenueMapForEvent(await getEvent("clasico-del-pacifico"))).toBeNull();
+    });
+
+    it("lanza un error si una zona apunta a un tipo de entrada inexistente", async () => {
+      const original = VENUE_LAYOUTS_MOCK[0];
+      const event = await getEvent(original.eventSlug);
+      VENUE_LAYOUTS_MOCK[0] = {
+        ...original,
+        zones: original.zones.map((zone) => (zone.id === "vip" ? { ...zone, ticketTypeId: "palco" } : zone)),
+      };
+      try {
+        await expect(getVenueMapForEvent(event)).rejects.toThrow(Error);
+        await expect(getVenueMapForEvent(event)).rejects.toThrow(/palco/);
       } finally {
         VENUE_LAYOUTS_MOCK[0] = original;
       }

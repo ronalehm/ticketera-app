@@ -1,5 +1,5 @@
 import { getEventBySlug } from "@/modules/events";
-import { getVenueMapBySlug, parseSeatIds } from "@/modules/seating";
+import { getVenueMapForEvent, parseSeatIds } from "@/modules/seating/seats";
 import { checkoutSlugSchema } from "../schemas/checkout.schema";
 import type { CheckoutOrderResult } from "../types/checkout.types";
 import { buildCheckoutOrder, parseTicketQuantities } from "../utils/checkoutOrder";
@@ -18,7 +18,8 @@ export async function resolveCheckoutOrder(
   quantities: Record<string, number> | null,
   seatIds: string[] | null = [],
 ): Promise<CheckoutOrderResult> {
-  const [event, map] = await Promise.all([getEventBySlug(slug), getVenueMapBySlug(slug)]);
+  const event = await getEventBySlug(slug);
   if (!event) return { status: "not-found" };
+  const map = await getVenueMapForEvent(event);
   return buildCheckoutOrder(event, quantities, { map, seatIds });
 }
