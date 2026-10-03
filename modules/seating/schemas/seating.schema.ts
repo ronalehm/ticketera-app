@@ -21,7 +21,9 @@ export const seatSchema = z.object({
 });
 export const seatRowSchema = z.object({ label: seatRowLabelSchema, seats: seatSchema.array().min(1) });
 
-const pointSchema = z.object({ x: z.number(), y: z.number() });
+export const pointSchema = z.object({ x: z.number(), y: z.number() });
+/** Coordenadas del plano = coordenadas del estadio × `scale` + (`x`, `y`). */
+export const planTransformSchema = z.object({ scale: z.number().positive(), x: z.number(), y: z.number() });
 const viewBoxSchema = z.string().regex(/^0 0 \d+ \d+$/);
 const kebabIdSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 
@@ -30,6 +32,8 @@ const zoneLayoutBaseSchema = z.object({
   ticketTypeId: kebabIdSchema,
   path: z.string().min(1),
   labelPos: pointSchema,
+  /** Parte el nombre en 2 líneas en el primer espacio ("Tribuna" / "Occidente"). */
+  wrapLabel: z.boolean().optional(),
 });
 
 export const venueZoneLayoutSchema = z.discriminatedUnion("kind", [
@@ -38,6 +42,7 @@ export const venueZoneLayoutSchema = z.discriminatedUnion("kind", [
     kind: z.literal("numbered"),
     seatViewBox: viewBoxSchema,
     rows: seatRowSchema.array().min(1),
+    planTransform: planTransformSchema.optional(),
   }),
 ]);
 
@@ -49,7 +54,13 @@ export const venueLayoutSchema = z
   .object({
     eventSlug: z.string().min(1),
     viewBox: viewBoxSchema,
-    stage: z.object({ label: z.string().min(1), path: z.string().min(1), labelPos: pointSchema }),
+    stage: z.object({
+      label: z.string().min(1),
+      path: z.string().min(1),
+      labelPos: pointSchema,
+      /** Luces decorativas del escenario. */
+      lights: pointSchema.array().optional(),
+    }),
     zones: venueZoneLayoutSchema.array().min(1),
   })
   .superRefine((layout, ctx) => {
