@@ -95,6 +95,9 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
   // Tras un pago aprobado, useZodForm vuelve a isSubmitting=false mientras la navegación sigue en curso:
   // este estado mantiene "Pagar" bloqueado para que no se pueda crear una segunda orden.
   const [isRedirecting, setIsRedirecting] = useState(false);
+  // Guarda síncrona contra envíos concurrentes: dos requestSubmit() en el mismo tick llegan antes de que React
+  // re-renderice, así que isSubmitting/isRedirecting aún valen false en el segundo. Se libera solo si el pago falla.
+  const paymentInFlightRef = useRef(false);
   const paymentErrorRef = useRef<HTMLDivElement>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
     checkoutFormSchema,
@@ -118,31 +121,35 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     if (paymentError) paymentErrorRef.current?.focus();
   }, [paymentError]);
 
-  const submitPayment = handleSubmit(async (data) => {
-    setPaymentError(null);
-    const { firstName, lastName, email, phone, documentType, documentNumber, paymentMethod, cardNumber } = data;
-    const payment: MockPaymentInput["payment"] =
-      paymentMethod === "card" ? { method: "card", cardNumber } : { method: paymentMethod };
-    try {
-      const paidOrder = await processMockPayment({
-        order,
-        buyer: { firstName, lastName, email, phone, documentType, documentNumber },
-        payment,
-      });
-      await persistOrder(paidOrder);
-      setIsRedirecting(true);
-      router.replace(`/checkout/confirmacion?orden=${paidOrder.code}`);
-    } catch (error) {
-      setPaymentError(error instanceof PaymentError ? error.message : UNEXPECTED_ERROR);
-    }
-  });
+  const isProcessing = isSubmitting || isRedirecting;
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    if (isExpired || isRedirecting) {
+    // Se corta antes de handleSubmit: si no, su `finally` pondría isSubmitting=false con el primer pago aún en curso.
+    if (isExpired || isProcessing || paymentInFlightRef.current) {
       event.preventDefault();
       return;
     }
-    submitPayment(event);
+    handleSubmit(async (data) => {
+      // useZodForm invoca este callback de forma síncrona dentro del submit: la ref queda marcada antes del siguiente.
+      paymentInFlightRef.current = true;
+      setPaymentError(null);
+      const { firstName, lastName, email, phone, documentType, documentNumber, paymentMethod, cardNumber } = data;
+      const payment: MockPaymentInput["payment"] =
+        paymentMethod === "card" ? { method: "card", cardNumber } : { method: paymentMethod };
+      try {
+        const paidOrder = await processMockPayment({
+          order,
+          buyer: { firstName, lastName, email, phone, documentType, documentNumber },
+          payment,
+        });
+        await persistOrder(paidOrder);
+        setIsRedirecting(true);
+        router.replace(`/checkout/confirmacion?orden=${paidOrder.code}`);
+      } catch (error) {
+        paymentInFlightRef.current = false;
+        setPaymentError(error instanceof PaymentError ? error.message : UNEXPECTED_ERROR);
+      }
+    })(event);
   };
 
   // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y del error.
@@ -159,7 +166,6 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     <FieldError id={`checkout-${name}-error`}>{errors[name]}</FieldError>
   );
 
-  const isProcessing = isSubmitting || isRedirecting;
   const payButtonProps = { totalLabel, isProcessing, disabled: isExpired || isProcessing };
 
   return (

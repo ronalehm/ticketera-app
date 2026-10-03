@@ -209,6 +209,39 @@ describe("CheckoutForm", () => {
     expect(replace).toHaveBeenCalledTimes(1);
   });
 
+  it("dos envíos seguidos sin esperar (mismo tick, sin re-render) solo pagan una vez", async () => {
+    vi.mocked(processMockPayment).mockResolvedValue(PAID_ORDER);
+    const { container } = renderForm();
+    const form = container.querySelector("form")!;
+
+    fillBuyer();
+    fillCard();
+    // Un único act: React no re-renderiza entre los dos envíos, como un doble requestSubmit() en el mismo tick.
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
+    await act(async () => {});
+    expect(processMockPayment).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("tras un pago rechazado se puede volver a pagar", async () => {
+    vi.mocked(processMockPayment).mockRejectedValueOnce(new PaymentError()).mockResolvedValueOnce(PAID_ORDER);
+    renderForm();
+
+    fillBuyer();
+    fillCard();
+    pay();
+    await screen.findByRole("alert");
+
+    pay();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
+    expect(processMockPayment).toHaveBeenCalledTimes(2);
+  });
+
   it("tarjeta rechazada muestra el Alert con el foco, reactiva los botones y no navega ni guarda", async () => {
     vi.mocked(processMockPayment).mockRejectedValue(new PaymentError());
     renderForm();
