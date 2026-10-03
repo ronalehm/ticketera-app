@@ -122,7 +122,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Tarjeta de evento | `Card` + `Badge` + `next/image` | `modules/events/components/EventCard.tsx` |
 | Hero slider y rails | `Carousel` (Embla) + `embla-carousel-autoplay` (solo hero) | `components/ui` / `modules/events` |
 | Buscador | `Input` + `Select` + `Button` | `modules/events` |
-| Filtro por categoría | `ToggleGroup` (chips) | `modules/events` |
+| Filtro por categoría | Landing (Próximos eventos, filtro local): `ToggleGroup` (chips). `/eventos`: chips-enlace que cambian `?categoria=` (ver `pages/events-list.md`) | `modules/events` |
 | Menú móvil | `Sheet` | `components/shared/SiteHeader.tsx` |
 | Separadores | `Separator` | footer |
 | Título de sección | nuevo, presentacional | `components/shared/SectionHeader.tsx` |

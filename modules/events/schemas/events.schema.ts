@@ -15,3 +15,19 @@ export const eventSchema = z.object({
   status: eventStatusSchema,
   featured: z.boolean(),
 });
+
+export const ticketTypeSchema = z.object({
+  id: z.string(), // kebab-case, se usa como clave en la URL de checkout
+  name: z.string().min(1),
+  description: z.string().optional(),
+  price: z.number().nonnegative(),
+  status: eventStatusSchema,
+});
+export const eventDetailSchema = eventSchema.extend({
+  description: z.string().min(1), // 2–3 párrafos separados por "\n\n"
+  address: z.string(),
+  doorsOpenAt: z.iso.datetime({ offset: true }),
+  minAge: z.number().int().nonnegative(), // 0 = todo público
+  organizer: z.string(),
+  ticketTypes: ticketTypeSchema.array().min(1),
+});

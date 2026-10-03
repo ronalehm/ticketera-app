@@ -6,29 +6,35 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { CITIES, PRICE_RANGES } from "../data/searchOptions";
+import type { EventFilters } from "../schemas/eventFilters.schema";
+
 type SelectOption = { label: string; value: string | null };
 
 const CITY_ITEMS: SelectOption[] = [
   { label: "Todas", value: null },
-  ...["Lima", "Arequipa", "Cusco", "Trujillo", "Piura"].map((city) => ({ label: city, value: city })),
+  ...CITIES.map((city) => ({ label: city, value: city })),
 ];
 
-const PRICE_ITEMS: SelectOption[] = [
-  { label: "Cualquier precio", value: null },
-  { label: "Gratis", value: "gratis" },
-  { label: "Hasta S/ 50", value: "0-50" },
-  { label: "S/ 50 – S/ 100", value: "50-100" },
-  { label: "S/ 100 – S/ 200", value: "100-200" },
-  { label: "Más de S/ 200", value: "200-mas" },
-];
+const PRICE_ITEMS: SelectOption[] = [{ label: "Cualquier precio", value: null }, ...PRICE_RANGES];
 
 const labelClassName = "text-xs font-bold tracking-wider text-muted-foreground uppercase";
 
 // Select es cliente (de shadcn) y envía su valor con un input oculto `name`; `null` envía vacío.
-function SelectField({ name, label, items }: { name: string; label: string; items: SelectOption[] }) {
+function SelectField({
+  name,
+  label,
+  items,
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  items: SelectOption[];
+  defaultValue?: string;
+}) {
   return (
     <div className="grid gap-1.5">
-      <Select name={name} items={items} defaultValue={null}>
+      <Select name={name} items={items} defaultValue={defaultValue ?? null}>
         <SelectPrimitive.Label className={labelClassName}>{label}</SelectPrimitive.Label>
         <SelectTrigger className="w-full cursor-pointer data-[size=default]:h-11">
           <SelectValue />
@@ -45,8 +51,8 @@ function SelectField({ name, label, items }: { name: string; label: string; item
   );
 }
 
-// Server Component: buscador de la home. Móvil: apilado; md: texto en su fila + ciudad/fecha/precio/Buscar; lg: una fila.
-export function EventSearchBar({ className }: { className?: string }) {
+// Server Component: buscador de la home y de /eventos (precargado con `defaultValues`). Móvil: apilado; md: texto en su fila + ciudad/fecha/precio/Buscar; lg: una fila.
+export function EventSearchBar({ className, defaultValues }: { className?: string; defaultValues?: EventFilters }) {
   return (
     <section aria-label="Buscar eventos" className={cn("mx-auto max-w-7xl px-4 pt-6 md:px-6 md:pt-8 lg:px-8", className)}>
       <form
@@ -61,20 +67,35 @@ export function EventSearchBar({ className }: { className?: string }) {
           </label>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id="search-q" name="q" type="search" placeholder="Artista, evento o lugar" className="h-11 pl-9" />
+            <Input
+              id="search-q"
+              name="q"
+              type="search"
+              placeholder="Artista, evento o lugar"
+              className="h-11 pl-9"
+              defaultValue={defaultValues?.q}
+            />
           </div>
         </div>
 
-        <SelectField name="ciudad" label="Ciudad" items={CITY_ITEMS} />
+        <SelectField name="ciudad" label="Ciudad" items={CITY_ITEMS} defaultValue={defaultValues?.ciudad} />
 
         <div className="grid gap-1.5">
           <label htmlFor="search-date" className={labelClassName}>
             Fecha
           </label>
-          <Input id="search-date" name="fecha" type="date" className="h-11 cursor-pointer" />
+          <Input
+            id="search-date"
+            name="fecha"
+            type="date"
+            className="h-11 cursor-pointer"
+            defaultValue={defaultValues?.fecha}
+          />
         </div>
 
-        <SelectField name="precio" label="Precio" items={PRICE_ITEMS} />
+        <SelectField name="precio" label="Precio" items={PRICE_ITEMS} defaultValue={defaultValues?.precio} />
+
+        {defaultValues?.categoria && <input type="hidden" name="categoria" value={defaultValues.categoria} />}
 
         <Button type="submit" className="h-11 cursor-pointer px-6 font-semibold hover:bg-primary-strong">
           <Search className="size-5" aria-hidden />

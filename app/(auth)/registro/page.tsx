@@ -1,0 +1,11 @@
+import type { Metadata } from "next";
+
+import { RegisterForm } from "@/modules/auth";
+
+export const metadata: Metadata = {
+  title: "Crear cuenta — Mentec Tickets",
+};
+
+export default function RegisterPage() {
+  return <RegisterForm />;
+}

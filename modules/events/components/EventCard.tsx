@@ -8,19 +8,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import { EVENT_CATEGORY_LABELS } from "../data/categories";
-import type { Event, EventStatus } from "../types/events.types";
+import { EVENT_STATUS_BADGE } from "../data/eventStatus";
+import type { Event } from "../types/events.types";
 import { formatEventDate, formatEventPrice } from "../utils/formatEvent";
 
 type EventCardProps = {
   event: Event;
   className?: string;
-};
-
-// Texto navy sobre warning/destructive: blanco no llega a 4.5:1 (MASTER §2, §11).
-const STATUS_BADGE: Record<EventStatus, { label: string; className: string }> = {
-  available: { label: "Disponible", className: "bg-accent text-accent-foreground" },
-  "low-stock": { label: "Últimas entradas", className: "bg-warning text-warning-foreground" },
-  "sold-out": { label: "Agotado", className: "bg-destructive text-foreground" },
 };
 
 const CTA_CLASS = cn(
@@ -40,7 +34,7 @@ function EventPrice({ priceFrom }: Pick<Event, "priceFrom">) {
 export function EventCard({ event, className }: EventCardProps) {
   const href = `/eventos/${event.slug}`;
   const soldOut = event.status === "sold-out";
-  const status = STATUS_BADGE[event.status];
+  const status = EVENT_STATUS_BADGE[event.status];
 
   return (
     <Card

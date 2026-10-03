@@ -11,17 +11,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { AuthHeaderActions } from "@/modules/auth";
 import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
 
 const NAV_LINK =
   "inline-flex cursor-pointer items-center rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring";
-
-const PRIMARY_BUTTON = cn(
-  buttonVariants(),
-  "h-11 cursor-pointer px-4 font-semibold duration-200 hover:bg-primary-strong",
-);
-
-const OUTLINE_BUTTON = cn(buttonVariants({ variant: "outline" }), "h-11 cursor-pointer px-4 duration-200");
 
 const categoryLinks = EVENT_CATEGORIES.map((slug) => ({
   href: `/eventos?categoria=${slug}`,
@@ -48,13 +42,7 @@ export function SiteHeader() {
             ))}
           </nav>
 
-          <Link href="/login" className={cn(OUTLINE_BUTTON, "hidden sm:inline-flex md:h-10")}>
-            Iniciar sesión
-          </Link>
-
-          <Link href="/registro" className={cn(PRIMARY_BUTTON, "hidden sm:inline-flex md:h-10")}>
-            Crear cuenta
-          </Link>
+          <AuthHeaderActions variant="bar" />
 
           <Sheet>
             <SheetTrigger
@@ -83,22 +71,7 @@ export function SiteHeader() {
                     </SheetClose>
                   ))}
                 </nav>
-                <div className="flex flex-col gap-3">
-                  <SheetClose
-                    nativeButton={false}
-                    render={<Link href="/registro" />}
-                    className={cn(PRIMARY_BUTTON, "w-full")}
-                  >
-                    Crear cuenta
-                  </SheetClose>
-                  <SheetClose
-                    nativeButton={false}
-                    render={<Link href="/login" />}
-                    className={cn(OUTLINE_BUTTON, "w-full")}
-                  >
-                    Iniciar sesión
-                  </SheetClose>
-                </div>
+                <AuthHeaderActions variant="sheet" />
               </div>
             </SheetContent>
           </Sheet>

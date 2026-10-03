@@ -1,4 +1,5 @@
 // Datos de ejemplo: los consume events.service.ts, que los valida como si vinieran de la API.
+// Contenido ficticio (descripciones, organizadores) con direcciones verosímiles.
 const image = (id: string) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=80`;
 
 export const EVENTS_MOCK = [
@@ -14,6 +15,17 @@ export const EVENTS_MOCK = [
     priceFrom: 180,
     status: "available",
     featured: true,
+    description:
+      "La Gira Neón 2026 llega a Lima con una noche dedicada al synth-pop y la electrónica en vivo. Tres horas de sintetizadores analógicos, visuales sincronizados y un escenario de 360° diseñado para esta gira.\n\nEl show recorre los temas más coreados del último disco y clásicos reversionados para la ocasión, con invitados sorpresa de la escena local.\n\nRecomendamos llegar con anticipación: el ingreso se hará por las puertas de la Av. José Díaz y no se permitirá el reingreso.",
+    address: "Av. José Díaz s/n, Cercado de Lima",
+    doorsOpenAt: "2026-11-14T18:00:00-05:00",
+    minAge: 0,
+    organizer: "Pulso Producciones",
+    ticketTypes: [
+      { id: "general", name: "General", description: "Campo de pie, sin ubicación asignada.", price: 180, status: "available" },
+      { id: "preferencial", name: "Preferencial", description: "Zona delantera de campo con barra exclusiva.", price: 320, status: "available" },
+      { id: "vip", name: "VIP", description: "Primera fila de campo, ingreso preferente y merch oficial.", price: 550, status: "low-stock" },
+    ],
   },
   {
     id: "evt-002",
@@ -27,6 +39,16 @@ export const EVENTS_MOCK = [
     priceFrom: 95,
     status: "sold-out",
     featured: false,
+    description:
+      "Los Ecos del Sur vuelven a su ciudad para celebrar quince años de carrera con un concierto acústico e íntimo en el Teatro Municipal.\n\nUn repertorio de huaynos, baladas y fusiones andinas acompañado por un cuarteto de cuerdas y la participación especial de músicos arequipeños.",
+    address: "Calle Mercaderes 239, Cercado de Arequipa",
+    doorsOpenAt: "2026-12-05T19:00:00-05:00",
+    minAge: 0,
+    organizer: "Sonar Andino Eventos",
+    ticketTypes: [
+      { id: "general", name: "General", description: "Galería, sin numerar.", price: 95, status: "sold-out" },
+      { id: "platea", name: "Platea", description: "Butaca numerada en platea.", price: 150, status: "sold-out" },
+    ],
   },
   {
     id: "evt-003",
@@ -40,6 +62,17 @@ export const EVENTS_MOCK = [
     priceFrom: 120,
     status: "available",
     featured: true,
+    description:
+      "Una familia se reúne en la vieja casona de la abuela para repartir la herencia, pero cada espejo de la casa parece guardar un secreto distinto.\n\nEsta comedia dramática de enredos, con un elenco de seis actores, juega con el tiempo y la memoria para preguntarse qué heredamos realmente de quienes nos criaron.\n\nDuración aproximada: 1 hora 50 minutos, con un intermedio de 15 minutos.",
+    address: "Av. Javier Prado Este 2225, San Borja, Lima",
+    doorsOpenAt: "2026-11-20T18:45:00-05:00",
+    minAge: 0,
+    organizer: "Compañía Teatral Espejo",
+    ticketTypes: [
+      { id: "platea-alta", name: "Platea alta", price: 120, status: "available" },
+      { id: "platea-baja", name: "Platea baja", description: "Filas cercanas al escenario.", price: 180, status: "available" },
+      { id: "palco", name: "Palco", description: "Palco lateral para 4 personas, precio por persona.", price: 260, status: "available" },
+    ],
   },
   {
     id: "evt-004",
@@ -53,6 +86,16 @@ export const EVENTS_MOCK = [
     priceFrom: 60,
     status: "available",
     featured: false,
+    description:
+      "Una adaptación libre de la comedia de Shakespeare trasladada a los Andes: amantes que huyen a la puna, apus caprichosos y una fiesta patronal donde nada sale como estaba previsto.\n\nCon música en vivo, danzas tradicionales y diálogos en español y quechua, es una propuesta para toda la familia que mezcla humor, magia y tradición.",
+    address: "Calle Mesón de la Estrella 149, Cusco",
+    doorsOpenAt: "2027-01-16T19:15:00-05:00",
+    minAge: 0,
+    organizer: "Teatro Kuntur",
+    ticketTypes: [
+      { id: "general", name: "General", price: 60, status: "available" },
+      { id: "preferencial", name: "Preferencial", description: "Primeras cinco filas.", price: 100, status: "available" },
+    ],
   },
   {
     id: "evt-005",
@@ -66,6 +109,18 @@ export const EVENTS_MOCK = [
     priceFrom: 75,
     status: "available",
     featured: true,
+    description:
+      "El partido que define la temporada: los dos rivales históricos de la costa se enfrentan en la final con el título en juego.\n\nAntes del pitazo inicial habrá un show de bandas y la presentación de las divisiones menores de ambos clubes.\n\nPor seguridad, cada tribuna tiene un ingreso propio; revisa el tuyo en la entrada digital.",
+    address: "Av. José Díaz s/n, Cercado de Lima",
+    doorsOpenAt: "2026-11-29T12:30:00-05:00",
+    minAge: 0,
+    organizer: "Liga Costera de Fútbol",
+    ticketTypes: [
+      { id: "popular", name: "Popular", description: "Tribuna norte y sur.", price: 75, status: "available" },
+      { id: "oriente", name: "Oriente", price: 150, status: "available" },
+      { id: "occidente", name: "Occidente", price: 220, status: "low-stock" },
+      { id: "palco", name: "Palco", description: "Palco techado con servicio de catering.", price: 450, status: "available" },
+    ],
   },
   {
     id: "evt-006",
@@ -79,6 +134,17 @@ export const EVENTS_MOCK = [
     priceFrom: 40,
     status: "available",
     featured: false,
+    description:
+      "La Copa del Norte llega a su semifinal en el Mansiche, con el equipo local buscando su primera final en una década.\n\nUna tarde de fútbol con toda la hinchada trujillana, música de banda en las tribunas y zona de comidas en el exterior del estadio.",
+    address: "Av. Mansiche s/n, Trujillo",
+    doorsOpenAt: "2027-02-07T13:30:00-05:00",
+    minAge: 0,
+    organizer: "Club Deportivo Norteño",
+    ticketTypes: [
+      { id: "popular", name: "Popular", price: 40, status: "available" },
+      { id: "oriente", name: "Oriente", price: 70, status: "available" },
+      { id: "occidente", name: "Occidente", price: 110, status: "available" },
+    ],
   },
   {
     id: "evt-007",
@@ -92,6 +158,17 @@ export const EVENTS_MOCK = [
     priceFrom: 250,
     status: "available",
     featured: true,
+    description:
+      "Doce horas de música frente al mar: el Festival Sol de Verano reúne en dos escenarios a artistas de pop, rock alternativo y electrónica de toda Latinoamérica.\n\nAdemás de los conciertos habrá food trucks, zona de descanso con sombra y puntos de hidratación gratuitos.\n\nEvento exclusivo para mayores de 18 años; se solicitará documento de identidad en el ingreso.",
+    address: "Circuito de Playas Costa Verde, San Miguel, Lima",
+    doorsOpenAt: "2027-02-20T12:00:00-05:00",
+    minAge: 18,
+    organizer: "Brisa Live",
+    ticketTypes: [
+      { id: "general", name: "General", price: 250, status: "available" },
+      { id: "preferencial", name: "Preferencial", description: "Zona cercana a ambos escenarios.", price: 380, status: "low-stock" },
+      { id: "vip", name: "VIP", description: "Lounge con barra, baños exclusivos y vista elevada.", price: 620, status: "available" },
+    ],
   },
   {
     id: "evt-008",
@@ -105,6 +182,16 @@ export const EVENTS_MOCK = [
     priceFrom: 140,
     status: "available",
     featured: false,
+    description:
+      "El festival de playa del norte peruano vuelve a Colán con una jornada de cumbia, reggae y DJ sets hasta el atardecer.\n\nHabrá traslados opcionales desde Piura y Paita, feria de emprendedores locales y actividades deportivas en la arena durante la tarde.",
+    address: "Malecón de Colán s/n, Paita, Piura",
+    doorsOpenAt: "2027-03-13T13:00:00-05:00",
+    minAge: 0,
+    organizer: "Mar Adentro Producciones",
+    ticketTypes: [
+      { id: "general", name: "General", price: 140, status: "available" },
+      { id: "vip", name: "VIP", description: "Zona techada frente al escenario con barra propia.", price: 290, status: "available" },
+    ],
   },
   {
     id: "evt-009",
@@ -118,6 +205,17 @@ export const EVENTS_MOCK = [
     priceFrom: 85,
     status: "low-stock",
     featured: false,
+    description:
+      "Cinco comediantes, un solo escenario y ningún tema prohibido: el especial de fin de año repasa todo lo que nos pasó en 2026 con humor ácido y mucha improvisación.\n\nShow recomendado para mayores de 18 años por su lenguaje adulto.",
+    address: "Av. Costanera 2125, San Miguel, Lima",
+    doorsOpenAt: "2026-12-18T20:30:00-05:00",
+    minAge: 18,
+    organizer: "Carcajada Producciones",
+    ticketTypes: [
+      { id: "general", name: "General", price: 85, status: "low-stock" },
+      { id: "preferencial", name: "Preferencial", price: 120, status: "low-stock" },
+      { id: "mesa", name: "Mesa", description: "Mesa frente al escenario, precio por persona.", price: 160, status: "sold-out" },
+    ],
   },
   {
     id: "evt-010",
@@ -131,6 +229,16 @@ export const EVENTS_MOCK = [
     priceFrom: 45,
     status: "available",
     featured: false,
+    description:
+      "Una noche de micro abierto con lo mejor de la nueva comedia arequipeña: monólogos cortos, sketches y un cierre de improvisación con el público.\n\nCada mes se presentan nuevos talentos junto a un comediante invitado de Lima.",
+    address: "Calle Melgar 109, Cercado de Arequipa",
+    doorsOpenAt: "2027-01-23T19:45:00-05:00",
+    minAge: 18,
+    organizer: "Colectivo Risa Blanca",
+    ticketTypes: [
+      { id: "general", name: "General", price: 45, status: "available" },
+      { id: "mesa", name: "Mesa", description: "Mesa para dos con bebida incluida, precio por persona.", price: 70, status: "available" },
+    ],
   },
   {
     id: "evt-011",
@@ -144,6 +252,17 @@ export const EVENTS_MOCK = [
     priceFrom: 35,
     status: "available",
     featured: false,
+    description:
+      "Acróbatas, malabaristas y payasos se unen en un espectáculo de dos horas bajo la carpa más grande de la temporada navideña.\n\nUn viaje por el espacio contado a través del circo contemporáneo, sin animales y con números aéreos pensados para sorprender a grandes y chicos.\n\nLos menores de 2 años ingresan gratis sin ocupar butaca.",
+    address: "Av. Javier Prado Este s/n, Santiago de Surco, Lima",
+    doorsOpenAt: "2026-12-27T15:00:00-05:00",
+    minAge: 0,
+    organizer: "Estrella Circense",
+    ticketTypes: [
+      { id: "ninos", name: "Niños", description: "De 2 a 12 años.", price: 35, status: "available" },
+      { id: "general", name: "General", price: 55, status: "available" },
+      { id: "preferencial", name: "Preferencial", description: "Butacas junto a la pista.", price: 80, status: "available" },
+    ],
   },
   {
     id: "evt-012",
@@ -157,5 +276,12 @@ export const EVENTS_MOCK = [
     priceFrom: 0,
     status: "available",
     featured: false,
+    description:
+      "Una obra de títeres y música en vivo para los más pequeños: tres amigos del bosque buscan la semilla que devolverá el color a su hogar.\n\nFunción gratuita como parte del programa cultural de verano. La entrada es libre, pero es necesario reservarla para garantizar el aforo.",
+    address: "Jr. Pizarro 640, Centro Histórico de Trujillo",
+    doorsOpenAt: "2027-01-10T10:30:00-05:00",
+    minAge: 0,
+    organizer: "Asociación Cultural Raíces del Norte",
+    ticketTypes: [{ id: "entrada-libre", name: "Entrada libre", price: 0, status: "available" }],
   },
 ];
