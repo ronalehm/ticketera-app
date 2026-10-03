@@ -759,6 +759,381 @@ Coordinación con las otras specs de la ronda (orden: seating → checkout → t
 - No ejecutar dos `npm install` a la vez (F4 T1).
 - Los developers en paralelo verifican con `npx vitest run <sus archivos>` y `npx eslint <sus archivos>`; el build lo ejecuta el reviewer.
 
+### Fase 2. Página de selección (zonas de pie)
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima/entradas`, cuando carga, entonces:
+  - el `<title>` es "Elige tus entradas: Noche de Sintetizadores: Gira Neón 2026 | Mentec Tickets";
+  - se ve el stepper con "Entradas" como paso actual (`aria-current="step"`);
+  - se ven el enlace "Volver al evento", un único h1 con el título, la fecha `SÁB 14 NOV · 21:00` y "Estadio Nacional, Lima";
+  - se ven el mapa "Elige tu zona" con escenario y 4 zonas, la lista "Entradas" y, en `lg`, "Tu compra" con "Todavía no elegiste entradas. Toca una zona o usa los botones +." y "Continuar" deshabilitado.
+- [ ] Dado `npm run build`, entonces se generan estáticamente solo las 3 rutas `/eventos/<slug>/entradas` con mapa.
+- [ ] Dado `/eventos/clasico-del-pacifico/entradas` (sin mapa) o un slug inexistente, entonces se ve "No encontramos este evento".
+- [ ] Dado el mapa, cuando se hace clic en "Preferencial", entonces:
+  - su `path` pasa a `aria-pressed="true"` (los demás a `"false"`) y muestra el halo de seleccionada;
+  - la fila "Preferencial" de la lista se resalta.
+- [ ] Dado el teclado, cuando se recorre con Tab, entonces cada zona recibe foco visible (trazo discontinuo) y Enter o Espacio la activan sin desplazar la página.
+- [ ] Dado "Agregar una entrada de General" pulsado 2 veces, entonces:
+  - la cantidad muestra 2 y "General" queda activa;
+  - "Tu compra" muestra "2 × General … S/ 360.00", "Total (2 entradas)", "S/ 360.00" y "Precio final, sin cargos ocultos";
+  - "Continuar" es un enlace a `/checkout?evento=noche-de-sintetizadores-lima&general=2`, y al seguirlo `/checkout` muestra el resumen correcto.
+- [ ] Dado "Quitar una entrada de General" con 0, entonces está deshabilitado y la cantidad no baja de 0.
+- [ ] Dadas 10 entradas en total, entonces todos los "+" quedan deshabilitados y el pie dice "Llegaste al máximo de 10 entradas por compra.".
+- [ ] Dado `/eventos/risas-sin-filtro/entradas`, entonces:
+  - "Mesa" se ve gris en el mapa con "Agotado" y en la lista con "Agotado", sin stepper;
+  - "General" y "Preferencial" muestran "Últimas entradas" en el mapa (píldora) y en la lista (`Badge`).
+- [ ] Dada una zona numerada ("Tribuna Norte") en Fase 2, entonces se puede activar en el mapa, y la lista muestra su precio y "Elección de asientos próximamente", sin stepper.
+- [ ] Dado un lector de pantalla, entonces:
+  - las zonas se anuncian como botón conmutable con nombre, precio y estado (p. ej. "VIP, S/ 550.00, últimas entradas");
+  - los cambios de cantidad y de total se anuncian (`aria-live`);
+  - el `<ol>` del stepper se lee en todos los tamaños.
+- [ ] Dado 375 px de ancho, entonces:
+  - no hay scroll horizontal;
+  - el stepper muestra "Paso 1 de 3", "Elige tus entradas" y la barra de progreso al 33 %;
+  - el mapa ocupa el ancho y sus textos miden ≥ 12 px;
+  - "Tu compra" no se ve;
+  - la barra inferior "Total · 0 entradas / S/ 0.00 / Continuar" queda pegada abajo al desplazarse y no tapa el footer al final de la página.
+- [ ] Dado 1024 px o más, entonces "Tu compra" es sticky bajo el header y la barra inferior no se ve.
+- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta el layout, los tonos por precio, los estados de zona y las reglas de accesibilidad de la página.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 3. Lógica de asientos y checkout con asientos
+- [ ] Dado `findBestAvailableSeats` con un fixture, entonces:
+  - elige el bloque contiguo `available` de la fila más cercana y más centrado;
+  - ignora los asientos accesibles y ocupados;
+  - devuelve `null` si no hay bloque.
+- [ ] Dado `getAdjacentSeatId`, entonces las flechas, Home y End se mueven según el requisito 19 y se quedan en el mismo asiento en los bordes.
+- [ ] Dado el hook, cuando se alterna un asiento disponible, entonces entra y sale de `seatIds`; un asiento ocupado no cambia nada; en el límite no se añade y `notice` es "Máximo 10 entradas por compra".
+- [ ] Dado `pickBestSeats` con 2 asientos de la zona ya elegidos, entonces se reemplazan por el mejor bloque de 2 y `notice` es "Elegimos 2 asientos juntos en la fila X.".
+- [ ] Dado `pickBestSeats` sin bloque posible, entonces la selección no cambia y aparece el aviso del requisito 20.
+- [ ] Dados 2 asientos disponibles de "Tribuna Norte" (p. ej. los que devuelve `findBestAvailableSeats(zonaNorte, 2)`), cuando se abre `/checkout?evento=noche-de-sintetizadores-lima&norte=2&asientos=<id1>,<id2>`, entonces el resumen muestra "Tribuna Norte", "2 × S/ 220.00", las etiquetas "Tribuna Norte · Fila … · Asiento …" de ambos asientos y el total S/ 440.00.
+- [ ] Dado `norte=2` sin `asientos`, un asiento ocupado, un `asientos` con 1 solo asiento para `norte=2`, `asientos` vacío o repetido, o asientos en un evento sin mapa, entonces se ve "No pudimos preparar tu compra".
+- [ ] Dado `general=2&vip=1` en `noche-de-sintetizadores-lima` (sin asientos), entonces sigue siendo válido con total S/ 910.00.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan; los tests de checkout existentes pasan sin cambios.
+
+### Fase 4. Plano de asientos e integración en el detalle
+- [ ] Dado `package.json`, entonces incluye `react-zoom-pan-pinch` `^4.2.0`.
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima/entradas`, cuando se activa "Tribuna Norte", entonces aparecen bajo el mapa:
+  - "Elige tus asientos" con "Tribuna Norte · S/ 220.00 c/u", los botones "Acercar", "Alejar" y "Ver todo el plano", y "Mejor asiento disponible";
+  - el plano entero a la vista, con el escenario arriba y las filas A–H rotuladas;
+  - la leyenda y "Tus asientos" con "Aún no elegiste asientos.".
+- [ ] Dado un asiento disponible, cuando se hace clic, entonces:
+  - pasa a `aria-checked="true"` con la forma de "Tu selección";
+  - aparece el chip "Tribuna Norte · Fila … · Asiento …";
+  - "Tu compra" muestra "1 × Tribuna Norte", la etiqueta corta y S/ 220.00;
+  - "Continuar" lleva a `/checkout?evento=…&norte=1&asientos=norte-…`.
+- [ ] Dado un asiento ocupado, cuando se hace clic o se pulsa Espacio sobre él, entonces no cambia nada y su `aria-label` termina en "ocupado".
+- [ ] Dado el plano con foco, cuando se usan las flechas, entonces:
+  - el foco se mueve entre asientos con foco visible y solo hay una parada de Tab en el plano;
+  - Espacio o Enter eligen o quitan el asiento sin desplazar la página.
+- [ ] Dado "Mejor asiento disponible" sin asientos elegidos, entonces se elige 1 asiento de la fila más cercana y más centrado y se anuncia "Elegimos Fila … · Asiento ….".
+- [ ] Dado el botón "Quitar …" de un chip, cuando se pulsa, entonces el asiento se deselecciona en el plano y en el resumen, y el foco pasa al chip siguiente (o al h2 si no queda ninguno).
+- [ ] Dado "Elegir asientos en Platea" en `/eventos/la-casa-de-los-espejos/entradas`, cuando se pulsa, entonces la zona se activa y el foco pasa al h2 "Elige tus asientos".
+- [ ] Dado el mapa, cuando se eligen asientos en "Platea" y en "Mezanine" y se cambia de zona, entonces se conservan los asientos de ambas zonas.
+- [ ] Dado lo anterior, entonces el enlace a checkout lleva `platea=<n>&mezanine=<m>&asientos=…` y `/checkout` lo acepta.
+- [ ] Dado el plano en móvil (375 px), cuando se pellizca o se arrastra, entonces:
+  - hace zoom o paneo sin hacer zoom en la página (`touch-action: none`);
+  - soltar tras un arrastre no elige ningún asiento;
+  - con el plano entero a la vista, cada asiento mide ≥ 24 px;
+  - no hay scroll horizontal.
+- [ ] Dados "Acercar", "Alejar" y "Ver todo el plano" (≥ 44 px), cuando se pulsan, entonces el plano hace zoom y se encaja; con `prefers-reduced-motion`, sin animación.
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima`, entonces el aside muestra, en lugar de `TicketSelector`:
+  - "Entradas desde S/ 180.00" y la lista de las 4 zonas con su tono y precio ("Últimas entradas" en VIP);
+  - "Elegir entradas", que lleva a `/eventos/noche-de-sintetizadores-lima/entradas`;
+  - "Pago seguro · Entrada digital con QR".
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima` a 375 px, entonces hay una barra inferior pegada "Desde S/ 180.00 · Comprar entradas" que lleva a `/entradas`.
+- [ ] Dado `/eventos/clasico-del-pacifico` (sin mapa), entonces se ve `TicketSelector` como antes y no hay barra inferior.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+## Diseño técnico
+
+### Rutas (`app/`)
+Consultar `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/generate-static-params.md` (params de segmentos superiores) y `file-conventions/not-found.md`.
+- `app/eventos/[slug]/entradas/page.tsx` (F2): `generateStaticParams` (eventos con `hasVenueMap`), `generateMetadata` y la página async. Sin `dynamicParams = false`: un slug desconocido llega a `notFound()` y usa el 404 del evento.
+- `app/eventos/[slug]/page.tsx` (F4): `Promise.all([getEventBySlug, getRelatedEvents, getVenueMapBySlug])`.
+  - Con mapa: `ZonePricesCard` en la celda del selector y `MobileBuyBar` como último elemento del fragmento (después de `RelatedEvents`).
+  - Sin mapa: `TicketSelector` sin cambios.
+
+### Componentes
+- shadcn (instalados, no hay nada que instalar): `card`, `button`/`buttonVariants`, `badge`, `separator`.
+  - Durante la redacción, `npx shadcn@latest search` falló por red (403 del proxy). Según el catálogo conocido de shadcn, no hay stepper de pasos, chips ni plano/zoom.
+  - `progress` existe pero no hace falta: la barra móvil del stepper es decorativa (`aria-hidden`, un `div`).
+- nuevo `components/shared/PurchaseStepper.tsx` (F2, servidor, presentacional; contrato A). Va a `shared` porque lo usan `seating` (paso 1) y `checkout` (pasos 2 y 3).
+- Nuevos en `modules/seating/components/` (los usa solo `seating`):
+  - `EventPurchaseStrip.tsx` (F2, servidor): props `slug`, `title`, `imageUrl`, `startsAt`, `venue`, `city`.
+  - `TicketSelection.tsx` (F2, `"use client"`): props `eventSlug: string` y `map: VenueMap`. Usa `useSeatSelection` y compone el resto. En F4 añade `SeatPlan` y el foco al h2 del plano.
+  - `VenueMapView.tsx` (F2; cliente por estar bajo `TicketSelection`): props `viewBox`, `stage`, `venue`, `zones`, `tones`, `activeZoneId` y `onSelectZone`.
+  - `ZoneList.tsx` (F2; F4 añade `seatCountByZone` y `onChooseSeats`): props `zones`, `tones`, `activeZoneId`, `quantities`, `atLimit` y `onChangeQuantity`.
+  - `PurchaseSummary.tsx` (F2): props `lines`, `ticketCount`, `total`, `checkoutHref` y `className`.
+  - `MobilePurchaseBar.tsx` (F2): props `ticketCount`, `total`, `checkoutHref` y `className`.
+  - `SeatPlan.tsx` (F4, `"use client"`): props `zone: NumberedVenueZone`, `stageLabel`, `selectedSeatIds`, `selectedSeats: { id; label }[]`, `notice`, `canPickBest`, `onToggleSeat`, `onRemoveSeat`, `onPickBestSeats` y `headingId`. Contiene `TransformWrapper` y la barra de herramientas (con `useControls` dentro del wrapper).
+  - `SeatLegend.tsx` (F4, presentacional).
+  - `SelectedSeatChips.tsx` (F4): props `seats: { id; label }[]` y `onRemove(id)`.
+  - `ZonePricesCard.tsx` (F4, servidor): props `slug`, `status`, `priceFrom` y `zones`.
+  - `MobileBuyBar.tsx` (F4, servidor): props `slug` y `priceFrom`.
+- Existentes que se modifican: `modules/checkout/components/OrderSummary.tsx` (F3, asientos por línea) y `app/eventos/[slug]/page.tsx` (F4).
+
+### Schemas, tipos, utils, hooks y service (`modules/seating`)
+
+`schemas/seating.schema.ts` (F1):
+```ts
+export const seatRowLabelSchema = z.string().regex(/^[A-Z]{1,2}$/);
+export const seatStatusSchema = z.enum(["available", "occupied", "accessible"]);
+export const seatSchema = z.object({
+  id: z.string(), row: seatRowLabelSchema, number: z.number().int().min(1).max(999),
+  x: z.number(), y: z.number(), status: seatStatusSchema,
+});
+export const seatRowSchema = z.object({ label: seatRowLabelSchema, seats: seatSchema.array().min(1) });
+const pointSchema = z.object({ x: z.number(), y: z.number() });
+const viewBoxSchema = z.string().regex(/^0 0 \d+ \d+$/);
+const kebabIdSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+const zoneLayoutBaseSchema = z.object({
+  id: kebabIdSchema, ticketTypeId: kebabIdSchema, path: z.string().min(1), labelPos: pointSchema,
+});
+export const venueZoneLayoutSchema = z.discriminatedUnion("kind", [
+  zoneLayoutBaseSchema.extend({ kind: z.literal("general"), capacity: z.number().int().positive() }),
+  zoneLayoutBaseSchema.extend({ kind: z.literal("numbered"), seatViewBox: viewBoxSchema, rows: seatRowSchema.array().min(1) }),
+]);
+export const venueLayoutSchema = z.object({
+  eventSlug: z.string().min(1),
+  viewBox: viewBoxSchema,
+  stage: z.object({ label: z.string().min(1), path: z.string().min(1), labelPos: pointSchema }),
+  zones: venueZoneLayoutSchema.array().min(1),
+}).superRefine(/* requisito 3 */);
+export const seatIdSchema = z.string().regex(SEAT_ID_PATTERN); // /^([a-z0-9]+(?:-[a-z0-9]+)*)-([A-Z]{1,2})-(\d{1,3})$/
+export const seatIdsParamSchema = z.string().transform((value) => value.split(","))
+  .pipe(seatIdSchema.array().min(1).max(MAX_TICKETS_PER_ORDER)) // MAX desde "@/modules/events/purchase"
+  .refine((ids) => new Set(ids).size === ids.length);
+```
+
+`types/seating.types.ts` (F1):
+```ts
+export type SeatStatus = z.infer<typeof seatStatusSchema>;
+export type Seat = z.infer<typeof seatSchema>;
+export type SeatRow = z.infer<typeof seatRowSchema>;
+export type VenueLayout = z.infer<typeof venueLayoutSchema>;
+export type VenueZoneLayout = z.infer<typeof venueZoneLayoutSchema>;
+export type VenueZone = VenueZoneLayout & { name: string; price: number; status: EventStatus }; // import type de "@/modules/events"
+export type GeneralVenueZone = Extract<VenueZone, { kind: "general" }>;
+export type NumberedVenueZone = Extract<VenueZone, { kind: "numbered" }>;
+export type VenueMap = Omit<VenueLayout, "zones"> & { venue: string; zones: VenueZone[] };
+export type ResolvedSeat = { id: string; label: string; zoneId: string; ticketTypeId: string };
+export type SeatSelection = { quantities: Record<string, number>; seatIds: string[] };
+export type SelectionLine = { zoneId: string; name: string; quantity: number; amount: number; seatLabels: string[] };
+export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "sold-out";
+```
+
+Utils (puros, sin React):
+- `utils/seatIds.ts` (F1):
+  - `SEAT_ID_PATTERN`;
+  - `formatSeatId(zoneId, row, number)` y `parseSeatId(id): { zoneId; row; number } | null`;
+  - `formatSeatShortLabel(row, number)` → "Fila F · Asiento 12";
+  - `formatSeatLabel(zoneName, row, number)` → "Tribuna Norte · Fila F · Asiento 12";
+  - `getSeatAriaLabel(seat, priceLabel)` (requisito 23);
+  - `parseSeatIds` y `resolveSeats` (requisito 6).
+- `utils/seatRows.ts` (F1): `SEAT_PITCH`, `SEAT_PLAN_MARGIN` y `generateSeatRows(spec: { zoneId: string; rowLabels: string[]; seatsPerRow: number | number[]; occupiedRatio: number; accessibleSeats?: string[] }): { seatViewBox: string; rows: SeatRow[] }`.
+- `utils/zoneTone.ts` (F1): `getZoneTones(zones: Pick<VenueZone, "id" | "price" | "status">[]): Record<string, ZoneTone>` y `ZONE_TONE_CLASSES: Record<ZoneTone, { shape: string; label: string; swatch: string }>` (decisión 9).
+- `utils/selectionSummary.ts` (F2): requisito 17.
+- `utils/bestSeats.ts` (F3): `findBestAvailableSeats(zone: NumberedVenueZone, count: number): string[] | null`.
+- `utils/seatNavigation.ts` (F3): `getAdjacentSeatId(zone: NumberedVenueZone, seatId: string, key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End"): string`.
+
+Hook `hooks/useSeatSelection.ts` (`"use client"`, F2 y F3):
+```ts
+export function useSeatSelection(map: VenueMap): {
+  activeZoneId: string | null;
+  quantities: Record<string, number>;
+  seatIds: string[];
+  ticketCount: number;
+  atLimit: boolean;
+  lines: SelectionLine[];
+  total: number;
+  checkoutHref: string | null;
+  notice: string | null;                                   // F3
+  selectZone(zoneId: string): void;
+  changeQuantity(zoneId: string, delta: 1 | -1): void;
+  toggleSeat(seatId: string): void;                       // F3
+  removeSeat(seatId: string): void;                       // F3
+  pickBestSeats(zoneId: string): void;                    // F3
+};
+```
+`map.eventSlug` sirve para el href.
+
+Datos `data/venueMaps.mock.ts` (F1): `VENUE_LAYOUTS_MOCK: z.input<typeof venueLayoutSchema>[]`, con las zonas numeradas generadas con `generateSeatRows` (no se escriben asientos a mano).
+- Las coordenadas son de referencia: el developer puede redondear esquinas o curvar formas, siempre que se mantengan los requisitos 7 y 10 y que las etiquetas queden dentro de su zona sin solaparse.
+- Las zonas `low-stock` miden ≥ 96 unidades de alto, para que quepa la píldora.
+
+| Evento | `viewBox` | Escenario | Zonas (`id` · tipo · forma de referencia · `labelPos`) |
+|---|---|---|---|
+| `noche-de-sintetizadores-lima` | `0 0 600 560` | "ESCENARIO" `M200 16 H400 V60 H200 Z` (300, 46) | `vip` · general (1500) · `M150 76 H450 V180 H150 Z` (300, 128) · `preferencial` · general (4000) · `M90 196 H510 V296 H90 Z` (300, 246) · `general` · general (12000) · `M20 312 H580 V444 H20 Z` (300, 378) · `norte` · numbered · `M20 460 H580 V544 H20 Z` (300, 502): filas A–H, 10 por fila, `occupiedRatio` 0.3, accesibles `norte-H-1`, `norte-H-10` |
+| `la-casa-de-los-espejos` | `0 0 600 520` | "ESCENARIO" `M150 16 H450 V64 H150 Z` (300, 50) | `platea` · numbered · `M60 90 H540 V300 H60 Z` (300, 195): filas A–J, `[8,8,9,9,10,10,10,10,10,10]`, 0.4, accesibles `platea-J-1`, `platea-J-10` · `mezanine` · numbered · `M40 330 H560 V490 H40 Z` (300, 410): filas A–F, 10, 0.85 |
+| `risas-sin-filtro` | `0 0 600 520` | "ESCENARIO" `M200 16 H400 V64 H200 Z` (300, 50) | `mesa` · numbered · `M120 84 H480 V170 H120 Z` (300, 127): filas A–C, 8, 1 (agotada) · `preferencial` · numbered · `M60 186 H540 V326 H60 Z` (300, 256): filas A–F, 10, 0.8, accesibles `preferencial-F-1`, `preferencial-F-10` · `general` · general (600) · `M20 342 H580 V500 H20 Z` (300, 421) |
+
+Service `services/seating.service.ts` (F1), servidor y mock por ahora, con la misma firma que tendrá la API:
+- `getVenueMapBySlug(slug: string): Promise<VenueMap | null>` (requisito 5);
+- `hasVenueMap(slug: string): boolean`.
+
+`index.ts`:
+- F1: `getVenueMapBySlug`, `hasVenueMap`, `parseSeatIds`, `resolveSeats`, `formatSeatLabel` y los tipos `VenueMap`, `VenueZone`, `NumberedVenueZone`, `Seat`, `SeatStatus`, `ResolvedSeat`.
+- F2 añade `TicketSelection` y `EventPurchaseStrip`.
+- F4 añade `ZonePricesCard` y `MobileBuyBar`.
+
+### Otros módulos
+- `modules/events/purchase.ts` (F1, entrada pública que solo reexporta): `formatEventPrice` (`./utils/formatEvent`) y `MAX_TICKETS_PER_ORDER` y `buildCheckoutHref` (`./utils/ticketOrder`).
+- `modules/events/data/events.mock.ts` (F1): decisión 4.
+- `modules/checkout` (F3):
+  - `types/checkout.types.ts`: `seats?` en `CheckoutOrderItem`.
+  - `utils/checkoutOrder.ts`: `buildCheckoutOrder(event, quantities, seating: { map: VenueMap | null; seatIds: string[] | null } = { map: null, seatIds: [] })`, con las reglas del requisito 21; usa `resolveSeats` de `@/modules/seating`.
+  - `services/checkout.service.ts`: separa `asientos`, usa `parseSeatIds` y `getVenueMapBySlug`, y amplía la firma de `resolveCheckoutOrder` (requisito 21).
+  - `components/OrderSummary.tsx`: requisito 22.
+  - `schemas/checkout.schema.ts`: sin cambios (`asientos` lo valida `seatIdsParamSchema` de `seating`).
+
+### Dependencias entre módulos
+`checkout` → `seating` → `events` (solo barrel o entrada pública). `events` no importa `seating`: la integración en el detalle la compone `app/`.
+
+### Contrato de API
+No hay API: son datos mock.
+- **Forma de los datos:** `VenueMap` (tipos de arriba).
+- **Funciones públicas** (contrato B):
+  - `getVenueMapBySlug(slug): Promise<VenueMap | null>`;
+  - `hasVenueMap(slug): boolean`;
+  - `parseSeatIds(raw: string | string[] | undefined): string[] | null`;
+  - `resolveSeats(map: VenueMap, seatIds: string[]): ResolvedSeat[] | null`.
+- **Paso a checkout** (contrato C):
+  ```
+  GET /checkout?evento=<slug>&<ticketTypeId>=<entero ≥ 1>…[&asientos=<seatId>(%2C<seatId>)*]
+  ```
+  Para cada zona numerada, `<ticketTypeId>` = número de asientos de esa zona en `asientos`.
+  ```ts
+  type CheckoutOrderItem = { ticketTypeId: string; name: string; unitPrice: number; quantity: number; seats?: { id: string; label: string }[] };
+  ```
+- **`PurchaseStepper`** (contrato A): `{ currentStep: 1 | 2 | 3 }`.
+- **Detalle** (contrato H): `ZonePricesCard` `{ slug: string; status: EventStatus; priceFrom: number; zones: VenueZone[] }` y `MobileBuyBar` `{ slug: string; priceFrom: number }`.
+
+## Reutilización
+- `events`:
+  - `getEventBySlug`, `getEvents`, `formatEventDate` y tipos (barrel, en servidor);
+  - `formatEventPrice`, `MAX_TICKETS_PER_ORDER` y `buildCheckoutHref` (entrada nueva `purchase.ts`, en cliente);
+  - patrón de stepper accesible de `TicketSelector` (`focusableWhenDisabled`, clases `aria-disabled:*`, `aria-live`) y de su CTA deshabilitado;
+  - clases de estado `bg-warning text-warning-foreground` de `EVENT_STATUS_BADGE`;
+  - grilla y sticky de `/eventos/[slug]`;
+  - `not-found.tsx` del evento.
+- `checkout`: `getCheckoutOrder`/`buildCheckoutOrder` (se amplían, no se duplican) y `OrderSummary`.
+- shadcn instalados: `Card`, `Button`, `Badge`, `Separator`.
+- Iconos `lucide-react`: `ArrowLeft`, `ArrowRight`, `Lock`, `Check`, `Minus`, `Plus`, `X`, `ZoomIn`, `ZoomOut`, `Maximize`, `Sparkles`.
+- Nativos: SVG, `URLSearchParams`, `Intl` (vía `formatEventPrice`), `matchMedia("(prefers-reduced-motion: reduce)")`.
+- Dependencia nueva (F4): `react-zoom-pan-pinch@^4.2.0` (decisión 2).
+
+## Tests
+- `modules/seating/schemas/seating.schema.test.ts` (F1):
+  - un layout mínimo válido pasa;
+  - fallan:
+    - zona duplicada;
+    - `ticketTypeId` duplicado;
+    - `seat.id` que no coincide con `formatSeatId`;
+    - `seat.row` distinto de `row.label`;
+    - filas o números repetidos;
+    - `viewBox` inválido;
+    - zona numerada sin `rows`;
+    - zona general sin `capacity`;
+  - `seatIdsParamSchema`: acepta 1 y 10 ids; rechaza 11, vacío, duplicados y mal formados.
+- `modules/seating/utils/seatIds.test.ts` (F1):
+  - `formatSeatId`/`parseSeatId`: ida y vuelta, zona con guiones y fila de 2 letras; inválidos → `null`;
+  - etiquetas completa y corta;
+  - `getSeatAriaLabel` para los 3 estados;
+  - `parseSeatIds`: casos del criterio F1;
+  - `resolveSeats` con un `VenueMap` fixture: ok en orden, inexistente, ocupado, zona agotada, asiento de zona general, duplicado y `[]`.
+- `modules/seating/utils/seatRows.test.ts` (F1):
+  - número de filas y asientos;
+  - ids y numeración 1..n;
+  - centrado de filas cortas;
+  - fórmula del `seatViewBox`;
+  - determinismo;
+  - `occupiedRatio` 0 y 1;
+  - accesibles aplicados solo si no están ocupados;
+  - accesible inexistente lanza error;
+  - con 0.3 sobre 100 asientos, entre 15 y 45 ocupados.
+- `modules/seating/utils/zoneTone.test.ts` (F1):
+  - orden por precio, empates, más de 4 precios y `sold-out`;
+  - todos los tonos tienen clases.
+- `modules/seating/services/seating.service.test.ts` (F1, con los mocks reales):
+  - los criterios F1 de `getVenueMapBySlug`/`hasVenueMap`;
+  - invariantes del requisito 7 para los 3 mapas.
+- `modules/seating/utils/selectionSummary.test.ts` (F2):
+  - líneas en orden de zonas;
+  - asientos agrupados por zona con etiqueta corta;
+  - conteo y total;
+  - `toCheckoutQuantities` (zona → `ticketTypeId`);
+  - href sin asientos, con asientos (`asientos=…%2C…`) y `null` con 0 entradas;
+  - omite cantidades 0;
+  - `formatTicketCount(1)` → "1 entrada" y `(3)` → "3 entradas".
+- `modules/seating/hooks/useSeatSelection.test.ts` (`renderHook`):
+  - F2:
+    - estado inicial;
+    - `selectZone`;
+    - `changeQuantity` activa la zona, sube y baja sin pasar de 0;
+    - no hace nada en zonas numeradas o agotadas;
+    - límite de 10 sumando zonas;
+    - `total`, `lines` y `checkoutHref`.
+  - F3 amplía con:
+    - `toggleSeat` (añade, quita, ocupado, límite + `notice`);
+    - `removeSeat`;
+    - `pickBestSeats` (1 asiento, reemplazo de k, sin bloque + `notice`);
+    - el límite cuenta asientos + entradas de pie;
+    - href con `asientos`.
+- `modules/seating/components/TicketSelection.test.tsx` (con un `VenueMap` fixture):
+  - Se usa `within`/`getAllBy` porque en jsdom se renderizan el resumen y la barra.
+  - F2:
+    - clic en una zona del mapa → `aria-pressed` y la fila se resalta;
+    - Enter en una zona la activa;
+    - "Agregar una entrada de …" actualiza la cantidad, el total y el `href` de "Continuar";
+    - CTA deshabilitado con 0;
+    - límite de 10 con el texto del pie;
+    - zona agotada con "Agotado" y sin stepper;
+    - zona numerada con "Elección de asientos próximamente".
+  - F4, con `vi.mock("react-zoom-pan-pinch")`: `TransformWrapper` renderiza `children` (función o nodo), `TransformComponent` pasa `children` y `useControls` devuelve funciones falsas.
+    - "Elegir asientos" muestra el plano y enfoca su h2;
+    - clic en un asiento → `aria-checked`, chip y resumen;
+    - Espacio alterna;
+    - ArrowRight mueve el foco y el `tabIndex` 0;
+    - un asiento ocupado no cambia nada;
+    - "Mejor asiento disponible" elige 1 asiento y anuncia el aviso;
+    - quitar un chip deselecciona y mueve el foco;
+    - el `href` incluye `asientos`.
+- `modules/seating/utils/bestSeats.test.ts` (F3):
+  - fila más cercana, bloque centrado, empate al número menor;
+  - ignora accesibles y ocupados;
+  - `count` mayor que cualquier bloque → `null`;
+  - zona sin disponibles → `null`.
+- `modules/seating/utils/seatNavigation.test.ts` (F3):
+  - las 6 teclas;
+  - bordes de fila y de plano;
+  - arriba/abajo con filas de distinta longitud (la `x` más cercana).
+- `modules/checkout/utils/checkoutOrder.test.ts` (F3):
+  - Los tests existentes no cambian.
+  - Se añade un `VenueMap` fixture (una zona de pie y una numerada):
+    - pedido con asientos válido → `seats` con etiquetas en la línea numerada y sin `seats` en la de pie;
+    - zona numerada sin asientos, número de asientos distinto de la cantidad, asiento ocupado, asiento de otra zona o inexistente, `seatIds` `null`, o asientos sin mapa → `invalid-tickets`;
+    - la regla de evento `sold-out` sigue yendo primero.
+- `modules/checkout/services/checkout.service.test.ts` (F3):
+  - Los tests existentes no cambian.
+  - Se añade:
+    - `noche-de-sintetizadores-lima&norte=2&asientos=<2 disponibles obtenidos del mapa real>` → `ok` con total 440 y etiquetas;
+    - `norte=2` sin `asientos` → `invalid-tickets`;
+    - `asientos` como array o vacío → `invalid-tickets`;
+    - `resolveCheckoutOrder` con `seatIds` por defecto sigue igual.
+- Sin tests:
+  - páginas de `app/`;
+  - `PurchaseStepper`: presentacional sin estado ni eventos;
+  - `EventPurchaseStrip`, `VenueMapView`, `ZoneList`, `PurchaseSummary`, `MobilePurchaseBar`, `SeatLegend`, `ZonePricesCard`, `MobileBuyBar` y `OrderSummary`: presentacionales, cubiertos por `TicketSelection.test` donde tienen comportamiento;
+  - `SeatPlan` y `SelectedSeatChips`: cubiertos en `TicketSelection.test` (F4);
+  - mocks, tipos, `index.ts` y `purchase.ts`.
+
+## Plan de tareas
+Coordinación con las otras specs de la ronda (orden: seating → checkout → tickets → organizer → events-ui-refresh):
+- Esta spec se implementa **completa (F1–F4)** antes de empezar la nueva spec de checkout. Esa spec reutiliza `PurchaseStepper` (contrato A), `CheckoutOrderItem.seats` y las reglas de `asientos` (contrato C), y modifica después los mismos archivos de `modules/checkout` que toca F3.
+- Nota para la spec de checkout: la acción "Volver a elegir entradas" debería apuntar a `/eventos/<slug>/entradas` cuando `hasVenueMap(slug)`.
+- `app/eventos/[slug]/page.tsx` (F4) y `modules/events/data/events.mock.ts` (F1) solo los tocan después las specs posteriores. events-ui-refresh **no** rehace el aside del detalle (contrato H).
+- No ejecutar dos `npm install` a la vez (F4 T1).
+- Los developers en paralelo verifican con `npx vitest run <sus archivos>` y `npx eslint <sus archivos>`; el build lo ejecuta el reviewer.
+
 ### Fase 1. Dominio `seating` y mapas mock
 - [ ] T1. Ajustar `ticketTypes` del mock de eventos (decisión 4) y crear la entrada pública `purchase.ts`; verificar que `npx vitest run modules/events modules/checkout` pasa.
   - Archivos: `modules/events/data/events.mock.ts`, `modules/events/purchase.ts`.
