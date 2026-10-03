@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "../schemas/payment.schema";
 import { formatCardExpiry, formatCardNumber } from "../utils/card";
+import { RequiredMark } from "./RequiredMark";
 import type { CheckoutFormValues, PaymentMethod } from "../types/checkout.types";
 
 type PaymentFieldName = "paymentMethod" | "cardNumber" | "cardExpiry" | "cardCvv" | "cardName";
@@ -51,6 +52,7 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
     onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(name, format(event.target.value)),
     onBlur: () => onBlur(name),
     autoComplete: "off",
+    required: true,
     className: "h-11",
     "aria-invalid": !!errors[name],
     "aria-describedby": errors[name] ? `checkout-${name}-error` : undefined,
@@ -62,14 +64,6 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="flex gap-2 text-sm text-muted-foreground">
-        <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span>
-          Pago simulado: no se realiza ningún cobro y los datos de tu tarjeta no se envían ni se guardan. Prueba con
-          4242 4242 4242 4242 (aprobada) o 4000 0000 0000 0002 (rechazada).
-        </span>
-      </p>
-
       <div className="flex flex-col gap-2">
         <RadioGroup
           aria-labelledby={labelledBy}
@@ -106,7 +100,10 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
       {method === "card" ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Field data-invalid={!!errors.cardNumber} className="col-span-2">
-            <FieldLabel htmlFor="checkout-cardNumber">Número de tarjeta</FieldLabel>
+            <FieldLabel htmlFor="checkout-cardNumber">
+              Número de tarjeta
+              <RequiredMark />
+            </FieldLabel>
             <Input
               {...cardProps("cardNumber", formatCardNumber)}
               inputMode="numeric"
@@ -116,17 +113,26 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
             {fieldError("cardNumber")}
           </Field>
           <Field data-invalid={!!errors.cardExpiry}>
-            <FieldLabel htmlFor="checkout-cardExpiry">Vencimiento</FieldLabel>
+            <FieldLabel htmlFor="checkout-cardExpiry">
+              Vencimiento
+              <RequiredMark />
+            </FieldLabel>
             <Input {...cardProps("cardExpiry", formatCardExpiry)} inputMode="numeric" maxLength={5} placeholder="MM/AA" />
             {fieldError("cardExpiry")}
           </Field>
           <Field data-invalid={!!errors.cardCvv}>
-            <FieldLabel htmlFor="checkout-cardCvv">CVV</FieldLabel>
+            <FieldLabel htmlFor="checkout-cardCvv">
+              CVV
+              <RequiredMark />
+            </FieldLabel>
             <Input {...cardProps("cardCvv", onlyDigits)} inputMode="numeric" maxLength={4} placeholder="3 o 4 dígitos" />
             {fieldError("cardCvv")}
           </Field>
           <Field data-invalid={!!errors.cardName} className="col-span-2 sm:col-span-4">
-            <FieldLabel htmlFor="checkout-cardName">Nombre en la tarjeta</FieldLabel>
+            <FieldLabel htmlFor="checkout-cardName">
+              Nombre en la tarjeta
+              <RequiredMark />
+            </FieldLabel>
             <Input {...cardProps("cardName")} placeholder="Como aparece en la tarjeta" />
             {fieldError("cardName")}
           </Field>
@@ -139,6 +145,15 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
           </p>
         )
       )}
+
+      <p className="flex gap-2 text-sm text-muted-foreground">
+        <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+        <span>
+          Demo: no se realiza ningún cobro real.
+          {method === "card" &&
+            " Tarjetas de prueba: 4242 4242 4242 4242 (aprobada) y 4000 0000 0000 0002 (rechazada)."}
+        </span>
+      </p>
     </div>
   );
 }
