@@ -1,7 +1,7 @@
 # Pantallas completas para acceso y panel de organizador (route groups)
 
 - Módulo: layout (route groups de `app/`) · auth · organizer
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Hoy el header y el footer del sitio se pintan en `app/layout.tsx`, así que aparecen en todas las rutas. El usuario pidió que **Iniciar sesión** y **Crear cuenta** sean pantallas completas, sin header, footer ni nada más que el acceso, como en sus capturas. También pidió que el **panel de organizador** sea una app a pantalla completa con su propia barra lateral: marca "Mentec Tickets · Organizadores", navegación, tarjeta del usuario con "Cerrar sesión" y contenido sobre `bg-muted`.
@@ -30,9 +30,10 @@ Del diseño se toman la estructura, los textos y los patrones. La identidad visu
     - Pestañas con estilo de control segmentado.
     - Tests de los formularios actualizados.
     - `design-system/ticketera/pages/auth.md` reescrito.
-  - **Fase 3. Shell del organizador:**
+  - **Fase 3. Shell del organizador** (enmendada para reutilizar lo que creó `auth-user-menu` F1):
+    - `UserSummary` pasa de `modules/auth/components/` a `components/shared/` (lo usan `auth` y `organizer`); `UserMenu` y `AuthHeaderActions` solo cambian su import.
     - Layout `organizador` sin `SiteShell`.
-    - Sidebar en `lg` con marca, navegación y tarjeta de usuario (avatar con iniciales, nombre, correo y "Cerrar sesión", o "Iniciar sesión" si no hay sesión).
+    - Sidebar en `lg` con marca, navegación y tarjeta de usuario (`UserSummary`: avatar con iniciales, nombre y correo; debajo, "Cerrar sesión"; o "Iniciar sesión" si no hay sesión).
     - Barra superior en móvil con menú en `Sheet`.
     - Enlace "Volver al resumen" sobre el h1 de Crear evento.
     - Ajustes mínimos de fondo y sticky en el dashboard y el formulario.
@@ -46,7 +47,10 @@ Del diseño se toman la estructura, los textos y los patrones. La identidad visu
   - Protección de rutas, roles de organizador, middleware/proxy o redirigir a `?next=` tras iniciar sesión.
   - Rutas "Mis eventos", "Ventas" o "Configuración" del panel, ni mostrarlas en la navegación (Decisión 7).
   - El componente `sidebar` de shadcn (Decisión 8).
-  - Cambiar `SiteHeader`, `SiteFooter`, `AuthHeaderActions` (lo está modificando tickets-my-tickets F2), el formulario de creación más allá de una clase (Decisión 11), los KPIs o la tabla de eventos.
+  - Cambiar `SiteHeader`, `SiteFooter`, el comportamiento o el aspecto de `UserMenu` y `AuthHeaderActions` (en la Fase 3 solo cambia la ruta de import de `UserSummary`), los KPIs o la tabla de eventos.
+  - Cambiar el formulario de creación más allá de una clase (Decisión 11). En particular, no se tocan los bloques por tipo de entrada con "Ubicación" General/Numerada ni los campos del evento público (organizador, edad mínima, apertura de puertas, dirección), que son de `organizer-event-seating`.
+  - Instalar `avatar` o crear utilidades de iniciales en `organizer`: ya existen `components/ui/avatar.tsx`, `lib/userName.ts` y `components/shared/UserAvatar.tsx` (`auth-user-menu` F1).
+  - Rehacer "Mis eventos" (barra de cabecera, tabla a sangre, sin contenedor en móvil): es de `design-alignment-account-views` F2 (Decisión 14).
   - Cambiar la imagen del panel de marca, tema oscuro o animaciones nuevas.
 
 ## Decisiones tomadas
@@ -67,18 +71,24 @@ Del diseño se toman la estructura, los textos y los patrones. La identidad visu
 8. **No se usa el `sidebar` de shadcn**, aunque existe en `@shadcn/sidebar` (`base-nova`):
    - Trae `SidebarProvider` con estado en cookie (`sidebar_state`), atajo de teclado `Ctrl/⌘+B`, modo colapsable a iconos y el hook `use-mobile`, con un breakpoint fijo de 768 px (el panel usa `lg`, 1024 px).
    - Instala `tooltip`, `skeleton` e `input` en `components/ui` y `hooks/use-mobile.ts`.
-   - Para dos enlaces y una tarjeta basta componer `Sheet` (instalado), `Avatar` (se instala) y `buttonVariants` (KISS/YAGNI).
+   - Para dos enlaces y una tarjeta basta componer `Sheet`, `UserSummary` y `buttonVariants`, todos ya existentes (KISS/YAGNI).
 9. **Sesión en el panel.** La tarjeta de usuario lee `useAuthStore` desde la entrada pública `@/modules/auth/session` y la rehidrata al montar (patrón de `AuthHeaderActions`).
    - **Sin sesión, el panel sigue accesible** (se mantiene la Decisión 1 de `organizer-dashboard.md`: un bloqueo solo en cliente no protege nada). La tarjeta muestra un enlace "Iniciar sesión" a `/login`.
-   - **"Cerrar sesión"** llama a `signOut()` y navega a `/`, como en el diseño, donde el botón lleva al inicio del sitio.
-   - Las iniciales salen de `getInitials(firstName, lastName)`.
+   - **"Cerrar sesión"** llama a `signOut()` y navega a `/`, como en el diseño, donde el botón lleva al inicio del sitio (Decisión 6 de `auth-user-menu`: el header se queda en la página, el panel no).
+   - **Con sesión, la tarjeta es `UserSummary`** (avatar de 40 px con `getInitials`, nombre completo con `getFullName` y correo) y, debajo, el botón "Cerrar sesión" con texto a todo el ancho. Es la misma composición que el bloque de cuenta del `Sheet` del sitio (`AuthHeaderActions`): tarjeta + "Cerrar sesión" outline a todo el ancho.
+   - **Sin truncado:** como en `UserSummary` (Requisito 9 de `auth-user-menu`), los nombres y correos largos hacen salto de línea. En el sidebar de 240 px, un botón solo-icono al lado dejaría unos 110 px para el texto; con el botón debajo quedan unos 155 px y el botón tiene una etiqueta visible.
 10. **Móvil del panel:** barra superior `sticky top-0` de `h-16` con la marca y el botón "Abrir menú del panel" (44×44), que abre un `Sheet` desde la izquierda con la navegación y la tarjeta de usuario. Sustituye a los chips horizontales de la Fase 1 de organizer-dashboard: sin header global, el menú también tiene que alojar la sesión, y los chips ya no bastan. Al elegir un enlace, el `Sheet` se cierra (`OrganizerNav` recibe `onNavigate`).
 11. **Cambios mínimos en archivos de organizer-dashboard en curso:**
-    - `OrganizerDashboard`: la `<section>` "Mis eventos" pasa a ser una tarjeta blanca (`rounded-2xl bg-card p-4 ring-1 ring-border md:p-6`). Sobre `bg-muted` desaparecerían el fondo del filtro segmentado y el del estado vacío, que son `bg-muted`.
+    - `OrganizerDashboard`: la `<section>` "Mis eventos" pasa a ser una tarjeta blanca (`rounded-2xl bg-card p-4 ring-1 ring-border md:p-6`). Sobre `bg-muted` desaparecerían el fondo del filtro segmentado y el del estado vacío, que son `bg-muted`. Es provisional (Decisión 14).
     - `OrganizerEventForm`: la vista previa sticky pasa de `lg:top-24`, que compensaba el header global de 64 px, a `lg:top-10`.
     - `app/organizador/eventos/nuevo/page.tsx`: se añade el enlace "Volver al resumen" encima del h1.
     - Nada más de esos archivos cambia.
-12. **Landmarks del panel:** el sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`. Solo uno es visible en cada breakpoint y el otro lleva `display: none`, así que hay un único `banner` y un único `<nav aria-label="Panel de organizador">` en el árbol de accesibilidad. El layout añade su propio `<main>`, porque el root layout ya no lo tiene.
+12. **Landmarks del panel:** el sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`. Solo uno es visible en cada breakpoint y el otro lleva `display: none`, así que hay un único `banner` y un único `<nav aria-label="Panel de organizador">` en el árbol de accesibilidad. El layout añade su propio `<main>`, porque el root layout ya no lo tiene. El `<header>` interno de `app/organizador/page.tsx` (h1 "Resumen" + "Crear evento") queda dentro de `<main>`, así que no es un `banner` y no se cambia.
+13. **`UserSummary` sube a `components/shared/`** (Fase 3). Lo crea `auth-user-menu` F1 en `modules/auth/components/` y ahora lo necesita también `organizer`. Por SETUP §1, regla 5 (un módulo no importa internals de otro) y §2 ("se sube a `shared` cuando un segundo dominio lo necesite"), se mueve con `git mv` a `components/shared/UserSummary.tsx`, sin cambiar su contenido ni su contrato. `UserMenu` y `AuthHeaderActions` solo actualizan el import. Se descarta exponerlo por `@/modules/auth/session`: esa entrada es de la sesión, no de componentes.
+14. **"Mis eventos": cambio provisional hasta `design-alignment-account-views` F2.**
+    - Esta fase mantiene el Requisito 23 (la sección pasa a tarjeta blanca) para que sea entregable sola: sobre el nuevo `bg-muted`, la pista del filtro (`bg-muted`) y el bloque de vacío (`bg-muted`) desaparecerían.
+    - `design-alignment-account-views` F2 (Requisito 13 de esa spec) prevalece y lo reemplaza: tarjeta solo en `lg` con barra de cabecera y tabla a sangre, sin contenedor por debajo de `lg`. Esa fase va después de esta y parte del estado que deja el Requisito 23.
+    - Lo mismo con `pages/organizer.md`: esta fase escribe el shell y "Mis eventos en tarjeta"; design-alignment F2 T4 reescribe después "Mis eventos" y la vista previa.
 
 ### Lo que esta spec reemplaza en otras specs y páginas de diseño
 Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar, prevalece esta spec en estos puntos:
@@ -101,6 +111,10 @@ Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar,
   - Header y footer del layout raíz en `/login` y `/registro`.
   - Franja móvil sin logo.
 - **`design-system/ticketera/pages/auth.md` y `pages/organizer.md`:** se reescriben en las Fases 2 y 3.
+
+### Relación con specs posteriores (Fase 3)
+- **`docs/specs/auth-user-menu.md` (aprobada e implementada):** sus notas sobre esta Fase 3 ya están incorporadas aquí: no se reinstala `avatar`, no se crea `modules/organizer/utils/userInitials.ts` (`getInitials` y `getFullName` están en `lib/userName.ts`, probados en `lib/userName.test.ts`) y el avatar es `UserAvatar size="lg"`, que llega a través de `UserSummary`. Esta fase solo añade el movimiento de `UserSummary` a `components/shared/` (Decisión 13).
+- **`docs/specs/design-alignment-account-views.md` (borrador):** su F2 prevalece sobre el Requisito 23 y sobre la parte de "Mis eventos" de `pages/organizer.md` (Decisión 14). Mantiene el sidebar de 240 px, la navegación sin "Mis eventos" y la barra móvil uniforme (sus filas P2, P3, P5 y C1, y su pregunta abierta 7).
 
 ## Requisitos
 
@@ -166,8 +180,10 @@ Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar,
     - Se quitan los imports de `Card*` que ya no se usan. Ningún otro cambio de comportamiento.
 
 ### Fase 3: shell del organizador
-15. Instalar `Avatar` de shadcn: `npx shadcn@latest add avatar` crea `components/ui/avatar.tsx` (Base UI `@base-ui/react/avatar`, sin dependencias nuevas). Si el CLI falla, se detiene la fase y se avisa: no se escribe a mano.
-16. `app/organizador/layout.tsx` (Server Component, `LayoutProps<"/organizador">`, mantiene `metadata: { robots: { index: false } }`), sin `SiteShell`:
+15. **`UserSummary` compartido** (Decisión 13). No se instala nada: `components/ui/avatar.tsx`, `lib/userName.ts` y `components/shared/UserAvatar.tsx` ya existen.
+    - `git mv modules/auth/components/UserSummary.tsx components/shared/UserSummary.tsx`. El contenido no cambia (ya importa con `@/`: `UserAvatar`, `getFullName`, `cn`). Contrato: `{ firstName: string; lastName: string; email: string; className?: string }`.
+    - `modules/auth/components/UserMenu.tsx` y `AuthHeaderActions.tsx`: `import { UserSummary } from "./UserSummary"` pasa a `import { UserSummary } from "@/components/shared/UserSummary"`. Nada más cambia: el menú de usuario y el `Sheet` del sitio se ven y se comportan igual.
+16. `app/organizador/layout.tsx` (Server Component, `LayoutProps<"/organizador">`, mantiene `metadata: { robots: { index: false } }`). Hoy envuelve en `SiteShell` una grilla `max-w-7xl` con `OrganizerNav` en una columna sticky `lg:top-24`. Se sustituye entero (sin `SiteShell` ni `OrganizerNav`; importa `OrganizerSidebar` y `OrganizerMobileBar` de `@/modules/organizer`):
     ```tsx
     <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <OrganizerSidebar />
@@ -187,21 +203,28 @@ Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar,
     - Activo (ruta exacta): `aria-current="page"` y `bg-accent font-semibold text-accent-foreground`. Inactivo: `text-muted-foreground hover:bg-muted hover:text-foreground`.
     - Mismos destinos e iconos que hoy (`LayoutDashboard` Resumen, `Plus` Crear evento).
     - Nueva prop opcional `onNavigate?: () => void`, que se llama en el `onClick` de cada enlace.
-19. `OrganizerUserCard` (cliente). Usa `useAuthStore` de `@/modules/auth/session` y `useEffect(() => { useAuthStore.persist.rehydrate(); }, [])`.
-    - **Con usuario:** `<div className="flex items-center gap-3">` con:
-      - `Avatar` (`size="lg"`, `aria-hidden`) y `AvatarFallback` `bg-accent font-semibold text-accent-foreground` con `getInitials(firstName, lastName)`.
-      - Un bloque `min-w-0 flex-1` con el nombre `"{firstName} {lastName}"` (`truncate text-sm font-semibold`, `title`) y el correo (`truncate text-sm text-muted-foreground`, `title`).
-      - Un botón solo-icono `LogOut` con `aria-label="Cerrar sesión"`, `buttonVariants({ variant: "ghost", size: "icon" })` y `size-11 shrink-0 cursor-pointer`. Al pulsarlo: `signOut()` y `router.push("/")`.
-    - **Sin usuario:** enlace `cn(buttonVariants({ variant: "outline" }), "h-11 w-full cursor-pointer gap-2")` con icono `LogIn` y el texto "Iniciar sesión", hacia `/login`.
+19. `OrganizerUserCard` (cliente; Decisión 9). Usa `useAuthStore` (`user`, `signOut`) de `@/modules/auth/session`, `useRouter` de `next/navigation` y `useEffect(() => { useAuthStore.persist.rehydrate(); }, [])`.
+    - **Con usuario:** `<div className="flex flex-col gap-3">` con:
+      - `<UserSummary firstName={user.firstName} lastName={user.lastName} email={user.email} />` de `@/components/shared/UserSummary` (avatar `UserAvatar size="lg"` "AQ", nombre completo y correo, con salto de línea si no caben).
+      - `<Button type="button" variant="outline" className="h-11 w-full cursor-pointer gap-2 duration-200">` con el icono `LogOut` (`aria-hidden`) y el texto "Cerrar sesión". Al pulsarlo: `signOut()` y `router.push("/")`.
+    - **Sin usuario:** enlace `cn(buttonVariants({ variant: "outline" }), "h-11 w-full cursor-pointer gap-2 duration-200")` con icono `LogIn` (`aria-hidden`) y el texto "Iniciar sesión", hacia `/login`.
+    - No se compone `Avatar`/`AvatarFallback` ni se llama a `getInitials` directamente: lo hace `UserSummary` → `UserAvatar`.
 20. `OrganizerSidebar` (Server Component): `<header className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col lg:gap-8 lg:overflow-y-auto lg:border-r lg:bg-background lg:px-4 lg:py-6">` con `OrganizerBrand` (en `px-2`), `OrganizerNav`, y abajo (`mt-auto border-t pt-4`) `OrganizerUserCard`.
 21. `OrganizerMobileBar` (cliente, `Sheet` controlado con `useState`):
     - Contenedor: `<header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 lg:hidden">` con `OrganizerBrand` y un `SheetTrigger` con `aria-label="Abrir menú del panel"` (`buttonVariants({ variant: "ghost", size: "icon" })`, `size-11 cursor-pointer`, icono `Menu size-5`).
     - `SheetContent side="left"` (`overflow-y-auto`) contiene `SheetHeader` con `SheetTitle` "Panel de organizador" y, debajo, `<div className="flex flex-1 flex-col gap-6 px-4 pb-6">` con `<OrganizerNav onNavigate={() => setOpen(false)} />` y `<div className="mt-auto border-t pt-4"><OrganizerUserCard /></div>`.
     - Base UI mueve el foco al abrir, cierra con Escape y devuelve el foco al disparador.
-22. `app/organizador/eventos/nuevo/page.tsx`: encima del h1 "Crear evento" se añade `<Link href="/organizador" className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"><ArrowLeft className="size-4" aria-hidden />Volver al resumen</Link>`. El h1 y el formulario no cambian.
-23. `OrganizerDashboard`: la `<section aria-labelledby>` "Mis eventos" añade `rounded-2xl bg-card p-4 ring-1 ring-border md:p-6` (Decisión 11). Nada más cambia.
-24. `OrganizerEventForm`: en el `<aside>` de la vista previa, `lg:top-24` pasa a `lg:top-10` (Decisión 11). Nada más cambia. `FORM_CONTROL_SCROLL` (`scroll-mt-24`) se mantiene, porque en móvil sigue habiendo una barra sticky de 64 px.
-25. Barrel `modules/organizer/index.ts`: añade `OrganizerSidebar` y `OrganizerMobileBar` y quita `OrganizerNav`, que ya solo usan componentes internos. El resto de exports no cambia.
+22. `app/organizador/eventos/nuevo/page.tsx` (hoy: `<div className="flex flex-col gap-8 md:gap-10">` con el h1 y `<OrganizerEventForm />`, y el comentario "Sin enlace 'volver'…"):
+    - Se elimina ese comentario, que deja de ser cierto.
+    - El h1 pasa a ir dentro de `<div className="flex flex-col gap-2">`, precedido de `<Link href="/organizador" className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"><ArrowLeft className="size-4" aria-hidden />Volver al resumen</Link>`. Así el enlace queda pegado al h1 y no a 32–40 px por el `gap` de la raíz.
+    - El h1 (clases incluidas), el formulario, la raíz y la metadata no cambian.
+    - `app/organizador/page.tsx` (Resumen) **no cambia**.
+23. `OrganizerDashboard` (**provisional**, Decisión 14): la `<section aria-labelledby>` "Mis eventos" añade `rounded-2xl bg-card p-4 ring-1 ring-border md:p-6` (Decisión 11). Nada más cambia. `design-alignment-account-views` F2 (su Requisito 13) lo reemplaza después.
+24. `OrganizerEventForm`: en el `<aside>` de la vista previa, `lg:top-24` pasa a `lg:top-10` (Decisión 11). Nada más cambia:
+    - ni las secciones del formulario, ni `TicketTypesField`/`TicketTypeCapacityFields` (zonas "General" y "Numerada" con plano y capacidad), ni los campos del evento público (organizador, edad mínima, apertura de puertas, dirección), que son de `organizer-event-seating`;
+    - ni la barra de acciones móvil (`sticky bottom-0 -mx-4 md:-mx-6`), cuyos márgenes negativos siguen coincidiendo con el `px-4 md:px-6` del `<main>` nuevo; solo su comentario "sin tapar el footer" puede quedar desfasado y no se toca;
+    - `FORM_CONTROL_SCROLL` (`scroll-mt-24`, en `TicketTypesField`) se mantiene, porque en móvil sigue habiendo una barra sticky de 64 px.
+25. Barrel `modules/organizer/index.ts`: añade `OrganizerSidebar` y `OrganizerMobileBar` y quita `OrganizerNav`, que ya solo usan componentes internos (hoy solo lo importa `app/organizador/layout.tsx`). El resto de exports no cambia.
 
 ## Criterios de aceptación
 
@@ -231,16 +254,24 @@ Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar,
   - La navegación "Panel de organizador" con "Resumen" (`aria-current="page"`, fondo acento) y "Crear evento".
   - Abajo, la tarjeta de usuario.
 
-  El contenido va sobre `bg-muted` y la sección "Mis eventos" es una tarjeta blanca.
+  El contenido va sobre `bg-muted` y la sección "Mis eventos" es una tarjeta blanca (provisional: `design-alignment-account-views` F2 la rehace después).
 - [ ] Dado `/organizador` a 1440 px con mucho contenido, cuando se hace scroll, entonces el sidebar se queda fijo a toda la altura de la ventana.
-- [ ] Dada la sesión demo iniciada, entonces la tarjeta muestra el avatar "AQ", "Ana Quispe" y "demo@mentectickets.pe" (con truncado y puntos suspensivos si no caben, sin scroll horizontal), y un botón "Cerrar sesión" de 44×44 px.
+- [ ] Dada la sesión demo iniciada, entonces la tarjeta muestra el avatar "AQ" (40 px, `bg-accent`), "Ana Quispe" y "demo@mentectickets.pe" y, debajo, el botón "Cerrar sesión" con icono y texto, a todo el ancho de la tarjeta y de 44 px de alto.
+- [ ] Dada una cuenta con Nombres "Ronald Eleazar", Apellidos "Mendoza Huamán" y un correo largo (p. ej. `ronald.eleazar.mendoza.huaman@correo-ejemplo.pe`), entonces en el sidebar de 240 px (y en el `Sheet` a 375 px) el avatar es "RM" y el nombre completo y el correo se leen enteros, en varias líneas si hace falta, sin salirse de la tarjeta ni provocar scroll horizontal.
 - [ ] Dada la sesión demo iniciada, cuando se pulsa "Cerrar sesión", entonces se navega a `/` y el header del sitio muestra "Iniciar sesión" y "Crear cuenta".
 - [ ] Dado `/organizador` sin sesión, entonces el panel se muestra igual (sin redirección) y la tarjeta muestra el enlace "Iniciar sesión" hacia `/login`.
-- [ ] Dado `/organizador/eventos/nuevo` a 1440 px, entonces "Crear evento" tiene `aria-current="page"`. Encima del único `<h1>` "Crear evento" está el enlace "Volver al resumen" hacia `/organizador`. Al hacer scroll, la vista previa queda fija a unos 40 px del borde superior, sin el hueco de un header inexistente.
+- [ ] Dado `/organizador/eventos/nuevo` a 1440 px, entonces "Crear evento" tiene `aria-current="page"`. Justo encima del único `<h1>` "Crear evento" (a unos 8 px) está el enlace "Volver al resumen" hacia `/organizador`, de 44 px de alto o más. Al hacer scroll, la vista previa queda fija a unos 40 px del borde superior, sin el hueco de un header inexistente.
+- [ ] Dado `/organizador/eventos/nuevo`, entonces el formulario conserva todo lo que tiene hoy: los bloques por tipo de entrada con "Ubicación" General/Numerada (con el plano y la capacidad de las zonas numeradas), los campos del evento público (organizador, edad mínima, apertura de puertas, dirección), la portada y la vista previa. Al guardar un borrador o publicar, se vuelve a `/organizador` con el aviso, como antes.
 - [ ] Dado `/organizador` o `/organizador/eventos/nuevo` a 375 px, entonces arriba hay una barra blanca sticky de 64 px con el logo, "Organizadores" y el botón "Abrir menú del panel" (44×44). No se ven el sidebar, el header ni el footer del sitio, y no hay scroll horizontal. En Crear evento, la barra de acciones inferior sigue pegada abajo mientras se rellena el formulario.
 - [ ] Dado el menú móvil, cuando se pulsa "Abrir menú del panel", entonces se abre un `Sheet` desde la izquierda con el título "Panel de organizador", la navegación y la tarjeta de usuario, y el foco entra en el panel. Cuando se elige "Crear evento", se navega y el `Sheet` se cierra. Con Escape se cierra y el foco vuelve al botón.
 - [ ] Dado el árbol de accesibilidad en cualquier breakpoint, entonces hay un solo `banner`, una sola `nav` "Panel de organizador" (con el `Sheet` cerrado), un único `<main>` y un único `<h1>`. Todo lo interactivo muestra foco visible al navegar con Tab.
-- [ ] Dado el código, entonces `userInitials.test.ts` y `OrganizerUserCard.test.tsx` pasan, `npx vitest run modules/organizer` sigue en verde y `design-system/ticketera/pages/organizer.md` describe el nuevo shell.
+- [ ] Dado el header del sitio con la sesión demo (menú de usuario en la barra y bloque "Tu cuenta" del `Sheet`), entonces la tarjeta con avatar, nombre y correo se ve y se comporta igual que antes de mover `UserSummary`.
+- [ ] Dado el código, entonces:
+  - `UserSummary` está en `components/shared/UserSummary.tsx` y ya no existe en `modules/auth/components/`; ningún archivo de `organizer` importa internals de `auth` (solo `@/modules/auth/session`);
+  - no existen `modules/organizer/utils/userInitials.ts` ni un segundo `components/ui/avatar.tsx`, y `OrganizerUserCard` no compone `Avatar` ni llama a `getInitials` directamente;
+  - pasan `OrganizerUserCard.test.tsx`, `lib/userName.test.ts`, `modules/auth/components/UserMenu.test.tsx` y `AuthHeaderActions.test.tsx` (sin cambios), y `npx vitest run modules/organizer modules/auth` sigue en verde;
+  - `npm run lint` y `npm run build` terminan sin errores;
+  - `design-system/ticketera/pages/organizer.md` describe el nuevo shell.
 
 ## Diseño técnico
 
@@ -253,8 +284,9 @@ Esas specs no se editan (están aprobadas o en curso). Al implementar y revisar,
 | `app/not-found.tsx` | 1 | Server | `SiteShell` + `NotFoundMessage` (Requisito 6). Lo usa Next para toda URL que no existe. |
 | `app/(auth)/layout.tsx` | 1 (temporal), 2 | Server | F1: envuelve en `SiteShell`. F2: Requisito 10. `LayoutProps<"/">`. |
 | `app/(auth)/login/page.tsx`, `app/(auth)/registro/page.tsx` | 2 | Server | Requisito 11. |
-| `app/organizador/layout.tsx` | 1 (temporal), 3 | Server | F1: envuelve en `SiteShell`. F3: Requisito 16. `LayoutProps<"/organizador">`. |
-| `app/organizador/eventos/nuevo/page.tsx` | 3 | Server | Enlace "Volver al resumen" (Requisito 22). |
+| `app/organizador/layout.tsx` | 1 (temporal), 3 | Server | F1: envuelve en `SiteShell`. F3: Requisito 16 (sustituye la grilla `max-w-7xl` con `OrganizerNav`). `LayoutProps<"/organizador">`. |
+| `app/organizador/page.tsx` | — | Server | Sin cambios (h1 "Resumen", botón "Crear evento" y `OrganizerDashboard`). |
+| `app/organizador/eventos/nuevo/page.tsx` | 3 | Server | Enlace "Volver al resumen" agrupado con el h1 (Requisito 22). |
 
 Tras mover las rutas, se ejecuta `npx next typegen` (o `npm run dev`/`build`) para regenerar `.next/types`, porque el `validator.ts` antiguo apunta a `../../app/page.js` y similares. No se edita nada en `.next/`.
 
@@ -268,22 +300,25 @@ Tras mover las rutas, se ejecuta `npx next typegen` (o `npm run dev`/`build`) pa
 | `AuthBrandPanel` | existente (`modules/auth/components/AuthBrandPanel.tsx`), modificado (Requisito 12) | — | 2 |
 | `AuthTabs` | existente (`modules/auth/components/AuthTabs.tsx`), solo cambia el estilo (Requisito 13) | — | 2 |
 | `LoginForm`, `RegisterForm` | existentes, sin `Card` y con textos nuevos (Requisito 14) | `modules/auth/components/` | 2 |
-| `Avatar`, `AvatarFallback` | shadcn (instalar: `npx shadcn@latest add avatar`) | `components/ui/avatar.tsx` | 3 |
+| `Button` | shadcn (instalado) | `components/ui/button.tsx` ("Cerrar sesión" de `OrganizerUserCard`) | 3 |
 | `Sheet`, `SheetTrigger`, `SheetContent`, `SheetHeader`, `SheetTitle` | shadcn (instalado) | `components/ui/sheet.tsx` | 3 |
+| `Avatar`, `AvatarFallback` | shadcn (instalado por `auth-user-menu` F1) | `components/ui/avatar.tsx`. No se usa directamente: llega a través de `UserAvatar`. | 3 |
+| `UserAvatar` | existente (`components/shared/UserAvatar.tsx`), sin cambios | Avatar de 40 px (`size="lg"`) dentro de `UserSummary` | 3 |
+| `UserSummary` | existente (`modules/auth/components/UserSummary.tsx`), **movido** sin cambios a `components/shared/UserSummary.tsx` | Lo usan `auth` (`UserMenu`, `AuthHeaderActions`) y `organizer` (`OrganizerUserCard`) (Decisión 13) | 3 |
+| `UserMenu`, `AuthHeaderActions` | existentes (`modules/auth/components/`), solo cambia el import de `UserSummary` | — | 3 |
 | `OrganizerBrand` | nuevo, presentacional | `modules/organizer/components/OrganizerBrand.tsx`: lo usan el sidebar y la barra móvil; solo es de este dominio | 3 |
 | `OrganizerNav` | existente, modificado: vertical y con `onNavigate` (Requisito 18) | `modules/organizer/components/OrganizerNav.tsx` | 3 |
-| `OrganizerUserCard` | nuevo, cliente (store de sesión, router) | `modules/organizer/components/OrganizerUserCard.tsx`: no existe una tarjeta de usuario; `AuthHeaderActions` es otra pieza (barra/menú del sitio) | 3 |
+| `OrganizerUserCard` | nuevo, cliente (store de sesión, router) | `modules/organizer/components/OrganizerUserCard.tsx`: compone `UserSummary` + "Cerrar sesión" / "Iniciar sesión" con la navegación propia del panel (`router.push("/")`). `AuthHeaderActions` no sirve: depende de `SheetClose` y de la variante barra/`Sheet` del sitio, y no navega al cerrar sesión. | 3 |
 | `OrganizerSidebar` | nuevo, Server Component | `modules/organizer/components/OrganizerSidebar.tsx` | 3 |
 | `OrganizerMobileBar` | nuevo, cliente (estado del `Sheet`) | `modules/organizer/components/OrganizerMobileBar.tsx` | 3 |
-| `OrganizerDashboard`, `OrganizerEventForm` | existentes (organizer-dashboard), una clase cada uno (Requisitos 23 y 24) | `modules/organizer/components/` | 3 |
+| `OrganizerDashboard`, `OrganizerEventForm` | existentes (organizer-dashboard, organizer-event-seating), una clase cada uno (Requisitos 23 y 24) | `modules/organizer/components/` | 3 |
 
 ### Utils
-| Unidad | Archivo | Firma / comportamiento | Fase |
-|---|---|---|---|
-| Iniciales | `modules/organizer/utils/userInitials.ts` | `getInitials(firstName: string, lastName: string): string`. Toma el primer carácter (con `Array.from`, para no partir caracteres compuestos) de la primera palabra tras `trim` de cada argumento y lo pasa a `toLocaleUpperCase("es-PE")`. Si uno está vacío, devuelve solo la otra inicial; si ambos lo están, `""`. | 3 |
+Sin utils nuevas en la Fase 3. `getInitials` y `getFullName` ya existen en `lib/userName.ts` (con `lib/userName.test.ts`) y los usa `UserSummary`/`UserAvatar`. No se crea `modules/organizer/utils/userInitials.ts`.
 
 ### Imports entre módulos
 - `organizer` → `@/modules/auth/session` (`useAuthStore`): entrada pública existente, sin cambios en `auth`.
+- `organizer` y `auth` → `@/components/shared/UserSummary` (Decisión 13).
 - `OrganizerUserCard` y `OrganizerMobileBar` importan los componentes internos por ruta relativa (Decisión 17 de organizer-dashboard). Nunca importan `@/modules/organizer`.
 
 ### Contrato de API
@@ -295,9 +330,13 @@ export function SiteShell(props: { children: React.ReactNode }): React.JSX.Eleme
 export function NotFoundMessage(props: { title: string; description: string }): React.JSX.Element;
 // modules/organizer/components/OrganizerNav.tsx
 export function OrganizerNav(props: { onNavigate?: () => void }): React.JSX.Element;
-// modules/organizer/utils/userInitials.ts
-export function getInitials(firstName: string, lastName: string): string;
-// Sesión (existente, sin cambios): useAuthStore → { user: { id; firstName; lastName; email } | null; signOut(): void }
+// components/shared/UserSummary.tsx (movido desde modules/auth/components/, mismo contrato)
+export function UserSummary(props: { firstName: string; lastName: string; email: string; className?: string }): React.JSX.Element;
+// modules/organizer/components/OrganizerUserCard.tsx
+export function OrganizerUserCard(): React.JSX.Element;
+// Existentes, sin cambios: lib/userName.ts → getInitials(firstName, lastName), getFullName(firstName, lastName)
+// Sesión (existente, sin cambios): useAuthStore → { user: AuthUser | null; signOut(): void }
+//   AuthUser = { id; firstName; lastName; email; phone?; documentType?; documentNumber?; createdAt? }
 ```
 
 ### Páginas de diseño
@@ -310,9 +349,10 @@ export function getInitials(firstName: string, lastName: string): string;
   - Accesibilidad: un `<main>`, un h1, foco cian sobre navy.
   - Se elimina la frase "No se adoptan los títulos… del diseño" y se indica que el campo "Nombre completo" sigue sin adoptarse.
 - **`design-system/ticketera/pages/organizer.md` (Fase 3):** sustituye la sección "Layout común" por el nuevo shell:
-  - Sidebar `lg` de 240 px con marca, navegación y tarjeta de usuario.
+  - Sidebar `lg` de 240 px con marca, navegación y tarjeta de usuario (`UserSummary` + "Cerrar sesión" a todo el ancho, o "Iniciar sesión"; textos largos con salto de línea).
   - Barra móvil con `Sheet`.
-  - Contenido sobre `bg-muted` con "Mis eventos" en tarjeta.
+  - Contenido sobre `bg-muted` con "Mis eventos" en tarjeta (provisional; `design-alignment-account-views` F2 T4 reescribe esa parte).
+  - Sin cambios en las secciones de Crear evento que añadió `organizer-event-seating` (zonas General/Numerada, plano, campos del evento público).
   - Enlace "Volver al resumen".
   - Vista previa en `lg:top-10`.
   - Se eliminan "dentro del `<main>` del layout raíz", "en móvil no hay hamburguesa ni `Sheet`" y "No hay bloque de usuario". Se añade la regla de sesión (Decisión 9).
@@ -320,9 +360,10 @@ export function getInitials(firstName: string, lastName: string): string;
 ## Reutilización
 - `SiteHeader`, `SiteFooter` y `BrandLogo` (`components/shared/`) sin cambios. El bloque de la 404 del evento se extrae a `NotFoundMessage`.
 - `AuthBrandPanel`, `AuthTabs`, `LoginForm`, `RegisterForm`, `PasswordInput`, `useZodForm`, `TEXT_LINK` y el service y store de auth: se reutilizan tal cual o con cambios de presentación.
-- `@/modules/auth/session` (`useAuthStore`) y el patrón de `AuthHeaderActions` (`persist.rehydrate()` al montar, `SheetClose`/`Sheet` del header).
+- `@/modules/auth/session` (`useAuthStore`) y el patrón de `AuthHeaderActions` (`persist.rehydrate()` al montar, `SheetClose`/`Sheet` del header, y el bloque de cuenta "tarjeta + 'Cerrar sesión' outline a todo el ancho").
+- De `auth-user-menu` F1: `UserSummary` (se mueve a `components/shared/`), `UserAvatar`, `lib/userName.ts` (`getInitials`, `getFullName`) y `components/ui/avatar.tsx`.
 - `OrganizerNav` existente, extendido por prop (`onNavigate`) en lugar de crear otro menú.
-- shadcn instalados: `sheet`, `button`. A instalar: `avatar`. Se descarta `sidebar` (Decisión 8).
+- shadcn instalados: `sheet`, `button`, `avatar`. No se instala nada en la Fase 3. Se descarta `sidebar` (Decisión 8).
 - Patrones visuales existentes: control segmentado del filtro de `OrganizerDashboard` (para `AuthTabs`), anillo `ring-highlight` sobre navy de `SiteFooter` (para el logo del panel) y overlay `bg-gradient-to-*` de `HeroCarousel`.
 - Guía de Next 16 leída: `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route-groups.md`, `layout.md` (root layout, `LayoutProps`) y `not-found.md` (la `app/not-found.tsx` raíz atiende las URL que no existen; `global-not-found` solo hace falta con varios root layouts).
 
@@ -335,19 +376,14 @@ Ubicados junto al archivo probado.
 - **Fase 2: `modules/auth/components/RegisterForm.test.tsx`** (actualizar):
   - El caso "muestra el título…" pasa a esperar `heading` nivel 1 "Crea tu cuenta", el texto "Guarda tus entradas y recibe novedades de tus eventos." y `link` "Inicia sesión" con `href="/login"`.
   - El resto sin cambios y pasando.
-- **Fase 3: `modules/organizer/utils/userInitials.test.ts`:**
-  - `("Ana", "Quispe")` → "AQ".
-  - `("  luis ", "pérez")` → "LP".
-  - `("María José", "De la Cruz")` → "MD".
-  - `("Ángel", "Ñahui")` → "ÁÑ".
-  - `("Ana", "")` → "A".
-  - `("", "")` → "".
-- **Fase 3: `modules/organizer/components/OrganizerUserCard.test.tsx`** (mock de `next/navigation` con `useRouter().push`; limpiar el store y localStorage, patrón de `AuthHeaderActions.test.tsx`):
-  - Con `useAuthStore.setState({ user })` muestra "Ana Quispe", "demo@mentectickets.pe" y "AQ".
-  - "Cerrar sesión" (por `aria-label`) deja `user` en `null` y llama a `push("/")`.
-  - Sin usuario muestra el enlace "Iniciar sesión" con `href="/login"`.
-  - Con la sesión guardada en localStorage (`mentec-auth`), tras montar muestra el nombre (rehidratación).
-- **Sin test:** `AuthBrandPanel`, `AuthTabs`, `OrganizerBrand`, `OrganizerNav`, `OrganizerSidebar`, `OrganizerMobileBar` (presentacionales o comportamiento nativo de Base UI), layouts y páginas, y `components/ui/avatar.tsx`.
+- **Fase 3: sin tests de iniciales.** `getInitials` ya está cubierto en `lib/userName.test.ts` (`auth-user-menu` F1), con los mismos casos que pedía esta spec y más ("Ronald Eleazar"/"Mendoza Huamán" → "RM").
+- **Fase 3: `modules/organizer/components/OrganizerUserCard.test.tsx`** (mock de `next/navigation` con `useRouter().push`; `useAuthStore.setState({ user: null })` + `localStorage.clear()` en `beforeEach`, patrón de `AuthHeaderActions.test.tsx`; `fireEvent`, sin `user-event`):
+  - Con `useAuthStore.setState({ user })` (demo de 4 campos) muestra "Ana Quispe", "demo@mentectickets.pe" y "AQ".
+  - El `button` "Cerrar sesión" (por rol y nombre visible) deja `user` en `null` y llama a `push("/")` una vez.
+  - Sin usuario muestra el `link` "Iniciar sesión" con `href="/login"` y no hay botón "Cerrar sesión".
+  - Con la sesión guardada en localStorage (`mentec-auth`), tras montar muestra "Ana Quispe" (rehidratación).
+- **Fase 3: `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`:** sin cambios; deben seguir en verde tras mover `UserSummary` (prueban la tarjeta por su texto, no por la ruta del archivo).
+- **Sin test:** `AuthBrandPanel`, `AuthTabs`, `OrganizerBrand`, `OrganizerNav`, `OrganizerSidebar`, `OrganizerMobileBar` (presentacionales o comportamiento nativo de Base UI), `UserSummary` (presentacional, ya existente), layouts y páginas.
 
 ## Plan de tareas
 Coordinación:
@@ -359,7 +395,11 @@ Coordinación:
 
   **La Fase 1 no se ejecuta mientras haya un developer trabajando en cualquiera de esas rutas.** El orden con esas specs está en Preguntas abiertas.
 - **Fase 2:** solo depende de la Fase 1. No toca `AuthHeaderActions` ni `modules/auth/index.ts` (tickets-my-tickets F2 T1 está modificando `AuthHeaderActions`).
-- **Fase 3:** se ejecuta **después de cerrar las Fases 2 y 3 de `organizer-dashboard.md`**, que crean o modifican `OrganizerEventForm`, `TicketTypesField`, el store, `OrganizerDashboard`, `app/organizador/page.tsx`, `app/organizador/eventos/nuevo/page.tsx` y `modules/organizer/index.ts`. Si no están cerradas, se detiene y se avisa. De esos archivos solo se tocan los cambios mínimos de los Requisitos 22–25.
+- **Fase 3** (enmendada):
+  - **Va después de:** la Fase 2 de esta spec (hecha), `organizer-dashboard` F1–F3 (hechas) y `auth-user-menu` F1 (hecha: `avatar`, `lib/userName.ts`, `UserAvatar`, `UserSummary`). El código de `organizer-event-seating` (zonas General/Numerada y campos del evento público) ya está en `OrganizerEventForm`/`TicketTypesField`; esta fase no lo toca.
+  - **No en paralelo con:** cualquier tarea de `organizer-event-seating` que edite `OrganizerEventForm.tsx` o `pages/organizer.md`; cualquier otra tarea que edite `UserMenu.tsx`, `AuthHeaderActions.tsx` o `UserSummary.tsx` (hoy ninguna spec pendiente los toca). `design-alignment-account-views` F1 no comparte archivos con esta fase (toca `LoginForm`/`RegisterForm`, no `UserMenu` ni `AuthHeaderActions`).
+  - **Va antes de:** `design-alignment-account-views` F2, que depende de esta fase cerrada. Su T3 reescribe la sección "Mis eventos" de `OrganizerDashboard` partiendo del Requisito 23, y su T4 reescribe "Mis eventos" y la vista previa en `pages/organizer.md` (Decisión 14).
+  - De los archivos ajenos solo se tocan los cambios mínimos de los Requisitos 15 y 22–25.
 - **Builds y commits:** los developers en paralelo no ejecutan `npm run build`; lo hace el reviewer al cerrar cada fase. Nadie hace commits.
 
 ### Fase 1 — Route groups sin cambio visual (15 archivos, 8 movidos)
@@ -385,12 +425,12 @@ Coordinación:
 - [x] T2 — Formularios sin `Card`, con los títulos, subtítulos y enlaces del diseño, y sus tests actualizados · archivos: `modules/auth/components/LoginForm.tsx`, `modules/auth/components/LoginForm.test.tsx`, `modules/auth/components/RegisterForm.tsx`, `modules/auth/components/RegisterForm.test.tsx` · depende de: Fase 1 · paralelo con T1
 - [x] T3 — Layout `(auth)` a pantalla completa (sin `SiteShell`), páginas con columna `max-w-md` y página de diseño · archivos: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `app/(auth)/registro/page.tsx`, `design-system/ticketera/pages/auth.md` · depende de: T1, T2 · secuencial
 
-### Fase 3 — Shell del organizador (15 archivos)
-- [ ] T1 — Instalar `avatar` de shadcn · archivos: `components/ui/avatar.tsx` (y `package.json`/`package-lock.json` solo si el CLI los cambia) · depende de: Fase 2 y organizer-dashboard Fases 2–3 cerradas · secuencial (base, `components/ui/`)
-- [ ] T2 — `getInitials` con test · archivos: `modules/organizer/utils/userInitials.ts`, `modules/organizer/utils/userInitials.test.ts` · depende de: — (archivos nuevos) · paralelo con T1 y T3
-- [ ] T3 — Marca y navegación vertical con `onNavigate` · archivos: `modules/organizer/components/OrganizerBrand.tsx`, `modules/organizer/components/OrganizerNav.tsx` · depende de: organizer-dashboard Fases 2–3 cerradas · paralelo con T1 y T2
-- [ ] T4 — Tarjeta de usuario (con test), sidebar y barra móvil con `Sheet` · archivos: `modules/organizer/components/OrganizerUserCard.tsx`, `modules/organizer/components/OrganizerUserCard.test.tsx`, `modules/organizer/components/OrganizerSidebar.tsx`, `modules/organizer/components/OrganizerMobileBar.tsx` · depende de: T1, T2, T3 · secuencial
-- [ ] T5 — Layout del panel a pantalla completa, barrel, enlace "Volver al resumen", tarjeta de "Mis eventos", sticky de la vista previa y página de diseño · archivos: `app/organizador/layout.tsx`, `modules/organizer/index.ts`, `app/organizador/eventos/nuevo/page.tsx`, `modules/organizer/components/OrganizerDashboard.tsx`, `modules/organizer/components/OrganizerEventForm.tsx`, `design-system/ticketera/pages/organizer.md` · depende de: T4 · secuencial
+### Fase 3 — Shell del organizador (5 tareas, 15 archivos, 1 movido)
+- [ ] T1 — Mover `UserSummary` a `components/shared/` con `git mv` y actualizar sus dos imports en `auth` (Requisito 15); `UserMenu.test` y `AuthHeaderActions.test` sin cambios y en verde · archivos: `components/shared/UserSummary.tsx` (movido desde `modules/auth/components/UserSummary.tsx`), `modules/auth/components/UserMenu.tsx`, `modules/auth/components/AuthHeaderActions.tsx` · depende de: Fase 2 · secuencial (base, `components/shared/`)
+- [ ] T2 — Marca y navegación vertical con `onNavigate` (Requisitos 17 y 18) · archivos: `modules/organizer/components/OrganizerBrand.tsx`, `modules/organizer/components/OrganizerNav.tsx` · depende de: Fase 2 · paralelo con T1 (archivos disjuntos, sin dependencia)
+- [ ] T3 — Tarjeta de usuario con `UserSummary` (con test), sidebar y barra móvil con `Sheet` (Requisitos 19–21) · archivos: `modules/organizer/components/OrganizerUserCard.tsx`, `modules/organizer/components/OrganizerUserCard.test.tsx`, `modules/organizer/components/OrganizerSidebar.tsx`, `modules/organizer/components/OrganizerMobileBar.tsx` · depende de: T1, T2 · secuencial
+- [ ] T4 — Layout del panel a pantalla completa, barrel, "Volver al resumen" junto al h1, tarjeta provisional de "Mis eventos" y sticky de la vista previa (Requisitos 16 y 22–25) · archivos: `app/organizador/layout.tsx`, `modules/organizer/index.ts`, `app/organizador/eventos/nuevo/page.tsx`, `modules/organizer/components/OrganizerDashboard.tsx`, `modules/organizer/components/OrganizerEventForm.tsx` · depende de: T3 · secuencial (barrel `index.ts`)
+- [ ] T5 — `design-system/ticketera/pages/organizer.md`: sección "Layout común" con el nuevo shell (sección "Páginas de diseño") · archivos: `design-system/ticketera/pages/organizer.md` · depende de: T3 · paralelo con T4 (archivos disjuntos)
 
 ## Preguntas abiertas
 1. **Campos del registro:** se mantienen Nombres y Apellidos separados (checkout y Mis entradas usan nombre y apellido), más Celular, Documento, Confirmar contraseña y Novedades. ¿Se simplifica en una iteración futura a Nombre completo / Correo / Contraseña / Términos como en el diseño? Eso obligaría a cambiar `registerSchema`, el usuario de sesión y la precarga del checkout.
@@ -399,3 +439,5 @@ Coordinación:
 4. **"Mis eventos" en la navegación del panel:** no tiene ruta y no se muestra (Decisión 7). ¿Se crea una página `/organizador/eventos` con la lista completa, o se acepta un enlace a `/organizador#mis-eventos`?
 5. **Enlace "← Volver al inicio" en el acceso:** solo el logo lleva al sitio (Decisión 6). ¿Se quiere además un enlace de texto visible sobre las pestañas?
 6. **Orden con otras specs que tocan rutas de `app/`:** hay tareas pendientes en events-ui-refresh F4, marketing-how-it-works, checkout-mock-payment F5 y checkout-purchase F2/F3 sobre `app/page.tsx`, `app/eventos/page.tsx` y `app/checkout/page.tsx`. ¿Se ejecuta la Fase 1 antes (y esas tareas usan las rutas de `app/(site)/`) o después de cerrarlas?
+7. **Tarjeta de usuario del panel:** la enmienda pone "Cerrar sesión" como botón con texto a todo el ancho, debajo de `UserSummary` (Decisión 9), en lugar del botón solo-icono a la derecha del nombre que muestra el diseño. Así no se trunca y se reutiliza la composición del `Sheet` del sitio. ¿Se acepta, o se prefiere el botón solo-icono (con truncado del nombre y el correo, sin reutilizar `UserSummary`)?
+8. **Requisito 23 provisional:** si `design-alignment-account-views` F2 se aprueba y se ejecuta justo después de esta fase, la tarjeta de "Mis eventos" de esta fase dura poco. Se mantiene para que la Fase 3 sea entregable sola (Decisión 14). ¿Se prefiere omitirla y aceptar, hasta esa fase, la pista del filtro y el vacío sin fondo visible sobre `bg-muted`?
