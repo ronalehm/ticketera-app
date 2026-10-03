@@ -59,7 +59,8 @@ export function TicketTypesField({ rows, errors, onChange, onBlur }: TicketTypes
         const number = index + 1;
         const rowErrors = errors?.[index] ?? {};
         return (
-          <FieldSet key={row.id} className="relative gap-4 rounded-xl p-4 ring-1 ring-border">
+          // `min-w-0`: un <fieldset> tiene `min-inline-size: min-content` y se ensancharía hasta el plano.
+          <FieldSet key={row.id} className="relative min-w-0 gap-4 rounded-xl p-4 ring-1 ring-border">
             {/* Absoluto: un <legend> en flujo se dibuja sobre el borde del fieldset e ignora su padding. */}
             <FieldLegend variant="label" className="absolute top-4 left-4 mb-0 flex h-11 items-center font-semibold">
               Tipo {number}

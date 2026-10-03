@@ -143,6 +143,23 @@ describe("ComplaintForm", () => {
     expect(vi.mocked(submitComplaint).mock.calls[0][0].isMinor).toBe(false);
   });
 
+  it("envío vacío con 'Soy menor de edad' muestra a la vez los errores del consumidor y del apoderado", () => {
+    render(<ComplaintForm />);
+    fireEvent.click(minorCheckbox());
+    fireEvent.click(submitButton());
+
+    for (const message of EMPTY_FORM_MESSAGES) {
+      expect(screen.getByText(message)).toBeTruthy();
+    }
+    const group = guardianGroup()!;
+    for (const message of GUARDIAN_MESSAGES) {
+      expect(within(group).getByText(message)).toBeTruthy();
+    }
+    expect(textbox("Nombres", group).getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(textbox("Nombres"));
+    expect(submitComplaint).not.toHaveBeenCalled();
+  });
+
   it("con apoderado válido, el envío incluye sus datos", async () => {
     vi.mocked(submitComplaint).mockResolvedValue(RECEIPT);
     render(<ComplaintForm />);

@@ -174,7 +174,7 @@ export function TicketTypeCapacityFields({ row, errors = {}, onChange, onBlur }:
           </div>
 
           {size ? (
-            <figure className="flex flex-col gap-2 rounded-lg bg-muted p-3 md:p-4">
+            <figure className="flex min-w-0 flex-col gap-2 rounded-lg bg-muted p-3 md:p-4">
               <SeatGridPreview rows={size.rows} seatsPerRow={size.seatsPerRow} />
               <figcaption className="text-sm text-muted-foreground">
                 {/* Mismo criterio de precio que la vista previa del evento: número finito ≥ 0 o `null`. */}

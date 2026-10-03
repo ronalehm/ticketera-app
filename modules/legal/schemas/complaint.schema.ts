@@ -46,6 +46,20 @@ const requiredChoice = <const T extends readonly [string, ...string[]]>(options:
     return z.NEVER;
   });
 
+// Por defecto zod salta un refinement si el objeto ya tiene errores en cualquier campo, y sus mensajes aparecerían
+// en un envío posterior. Con `when` corre en la misma pasada siempre que los campos que lee sean válidos.
+const whenFieldsValid =
+  (...fields: readonly string[]) =>
+  (payload: z.core.ParsePayload) =>
+    !payload.issues.some((issue) => fields.includes(String(issue.path[0])));
+
+const GUARDIAN_FIELDS = [
+  "guardianFirstName",
+  "guardianLastName",
+  "guardianDocumentType",
+  "guardianDocumentNumber",
+] as const;
+
 // Datos del padre, madre o apoderado: solo se validan si el consumidor es menor de edad.
 const guardianSchema = z
   .object({
@@ -59,7 +73,7 @@ const guardianSchema = z
     if (documentNumberError) {
       ctx.addIssue({ code: "custom", path: ["guardianDocumentNumber"], message: documentNumberError });
     }
-  });
+  }, { when: whenFieldsValid("guardianDocumentType", "guardianDocumentNumber") });
 
 export const complaintFormSchema = z
   .object({
@@ -96,12 +110,14 @@ export const complaintFormSchema = z
     if (documentNumberError) {
       ctx.addIssue({ code: "custom", path: ["documentNumber"], message: documentNumberError });
     }
+  }, { when: whenFieldsValid("documentType", "documentNumber") })
+  .superRefine((data, ctx) => {
     if (!data.isMinor) return;
     const guardian = guardianSchema.safeParse(data);
     for (const issue of guardian.error?.issues ?? []) {
       ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
     }
-  });
+  }, { when: whenFieldsValid("isMinor", ...GUARDIAN_FIELDS) });
 
 export const complaintReceiptSchema = z.object({
   code: z.string().regex(/^LR-\d{4}-\d{6}$/),

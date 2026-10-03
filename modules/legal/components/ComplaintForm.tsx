@@ -272,7 +272,8 @@ export function ComplaintForm() {
                   GUARDIAN_FIELDS.forEach((name) => handleBlur(name));
                 }}
               />
-              <FieldLabel htmlFor={fieldId("isMinor")} className="font-normal">
+              {/* min-h-11: área táctil de 44 px (la etiqueta ocupa el resto de la fila y también marca la casilla). */}
+              <FieldLabel htmlFor={fieldId("isMinor")} className="min-h-11 cursor-pointer font-normal">
                 Soy menor de edad
               </FieldLabel>
             </Field>

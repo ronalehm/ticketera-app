@@ -1,13 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { LEGAL_PROVIDER } from "../data/legalProvider";
+import { LEGAL_PROVIDER_ROWS } from "../data/legalProvider";
 import { COMPLAINT_TYPE_DEFINITIONS, COMPLAINT_TYPE_LABELS, COMPLAINT_TYPES } from "../schemas/complaint.schema";
-
-/** Filas "Datos del proveedor" (también las imprime la hoja de reclamación). */
-export const LEGAL_PROVIDER_ROWS = [
-  { label: "Razón social", value: LEGAL_PROVIDER.businessName },
-  { label: "RUC", value: LEGAL_PROVIDER.ruc },
-  { label: "Dirección", value: LEGAL_PROVIDER.address },
-];
 
 const NOTES = [
   "Responderemos en un plazo máximo de quince (15) días hábiles.",

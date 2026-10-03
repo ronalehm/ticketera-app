@@ -122,6 +122,38 @@ describe("complaintFormSchema", () => {
       });
     });
 
+    it("con isMinor y todo vacío da en la misma pasada los errores del consumidor y del apoderado", () => {
+      expect(errors({ ...empty, isMinor: true })).toEqual({
+        firstName: "Ingresa tus nombres",
+        lastName: "Ingresa tus apellidos",
+        documentNumber: "Ingresa tu número de documento",
+        address: "Ingresa tu domicilio",
+        phone: "Ingresa tu número de celular",
+        email: "Ingresa tu correo electrónico",
+        guardianFirstName: "Ingresa los nombres del padre, madre o apoderado",
+        guardianLastName: "Ingresa los apellidos del padre, madre o apoderado",
+        guardianDocumentNumber: "Ingresa su número de documento",
+        itemType: "Indica si es un producto o un servicio",
+        itemDescription: "Describe el producto o servicio",
+        complaintType: "Elige si es un reclamo o una queja",
+        detail: "Describe lo ocurrido",
+        request: "Indica qué solicitas",
+      });
+    });
+
+    it("aplica las reglas de documento aunque otros campos tengan errores", () => {
+      const result = errors({
+        ...empty,
+        documentNumber: "1234",
+        ...validGuardian,
+        guardianFirstName: "",
+        guardianDocumentNumber: "123",
+      });
+      expect(result.documentNumber).toBe("El DNI debe tener 8 dígitos");
+      expect(result.guardianFirstName).toBe("Ingresa los nombres del padre, madre o apoderado");
+      expect(result.guardianDocumentNumber).toBe("El DNI debe tener 8 dígitos");
+    });
+
     it("con isMinor y datos válidos acepta el formulario", () => {
       expect(complaintFormSchema.safeParse({ ...valid, ...validGuardian }).success).toBe(true);
     });
