@@ -140,13 +140,8 @@ describe("downloadIcs", () => {
     URL.createObjectURL = createObjectURL;
     URL.revokeObjectURL = revokeObjectURL;
 
-    let clicked: HTMLAnchorElement | undefined;
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
-      this: HTMLAnchorElement,
-    ) {
-      clicked = this;
-      expect(revokeObjectURL).not.toHaveBeenCalled();
-    });
+    // Evita la navegación de jsdom; el enlace se recupera del contexto de la llamada.
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     downloadIcs("noche-de-sintetizadores-lima.ics", "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
 
@@ -157,10 +152,14 @@ describe("downloadIcs", () => {
     expect(await blob.text()).toBe("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
 
     expect(click).toHaveBeenCalledTimes(1);
-    expect(clicked?.download).toBe("noche-de-sintetizadores-lima.ics");
-    expect(clicked?.getAttribute("href")).toBe("blob:mock-url");
-    expect(clicked?.isConnected).toBe(false);
+    const link = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(link.download).toBe("noche-de-sintetizadores-lima.ics");
+    expect(link.getAttribute("href")).toBe("blob:mock-url");
+    expect(link.isConnected).toBe(false);
 
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+    expect(revokeObjectURL.mock.invocationCallOrder[0]).toBeGreaterThan(
+      click.mock.invocationCallOrder[0],
+    );
   });
 });
