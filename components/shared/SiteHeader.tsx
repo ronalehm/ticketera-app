@@ -11,7 +11,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { AuthHeaderActions } from "@/modules/auth";
+import { AuthHeaderActions } from "@/modules/auth/header";
 import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
 
 const NAV_LINK =

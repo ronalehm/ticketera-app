@@ -85,7 +85,7 @@ Que el comprador pueda iniciar sesión (`/login`) y crear una cuenta (`/registro
 
 9. **Service mock:** latencia simulada `MOCK_LATENCY_MS = 600`. Cuenta de prueba en el fixture: `demo@mentectickets.pe` / `Mentec2026` (Ana Quispe). La comparación de correo ignora mayúsculas y espacios. Mensajes: "Correo o contraseña incorrectos" (login) y "Ya existe una cuenta con este correo" (registro). Nunca devuelve la contraseña.
 10. **Header (Fase 2):** sin sesión, igual que hoy ("Iniciar sesión" + "Crear cuenta" en `sm+` y en el menú móvil). Con sesión: "Hola, <firstName>" + botón outline "Cerrar sesión" en los mismos lugares. "Cerrar sesión" borra la sesión (store y localStorage) y el header vuelve a mostrar los enlaces. Antes de rehidratar se muestran los enlaces (puede haber un parpadeo breve; aceptado).
-11. **Accesibilidad y responsive:** inputs, selects y botones `h-11` (≥ 44 px); botón de mostrar contraseña ≥ 44×44 con `aria-label` dinámico y `aria-pressed`, `type="button"`; iconos lucide con `aria-hidden` (`Eye`/`EyeOff`); spinner `aria-hidden` y `motion-reduce:animate-none`; `Alert` con `role="alert"`; foco visible en todo; clicar el texto del checkbox lo marca. Sin scroll horizontal a 375 / 768 / 1024 / 1440. Solo tokens del tema (enlaces de texto en `text-primary-strong`), Creato Display, sin emojis.
+11. **Accesibilidad y responsive:** inputs, selects y botones `h-11` (≥ 44 px); botón de mostrar contraseña ≥ 44×44 con `aria-label` dinámico y `aria-pressed`, `type="button"`; iconos lucide con `aria-hidden` (`Eye`/`EyeOff`); spinner `aria-hidden` y `motion-reduce:animate-none`; `Alert` con `role="alert"`; foco visible en todo; clicar el texto del checkbox lo marca. Sin scroll horizontal a 375 / 768 / 1024 / 1440. Solo tokens del tema (enlaces de texto en `text-primary-strong`), Creato Display, sin emojis. Enlaces de texto sueltos ("¿Olvidaste tu contraseña?", "Crear cuenta", "Iniciar sesión" del pie) con área táctil ≥ 44 px vía `::after` sin cambiar su aspecto; en "¿Olvidaste tu contraseña?" el área es asimétrica (más hacia arriba) para no tapar el campo de contraseña. Los enlaces dentro de una frase (Términos, Privacidad) no amplían su área (exentos por WCAG 2.5.8) para no tapar el texto vecino.
 
 ## Criterios de aceptación
 ### Fase 1
@@ -122,8 +122,9 @@ Que el comprador pueda iniciar sesión (`/login`) y crear una cuenta (`/registro
   - nuevo `modules/auth/components/PasswordInput.tsx` (`"use client"`, Fase 1): `InputGroup` + `InputGroupInput` + `InputGroupButton` con estado `visible`. Acepta y reenvía las props del input (`...props`, `className`). Se usa 3 veces (login, contraseña y confirmación) y no existe en shadcn (no hay componente "password").
   - nuevo `modules/auth/components/LoginForm.tsx` (`"use client"`, Fase 1): `Card` + `Field`/`FieldGroup`/`FieldLabel`/`FieldError` + `Input` + `PasswordInput` + `Alert` + `Button` con `Spinner`.
   - nuevo `modules/auth/components/RegisterForm.tsx` (`"use client"`, Fase 2): igual que el login + `Select` + `InputGroup` (addon "+51") + `Checkbox` (`Field orientation="horizontal"`).
+  - nuevo `modules/auth/components/formShared.ts` (Fase 1, ampliado en Fase 2; interno del módulo, sin `"use client"`): constantes compartidas por `LoginForm` y `RegisterForm` (se repiten en ambos, DRY). `GENERIC_ERROR` ("No pudimos completar la solicitud. Inténtalo de nuevo.", requisito 7); `TEXT_LINK` (Fase 1): clases de enlace de texto suelto (`text-primary-strong`, foco visible) con `relative` + `::after` que amplía el área táctil a ≥ 44 px; quien la usa puede ajustar el `::after` con `cn()` (área asimétrica en "¿Olvidaste tu contraseña?"); `INLINE_LINK` (Fase 2): mismas clases sin ampliar área, para enlaces dentro de frases (Términos, Privacidad); `TEXT_LINK` se construye sobre ella.
   - nuevo `modules/auth/components/AuthHeaderActions.tsx` (`"use client"`, Fase 2): prop `variant: "bar" | "sheet"`. Lee `useAuthStore`, llama a `useAuthStore.persist.rehydrate()` en un `useEffect` al montar. `bar`: los enlaces actuales con `hidden sm:inline-flex md:h-10`, o el saludo + "Cerrar sesión". `sheet`: los enlaces en `SheetClose` (como hoy) o el saludo + "Cerrar sesión" envuelto en `SheetClose`. Las constantes `PRIMARY_BUTTON`/`OUTLINE_BUTTON` se mueven aquí desde `SiteHeader.tsx` (dejan de usarse allí).
-  - existente `components/shared/SiteHeader.tsx` (Fase 2): sigue siendo Server Component; sustituye los dos `Link` de la barra por `<AuthHeaderActions variant="bar" />` y el bloque de botones del `Sheet` por `<AuthHeaderActions variant="sheet" />`. Nada más cambia.
+  - existente `components/shared/SiteHeader.tsx` (Fase 2): sigue siendo Server Component; importa `AuthHeaderActions` desde `@/modules/auth/header` (no desde el barrel) y sustituye los dos `Link` de la barra por `<AuthHeaderActions variant="bar" />` y el bloque de botones del `Sheet` por `<AuthHeaderActions variant="sheet" />`. Nada más cambia.
 - Hook `modules/auth/hooks/useZodForm.ts` (`"use client"`, Fase 1):
   ```ts
   function useZodForm<TSchema extends z.ZodObject>(
@@ -192,7 +193,10 @@ Que el comprador pueda iniciar sesión (`/login`) y crear una cuenta (`/registro
     persist(/* ... */, { name: "mentec-auth", partialize: (s) => ({ user: s.user }), skipHydration: true }),
   );
   ```
-- `modules/auth/index.ts`: Fase 1 exporta `LoginForm`; Fase 2 añade `RegisterForm` y `AuthHeaderActions`. El resto (store, service, schemas) queda interno hasta que otro módulo lo necesite.
+- API pública del módulo (`docs/SETUP.md` §1 regla 4), archivos que solo reexportan:
+  - `modules/auth/index.ts`: Fase 1 exporta `LoginForm`; Fase 2 añade `RegisterForm`. No exporta `AuthHeaderActions`.
+  - `modules/auth/header.ts` (Fase 2): exporta solo `AuthHeaderActions`. Motivo: el header vive en el layout raíz; si importara el barrel, todas las rutas cargarían un chunk de cliente (~30–50 KB) con `LoginForm`/`RegisterForm`.
+  - El resto (store, service, schemas, `formShared`) queda interno hasta que otro módulo lo necesite.
 - Contrato de API (mock, futura API con la misma firma):
   - `login`: request `LoginInput` `{ email: string; password: string }` → response `AuthUser` `{ id: string; firstName: string; lastName: string; email: string }`; error `AuthError` `invalid-credentials`.
   - `register`: request `RegisterInput` (campos del `registerSchema`) → response `AuthUser`; error `AuthError` `email-taken`.
@@ -214,7 +218,7 @@ Que el comprador pueda iniciar sesión (`/login`) y crear una cuenta (`/registro
 - `modules/auth/components/LoginForm.test.tsx` (mock de `../services/auth.service` y de `next/navigation`): envío vacío muestra errores y enfoca el correo; envío válido muestra "Ingresando…", guarda el usuario en el store y llama a `router.replace("/")`; `AuthError` muestra el `Alert` y no navega; el botón de mostrar contraseña alterna `type` y `aria-label`.
 - `modules/auth/components/RegisterForm.test.tsx` (mismos mocks): envío vacío muestra el error de Términos y enfoca "Nombres"; contraseñas distintas → error al hacer blur tras el primer intento; envío válido (marcando el checkbox por su etiqueta) guarda usuario y navega; `email-taken` muestra el `Alert`. Las reglas por tipo de documento se cubren en el test del schema (no se automatiza el popup del `Select`).
 - `modules/auth/components/AuthHeaderActions.test.tsx`: sin usuario muestra "Iniciar sesión"/"Crear cuenta"; con usuario muestra "Hola, Ana" y "Cerrar sesión"; pulsar "Cerrar sesión" vuelve a los enlaces.
-- Sin tests: páginas y layout de `app/`, `PasswordInput` (cubierto por `LoginForm.test`), componentes de `components/ui/`, tipos.
+- Sin tests: páginas y layout de `app/`, `PasswordInput` (cubierto por `LoginForm.test`), `formShared.ts` (solo constantes), `index.ts`/`header.ts` (solo reexportan), componentes de `components/ui/`, tipos.
 
 ## Plan de tareas
 Coordinación con `events-detail` / `events-listing`: esta spec no toca `modules/events/**`, `app/eventos/**` ni `app/page.tsx`. La instalación de shadcn es compartida (`components/ui/*`, posible `package-lock.json`): **T1 de `events-detail` instala `breadcrumb`**; no ejecutar ambos `npx shadcn add` a la vez (uno tras otro, en cualquier orden). Ninguna tarea de events toca `components/shared/SiteHeader.tsx`.
@@ -223,14 +227,14 @@ Coordinación con `events-detail` / `events-listing`: esta spec no toca `modules
 - [x] T1 — Instalar componentes shadcn · archivos: `components/ui/field.tsx`, `components/ui/label.tsx`, `components/ui/input-group.tsx`, `components/ui/textarea.tsx`, `components/ui/alert.tsx`, `components/ui/spinner.tsx` (generados por el CLI; `button.tsx`/`input.tsx` sin cambios) · depende de: — (no en simultáneo con T1 de `events-detail`) · secuencial (base)
 - [x] T2 — Dominio: schemas, tipos, fixture, service mock y store con tests · archivos: `modules/auth/schemas/auth.schema.ts`, `modules/auth/schemas/auth.schema.test.ts`, `modules/auth/types/auth.types.ts`, `modules/auth/data/users.mock.ts`, `modules/auth/services/auth.service.ts`, `modules/auth/services/auth.service.test.ts`, `modules/auth/stores/auth.store.ts`, `modules/auth/stores/auth.store.test.ts` · depende de: T1 · paralelo con T3
 - [x] T3 — Hook `useZodForm` con test · archivos: `modules/auth/hooks/useZodForm.ts`, `modules/auth/hooks/useZodForm.test.ts` · depende de: T1 · paralelo con T2
-- [x] T4 — `PasswordInput` y `LoginForm` con test · archivos: `modules/auth/components/PasswordInput.tsx`, `modules/auth/components/LoginForm.tsx`, `modules/auth/components/LoginForm.test.tsx` · depende de: T2, T3 · secuencial
-- [x] T5 — Ruta `/login`, layout `(auth)` y export · archivos: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `modules/auth/index.ts` · depende de: T4 · secuencial
+- [x] T4 — `PasswordInput`, `formShared` (`GENERIC_ERROR`, `TEXT_LINK`) y `LoginForm` con test · archivos: `modules/auth/components/PasswordInput.tsx`, `modules/auth/components/formShared.ts`, `modules/auth/components/LoginForm.tsx`, `modules/auth/components/LoginForm.test.tsx` · depende de: T2, T3 · secuencial
+- [x] T5 — Ruta `/login`, layout `(auth)` y export de `LoginForm` en el barrel · archivos: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `modules/auth/index.ts` · depende de: T4 · secuencial
 
 ### Fase 2 — Registro y sesión en el header
 - [x] T1 — Instalar checkbox · archivos: `components/ui/checkbox.tsx` · depende de: Fase 1 · secuencial (base)
-- [x] T2 — Estado de sesión en el header (aislado en subcomponente cliente) · archivos: `modules/auth/components/AuthHeaderActions.tsx`, `modules/auth/components/AuthHeaderActions.test.tsx`, `components/shared/SiteHeader.tsx`, `modules/auth/index.ts` · depende de: T1 · secuencial (toca archivo compartido)
-- [x] T3 — `RegisterForm` con test · archivos: `modules/auth/components/RegisterForm.tsx`, `modules/auth/components/RegisterForm.test.tsx` · depende de: T1 · paralelo con T2 (archivos disjuntos)
-- [x] T4 — Ruta `/registro` y export · archivos: `app/(auth)/registro/page.tsx`, `modules/auth/index.ts` · depende de: T2, T3 · secuencial
+- [x] T2 — Estado de sesión en el header (aislado en subcomponente cliente) con entrada pública propia · archivos: `modules/auth/components/AuthHeaderActions.tsx`, `modules/auth/components/AuthHeaderActions.test.tsx`, `modules/auth/header.ts`, `components/shared/SiteHeader.tsx` (importa desde `@/modules/auth/header`) · depende de: T1 · secuencial (toca archivo compartido)
+- [x] T3 — `RegisterForm` con test y `INLINE_LINK` en `formShared` · archivos: `modules/auth/components/RegisterForm.tsx`, `modules/auth/components/RegisterForm.test.tsx`, `modules/auth/components/formShared.ts` · depende de: T1 · paralelo con T2 (archivos disjuntos)
+- [x] T4 — Ruta `/registro` y export de `RegisterForm` en el barrel (`index.ts` exporta solo `LoginForm` y `RegisterForm`) · archivos: `app/(auth)/registro/page.tsx`, `modules/auth/index.ts` · depende de: T2, T3 · secuencial
 
 ## Preguntas abiertas
 1. **Documentos:** se asume CE de 9–12 caracteres alfanuméricos y Pasaporte de 6–12. ¿Hay reglas exactas (p. ej. CE solo 9 dígitos)?

@@ -27,6 +27,10 @@ const CTA_CLASS = cn(
   "h-11 w-full cursor-pointer font-semibold duration-200 hover:bg-primary-strong focus-visible:ring-ring",
 );
 
+// focusableWhenDisabled no pone `disabled`: se neutralizan a mano el hover y el desplazamiento al pulsar del Button.
+const STEPPER_CLASS =
+  "size-11 cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-background aria-disabled:dark:hover:bg-input/30 aria-disabled:active:not-aria-[haspopup]:translate-y-0";
+
 export function TicketSelector({ slug, status, priceFrom, ticketTypes }: TicketSelectorProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const soldOut = status === "sold-out";
@@ -73,9 +77,10 @@ export function TicketSelector({ slug, status, priceFrom, ticketTypes }: TicketS
                       <Button
                         variant="outline"
                         size="icon"
-                        className="size-11 cursor-pointer"
+                        className={STEPPER_CLASS}
                         aria-label={`Quitar una entrada ${type.name}`}
                         disabled={typeSoldOut || quantity === 0}
+                        focusableWhenDisabled={!typeSoldOut}
                         onClick={() => change(type.id, -1)}
                       >
                         <Minus className="size-5" aria-hidden />
@@ -86,9 +91,10 @@ export function TicketSelector({ slug, status, priceFrom, ticketTypes }: TicketS
                       <Button
                         variant="outline"
                         size="icon"
-                        className="size-11 cursor-pointer"
+                        className={STEPPER_CLASS}
                         aria-label={`Añadir una entrada ${type.name}`}
                         disabled={typeSoldOut || atLimit}
+                        focusableWhenDisabled={!typeSoldOut}
                         onClick={() => change(type.id, 1)}
                       >
                         <Plus className="size-5" aria-hidden />

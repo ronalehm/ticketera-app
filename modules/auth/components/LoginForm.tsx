@@ -16,7 +16,7 @@ import { useZodForm } from "../hooks/useZodForm";
 import { loginSchema } from "../schemas/auth.schema";
 import { AuthError, login } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
-import { GENERIC_ERROR, TEXT_LINK } from "./formStyles";
+import { GENERIC_ERROR, TEXT_LINK } from "./formShared";
 import { PasswordInput } from "./PasswordInput";
 
 export function LoginForm() {
@@ -73,7 +73,8 @@ export function LoginForm() {
             <Field data-invalid={!!errors.password}>
               <div className="flex items-center justify-between gap-2">
                 <FieldLabel htmlFor="login-password">Contraseña</FieldLabel>
-                <Link href="/recuperar-contrasena" className={cn(TEXT_LINK, "text-sm")}>
+                {/* Área táctil asimétrica: el input queda a 8px (gap-2) debajo; no debe solaparlo. */}
+                <Link href="/recuperar-contrasena" className={cn(TEXT_LINK, "text-sm after:-top-4 after:-bottom-2")}>
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>

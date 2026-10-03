@@ -13,7 +13,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript strict · Tailwind CSS 
 1. **Modular por dominio.** Todo el código de negocio vive en `modules/<dominio>/`. Un dominio es un concepto del negocio (`users`, `orders`, `auth`), no un tipo técnico.
 2. **`app/` solo enruta.** Las rutas del App Router (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `route.ts`) son delgadas: leen params, componen componentes del módulo y nada más. Sin lógica de negocio, sin llamadas HTTP directas.
 3. **Nombres en inglés** para carpetas, archivos, variables, funciones, tipos y componentes. El contenido visible al usuario puede estar en español.
-4. **Cada módulo expone una API pública** mediante `index.ts`. Fuera del módulo se importa solo desde `@/modules/<dominio>`, nunca desde sus archivos internos.
+4. **Cada módulo expone una API pública** mediante `index.ts`. Solo si el barrel arrastraría código cliente innecesario a otras rutas (p. ej. un componente del layout raíz), el módulo puede exponer entradas públicas adicionales en su raíz (`modules/<dominio>/<entrada>.ts`), que solo reexporta, igual que `index.ts` (sin lógica propia). Fuera del módulo se importa solo desde `@/modules/<dominio>` o esas entradas, nunca desde sus archivos internos.
 5. **Un módulo no importa internals de otro módulo.** Si dos módulos necesitan lo mismo, se sube a `components/shared`, `hooks/` o `lib/`.
 6. **Solo se crean las subcarpetas que el módulo necesita.** No se crean carpetas vacías "por si acaso".
 7. **Server Components por defecto.** `"use client"` solo en componentes con estado, efectos, eventos o hooks de cliente (TanStack Query, zustand), y lo más abajo posible en el árbol.
@@ -45,6 +45,7 @@ modules/
     types/
     utils/
     index.ts                  # API pública del módulo
+    <entrada>.ts              # opcional: entrada pública adicional (ver regla 4)
 docs/
   SETUP.md
   specs/                      # especificaciones SDD (ver sección 3)

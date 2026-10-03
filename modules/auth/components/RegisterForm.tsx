@@ -21,7 +21,7 @@ import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES, registerSchema } from "../schemas
 import { AuthError, register } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
 import type { RegisterInput } from "../types/auth.types";
-import { GENERIC_ERROR, TEXT_LINK } from "./formStyles";
+import { GENERIC_ERROR, INLINE_LINK, TEXT_LINK } from "./formShared";
 import { PasswordInput } from "./PasswordInput";
 
 const PASSWORD_HINT_ID = "register-password-description";
@@ -203,11 +203,11 @@ export function RegisterForm() {
               <FieldContent>
                 <FieldLabel htmlFor="register-acceptTerms" className="block font-normal">
                   Acepto los{" "}
-                  <Link href="/terminos" target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
+                  <Link href="/terminos" target="_blank" rel="noopener noreferrer" className={INLINE_LINK}>
                     Términos y condiciones
                   </Link>{" "}
                   y la{" "}
-                  <Link href="/privacidad" target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
+                  <Link href="/privacidad" target="_blank" rel="noopener noreferrer" className={INLINE_LINK}>
                     Política de privacidad
                   </Link>
                 </FieldLabel>

@@ -32,23 +32,39 @@ describe("TicketSelector", () => {
 
   it("'−' no baja de 0", () => {
     renderSelector();
-    expect(remove("General").disabled).toBe(true);
+    expect(remove("General").getAttribute("aria-disabled")).toBe("true");
 
     fireEvent.click(add("General"));
     fireEvent.click(remove("General"));
     fireEvent.click(remove("General"));
 
-    expect(remove("General").disabled).toBe(true);
+    expect(remove("General").getAttribute("aria-disabled")).toBe("true");
+    expect(remove("General").parentElement?.textContent).toContain("0");
     expect(screen.getByText("S/ 0.00")).toBeTruthy();
   });
 
-  it("con 10 entradas deshabilita todos los '+' y muestra el límite", () => {
+  it("con 10 entradas deshabilita todos los '+' (sin cambiar cantidades) y muestra el límite", () => {
     renderSelector();
     for (let i = 0; i < 10; i++) fireEvent.click(add("General"));
 
-    expect(add("General").disabled).toBe(true);
-    expect(add("VIP").disabled).toBe(true);
+    expect(add("General").getAttribute("aria-disabled")).toBe("true");
+    expect(add("VIP").getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText("Máximo 10 entradas por compra")).toBeTruthy();
+
+    fireEvent.click(add("VIP"));
+    expect(add("VIP").parentElement?.textContent).toContain("0");
+    expect(add("General").parentElement?.textContent).toContain("10");
+  });
+
+  it("'+' conserva el foco al llegar al límite", () => {
+    renderSelector();
+    const plus = add("General");
+    plus.focus();
+    for (let i = 0; i < 10; i++) fireEvent.click(plus);
+
+    expect(plus.getAttribute("aria-disabled")).toBe("true");
+    expect(plus.disabled).toBe(false);
+    expect(document.activeElement).toBe(plus);
   });
 
   it("un tipo agotado muestra 'Agotado' y sus controles están deshabilitados; low-stock muestra 'Últimas entradas'", () => {
