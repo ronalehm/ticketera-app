@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UserMenu } from "./UserMenu";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
-
 const TRIGGER_NAME = "Cuenta de Ronald Eleazar Mendoza Huamán";
 const EMAIL = "ronald.eleazar.mendoza.huaman@correo-ejemplo.pe";
 
@@ -43,11 +41,9 @@ describe("UserMenu", () => {
 
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
 
-    const group = screen.getByRole("group");
-    const groupName = group.getAttribute("aria-labelledby");
-    const label = groupName ? document.getElementById(groupName) : null;
-    expect(label?.textContent).toContain("Ronald Eleazar Mendoza Huamán");
-    expect(label?.textContent).toContain(EMAIL);
+    const group = screen.getByRole("group", { name: /Ronald Eleazar Mendoza Huamán/ });
+    expect(group.getAttribute("aria-labelledby")).toBeTruthy();
+    expect(screen.getByRole("group", { name: new RegExp(EMAIL.replaceAll(".", "\\.")) })).toBe(group);
 
     const items = screen.getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual(["Mis entradas", "Panel de organizador", "Cerrar sesión"]);
