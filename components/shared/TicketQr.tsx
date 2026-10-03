@@ -1,3 +1,4 @@
+import { hashString } from "@/lib/hash";
 import { cn } from "@/lib/utils";
 
 const QR_SIZE = 21;
@@ -8,16 +9,6 @@ const FINDER_ORIGINS = [
   [0, QR_SIZE - FINDER_SIZE],
   [QR_SIZE - FINDER_SIZE, 0],
 ] as const;
-
-/** FNV-1a de 32 bits. */
-function hashString(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
 
 /** PRNG mulberry32: devuelve una función que genera números en [0, 1). */
 function mulberry32(seed: number): () => number {

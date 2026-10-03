@@ -67,6 +67,10 @@ describe("buildIcsEvent", () => {
     ).not.toBe(uid);
   });
 
+  it("mantiene el UID fijado para la misma entrada", () => {
+    expect(getProperty(buildIcsEvent(baseInput), "UID")).toBe("UID:b9c9de17@mentectickets.pe");
+  });
+
   it("escapa comas, punto y coma, barras invertidas y saltos de línea", () => {
     const ics = buildIcsEvent({
       title: "Rock; pop, y más",
