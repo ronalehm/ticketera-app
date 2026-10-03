@@ -1,7 +1,7 @@
 # Documentos legales, consentimientos y Libro de Reclamaciones
 
 - Módulo: legal (nuevo) · auth · checkout · components/shared (footer)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Dar a Mentec Tickets las condiciones legales que exige operar en Perú (Indecopi): Términos y condiciones, Política de privacidad (con transferencia internacional y publicidad), Política de cookies, Política de garantía y devoluciones y el Libro de Reclamaciones virtual. Los compradores y usuarios registrados las pueden leer desde cualquier página del sitio, las aceptan al registrarse y al pagar, y pueden presentar un reclamo o una queja.
