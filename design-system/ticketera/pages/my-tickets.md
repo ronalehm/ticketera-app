@@ -1,6 +1,6 @@
 # Página: Mis entradas `/mis-entradas`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/tickets-my-tickets.md` (Fase 1: datos, pestañas, lista y entrada; Fase 2: acciones, impresión y enlace en el header). "Descargar PDF": `docs/specs/tickets-pdf-download.md`.
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/tickets-my-tickets.md` (Fase 1: datos, pestañas, lista y entrada; Fase 2: acciones, impresión y enlace en el header). "Descargar PDF": `docs/specs/tickets-pdf-download.md`. h1, chip y metadatos móviles: `docs/specs/design-alignment-account-views.md` (Fase 3).
 
 Entradas de los pedidos del comprador con sesión iniciada, separadas en próximas y pasadas, con la entrada seleccionada como un boleto. Es una **maqueta con datos mock**: las órdenes salen del store del navegador (`localStorage`, clave `mentec-orders`, creado por el checkout con pago simulado) y, para la cuenta `demo@mentectickets.pe`, de pedidos demo. Del diseño de referencia (`MyTickets.dc.html`, `MyTicketsMobile.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins del diseño. El QR es decorativo (`TicketQr`): no codifica nada escaneable.
 
@@ -27,7 +27,7 @@ Footer            (igual que la landing)
 ```
 
 - **Fondo `bg-muted`** a todo el ancho (override del MASTER, que reserva `bg-muted` para secciones alternas): la tarjeta blanca destaca y las muescas del talón usan el mismo `bg-muted`. Interior `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-8 md:py-12`.
-- h1 "Mis entradas" `text-3xl md:text-5xl font-extrabold tracking-tight`, único h1 y presente en todos los estados (también en SSR).
+- h1 "Mis entradas" `text-3xl font-extrabold tracking-tight md:text-4xl` (30 px en móvil, 36 px desde `md`; la misma escala que el h1 del panel de organizador), único h1 y presente en todos los estados (también en SSR).
 - `MyTickets` es el límite cliente (todo depende de `localStorage`); la ruta es un Server Component que solo pone metadata (`Mis entradas | Mentec Tickets`, `robots: noindex`) y lo renderiza.
 
 ## Pestañas (`Tabs` de shadcn / Base UI)
@@ -49,8 +49,11 @@ Footer            (igual que la landing)
 
 - `<article>` `rounded-2xl bg-card ring-1 ring-border overflow-hidden`.
 - **Imagen:** `next/image` `fill` en contenedor de alto fijo `h-36 md:h-48` (sin CLS), `alt` "Título en Lugar, Ciudad".
-- **Chip de fecha** (`aria-hidden`, la fecha ya está en el cuerpo): `absolute top-3 left-3 rounded-xl bg-background`, mes overline `text-xs font-bold tracking-wider text-primary-strong` ("NOV") y día `text-2xl font-extrabold` de dos dígitos ("14"), zona America/Lima.
-- **Cuerpo:** h2 título `text-xl md:text-2xl font-bold tracking-tight`; metadatos `text-muted-foreground` con iconos `size-4` `aria-hidden`: `CalendarDays` + fecha larga con mayúscula inicial ("Sábado, 14 de noviembre de 2026", en `<time>`), `Clock` + hora, `MapPin` + "Lugar, Ciudad". Columna en móvil, fila con `flex-wrap` desde `sm`.
+- **Chip de fecha:** `DateChip` compartido (`components/shared/DateChip.tsx`, decorativo con `aria-hidden`: la fecha ya está en el cuerpo) con `className="absolute top-3 left-3"`. Mes overline `text-xs font-bold tracking-wider text-primary-strong` ("NOV") y día `text-2xl font-extrabold tabular-nums` de dos dígitos ("14") sobre `rounded-xl bg-background ring-1 ring-border/60`, 62 px de alto; zona America/Lima.
+- **Cuerpo:** h2 título `text-xl md:text-2xl font-bold tracking-tight`; metadatos `text-muted-foreground` con iconos `size-4` `aria-hidden`: `CalendarDays` + fecha larga con mayúscula inicial ("Sábado, 14 de noviembre de 2026", en `<time>`), `Clock` + hora, `MapPin` + "Lugar, Ciudad".
+  - **Bajo `sm` (dos elementos en columna):** la hora va en la línea de la fecha, "Sábado, 14 de noviembre de 2026 · 21:00" (se parte en dos líneas si no cabe), con `<span className="sm:hidden"> · 21:00</span>` tras el `<time>`; debajo, `MapPin` + lugar. El `<li>` de `Clock` es `hidden sm:flex`: no se muestra.
+  - **Desde `sm`:** tres elementos (fecha, `Clock` + hora, lugar) en fila con `flex-wrap`; el `<span>` de la hora junto a la fecha se oculta.
+  - Un único DOM: lo oculto usa `display: none`, así que la hora se anuncia una sola vez en el árbol de accesibilidad en cualquier ancho.
 - **Talón** (`aria-hidden`): `border-t-2 border-dashed border-border` con dos muescas `size-6 rounded-full bg-muted ring-1 ring-border` en los bordes (el `overflow-hidden` de la tarjeta las corta a media luna).
 - **Parte inferior:** columna centrada en móvil, fila desde `sm`. QR (`TicketQr value={código}`) en recuadro `size-52 rounded-2xl bg-background p-3 ring-1 ring-border`.
   - Navegación: paginador compartido `TicketPager` (`components/shared/`, MASTER §7 "Paginador de entradas"; spec `docs/specs/tickets-ticket-pager.md`), `print:hidden`. "Entrada n de N" (`text-lg font-bold tabular-nums whitespace-nowrap`, `aria-live="polite"` `aria-atomic="true"`) y botones solo-icono `size-11` ("Entrada anterior"/"Entrada siguiente", `ChevronLeft`/`ChevronRight`), un solo DOM.
