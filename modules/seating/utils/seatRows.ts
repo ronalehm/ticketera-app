@@ -25,6 +25,15 @@ function hashToUnit(value: string): number {
 }
 
 /**
+ * Estado determinista de un asiento generado: `occupied` si el hash mezclado de su id cae por debajo de
+ * `occupiedRatio`; si no, `accessible` si figura en `accessible`; si no, `available`.
+ */
+export function getGeneratedSeatStatus(id: string, occupiedRatio: number, accessible: ReadonlySet<string>): SeatStatus {
+  if (hashToUnit(id) < occupiedRatio) return "occupied";
+  return accessible.has(id) ? "accessible" : "available";
+}
+
+/**
  * Genera las filas de una zona numerada con asientos numerados de 1 a n de izquierda a derecha,
  * las filas cortas centradas y una ocupación determinista (hash mezclado del id). Lanza `Error` si un id de
  * `accessibleSeats` no existe o si `seatsPerRow` no tiene un valor por fila.
@@ -54,10 +63,7 @@ export function generateSeatRows({
       const number = seatIndex + 1;
       const id = formatSeatId(zoneId, label, number);
       generatedIds.add(id);
-
-      let status: SeatStatus = "available";
-      if (hashToUnit(id) < occupiedRatio) status = "occupied";
-      else if (accessible.has(id)) status = "accessible";
+      const status = getGeneratedSeatStatus(id, occupiedRatio, accessible);
 
       return { id, row: label, number, x: offsetX + seatIndex * SEAT_PITCH + SEAT_PITCH / 2, y, status };
     });

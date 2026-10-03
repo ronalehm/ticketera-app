@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NumberedVenueZone } from "../types/seating.types";
+import { generateArcSeatRows } from "./arcSeatRows";
 import { getAdjacentSeatId } from "./seatNavigation";
 import { generateSeatRows } from "./seatRows";
 
@@ -85,5 +86,60 @@ describe("getAdjacentSeatId", () => {
 
   it("devuelve el mismo id si el asiento no pertenece a la zona", () => {
     expect(getAdjacentSeatId(zone, "platea-A-1", "ArrowRight")).toBe("platea-A-1");
+  });
+});
+
+/**
+ * Zona en arco con el sector y las filas A–J de referencia de `oriente` (casi vertical en
+ * pantalla). Filas A y B de 4 butacas y C de 5; dentro de cada fila la `x` apenas cambia y la `y`
+ * crece con el número.
+ */
+function buildArcZone(): NumberedVenueZone {
+  const { seatViewBox, rows, planTransform } = generateArcSeatRows({
+    zoneId: "oriente",
+    sector: { cx: 300, cy: 54, innerRadius: 102, outerRadius: 268, startAngle: -10, endAngle: 30 },
+    scale: 1.95,
+    rowLabels: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+    occupiedRatio: 0,
+  });
+
+  return {
+    kind: "numbered",
+    id: "oriente",
+    ticketTypeId: "oriente",
+    path: "M0 0 H10 V10 H0 Z",
+    labelPos: { x: 5, y: 5 },
+    seatViewBox,
+    rows,
+    planTransform,
+    name: "Tribuna Oriente",
+    price: 155,
+    status: "available",
+  };
+}
+
+describe("getAdjacentSeatId en una zona en arco", () => {
+  const arcZone = buildArcZone();
+  const seat = (id: string) => arcZone.rows.flatMap((row) => row.seats).find((s) => s.id === id)!;
+
+  it("ArrowDown desde la butaca central de la fila A va a la butaca central de la fila B", () => {
+    expect(getAdjacentSeatId(arcZone, "oriente-A-2", "ArrowDown")).toBe("oriente-B-2");
+    expect(getAdjacentSeatId(arcZone, "oriente-A-3", "ArrowDown")).toBe("oriente-B-3");
+  });
+
+  it("ArrowUp y ArrowDown eligen por distancia euclídea, no por la x más cercana", () => {
+    // Por x, A-2 iría a B-4: la fila B se desplaza a la izquierda al bajar en el arco.
+    const closestByX = arcZone.rows[1].seats.reduce((closest, s) =>
+      Math.abs(s.x - seat("oriente-A-2").x) < Math.abs(closest.x - seat("oriente-A-2").x) ? s : closest,
+    );
+    expect(closestByX.id).not.toBe("oriente-B-2");
+
+    expect(getAdjacentSeatId(arcZone, "oriente-B-2", "ArrowUp")).toBe("oriente-A-2");
+    expect(getAdjacentSeatId(arcZone, "oriente-B-2", "ArrowDown")).toBe("oriente-C-2");
+  });
+
+  it("ArrowLeft y ArrowRight siguen el número de butaca de la fila", () => {
+    expect(getAdjacentSeatId(arcZone, "oriente-C-3", "ArrowLeft")).toBe("oriente-C-2");
+    expect(getAdjacentSeatId(arcZone, "oriente-C-3", "ArrowRight")).toBe("oriente-C-4");
   });
 });

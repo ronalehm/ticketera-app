@@ -344,6 +344,28 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
     `selectorProps` = `{ slug, status, priceFrom, ticketTypes }` del evento, como hoy. La rama con mapa (`ZonePricesCard`), `generateStaticParams`, `generateMetadata`, el `id="entradas"` y el resto de la página no cambian.
 50. **Accesibilidad (F7):** la precarga no mueve el foco ni anuncia nada: las cantidades ya están en los contadores y en el total desde el primer render del selector. El ancla `#entradas` solo desplaza la vista (`scroll-mt-24`, como hoy).
 
+### Fase 8 — Bundle cliente de `/checkout` sin `seating` ni `events`
+Solo cambian imports y reexportaciones (decisiones 10 y 38–40). Ningún comportamiento, texto, firma ni test de comportamiento cambia.
+
+51. **Entradas públicas de `events`** (solo reexportan, sin lógica):
+    - nueva `modules/events/catalog.ts`, con un comentario de cabecera como el de `seating/seats.ts` ("Entrada pública de servidor para otros módulos: a diferencia del barrel, no arrastra componentes cliente."): `export { getEventBySlug } from "./services/events.service";`;
+    - `modules/events/format.ts`: `export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";`. Lo demás no cambia, incluidos `formatShortDayMonth`/`formatLongDayMonth` si la F5 ya los añadió;
+    - `modules/events/purchase.ts`: `export { buildCheckoutHref, getOrderTotal, MAX_TICKETS_PER_ORDER } from "./utils/ticketOrder";`.
+52. **Layout raíz:** `components/shared/SiteHeader.tsx` y `components/shared/SiteFooter.tsx` cambian `from "@/modules/events"` por `from "@/modules/events/format"` (mismos nombres: `EVENT_CATEGORIES`, `EVENT_CATEGORY_LABELS`). Nada más cambia.
+53. **Seating (excepción de la decisión 40):** en `modules/seating/services/seating.service.ts`, `import { type EventDetail, getEventBySlug } from "@/modules/events";` pasa a `import type { EventDetail } from "@/modules/events";` + `import { getEventBySlug } from "@/modules/events/catalog";`. Nada más cambia.
+54. **Checkout:**
+    - `app/checkout/page.tsx`: `import { hasVenueMap } from "@/modules/seating/seats";`, en lugar del barrel. Lo demás, según la fase en que esté el archivo, no cambia.
+    - `modules/checkout/components/OrderSummary.tsx`: los formateadores llegan de `@/modules/events/format`. Si la F5 ya se aplicó, el import ya es ese y no hay cambio.
+    - `modules/checkout/schemas/checkout.schema.ts`: `MAX_TICKETS_PER_ORDER` de `@/modules/events/purchase`.
+    - `modules/checkout/utils/checkoutOrder.ts`: `import type { EventDetail } from "@/modules/events";` + `import { getOrderTotal, MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";`. Si la F7 ya añadió `buildChangeTicketsHref`, se conserva.
+    - `modules/checkout/services/checkout.service.ts`: `getEventBySlug` de `@/modules/events/catalog`.
+    - `modules/checkout/services/checkout.service.test.ts`: el `vi.mock` y el import de `getEventBySlug` pasan de `"@/modules/events"` a `"@/modules/events/catalog"`, con el mismo envoltorio `vi.fn(actual.getEventBySlug)`. Ese mock también intercepta la llamada desde `seating.service.ts` (mismo módulo), así que el caso "`getEventBySlug` se llama exactamente 1 vez" sigue valiendo sin cambiar sus expectativas.
+55. **Lista de componentes cliente que `/checkout` usa de verdad** (referencia para el criterio):
+    - Del layout: `AuthHeaderActions` (auth), y `sheet` y `separator` de `components/ui/`.
+    - De la página: `CheckoutForm`, con sus hijos dentro de su frontera cliente, que no aparecen aparte en el manifiesto.
+    - `OrderConfirmation` aparece porque la página importa el barrel `@/modules/checkout` (fuera de alcance; Preguntas abiertas).
+    - **Ningún componente de `modules/events/components/` ni de `modules/seating/`**: `/checkout` no renderiza ninguno.
+
 ## Criterios de aceptación
 
 ### Fase 1 — Base compartida
@@ -466,6 +488,23 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
 - [ ] Dado el código, entonces `TicketSelector` no lee la URL, `PreselectedTicketSelector` solo conecta `useSearchParams` con `parsePreselectedQuantities`, y `app/eventos/[slug]/page.tsx` no lee `searchParams`.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
+### Fase 8 — Bundle cliente de `/checkout`
+Manifiesto: `.next/server/app/checkout/page_client-reference-manifest.js`. Si ya se aplicó `layout-fullscreen-shells.md`, es `.next/server/app/(site)/checkout/…`. Para listar sus archivos: `grep -oE '(modules|components)/[A-Za-z0-9_/.-]+\.tsx?' <manifiesto> | sort -u`.
+- [ ] Dado `npm run build`, entonces el manifiesto de `/checkout` no contiene ninguna ruta `modules/seating/` y ninguna `modules/events/components/`. `/checkout` no usa ningún componente cliente de `events` ni de `seating` (requisito 55), así que la lista permitida de `modules/events/components/` está vacía.
+  - Sí contiene `modules/checkout/components/CheckoutForm.tsx`. El resto debe ser un subconjunto de lo que usa el layout (`modules/auth/components/AuthHeaderActions.tsx`, `components/ui/sheet.tsx`, `components/ui/separator.tsx`), más `modules/checkout/components/OrderConfirmation.tsx`.
+  - Antes del cambio contiene `modules/seating/components/TicketSelection.tsx`, `modules/events/components/HeroCarousel.tsx`, `TicketSelector.tsx`, `UpcomingEvents.tsx`, `EventFiltersSheet.tsx`, `EventFiltersForm.tsx`, `SaveEventButton.tsx`, `ShareEventButton.tsx` y `components/ui/carousel.tsx`.
+- [ ] Dado el mismo build, entonces el manifiesto de `/checkout/confirmacion` cumple lo mismo: sin `modules/seating/` ni `modules/events/components/`.
+- [ ] Dado el mismo build, entonces ningún chunk de las entradas de `entryJSFiles` del manifiesto de `/checkout` (layout y página; rutas bajo `.next/static/chunks/`) contiene el texto "Elige tu zona" ni `react-zoom-pan-pinch`.
+- [ ] Dado el mismo build, entonces el manifiesto de `/login` (`.next/server/app/(auth)/login/…`) no contiene `modules/events/components/`. Es el control de que el layout raíz ya no arrastra el barrel de `events`.
+- [ ] Dado el código (`grep -rn 'from "@/modules/events"' app/checkout components/shared modules/checkout modules/seating/services` sin tests), entonces:
+  - solo quedan `import type`;
+  - ningún archivo de `app/checkout` ni de `modules/checkout` (sin tests) importa valores de `"@/modules/seating"`.
+- [ ] Dados `modules/events/catalog.ts`, `format.ts` y `purchase.ts`, entonces solo contienen reexportaciones (requisito 51). Los barrels `index.ts` de `events`, `seating` y `checkout` y `modules/seating/seats.ts` no cambian.
+- [ ] Dado `git diff` de la fase, entonces en `SiteHeader.tsx`, `SiteFooter.tsx`, `seating.service.ts`, `checkout.schema.ts`, `checkoutOrder.ts`, `checkout.service.ts` y `app/checkout/page.tsx` solo cambian líneas de import.
+- [ ] Dados `npx vitest run modules/checkout modules/seating modules/events`, entonces pasan sin cambiar expectativas. En particular, `checkout.service.test.ts` sigue comprobando 1 sola llamada a `getEventBySlug`.
+- [ ] Dados `npm run lint` y `npm run build`, entonces pasan, y `/checkout`, `/checkout/confirmacion`, el header y el footer se ven y funcionan igual que antes.
+- [ ] Dado `docs/specs/seating-ticket-selection.md` F5 T2, entonces su criterio "el manifiesto de `/checkout` ya no referencia `modules/seating/components/`" queda cumplido con este build. Esa spec no se edita: solo se pueden marcar sus casillas.
+
 ## Diseño técnico
 - Rutas (`app/`), consultar `node_modules/next/dist/docs/` (`searchParams` es Promise, `PageProps<"…">`, `useRouter` de `next/navigation`):
   - `app/checkout/page.tsx` (modificada, Fase 3).
@@ -485,7 +524,7 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
   - nuevo `modules/checkout/components/OrderConfirmation.tsx` (`"use client"`): lee la orden del store.
   - nuevo `modules/checkout/components/ConfirmationTicketCard.tsx` (presentacional, sin directiva: lo importa `OrderConfirmation`).
 - Hooks: `hooks/useZodForm.ts` (movido); nuevo `modules/checkout/hooks/useStoredOrder.ts`.
-- Schemas: `lib/formFields.ts` (nuevo, Fase 1); `modules/checkout/schemas/payment.schema.ts` (nuevo, Fase 2). `checkout.schema.ts` no se toca (importa el barrel de `events` y solo lo usa el servidor).
+- Schemas: `lib/formFields.ts` (nuevo, Fase 1); `modules/checkout/schemas/payment.schema.ts` (nuevo, Fase 2). ~~`checkout.schema.ts` no se toca (importa el barrel de `events` y solo lo usa el servidor).~~ Desde la Fase 8, `checkout.schema.ts` importa de `@/modules/events/purchase`, porque el código de servidor también arrastra los componentes cliente del barrel (decisión 10 ampliada).
 - Utils: `lib/linkStyles.ts`, `lib/calendar.ts` (Fase 1); `modules/checkout/utils/card.ts`, `modules/checkout/utils/order.ts` (Fase 2); `modules/checkout/utils/checkoutOrder.ts` (añade `category`).
 - Store: `modules/checkout/stores/orders.store.ts` (Fase 2).
 - Service: `modules/checkout/services/payment.service.ts` (mock en cliente, Fase 2).
@@ -604,6 +643,40 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
   type PayButtonProps = { totalLabel: string; isProcessing: boolean; disabled: boolean; termsPending: boolean; className?: string };
   ```
 
+### Enmienda (Fase 8: bundle cliente de `/checkout`)
+- Rutas: `app/checkout/page.tsx` (solo el import de `hasVenueMap`). `app/checkout/confirmacion/page.tsx` y `app/layout.tsx` no cambian.
+- Componentes:
+  - existentes, solo cambia el import: `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx` y `modules/checkout/components/OrderSummary.tsx`.
+  - No hay UI nueva ni shadcn que instalar o consultar.
+- Entradas públicas (SETUP §1, regla 4):
+  - nueva `modules/events/catalog.ts`, de servidor. No existe ninguna entrada de `events` que exponga la carga de un evento sin el barrel (decisión 38).
+  - ampliadas: `modules/events/format.ts` (`EVENT_CATEGORIES`) y `modules/events/purchase.ts` (`getOrderTotal`) (decisión 39).
+- Services, schemas y utils: solo cambian imports en `modules/checkout/services/checkout.service.ts` (+ test), `modules/checkout/schemas/checkout.schema.ts`, `modules/checkout/utils/checkoutOrder.ts` y `modules/seating/services/seating.service.ts` (decisión 40).
+- Hooks, stores, tipos y contratos A–F: sin cambios.
+- Contratos (entradas públicas, solo reexportan):
+  ```ts
+  // modules/events/catalog.ts (nueva) — servidor de otros módulos
+  export { getEventBySlug } from "./services/events.service";
+
+  // modules/events/format.ts — añade EVENT_CATEGORIES
+  export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
+
+  // modules/events/purchase.ts — añade getOrderTotal
+  export { buildCheckoutHref, getOrderTotal, MAX_TICKETS_PER_ORDER } from "./utils/ticketOrder";
+  ```
+- Mapa de imports resultante del grafo de `/checkout`, sin tests:
+
+  | Archivo | Antes | Después |
+  |---|---|---|
+  | `app/checkout/page.tsx` | `hasVenueMap` ← `@/modules/seating` | ← `@/modules/seating/seats` |
+  | `components/shared/SiteHeader.tsx`, `SiteFooter.tsx` | `EVENT_CATEGORIES`, `EVENT_CATEGORY_LABELS` ← `@/modules/events` | ← `@/modules/events/format` |
+  | `modules/checkout/components/OrderSummary.tsx` | formateadores ← `@/modules/events` | ← `@/modules/events/format` (ya previsto en F5) |
+  | `modules/checkout/schemas/checkout.schema.ts` | `MAX_TICKETS_PER_ORDER` ← `@/modules/events` | ← `@/modules/events/purchase` |
+  | `modules/checkout/utils/checkoutOrder.ts` | `EventDetail`, `getOrderTotal`, `MAX_TICKETS_PER_ORDER` ← `@/modules/events` | `import type { EventDetail }` ← barrel; valores ← `@/modules/events/purchase` |
+  | `modules/checkout/services/checkout.service.ts` | `getEventBySlug` ← `@/modules/events` | ← `@/modules/events/catalog` |
+  | `modules/seating/services/seating.service.ts` | `EventDetail`, `getEventBySlug` ← `@/modules/events` | `import type { EventDetail }` ← barrel; `getEventBySlug` ← `@/modules/events/catalog` |
+  | `modules/checkout/types/checkout.types.ts` | `import type` ← `@/modules/events` | sin cambios |
+
 ## Reutilización
 - `auth`: `useZodForm` (sube a `hooks/`), reglas de `registerSchema` (suben a `lib/formFields.ts`), `INLINE_LINK`/`TEXT_LINK` (suben a `lib/linkStyles.ts`), `useAuthStore` (vía `modules/auth/session.ts`), patrón visual y de tests de `RegisterForm` (campos, "+51", `Select`, `Checkbox`, `Alert`, `Spinner`, `vi.mock` de `next/navigation`), patrón de store persistido con `skipHydration` y su test.
 - `checkout` (Fase 1 de `checkout-purchase.md` + extensiones de seating): `getCheckoutOrder`, `CheckoutOrder`, `OrderSummary`, `ReservationTimer`/`useCountdown`, `CheckoutStatusMessage`.
@@ -620,6 +693,11 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
   - `MAX_TICKETS_PER_ORDER`;
   - `useSearchParams` + `Suspense` (documentación de Next 16);
   - el ancla `id="entradas"` existente del detalle.
+- (Enmienda F8):
+  - entradas públicas existentes: `@/modules/events/format`, `@/modules/events/purchase` y `@/modules/seating/seats`;
+  - patrón de entrada de servidor de `seating/seats.ts`, para `events/catalog.ts`;
+  - funciones existentes sin cambios: `getEventBySlug`, `getOrderTotal` y `EVENT_CATEGORIES`.
+  - Sin dependencias nuevas.
 
 ## Tests
 - `hooks/useZodForm.test.ts` (F1): movido sin cambios; junto con los tests de `modules/auth` sin cambios deben pasar. `lib/formFields.ts` queda cubierto por `auth.schema.test.ts` y `payment.schema.test.ts` (sin test propio).
@@ -706,6 +784,16 @@ Decisiones de la enmienda (Fase 8, bundle cliente de `/checkout`; prevalecen sob
   - `PreselectedTicketSelector`, con `vi.mock("next/navigation", async (importOriginal) => ({ ...(await importOriginal()), useSearchParams: () => new URLSearchParams("general=2&vip=1") }))`, muestra esas cantidades.
 - Sin tests propios: `app/eventos/[slug]/page.tsx`, `app/checkout/page.tsx`, barrels.
 
+**Fase 8:**
+- `modules/checkout/services/checkout.service.test.ts` (**solo cambia la ruta del mock**):
+  - `vi.mock("@/modules/events/catalog", …)` y `import { getEventBySlug } from "@/modules/events/catalog"`, con el mismo envoltorio `vi.fn(actual.getEventBySlug)`;
+  - las expectativas no cambian, incluido "`getEventBySlug` se llama exactamente 1 vez".
+- Los demás tests existentes deben pasar sin cambios: `checkoutOrder.test.ts`, `seating.service.test.ts`, `ticketOrder.test.ts`, `formatEvent.test.ts`, `CheckoutForm.test.tsx` y `OrderConfirmation.test.tsx`. Siguen importando los barrels, lo que está permitido en tests.
+- Sin tests nuevos:
+  - las entradas solo reexportan;
+  - en el resto de archivos solo cambian imports;
+  - la verificación del bundle es del build: la hace el reviewer con los criterios de la Fase 8.
+
 ## Plan de tareas
 Coordinación:
 - **Orden global:** seating → checkout → tickets → organizer → events-ui-refresh. La Fase 1 no depende de seating; las Fases 2–4 requieren seating implementada (contrato A `PurchaseStepper`, B `hasVenueMap`, C `seats` en `CheckoutOrderItem`, validación de `asientos=` y su presentación en `OrderSummary`). Seating modifica antes que esta spec `checkout.types.ts`, `checkoutOrder.ts`(+test), `checkout.schema.ts`, `checkout.service.ts`(+test) y `OrderSummary.tsx`; aquí se edita sobre su versión.
@@ -755,6 +843,7 @@ Coordinación de la ampliación (Fases 5 y 6):
   - esa spec y la F6 modifican `OrderConfirmation.tsx` y su test: se ejecutan en sesiones distintas, y se recomienda la de PDF primero;
   - la F6 edita sobre su versión: conserva `TicketsPdfButton` en las acciones y no reintroduce `window.print()` ni la lista "Tus entradas".
 - F6 depende de F5 (formateadores y `summaryFormat`). Se ejecuta una fase por sesión.
+- **F8 (bundle cliente) es independiente y se recomienda antes de la F5.** Si ya se aplicó, F5 T1, T2 y T4 conservan sus imports (`format.ts` con `EVENT_CATEGORIES`, `hasVenueMap` de `@/modules/seating/seats`). Ver "Coordinación de la Fase 8".
 
 ### Fase 5 — "Datos y pago" según las capturas
 - [ ] T1 — Formateadores de fecha en events (+ casos de test) y formateadores del resumen (`formatTicketCount`, asientos compactos) con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/summaryFormat.ts`, `modules/checkout/utils/summaryFormat.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
@@ -785,6 +874,32 @@ Coordinación de la Fase 7:
 - [ ] T2 — `parsePreselectedQuantities` con tests, `initialQuantities` en `TicketSelector` y nuevo `PreselectedTicketSelector`, con tests · archivos: `modules/events/utils/ticketOrder.ts`, `modules/events/utils/ticketOrder.test.ts`, `modules/events/components/TicketSelector.tsx`, `modules/events/components/TicketSelector.test.tsx`, `modules/events/components/PreselectedTicketSelector.tsx` · depende de: Fase 5 · paralelo con T1
 - [ ] T3 — Barrel de events y página de detalle con `Suspense` + `PreselectedTicketSelector` (rama sin mapa); diseño de página (`/checkout`: "Cambiar entradas" conserva la selección) · archivos: `modules/events/index.ts`, `app/eventos/[slug]/page.tsx`, `design-system/ticketera/pages/checkout.md` · depende de: T1, T2 · secuencial. Verificar en `npm run build` (lo ejecuta el reviewer) que `/eventos/[slug]` sigue prerenderizada.
 
+Coordinación de la Fase 8:
+- **Por qué es una fase aparte y no una tarea más de la Fase 5:** la F5 ya tiene 5 tareas y 14 archivos. Añadir estos 12 archivos (9 nuevos para la fase) la llevaría a 6 tareas y 23 archivos, por encima del límite de SETUP §3.
+- **Independiente de las Fases 5–7, y se recomienda ejecutarla primero**, antes de la F5:
+  - cierra el criterio pendiente de seating F5 T2 sin esperar a la F5;
+  - las demás fases solo editan encima.
+  - No puede ir en la misma sesión que otra fase de esta spec.
+- **Archivos compartidos con otras fases de esta spec.** La fase que vaya después edita sobre la versión de la anterior y **conserva los imports de la F8**:
+  - `app/checkout/page.tsx` (F5 T4, F7 T1);
+  - `OrderSummary.tsx` (F5 T2, que ya importa de `@/modules/events/format`);
+  - `modules/events/format.ts` (F5 T1 añade dos formateadores);
+  - `checkoutOrder.ts` (F7 T1).
+  - Nada de la F5–F7 debe volver a importar valores de `@/modules/events` ni de `@/modules/seating` en el grafo de `/checkout` (decisión 10).
+- **Seating (`seating-ticket-selection.md`, aprobada; no se edita):**
+  - requiere el código de su F5 T2 (`modules/seating/seats.ts` con `getVenueMapForEvent`; ya está en el repositorio);
+  - no se ejecuta a la vez que una tarea de seating que toque `seating.service.ts` (seating F5 T2, si sigue abierta, o `seating-stadium-map.md`). Ese archivo cambia solo en su línea de import;
+  - tras el build del reviewer, el orquestador puede marcar la casilla de seating F5 T2 si sus otros criterios ya se cumplían.
+- **Otras specs que tocan los mismos archivos compartidos**, que no se ejecutan en paralelo con esta fase:
+  - `legal-documents.md` (`SiteFooter.tsx`);
+  - `layout-fullscreen-shells.md` (mueve las páginas a `app/(site)/`, lo que cambia la ruta del manifiesto en los criterios);
+  - `events-ui-refresh.md` (si toca `modules/events/format.ts`).
+  - Quien edite después conserva los imports de la F8.
+
+### Fase 8 — Bundle cliente de `/checkout` sin `seating` ni `events` (2 tareas, 12 archivos)
+- [ ] T1 — Entradas públicas de `events` (`catalog.ts` nueva, `EVENT_CATEGORIES` en `format.ts`, `getOrderTotal` en `purchase.ts`) y sus consumidores fuera de checkout: header, footer y service de seating, solo con cambios de import (requisitos 51–53) · archivos: `modules/events/catalog.ts`, `modules/events/format.ts`, `modules/events/purchase.ts`, `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx`, `modules/seating/services/seating.service.ts` · depende de: código de seating F5 T2 presente (`seats.ts`, `getVenueMapForEvent`) · secuencial (base: entradas públicas, `components/shared/`)
+- [ ] T2 — Imports de checkout y de la página `/checkout`: `hasVenueMap` de `@/modules/seating/seats`, `OrderSummary` de `format`, `checkout.schema.ts` y `checkoutOrder.ts` de `purchase`, `checkout.service.ts` de `catalog` y mock del test en `catalog` (requisito 54) · archivos: `app/checkout/page.tsx`, `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/schemas/checkout.schema.ts`, `modules/checkout/utils/checkoutOrder.ts`, `modules/checkout/services/checkout.service.ts`, `modules/checkout/services/checkout.service.test.ts` · depende de: T1 · secuencial. El developer verifica con `npx vitest run modules/checkout modules/seating modules/events` y `npm run lint`. El reviewer ejecuta `npm run build` y comprueba los manifiestos y los chunks según los criterios de la Fase 8.
+
 ## Preguntas abiertas
 1. **Yape y PagoEfectivo:** los textos del diseño prometen un QR de Yape y un código de pago, pero en la simulación "Pagar" aprueba al instante. ¿Se mantienen los textos tal cual, se cambian por algo como "En esta demo el pago se aprueba al instante", o se simula un paso intermedio con QR/código?
 2. **"Enviamos tus entradas a tu correo"** (confirmación y "Qué sigue"): no se envía ningún correo. ¿Se mantiene el texto del diseño o se cambia mientras no exista envío?
@@ -813,3 +928,9 @@ Enmienda (Fase 5, captura del resumen, y Fase 7):
 19. **Mayúsculas en la fecha corta:** la nueva captura del resumen muestra "Dom 15 Nov · Arena Costa Verde, Lima" (con mayúscula inicial), y la F5 define `formatShortDayMonth` en minúsculas ("lun 5 oct", decisión 23). Se mantienen las minúsculas. ¿Prefieres "Dom 15 Nov"? Solo cambiaría `formatShortDayMonth` y su test, y "Mis entradas" heredaría el formato.
 20. **Enter en un campo con Términos sin marcar:** lleva el foco a la casilla de Términos, igual que pulsar "Pagar" (decisión 33), porque es el envío implícito del formulario. ¿De acuerdo, o prefieres que Enter no haga nada mientras "Pagar" esté bloqueado?
 21. **"Volver a elegir entradas" tras expirar** conserva también la selección (mismo enlace que "Cambiar entradas", decisión 35). ¿De acuerdo, o debe volver al paso 1 vacío, porque la reserva "se liberó"?
+
+Enmienda (Fase 8):
+
+22. **`seating.service.ts` desde esta spec:** la F8 cambia una línea de import en `modules/seating/services/seating.service.ts` (decisión 40), porque sin ella `/checkout` sigue arrastrando los componentes de `events` a través de `@/modules/seating/seats`. La alternativa es una enmienda de `seating-ticket-selection.md`, que está aprobada y que los agentes no editan sin pedido. ¿Aceptas la excepción en esta spec?
+23. **`CheckoutForm` y `OrderConfirmation` en los dos manifiestos:** `/checkout` referencia `OrderConfirmation` y `/checkout/confirmacion` referencia `CheckoutForm`, porque ambas páginas importan el barrel `@/modules/checkout`. Es el mismo problema dentro del propio módulo. ¿Se separan en una enmienda posterior (p. ej. importando cada componente desde una entrada propia), o se acepta mientras ambos sean del mismo flujo?
+24. **Barrel de `events` en otros módulos de servidor:** `modules/organizer/services/organizer.service.ts` importa `getEvents` de `@/modules/events`, así que las rutas de `/organizador` seguirán arrastrando los componentes de `events`. No afecta a `/checkout` y queda fuera de alcance (YAGNI: `catalog.ts` solo expone `getEventBySlug`). ¿Se abre una enmienda de `organizer-dashboard.md` para usar `catalog.ts` con `getEvents`?

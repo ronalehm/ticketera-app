@@ -25,40 +25,45 @@ function getNodeText(node: HastNode | undefined): string {
   return "";
 }
 
-const SECTION_HEADING =
-  "mt-10 mb-4 scroll-mt-24 text-2xl font-bold tracking-tight first:mt-0";
-const LIST = "mb-4 space-y-2 pl-6 marker:text-muted-foreground";
-
-function SectionHeading({ node, ...props }: React.ComponentProps<"h2"> & ExtraProps) {
-  return <h2 id={slugifyHeading(getNodeText(node))} className={SECTION_HEADING} {...props} />;
+// Quita `node` (el nodo hast que pasa react-markdown) para no llevarlo al DOM ni a componentes cliente.
+function omitNode<P extends ExtraProps>(props: P): Omit<P, "node"> {
+  const rest = { ...props };
+  delete rest.node;
+  return rest;
 }
 
-function MinorHeading({ node: _node, ...props }: React.ComponentProps<"h4"> & ExtraProps) {
-  return <h4 className="mt-6 mb-2 text-base font-bold" {...props} />;
+type StyledTag = "h3" | "h4" | "p" | "ul" | "ol" | "li" | "strong" | "em" | "blockquote" | "code";
+
+// Elemento nativo con las clases de tokens del documento legal (más las que traiga el markdown, p. ej. listas de tareas).
+function styled<T extends StyledTag>(tag: T, baseClassName: string) {
+  return function StyledElement({ className, ...props }: React.ComponentProps<T> & ExtraProps) {
+    const Tag = tag as React.ElementType;
+    return <Tag className={cn(baseClassName, className)} {...omitNode(props)} />;
+  };
 }
 
-function MarkdownLink({
-  node: _node,
-  href = "",
-  children,
-  ...props
-}: React.ComponentProps<"a"> & ExtraProps) {
+function SectionHeading({ className, ...props }: React.ComponentProps<"h2"> & ExtraProps) {
+  return (
+    <h2
+      id={slugifyHeading(getNodeText(props.node))}
+      className={cn("mt-10 mb-4 scroll-mt-24 text-2xl font-bold tracking-tight first:mt-0", className)}
+      {...omitNode(props)}
+    />
+  );
+}
+
+function MarkdownLink({ href = "", children, ...props }: React.ComponentProps<"a"> & ExtraProps) {
+  const linkProps = { ...omitNode(props), className: cn(INLINE_LINK, props.className) };
   if (href.startsWith("/")) {
     return (
-      <Link href={href} className={INLINE_LINK} {...props}>
+      <Link href={href} {...linkProps}>
         {children}
       </Link>
     );
   }
   if (/^https?:\/\//i.test(href)) {
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={INLINE_LINK}
-        {...props}
-      >
+      <a href={href} target="_blank" rel="noopener noreferrer" {...linkProps}>
         {children}
         <span className="sr-only"> (se abre en una pestaña nueva)</span>
       </a>
@@ -66,40 +71,41 @@ function MarkdownLink({
   }
   // `#ancla`, `mailto:` y cualquier otro valor que deje pasar el `urlTransform` por defecto.
   return (
-    <a href={href} className={INLINE_LINK} {...props}>
+    <a href={href} {...linkProps}>
       {children}
     </a>
   );
 }
 
+const LIST = "mb-4 space-y-2 pl-6 marker:text-muted-foreground";
+const MinorHeading = styled("h4", "mt-6 mb-2 text-base font-bold");
+
 const components: Components = {
   h1: SectionHeading,
   h2: SectionHeading,
-  h3: ({ node: _node, ...props }) => <h3 className="mt-8 mb-3 text-lg font-bold" {...props} />,
+  h3: styled("h3", "mt-8 mb-3 text-lg font-bold"),
   h4: MinorHeading,
   h5: MinorHeading,
   h6: MinorHeading,
-  p: ({ node: _node, ...props }) => <p className="mb-4 text-base leading-relaxed" {...props} />,
-  ul: ({ node: _node, ...props }) => <ul className={cn(LIST, "list-disc")} {...props} />,
-  ol: ({ node: _node, ...props }) => <ol className={cn(LIST, "list-decimal")} {...props} />,
-  li: ({ node: _node, ...props }) => <li className="pl-1 leading-relaxed" {...props} />,
+  p: styled("p", "mb-4 text-base leading-relaxed"),
+  ul: styled("ul", cn(LIST, "list-disc")),
+  ol: styled("ol", cn(LIST, "list-decimal")),
+  li: styled("li", "pl-1 leading-relaxed"),
   a: MarkdownLink,
-  strong: ({ node: _node, ...props }) => <strong className="font-bold" {...props} />,
-  em: ({ node: _node, ...props }) => <em className="italic" {...props} />,
-  blockquote: ({ node: _node, ...props }) => (
-    <blockquote
-      className="my-6 rounded-2xl border-l-4 border-primary bg-muted p-4 text-sm [&>p]:mb-0"
-      {...props}
-    />
+  strong: styled("strong", "font-bold"),
+  em: styled("em", "italic"),
+  blockquote: styled(
+    "blockquote",
+    "my-6 rounded-2xl border-l-4 border-primary bg-muted p-4 text-sm [&>p]:mb-0",
   ),
   hr: () => <Separator className="my-8" />,
-  table: ({ node: _node, ...props }) => <Table className="my-6" {...props} />,
-  thead: ({ node: _node, ...props }) => <TableHeader {...props} />,
-  tbody: ({ node: _node, ...props }) => <TableBody {...props} />,
-  tr: ({ node: _node, ...props }) => <TableRow {...props} />,
-  th: ({ node: _node, ...props }) => <TableHead {...props} />,
-  td: ({ node: _node, ...props }) => <TableCell {...props} />,
-  code: ({ node: _node, ...props }) => <code className="rounded bg-muted px-1 text-sm" {...props} />,
+  table: (props) => <Table {...omitNode(props)} className={cn("my-6", props.className)} />,
+  thead: (props) => <TableHeader {...omitNode(props)} />,
+  tbody: (props) => <TableBody {...omitNode(props)} />,
+  tr: (props) => <TableRow {...omitNode(props)} />,
+  th: (props) => <TableHead {...omitNode(props)} />,
+  td: (props) => <TableCell {...omitNode(props)} />,
+  code: styled("code", "rounded bg-muted px-1 text-sm"),
 };
 
 type LegalMarkdownProps = {

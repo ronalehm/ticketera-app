@@ -62,7 +62,7 @@ describe("LegalMarkdown", () => {
     expect(mail.getAttribute("href")).toBe("mailto:legal@example.com");
     expect(mail.hasAttribute("target")).toBe(false);
 
-    const external = screen.getByRole("link", { name: "Indecopi (se abre en una pestaña nueva)" });
+    const external = screen.getByRole("link", { name: /^Indecopi\s*\(se abre en una pestaña nueva\)$/ });
     expect(external.getAttribute("href")).toBe("https://www.indecopi.gob.pe");
     expect(external.getAttribute("target")).toBe("_blank");
     expect(external.getAttribute("rel")).toBe("noopener noreferrer");

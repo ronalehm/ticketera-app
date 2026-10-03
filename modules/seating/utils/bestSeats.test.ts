@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NumberedVenueZone, SeatStatus } from "../types/seating.types";
+import { generateArcSeatRows } from "./arcSeatRows";
 import { findBestAvailableSeats } from "./bestSeats";
 import { generateSeatRows } from "./seatRows";
 
@@ -94,7 +95,69 @@ describe("findBestAvailableSeats", () => {
     expect(findBestAvailableSeats(zone, 1)).toBeNull();
   });
 
+  it("el mejor asiento suelto de una fila libre de 5 es el número 3", () => {
+    expect(findBestAvailableSeats(zoneFrom({ A: "....." }), 1)).toEqual(["platea-A-3"]);
+  });
+
   it("devuelve null con count menor que 1", () => {
     expect(findBestAvailableSeats(zoneFrom({ A: "....." }), 0)).toBeNull();
+  });
+});
+
+/**
+ * Zona en arco con el sector y las filas A–J de referencia de `oriente`: A y B (4 butacas) ocupadas
+ * y el resto libres (C tiene 5). En el arco las butacas no están equiespaciadas en `x`, así que centrar por `x` y por
+ * índice dan resultados distintos.
+ */
+function arcZone(): NumberedVenueZone {
+  const { seatViewBox, rows, planTransform } = generateArcSeatRows({
+    zoneId: "oriente",
+    sector: { cx: 300, cy: 54, innerRadius: 102, outerRadius: 268, startAngle: -10, endAngle: 30 },
+    scale: 1.95,
+    rowLabels: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+    occupiedRatio: 0,
+  });
+
+  return {
+    kind: "numbered",
+    id: "oriente",
+    ticketTypeId: "oriente",
+    path: "M0 0 H10 V10 H0 Z",
+    labelPos: { x: 5, y: 5 },
+    seatViewBox,
+    rows: rows.map((row) =>
+      row.label === "A" || row.label === "B"
+        ? { ...row, seats: row.seats.map((seat) => ({ ...seat, status: "occupied" as const })) }
+        : row,
+    ),
+    planTransform,
+    name: "Tribuna Oriente",
+    price: 155,
+    status: "available",
+  };
+}
+
+describe("findBestAvailableSeats en una zona en arco", () => {
+  it("centra el bloque por posición en la fila, no por x", () => {
+    const zone = arcZone();
+    const rowC = zone.rows[2].seats;
+    expect(rowC).toHaveLength(5);
+
+    // Por x, el centro de la fila (media de los extremos) cae junto a C-4.
+    const centerX = (rowC[0].x + rowC[4].x) / 2;
+    const closestByX = rowC.reduce((closest, s) => (Math.abs(s.x - centerX) < Math.abs(closest.x - centerX) ? s : closest));
+    expect(closestByX.id).not.toBe("oriente-C-3");
+
+    expect(findBestAvailableSeats(zone, 1)).toEqual(["oriente-C-3"]);
+    expect(findBestAvailableSeats(zone, 2)).toEqual(["oriente-C-2", "oriente-C-3"]);
+    expect(findBestAvailableSeats(zone, 3)).toEqual(["oriente-C-2", "oriente-C-3", "oriente-C-4"]);
+  });
+
+  it("en la fila A libre de 4 elige el centro por índice con el número menor en empate", () => {
+    const { rows, ...zone } = arcZone();
+    const freeA = { ...zone, rows: [{ ...rows[0], seats: rows[0].seats.map((s) => ({ ...s, status: "available" as const })) }] };
+
+    expect(findBestAvailableSeats(freeA, 1)).toEqual(["oriente-A-2"]);
+    expect(findBestAvailableSeats(freeA, 2)).toEqual(["oriente-A-2", "oriente-A-3"]);
   });
 });
