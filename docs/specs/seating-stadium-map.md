@@ -643,44 +643,148 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
       - el resto no cambia (incluido que `changeQuantity` activa la zona).
     - `utils/viewBox.ts` (nuevo): `parseViewBox(viewBox: string): { width: number; height: number }`, para el formato `"0 0 W H"` de `viewBoxSchema`. Con otro formato lanza `Error`. Lo usan `VenueMapView`, `TicketSelection` y `SeatPlan`.
 
-### Plano curvo (Fase 3)
-17. **Fondo del estadio en el plano** (solo zonas con `planTransform`):
+### Accesibilidad y responsive (Fases 3–6)
+20. Se mantiene el requisito 29 de la spec base, con estos encabezados:
+    - un h1 (título del evento);
+    - h2 "Elige tus entradas" y "Tu compra" (en móvil, "Tu compra" es el `SheetTitle` de la hoja abierta);
+    - h3 de zona en el sub-paso 2 y h3 "Tus asientos" en el plano.
+    - Además:
+      - el cambio de sub-paso se anuncia por el `aria-live` del indicador;
+      - el foco nunca se pierde al cambiar de sub-paso (requisito 11);
+      - targets ≥ 44 px en tarjetas, migas, steppers, controles de zoom y el botón de la hoja (las butacas tienen su propia regla: ≥ 24 px con el plano entero a la vista);
+      - foco visible en todo lo interactivo;
+      - sin scroll horizontal a 375 / 768 / 1024 / 1440;
+      - solo tokens, sin emojis;
+      - animaciones solo con `motion-safe:` o `animationTime` 0 si `prefers-reduced-motion: reduce`.
+
+### Plano de butacas renovado (Fase 4; objetivo: captura del paso 2)
+21. **`SeatShape` y `SeatLegend`** (`components/SeatLegend.tsx`; decisión 10):
+    - **`SeatShape({ status, selected, number? })`:**
+      - **disponible sin elegir:**
+        - `<circle r={12} className="fill-primary/30 stroke-primary stroke-[1.5] transition-colors duration-150 group-hover/seat:fill-primary/50">`;
+        - con `number`, encima: `<text fontSize={12} textAnchor="middle" dominantBaseline="central" className="pointer-events-none fill-brand-navy font-bold tabular-nums opacity-0 transition-opacity group-data-[detail=numbers]/plan:opacity-100">` (requisito 23);
+      - **elegida** (disponible o accesible):
+        - círculo r 12 (o el cuadrado de 24, `rx` 6, si es accesible) `fill-brand-navy`;
+        - check `stroke-background stroke-[2.5]` con `motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-150 origin-center [transform-box:fill-box]`;
+      - **ocupada:** como hoy, `fill-secondary stroke-input stroke-2` con "×" `stroke-muted-foreground`;
+      - **accesible sin elegir:** cuadrado 24 × 24 `rx` 6 `fill-highlight` con `<Accessibility x={-8} y={-8} width={16} height={16} strokeWidth={2.5} className="text-highlight-foreground" aria-hidden />` (lucide).
+    - El borde `primary` de las disponibles contrasta ≥ 3:1 con `muted` y `accent` (componente gráfico).
+    - `SeatGridPreview` (vista previa de organizer) hereda la nueva forma de "disponible", sin número. No cambia su código.
+    - **`SeatLegend({ price, selectedCount, hasAccessible })`:**
+      - contenedor `flex flex-wrap items-center justify-between gap-x-6 gap-y-2`;
+      - `<ul aria-label="Leyenda del plano" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">` con la miniatura de cada `SeatShape` (`size-6`) y su texto: "Disponible · S/ 155.00", "Elegida", "Ocupada" y, solo si la zona tiene accesibles, "Accesible (silla de ruedas)";
+      - a la derecha, `<p aria-live="polite" className="text-sm font-medium tabular-nums">` "1 elegida" / "n elegidas" (butacas elegidas en la zona; con 0, "0 elegidas").
+22. **Controles de zoom** (decisión 12):
+    - Grupo `role="group" aria-label="Zoom del plano"` en pastilla `inline-flex gap-1 rounded-xl bg-background p-1 shadow-sm ring-1 ring-border`.
+    - Tres `Button variant="ghost" size="icon" className="size-11 cursor-pointer"`: `Plus` "Acercar", `Minus` "Alejar" y `Maximize` "Ver todo el plano" (`aria-label`), con el mismo comportamiento de hoy.
+    - **Por debajo de `sm`:** en la barra sobre el lienzo, a la derecha (`flex items-end justify-between gap-2`).
+    - **Desde `sm`:** superpuesto dentro del lienzo (`relative`), con `sm:absolute sm:bottom-3 sm:right-3 sm:z-10`.
+      - El contenido transformado reserva espacio abajo (p. ej. `sm:pb-16`): con el plano entero a la vista ninguna butaca queda bajo los controles.
+      - El developer lo comprueba con capturas a 768 y 1440 en las 6 zonas numeradas de los 4 mapas.
+    - "Mejor asiento disponible" sale de la barra (requisito 26).
+23. **Nivel de detalle: números al acercar** (decisión 23):
+    - `utils/planViewport.ts` (nuevo, puro):
+      - `getPlanFit({ planWidth, planHeight, viewportWidth, viewportHeight }): { unit: number; offsetX: number; offsetY: number }`:
+        - `unit = min(vw/pw, vh/ph)` y `offset = ((vw − pw·unit)/2, (vh − ph·unit)/2)`, como el `preserveAspectRatio` por defecto;
+        - con alguna medida ≤ 0, todo 0;
+      - `getSeatDetailLevel(unit, scale): "overview" | "numbers"`: `"numbers"` si `scale > 1` y `unit·scale ≥ 1` (el número de 12 unidades mide ≥ 12 px); si no, `"overview"`.
+    - `SeatPlan`:
+      - el `<svg>` lleva `className="group/plan …"`;
+      - un componente interno sin salida visual (dentro de `TransformWrapper`) usa `useTransformInit` y `useTransformEffect`. Con `getPlanFit` (tamaño CSS del `<svg>`, `clientWidth`/`clientHeight`) y `state.scale` calcula el nivel, y solo si cambia escribe `svg.dataset.detail`. No es una prop de React: no hay re-render ni desajuste de hidratación, y sin atributo cuenta como `"overview"`.
+    - Las butacas disponibles sin elegir reciben `number={seat.number}`.
+24. **`SeatTooltip`** (nuevo, presentacional; decisión 24):
+    - **Props:** `tooltip: { title: string; detail: string; x: number; y: number; placement: "top" | "bottom" } | null`.
+    - **Aspecto:**
+      - `aria-hidden`;
+      - `pointer-events-none absolute z-20 rounded-lg bg-brand-navy px-3 py-1.5 text-xs text-background shadow-lg`;
+      - `-translate-x-1/2`, más `-translate-y-full -mt-2` (arriba) o `mt-2` (abajo);
+      - título `font-bold` y detalle `tabular-nums`.
+    - **`SeatPlan` lo muestra:**
+      - con el puntero sobre una butaca (`pointerover` delegado en el `<g>` de butacas) si `event.pointerType !== "touch"`;
+      - al enfocar una butaca (`focus` delegado).
+    - **Posición:**
+      - relativa al lienzo (`relative`), a partir del `getBoundingClientRect` de la butaca;
+      - `x` = centro de la butaca, recortado a [64, ancho − 64];
+      - `y` = borde superior (`top`). Si queda a menos de 48 px del borde del lienzo, borde inferior (`bottom`).
+    - **Se oculta** al salir el puntero de las butacas, con `blur` y al empezar paneo, zoom o pellizco (`onPanningStart`, `onZoomStart`, `onPinchStart`).
+    - **Textos:**
+      - título "Fila F · Asiento 12" (`formatSeatShortLabel`);
+      - detalle:
+        - disponible: "S/ 155.00";
+        - elegida: "Elegida · S/ 155.00";
+        - accesible: "Accesible · S/ 155.00";
+        - ocupada: "Ocupada".
+25. **Letras de fila:**
+    - **En cuadrícula** (sin `planTransform`): letra en los dos márgenes (`x = SEAT_PLAN_MARGIN.x / 2` y `x = ancho − SEAT_PLAN_MARGIN.x / 2`, `y` de la fila). La barra "ESCENARIO" sigue arriba.
+    - **En arco** (con `planTransform`):
+      - sin barra "ESCENARIO", que contradecía la orientación (diagnóstico 4);
+      - letra en `getRowEdgeLabelPoints(row).start` y `.end`;
+      - la invariante de la Fase 1 garantiza que quedan dentro del `seatViewBox` con ≥ 12 de margen.
+    - **Estilo:** `fill-muted-foreground font-bold`, 24 unidades, `text-anchor="middle"`, `dominant-baseline="central"`, `aria-hidden`.
+26. **"Mejores butacas" con cantidad** (decisión 25):
+    - **Hook `pickBestSeats(zoneId: string, count: number): string[] | null`** (cambia la firma):
+      - calcula con la selección actual (el cierre del render, porque es un manejador de clic), aplica el estado y devuelve los ids elegidos o `null`;
+      - con `count` que no sea un entero ≥ 1, o una zona inexistente o de pie: `null`, sin cambios;
+      - zona agotada o sin bloque libre de `count` (`findBestAvailableSeats`): aviso "No quedan asientos disponibles en esta zona." (count 1) o "No hay <count> asientos juntos disponibles en esta zona." y `null`;
+      - si (entradas totales − butacas de la zona + `count`) > `MAX_TICKETS_PER_ORDER`: aviso "Máximo 10 entradas por compra" y `null`;
+      - si no: sustituye las butacas de la zona por el bloque (las demás zonas no cambian), pone el aviso de siempre ("Elegimos Fila C · Asiento 6." / "Elegimos 2 asientos juntos en la fila C.") y devuelve el bloque.
+    - **`BestSeatsPicker`** (nuevo, presentacional):
+      - **Props:** `seatLimit`, `selectedInZone` y `onPick(count)`.
+      - **Estado local `count`:** inicial `selectedInZone > 0 ? selectedInZone : 2`; se muestra recortado a [1, máx(1, `seatLimit`)].
+      - **Layout:** `flex flex-col gap-3 rounded-xl bg-muted p-3 sm:flex-row sm:items-center sm:justify-between`.
+      - **A la izquierda:**
+        - "¿Cuántas butacas juntas?" (`text-sm font-semibold`, `id`);
+        - stepper en pastilla con las clases de `ZoneQuantityPanel` (`role="group"` + `aria-labelledby`; "Quitar una butaca" / "Agregar una butaca"; valor con `aria-live="polite"`; "−" deshabilitado en 1 y "+" en `seatLimit`; `focusableWhenDisabled`).
+      - **A la derecha:** `Button variant="outline" className="h-11 cursor-pointer gap-2 font-semibold text-primary-strong"` con `Sparkles`: "Elegir las mejores butacas" o, con `count` 1, "Elegir la mejor butaca".
+      - **Con `seatLimit` 0:** el stepper y el botón quedan deshabilitados (`focusableWhenDisabled`).
+    - **`SeatPlan`:**
+      - prop `onPickBestSeats(zoneId, count) => string[] | null`;
+      - si devuelve ids: oculta el tooltip y llama a `zoomToElement(<elementos de esas butacas>, { maxScale: 2, animationTime: getAnimationTime() })`;
+      - se quita la prop `canPickBest` (la sustituye `seatLimit`).
+27. **Estructura de `SeatPlan` en la Fase 4** (de arriba abajo):
+    1. ayuda (`text-sm text-muted-foreground`);
+    2. por debajo de `sm`, la barra sobre el lienzo con el zoom a la derecha;
+    3. lienzo `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`, con el `aspect-ratio` del `seatViewBox` (hasta F5). Dentro: el `TransformComponent`, el `SeatTooltip` y, desde `sm`, el grupo de zoom superpuesto;
+    4. `SeatLegend` (precio, elegidas en la zona y si hay accesibles);
+    5. bandeja `flex flex-col gap-4 border-t pt-4`: `BestSeatsPicker`, `<p role="status">` del aviso y `SelectedSeatChips` (todas las zonas, como hoy).
+    - **Props finales:** `zone`, `stageLabel`, `selectedSeatIds`, `selectedSeats`, `notice`, `seatLimit`, `selectedInZone`, `onToggleSeat`, `onRemoveSeat`, `onPickBestSeats` y `headingId`.
+    - Se mantienen sin cambios: el roving tabindex, el teclado, el clic tras arrastre, la rueda con Ctrl/Cmd, el doble toque desactivado y los `aria-*` de las butacas.
+
+### Plano curvo con contexto y minimapa (Fase 5; antigua Fase 3)
+28. **Fondo del estadio en el plano** (solo zonas con `planTransform`; captura del paso 2):
     - Debajo de las butacas, `<g aria-hidden transform="translate(x y) scale(s)" className="pointer-events-none">` con:
-      - escenario `fill-brand-navy` y sus luces `fill-highlight`;
-      - las demás zonas `fill-secondary`;
-      - la zona abierta `fill-accent stroke-primary/40` (trazo de 2 px con `vector-effect="non-scaling-stroke"`).
-    - Sin textos del mapa. No se pinta la barra "ESCENARIO" de la cuadrícula.
-    - Letras de fila (`fill-muted-foreground font-bold`, 24 unidades, `aria-hidden`, `text-anchor="middle"`, `dominant-baseline="central"`) en los dos puntos de `getRowEdgeLabelPoints`.
-    - Las zonas sin `planTransform` siguen como en la spec base: barra de escenario arriba y letra a la izquierda.
-18. **`SeatPlanMinimap`** (nuevo, `"use client"` por estar dentro de `TransformWrapper`):
-    - SVG `aria-hidden` con `viewBox` del mapa, `w-24 md:w-28 h-auto rounded-lg bg-muted ring-1 ring-border p-1`.
-    - Contenido:
+      - el escenario `fill-brand-navy` y sus luces `fill-highlight`;
+      - las demás zonas `fill-secondary`, con borde `stroke-background` de 2 px;
+      - la zona abierta `fill-accent stroke-primary`, de 2 px (el "lila con borde azul" de la captura).
+    - Los trazos llevan `vector-effect="non-scaling-stroke"`.
+    - Sin textos del mapa.
+29. **Lienzo apaisado y minimapa** (decisiones 12 y 27; solo zonas con `planTransform`):
+    - **Desde `sm`:**
+      - el lienzo es `sm:aspect-[16/10]` (en vez del `aspect-ratio` del plano);
+      - el `<svg>` del plano lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo;
+      - `fitOnInit="contain"` centra el plano.
+    - **Minimapa:**
+      - desde `sm`, superpuesto con `sm:absolute sm:left-3 sm:top-3 sm:z-10`;
+      - por debajo de `sm`, a la izquierda de la barra sobre el lienzo;
+      - con el plano entero a la vista no tapa butacas (margen lateral del 16:10; se comprueba a 768 y 1440).
+    - Las zonas en cuadrícula no cambian: sin fondo ni minimapa, con la proporción del plano.
+30. **`SeatPlanMinimap`** (nuevo, `"use client"` por estar dentro de `TransformWrapper`):
+    - SVG `aria-hidden` con el `viewBox` del mapa, en `h-auto w-24 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border md:w-28`.
+    - **Contenido:**
       - escenario `fill-brand-navy`;
       - zonas `fill-secondary`;
       - zona abierta `fill-primary`;
       - recuadro de la vista actual: `fill-none stroke-foreground`, 2 px no escalables.
     - Lee la transformación con `useTransformEffect` (`state.scale`, `positionX`, `positionY`) y el tamaño de `instance.wrapperComponent`, y calcula el recuadro con `getVisiblePlanRect` y `toVenueRect`. Antes del primer efecto, el recuadro es el plano entero.
-19. **`utils/planViewport.ts`** (puro):
+31. **`utils/planViewport.ts`** (se amplía; puro):
     - `getVisiblePlanRect({ planWidth, planHeight, viewportWidth, viewportHeight, scale, positionX, positionY }): Rect`:
-      - unidad `u = min(viewportWidth/planWidth, viewportHeight/planHeight)` y desplazamiento de centrado `off` = ((vw − pw·u)/2, (vh − ph·u)/2), como el `preserveAspectRatio` por defecto;
+      - usa `getPlanFit` (`u` y `off`);
       - `x = (−positionX/scale − offX)/u`, `y = (−positionY/scale − offY)/u`, `width = vw/(scale·u)`, `height = vh/(scale·u)`;
       - resultado recortado a [0, pw] × [0, ph].
     - `toVenueRect(rect, planTransform): Rect` = ((x − tx)/s, (y − ty)/s, w/s, h/s).
 
-### Accesibilidad y responsive (todas las fases)
-20. Se mantiene el requisito 29 de la spec base, con estos encabezados:
-    - un h1 (título del evento);
-    - h2 "Elige tus entradas" y "Tu compra";
-    - h3 de zona en el sub-paso 2, y h3 "Tus asientos" dentro del plano.
-    - Además:
-      - el cambio de sub-paso se anuncia por el `aria-live` del indicador;
-      - el foco nunca se pierde al cambiar de sub-paso (requisito 9);
-      - las tarjetas y las migas tienen targets ≥ 44 px;
-      - sin scroll horizontal a 375 / 768 / 1024 / 1440;
-      - solo tokens y sin emojis.
-
-### Precarga desde la URL (Fase 4)
-21. **`parseSeatingPreselection(map, params)`** en `utils/selectionSummary.ts` (pura; decisión 15):
+### Precarga desde la URL (Fase 6; antigua Fase 4)
+32. **`parseSeatingPreselection(map, params)`** en `utils/selectionSummary.ts` (pura; decisión 15):
     - Firma: `(map: VenueMap, params: Pick<URLSearchParams, "getAll">) => SeatSelection`. `ReadonlyURLSearchParams` encaja.
     - `remaining = MAX_TICKETS_PER_ORDER`. Se recorren las zonas de `map.zones` en orden y se omiten las `sold-out`:
       - **de pie:** se toma `params.getAll(zone.ticketTypeId)` solo si hay exactamente un valor `^\d+$` entre 1 y `MAX_TICKETS_PER_ORDER`. Entonces `quantities[zone.id] = min(valor, remaining)`;
@@ -688,14 +792,16 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
       - En cada paso se descuenta de `remaining` lo tomado.
     - Devuelve `{ quantities, seatIds }`: solo cantidades > 0, y `seatIds` en orden de zonas y, dentro de cada una, en el de la URL. Sin nada válido, `{ quantities: {}, seatIds: [] }`.
     - Ida y vuelta: para toda selección válida `s`, `parseSeatingPreselection(map, params de buildSeatingCheckoutHref(slug, map, s))` devuelve las mismas cantidades y los mismos asientos.
-22. **`useSeatSelection(map, initialSelection?: SeatSelection)`:** el estado inicial es `{ selection: initialSelection ?? { quantities: {}, seatIds: [] }, notice: null }` (inicializador de `useState`). `activeZoneId` empieza en `null`. La selección inicial debe venir de `parseSeatingPreselection` (ya validada): el hook no la revalida. El resto de la firma y de las acciones no cambia.
-23. **`TicketSelection`** gana `initialSelection?: SeatSelection` y la pasa al hook. Sin la prop, idéntico a la Fase 2.
-24. **`components/PreselectedTicketSelection.tsx`** (nuevo, `"use client"`):
+33. **`useSeatSelection(map, initialSelection?: SeatSelection)`:** el estado inicial es `{ selection: initialSelection ?? { quantities: {}, seatIds: [] }, notice: null }` (inicializador de `useState`). `activeZoneId` empieza en `null`. La selección inicial debe venir de `parseSeatingPreselection` (ya validada): el hook no la revalida. El resto de la firma y de las acciones no cambia.
+34. **`TicketSelection`** gana `initialSelection?: SeatSelection` y la pasa al hook. Sin la prop, idéntico a la pantalla de las Fases 3–5.
+35. **`components/PreselectedTicketSelection.tsx`** (nuevo, `"use client"`):
     - Props `{ map: VenueMap }`.
     - `const searchParams = useSearchParams()` (de `next/navigation`) y `<TicketSelection map={map} initialSelection={parseSeatingPreselection(map, searchParams)} />`.
     - Sin más lógica. Se exporta en `index.ts`.
-25. **`app/eventos/[slug]/entradas/page.tsx`:** `<Suspense fallback={<TicketSelection map={map} />}><PreselectedTicketSelection map={map} /></Suspense>` en lugar de `<TicketSelection map={map} />`. `generateStaticParams`, `generateMetadata`, el stepper y la franja del evento no cambian.
-26. **Accesibilidad (F4):** la precarga no mueve el foco ni anuncia nada (el indicador "Paso 1 de 2 · Elige una zona" es el de siempre). Las cantidades ya están en las tarjetas, en "Tu compra" y en la barra móvil desde el primer render de la pantalla.
+36. **`app/(site)/eventos/[slug]/entradas/page.tsx`:** `<Suspense fallback={<TicketSelection map={map} />}><PreselectedTicketSelection map={map} /></Suspense>` en lugar de `<TicketSelection map={map} />`. No cambian `generateStaticParams`, `generateMetadata`, el stepper ni la franja del evento.
+37. **Accesibilidad (F6):**
+    - La precarga no mueve el foco ni anuncia nada: el indicador "Paso 1 de 2 · Elige una zona" es el de siempre.
+    - Desde el primer render, las cantidades ya están en las tarjetas ("2 entradas elegidas"), en las insignias del mapa, en "Tu compra" y en la barra móvil.
 
 ## Criterios de aceptación
 

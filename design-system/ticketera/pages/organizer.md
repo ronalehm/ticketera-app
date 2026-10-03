@@ -1,34 +1,114 @@
 # Página: panel de organizador `/organizador` y `/organizador/eventos/nuevo`
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
+> Shell a pantalla completa (sidebar, barra móvil, tarjeta de usuario, fondo `bg-muted`, "Volver al resumen"): `docs/specs/layout-fullscreen-shells.md` (Fase 3). Prevalece sobre el layout, la navegación y la ausencia de sesión de `organizer-dashboard`.
+> "Mis eventos" en tarjeta es **provisional**: `docs/specs/design-alignment-account-views.md` (Fase 2) rehace después esa sección y la vista previa de Crear evento.
 
-Panel para quien organiza eventos: ver cómo van las ventas (KPIs y lista de eventos) y crear un evento nuevo. Es una **maqueta con datos mock**: sin backend, sin sesión obligatoria ni roles; los eventos creados solo existen en este navegador (`localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins del diseño. La marca visible es "Mentec Tickets" (header global).
+Panel para quien organiza eventos: ver cómo van las ventas (KPIs y lista de eventos) y crear un evento nuevo. Es una **maqueta con datos mock**: sin backend, sin sesión obligatoria ni roles; los eventos creados solo existen en este navegador (`localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es "Mentec Tickets · Organizadores" (`OrganizerBrand`, en el sidebar y en la barra móvil).
 
 ## Layout común `/organizador/*`
 
-```
-Header sticky     (global, igual que la landing)
-┌──────────────┬───────────────────────────────────────┐
-│ PANEL DE     │ contenido de la página                │  lg: grilla 220px | 1fr, gap-10
-│ ORGANIZADOR  │                                       │  nav sticky lg:top-24
-│ ▣ Resumen    │                                       │
-│ + Crear      │                                       │
-│   evento     │                                       │
-└──────────────┴───────────────────────────────────────┘
-Footer            (global)
+**Pantalla completa:** sin header ni footer del sitio. `app/organizador` vive fuera del route group `app/(site)`, así que no usa `SiteShell`; el panel tiene su propio shell.
 
-Móvil (< lg):
-[▣ Resumen] [+ Crear evento]   chips h-11 rounded-full, scroll horizontal propio
-contenido
+### Escritorio (`lg+`)
+
+```
+┌──── 240px · bg-background · border-r ────┬──────────── 1fr · bg-muted ────────────────────┐
+│ [logo Mentec] → /                         │  <main> px-10 py-10                             │
+│ Organizadores                             │  ┌──────── mx-auto max-w-6xl ───────────────┐   │
+│                                           │  │ contenido de la página                   │   │
+│ ▣ Resumen          (activo: bg-accent)    │  │                                          │   │
+│ + Crear evento                            │  │                                          │   │
+│                                           │  │                                          │   │
+│                                           │  │                                          │   │
+│ ───────────────────────────────────────── │  │                                          │   │
+│ (AQ) Ana Quispe                           │  │                                          │   │
+│      demo@mentectickets.pe                │  │                                          │   │
+│ [ ⇥  Cerrar sesión                    ]   │  └──────────────────────────────────────────┘   │
+└──── sticky top-0 · h-dvh ─────────────────┴─────────────────────────────────────────────────┘
 ```
 
-- `app/organizador/layout.tsx` (Server Component): contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-8 md:py-12`; en `lg`, `grid-cols-[220px_minmax(0,1fr)] gap-10`. Dentro del `<main>` del layout raíz (no se añade otro).
-- `OrganizerNav`: `<nav aria-label="Panel de organizador">`. Overline "Panel de organizador" solo en `lg` (sustituye al bloque de marca "Ticketera · Organizadores" del diseño: el logo ya está en el header).
-  - Enlaces: "Resumen" (`LayoutDashboard`, `/organizador`) y "Crear evento" (`Plus`, `/organizador/eventos/nuevo`).
-  - Activo (ruta exacta): `aria-current="page"` + `bg-accent text-accent-foreground font-semibold`.
-  - `lg`: lista vertical, items `h-11 rounded-lg px-3`. Móvil: chips `h-11 rounded-full bg-muted` (patrón de `CategoryFilter`).
-- **Solo destinos reales** (Decisión 2): "Mis eventos", "Ventas" y "Configuración" no aparecen (ni deshabilitados ni como "Próximamente"). En móvil no hay hamburguesa ni `Sheet`: con dos destinos bastan los chips. No hay bloque de usuario / "Cerrar sesión" en el panel: la sesión vive en el header global.
-- Metadata del layout: `robots: { index: false }`.
+- `app/organizador/layout.tsx` (Server Component, `LayoutProps<"/organizador">`, metadata `robots: { index: false }`):
+  ```tsx
+  <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+    <OrganizerSidebar />
+    <OrganizerMobileBar />
+    <main className="min-w-0 px-4 py-6 md:px-6 md:py-8 lg:px-10 lg:py-10">
+      <div className="mx-auto max-w-6xl">{children}</div>
+    </main>
+  </div>
+  ```
+  El layout aporta el único `<main>` (el root layout ya no lo tiene). El contenido va sobre `bg-muted`; las tarjetas blancas (`bg-card`) destacan sobre él.
+- **`OrganizerSidebar`** (server): `<header className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col lg:gap-8 lg:overflow-y-auto lg:border-r lg:bg-background lg:px-4 lg:py-6">`. Orden: `OrganizerBrand` (en `px-2`), `OrganizerNav` y, abajo (`mt-auto border-t pt-4`), `OrganizerUserCard`. Se queda fijo a toda la altura de la ventana al hacer scroll; si no cabe, hace scroll propio.
+
+### Móvil (`< lg`)
+
+```
+┌──────────── header sticky top-0 · h-16 · bg-background · border-b ────────────┐
+│ [logo Mentec] → /                                                       [≡]   │  botón 44×44
+│ Organizadores                                                                  │
+└────────────────────────────────────────────────────────────────────────────────┘
+<main> px-4 py-6 (md: px-6 py-8) sobre bg-muted
+
+Sheet desde la izquierda (al pulsar ≡):
+┌──────────────────────────────┐
+│ Panel de organizador     [✕] │  SheetTitle
+│ ▣ Resumen                    │
+│ + Crear evento               │
+│                              │
+│ ──────────────────────────── │
+│ (AQ) Ana Quispe              │
+│      demo@mentectickets.pe   │
+│ [ ⇥  Cerrar sesión       ]   │
+└──────────────────────────────┘
+```
+
+- **`OrganizerMobileBar`** (cliente, `Sheet` controlado con `useState`): `<header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 lg:hidden">` con `OrganizerBrand` y un `SheetTrigger` `aria-label="Abrir menú del panel"` (`buttonVariants({ variant: "ghost", size: "icon" })` + `size-11 cursor-pointer`, icono `Menu size-5`).
+- `SheetContent side="left"` (`overflow-y-auto`): `SheetHeader` con `SheetTitle` "Panel de organizador" y, debajo, `flex flex-1 flex-col gap-6 px-4 pb-6` con `<OrganizerNav onNavigate={() => setOpen(false)} />` y `<div className="mt-auto border-t pt-4"><OrganizerUserCard /></div>`.
+- Al elegir un enlace, el `Sheet` se cierra. Base UI mueve el foco al abrir, cierra con Escape y devuelve el foco al disparador.
+- Sustituye a los chips horizontales de la primera versión: sin header global, el menú también tiene que alojar la sesión.
+
+### Marca (`OrganizerBrand`, server)
+
+- `<div className="flex flex-col gap-0.5">` con:
+  - `<Link href="/" aria-label="Mentec Tickets: ir al inicio">` (`inline-flex min-h-11 items-center self-start rounded-lg`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`) que contiene `<BrandLogo className="h-7 w-auto" />`. El nombre accesible incluye el nombre visible de la marca (WCAG 2.5.3).
+  - `<p className="px-0.5 text-xs font-medium text-muted-foreground">Organizadores</p>`.
+- La misma marca en el sidebar y en la barra móvil. Es el único enlace al sitio público.
+
+### Navegación (`OrganizerNav`, cliente)
+
+- `<nav aria-label="Panel de organizador">` con lista **vertical** en todos los anchos (`flex flex-col gap-1`). Sin overline ni chips.
+- Enlaces: "Resumen" (`LayoutDashboard`, `/organizador`) y "Crear evento" (`Plus`, `/organizador/eventos/nuevo`). Icono `size-5` `aria-hidden`.
+- Items `flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium`, transición 200 ms, foco `focus-visible:ring-3 focus-visible:ring-ring/50`.
+  - Activo (ruta exacta): `aria-current="page"` + `bg-accent font-semibold text-accent-foreground`.
+  - Inactivo: `text-muted-foreground hover:bg-muted hover:text-foreground`.
+- Prop opcional `onNavigate`, que se llama al pulsar cualquier enlace (la usa la barra móvil para cerrar el `Sheet`).
+- **Solo destinos reales**: "Mis eventos", "Ventas" y "Configuración" no aparecen (ni deshabilitados ni como "Próximamente"). "Mis eventos" no tiene ruta propia: la lista vive en Resumen, y un ancla compartiría `aria-current` con "Resumen".
+
+### Tarjeta de usuario (`OrganizerUserCard`, cliente)
+
+```
+Con sesión                                Sin sesión
+(AQ)  Ana Quispe                          [ →  Iniciar sesión          ]  → /login
+      demo@mentectickets.pe
+[ ⇥  Cerrar sesión                 ]
+```
+
+- **Regla de sesión:** lee `useAuthStore` (`user`, `signOut`) desde la entrada pública `@/modules/auth/session` y la rehidrata al montar (`useAuthStore.persist.rehydrate()`, patrón de `AuthHeaderActions`).
+  - **Sin sesión el panel sigue accesible** (sin redirección: un bloqueo solo en cliente no protege nada). La tarjeta muestra el enlace "Iniciar sesión" (`LogIn`) hacia `/login`.
+  - **"Cerrar sesión"** llama a `signOut()` y navega a `/` (el panel no se queda en la página, a diferencia del menú del header del sitio).
+- **Con sesión:** `flex flex-col gap-3` con:
+  - `UserSummary` (`@/components/shared/UserSummary`): avatar `UserAvatar size="lg"` de 40 px con las iniciales (`bg-accent text-accent-foreground`, p. ej. "AQ"), nombre completo (`font-semibold`) y correo (`text-sm text-muted-foreground`).
+  - Debajo, `Button variant="outline"` "Cerrar sesión" con icono `LogOut` (`aria-hidden`) y texto, **a todo el ancho** (`h-11 w-full cursor-pointer gap-2`).
+- Sin sesión: enlace con `buttonVariants({ variant: "outline" })` y las mismas clases de ancho completo.
+- **Sin truncado:** nombres y correos largos hacen salto de línea (`wrap-break-word` / `wrap-anywhere` de `UserSummary`), sin salirse de la tarjeta ni provocar scroll horizontal. Con el botón debajo (y no un botón solo-icono al lado) el texto dispone de ~155 px en el sidebar de 240 px y el botón tiene etiqueta visible.
+- Es la misma composición que el bloque "Tu cuenta" del `Sheet` del sitio (tarjeta + "Cerrar sesión" outline a todo el ancho). No compone `Avatar` ni calcula iniciales: lo hace `UserSummary` → `UserAvatar`.
+
+### Landmarks y accesibilidad
+
+- El sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`; solo uno es visible en cada breakpoint y el otro tiene `display: none`, así que hay un único `banner` y una única `nav` "Panel de organizador" (con el `Sheet` cerrado).
+- Un único `<main>` (el del layout) y un único `<h1>` por página. El `<header>` interno de Resumen (h1 + "Crear evento") queda dentro de `<main>`, así que no es un `banner`.
+- Todo lo interactivo mide 44 px o más (`h-11`, `min-h-11`, `size-11`) y muestra foco visible.
 
 ## Resumen `/organizador`
 
@@ -42,14 +122,18 @@ Así van las ventas de tus eventos.
 │ ▥ Ingresos   │ ▤ Entradas   │ ▦ Eventos     │  <dl>; lg: 3 columnas
 │ S/ 1,387,530 │ vendidas 8,146│ publicados 3 │  móvil: Ingresos fila completa,
 └──────────────┴──────────────┴──────────────┘  los otros dos en la siguiente
-h2 "Mis eventos"                  [Todos|Publicados|Borradores]
-┌───────────────────────────┬──────────┬──────────────────┬───────────────┐
-│ Evento                    │ Estado   │ Vendidas         │      Ingresos │  lg: <table>
-│ [img] Título              │ Publicado│ 7,420 / 8,000    │ S/ 1,335,600.00│
-│       SÁB 14 NOV · Lima   │          │ ▓▓▓▓▓▓▓▓▓░       │               │
-└───────────────────────────┴──────────┴──────────────────┴───────────────┘
+┌─ tarjeta bg-card rounded-2xl ring-1 ring-border p-4 md:p-6 (provisional) ──────┐
+│ h2 "Mis eventos"                  [Todos|Publicados|Borradores]                 │
+│ ┌───────────────────────────┬──────────┬──────────────────┬───────────────┐     │
+│ │ Evento                    │ Estado   │ Vendidas         │      Ingresos │     │  lg: <table>
+│ │ [img] Título              │ Publicado│ 7,420 / 8,000    │ S/ 1,335,600.00│    │
+│ │       SÁB 14 NOV · Lima   │          │ ▓▓▓▓▓▓▓▓▓░       │               │     │
+│ └───────────────────────────┴──────────┴──────────────────┴───────────────┘     │
+└─────────────────────────────────────────────────────────────────────────────────┘
 Móvil: <ul> de tarjetas (img + h3 + fecha · ciudad + badge / vendidas + ingresos / barra)
 ```
+
+- **"Mis eventos" en tarjeta (provisional):** la `<section aria-labelledby>` lleva `rounded-2xl bg-card p-4 ring-1 ring-border md:p-6`. Sobre el fondo `bg-muted` del panel, la pista del filtro segmentado y el bloque de vacío (ambos `bg-muted`) desaparecerían sin ella. `design-alignment-account-views` F2 reescribe esta sección (tarjeta solo en `lg` con barra de cabecera y tabla a sangre).
 
 - Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`.
 - **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: el filtro no los cambia.
