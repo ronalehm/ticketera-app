@@ -330,6 +330,30 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
     - A 375 y 1440 px la pantalla se ve como la captura. Al imprimir, N páginas con una entrada cada una, con la franja de marca en color.
     - Solo tokens. Sin emojis.
 
+### Fase 7 — "Cambiar entradas" conserva la selección
+44. **`buildChangeTicketsHref(order, hasMap)`** en `modules/checkout/utils/checkoutOrder.ts` (pura; decisión 35):
+    - Firma: `(order: Pick<CheckoutOrder, "event" | "items">, hasMap: boolean) => string`.
+    - Parámetros con `URLSearchParams`, en el orden de `items`: `<ticketTypeId>=<quantity>` por item. Si algún item tiene `seats`, al final `asientos` con todos los ids unidos por `,`, en el orden de `items` y de `seats`.
+    - `hasMap` → `/eventos/<slug>/entradas?<params>`. Si no → `/eventos/<slug>?<params>#entradas`.
+    - Se exporta en `modules/checkout/index.ts` (solo la usa la página).
+45. **`app/checkout/page.tsx`:** `const changeHref = buildChangeTicketsHref(order, hasVenueMap(slug))`. Sustituye al ternario actual. Lo demás no cambia: `CheckoutForm` lo pasa a `OrderSummary` y a `ReservationTimer` (`retryHref`).
+46. **`parsePreselectedQuantities(ticketTypes, params)`** en `modules/events/utils/ticketOrder.ts` (pura; decisión 37):
+    - Firma: `(ticketTypes: Pick<TicketType, "id" | "status">[], params: Pick<URLSearchParams, "getAll">) => Record<string, number>`. `ReadonlyURLSearchParams` de `useSearchParams` encaja.
+    - Devuelve solo los tipos con cantidad > 0, en el orden de `ticketTypes`; sin nada válido, `{}`.
+47. **`TicketSelector`** gana `initialQuantities?: Record<string, number>`: `useState(() => (soldOut ? {} : (initialQuantities ?? {})))`. Sin la prop, comportamiento idéntico. El total, el aviso de límite y "Continuar con la compra" (`buildCheckoutHref`) reflejan las cantidades precargadas desde el primer render.
+48. **`modules/events/components/PreselectedTicketSelector.tsx`** (`"use client"`):
+    - Mismas props que `TicketSelector` (`slug`, `status`, `priceFrom`, `ticketTypes`).
+    - `const searchParams = useSearchParams()` (de `next/navigation`) y `<TicketSelector {...props} initialQuantities={parsePreselectedQuantities(ticketTypes, searchParams)} />`.
+    - Sin más lógica. Se exporta en `modules/events/index.ts`.
+49. **`app/eventos/[slug]/page.tsx`**, solo la rama sin mapa del aside (decisión 36):
+    ```tsx
+    <Suspense fallback={<TicketSelector {...selectorProps} />}>
+      <PreselectedTicketSelector {...selectorProps} />
+    </Suspense>
+    ```
+    `selectorProps` = `{ slug, status, priceFrom, ticketTypes }` del evento, como hoy. La rama con mapa (`ZonePricesCard`), `generateStaticParams`, `generateMetadata`, el `id="entradas"` y el resto de la página no cambian.
+50. **Accesibilidad (F7):** la precarga no mueve el foco ni anuncia nada: las cantidades ya están en los contadores y en el total desde el primer render del selector. El ancla `#entradas` solo desplaza la vista (`scroll-mt-24`, como hoy).
+
 ## Criterios de aceptación
 
 ### Fase 1 — Base compartida
@@ -354,14 +378,14 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 ### Fase 3 — Paso 2 `/checkout`
 - [ ] Dado `/checkout?evento=noche-de-sintetizadores-lima&general=2&vip=1` en 1440 px, entonces se ven el stepper en el paso 2 ("Datos y pago" con `aria-current="step"`), h1 "Finalizar compra", el banner "Reservamos tus entradas por 10:00. Completa el pago antes de que se liberen.", las secciones "Datos del comprador" y "Método de pago", Términos y, en la columna derecha sticky, el resumen con "Cambiar entradas", total S/ 910.00 y "Pagar S/ 910.00".
 - [ ] Dado 375 px, entonces no hay scroll horizontal, el resumen aparece plegado arriba ("3 entradas · S/ 910.00", `aria-expanded="false"`), se despliega al pulsarlo (`aria-expanded="true"`) y la barra inferior con "Pagar S/ 910.00" queda pegada abajo mientras se desplaza el formulario sin tapar el footer al final.
-- [ ] Dado el formulario vacío, cuando se pulsa "Pagar", entonces cada campo muestra su mensaje (incluidos tarjeta y Términos), el foco va a "Nombres" y no se llama al service.
+- [ ] Dado el formulario vacío, cuando se pulsa "Pagar", entonces cada campo muestra su mensaje (incluidos tarjeta y Términos), el foco va a "Nombres" y no se llama al service. *(Desde la Fase 5 lo sustituyen los criterios de Términos de la Fase 5: decisión 33.)*
 - [ ] Dado "Yape" o "PagoEfectivo" elegido, entonces desaparecen los campos de tarjeta y se ve su texto informativo del diseño; con datos válidos y Términos, "Pagar" aprueba.
 - [ ] Dado que se escribe `4242424242424242` y `1230`, entonces los campos muestran `4242 4242 4242 4242` y `12/30`.
 - [ ] Dada una sesión iniciada (Ana Quispe), cuando se abre `/checkout`, entonces Nombres, Apellidos y Correo vienen rellenados; sin sesión, vacíos; lo ya escrito no se sobrescribe.
 - [ ] Dados datos válidos y la tarjeta `4242 4242 4242 4242`, cuando se pulsa "Pagar", entonces el botón muestra "Procesando pago…" deshabilitado, se anuncia "Procesando pago…" (`role="status"`) y, tras ~1,2 s, se navega (sin entrada en el historial) a `/checkout/confirmacion?orden=MT-XXXXXX`.
 - [ ] Dada la tarjeta `4000 0000 0000 0002`, entonces aparece el `Alert` "Tu tarjeta fue rechazada…" con el foco en él, no hay navegación ni orden guardada y se puede reintentar.
 - [ ] Dado que pasan 10 minutos, entonces aparece "Tu reserva expiró" con "Volver a elegir entradas" y los botones "Pagar" quedan deshabilitados.
-- [ ] Dado "Cambiar entradas" en un evento sin mapa, entonces lleva a `/eventos/<slug>`; en uno con mapa (`hasVenueMap`), a `/eventos/<slug>/entradas`.
+- [ ] Dado "Cambiar entradas" en un evento sin mapa, entonces lleva a `/eventos/<slug>`; en uno con mapa (`hasVenueMap`), a `/eventos/<slug>/entradas`. *(Desde la Fase 7, con los parámetros de la selección: decisión 35.)*
 - [ ] Dado un checkout con asientos válidos (contrato C), entonces el resumen los muestra y la orden guarda cada `seatLabel`.
 - [ ] Dado el teclado, entonces el orden de tabulación es: comprador → método → tarjeta → Términos → resumen ("Cambiar entradas"; en móvil, antes el botón del resumen) → Pagar, con foco visible en todo; "Pagar" nunca se alcanza antes que los campos.
 - [ ] Dado el código, entonces ningún archivo de checkout que se ejecute en el cliente importa `@/modules/events` (salvo `import type`) y no hay `fetch`/axios en el pago.
@@ -393,7 +417,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
   - entonces cada campo obligatorio se anuncia como requerido (`required`) y su nombre no incluye "asterisco" ni "*" (p. ej. "Nombres");
   - el grupo se anuncia como "Documento de identidad", con "Tipo de documento" y "Número de documento";
   - el h1 "Finalizar compra" es el primer encabezado.
-- [ ] Dado el teclado, entonces el orden de tabulación es Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible; con el formulario vacío, "Pagar" sigue enfocando "Nombres".
+- [ ] Dado el teclado, entonces el orden de tabulación es Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible, también con Términos sin marcar ("Pagar" sigue siendo alcanzable). Con Términos marcados y el formulario vacío, "Pagar" muestra los errores y enfoca "Nombres" (sin Términos marcados, ver los criterios de Términos).
 - [ ] Dada la tarjeta "Método de pago", entonces:
   - no hay aviso arriba de los métodos;
   - al pie se lee "Demo: no se realiza ningún cobro real." con icono de información;
@@ -402,11 +426,19 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - [ ] Dado 1440 px, entonces el resumen (columna derecha, sticky) es compacto:
   - miniatura, título y "sáb 14 nov · <Lugar>, <Ciudad>" (en minúsculas, sin hora);
   - líneas "2 × General … S/ 500.00" y "1 × VIP … S/ 410.00", sin precio unitario;
-  - "Cambiar entradas", la fila "Total (3 entradas)" con "S/ 910.00" a la derecha (con 1 entrada: "Total (1 entrada)") y el botón primario azul "Pagar S/ 910.00" con candado **dentro** de la misma tarjeta.
+  - "Cambiar entradas", un separador **discontinuo**, la fila "Total (3 entradas)" con "S/ 910.00" a la derecha (con 1 entrada: "Total (1 entrada)") y el botón primario azul "Pagar S/ 910.00" con candado **dentro** de la misma tarjeta;
+  - al cargar (Términos sin marcar), el botón se ve pálido y debajo, centrado y dentro de la tarjeta, "Acepta los términos para continuar." (como la captura).
 - [ ] Dado 375 px, entonces el encabezado plegable del resumen muestra "3 entradas · S/ 910.00" ("1 entrada" en singular) y, al desplegarlo, la fila "Total (3 entradas)".
 - [ ] Dado 375 px, entonces al desplegar el resumen no se ve un segundo botón "Pagar" dentro de la tarjeta: solo el de la barra inferior.
 - [ ] Dado un checkout con dos asientos de filas distintas (p. ej. `L-9` y `M-8` de "Tribuna Oriente" en el evento que añade seating F6, o cualquier zona numerada existente), entonces el resumen muestra "2 × Tribuna Oriente" y debajo "Fila L · 9 · Fila M · 8" (y el lector lee "Asientos: …").
-- [ ] Dado Términos, entonces sigue debajo de "Método de pago" en todos los anchos y sin marcar impide pagar con su mensaje.
+- [ ] Dado Términos, entonces sigue debajo de "Método de pago" en todos los anchos.
+- [ ] Dado `/checkout` recién cargado (Términos sin marcar), a 1440 px y a 375 px, entonces:
+  - el "Pagar" visible (tarjeta del resumen en `lg`, barra inferior en móvil) se ve deshabilitado (pálido, cursor "no permitido", sin hover) y tiene `aria-disabled="true"`, pero **no** el atributo `disabled`;
+  - debajo de ese botón se lee "Acepta los términos para continuar." (`text-sm text-muted-foreground`, centrado), y el botón lo referencia con `aria-describedby`;
+  - con lector de pantalla, "Pagar" se anuncia como no disponible, con esa descripción.
+- [ ] Dados Términos sin marcar (con o sin el resto de datos), cuando se pulsa "Pagar" (clic, Enter o Espacio) o se pulsa Enter en un campo, entonces no aparece ningún mensaje de error, no se llama al service, no se muestra "Procesando pago…" y el foco pasa a la casilla de Términos (en móvil, la casilla queda a la vista).
+- [ ] Dado que se marcan los Términos, entonces el aviso desaparece, "Pagar" pierde `aria-disabled` y `aria-describedby` y se ve activo. Con datos válidos, paga como en la Fase 3. Con campos vacíos, muestra sus errores y enfoca "Nombres". Si se desmarcan, vuelven el aspecto deshabilitado y el aviso.
+- [ ] Dada la reserva expirada, entonces los "Pagar" quedan `disabled` como en la Fase 3 y no se muestra "Acepta los términos para continuar." (aunque Términos no esté marcado). Mientras se procesa, tampoco.
 - [ ] Dados importes, entonces siguen el formato del MASTER (`S/ 910.00`).
 - [ ] Dado `formatShortDayMonth`/`formatLongDayMonth` y `formatCompactSeats`, entonces cumplen los ejemplos de los requisitos 30–31 (tests).
 - [ ] Dado el código, entonces ningún archivo de `modules/checkout` importa de `modules/seating/**` salvo sus entradas públicas, no se modifica `modules/seating/**`, y `OrderSummary` no importa el barrel `@/modules/events`.
@@ -433,6 +465,22 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - [ ] Dada una entrada de zona general (sin asiento), entonces la entrada imprimible omite "Ubicación".
 - [ ] Dado `PrintableTicket`, entonces no importa nada de `modules/` ni el tipo `Order`, solo usa tokens y acepta `className`.
 - [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de las Fases 5 y 6 (incluida la anatomía de la entrada imprimible).
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 7 — "Cambiar entradas" conserva la selección
+- [ ] Dado `/checkout?evento=festival-arena-y-mar-piura&general=2&vip=1` (evento sin mapa), entonces "Cambiar entradas" enlaza a `/eventos/festival-arena-y-mar-piura?general=2&vip=1#entradas`. Al pulsarlo:
+  - el `TicketSelector` del detalle muestra General 2 y VIP 1, con el total "S/ 570.00";
+  - la vista queda en el selector;
+  - "Continuar con la compra" lleva a `/checkout?evento=festival-arena-y-mar-piura&general=2&vip=1`, con el mismo resumen.
+- [ ] Dado ese selector precargado, cuando se cambia una cantidad (p. ej. "−" en VIP), entonces se actualizan el contador, el total y el enlace de "Continuar", como en una selección normal.
+- [ ] Dado `/checkout?evento=noche-de-sintetizadores-lima&general=2&vip=1` (con mapa), entonces "Cambiar entradas" enlaza a `/eventos/noche-de-sintetizadores-lima/entradas?general=2&vip=1`. Con asientos, añade `&asientos=<id1>%2C<id2>` en el orden del pedido. La precarga en esa pantalla la verifica la Fase 4 de `seating-stadium-map.md`; hasta entonces la página carga sin errores e ignora los parámetros.
+- [ ] Dada la reserva expirada, entonces "Volver a elegir entradas" tiene el mismo `href` que "Cambiar entradas".
+- [ ] Dado `/eventos/festival-arena-y-mar-piura?general=abc&vip=99&foo=1`, entonces no se precarga nada y el selector se ve como sin parámetros. Además:
+  - con `general=8&vip=5`, queda General 8 y VIP 2 (límite de 10, aviso "Máximo 10 entradas por compra");
+  - con un tipo agotado en la URL, ese tipo se ignora;
+  - en un evento agotado, se ve "Entradas agotadas" sin precarga.
+- [ ] Dado `/eventos/<slug>` sin parámetros, entonces el detalle se ve y se comporta igual que antes de esta fase, y en `npm run build` la ruta `/eventos/[slug]` sigue prerenderizada (SSG, no dinámica `ƒ`).
+- [ ] Dado el código, entonces `TicketSelector` no lee la URL, `PreselectedTicketSelector` solo conecta `useSearchParams` con `parsePreselectedQuantities`, y `app/eventos/[slug]/page.tsx` no lee `searchParams`.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
 ## Diseño técnico
@@ -552,6 +600,44 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
   type CheckoutSummaryPanelProps = { title: string; imageUrl: string; ticketCount: number; totalLabel: string; children: ReactNode; className?: string }; // sin `footer`
   ```
 
+### Enmienda (Fase 5: Términos y separador; Fase 7: "Cambiar entradas")
+- Rutas:
+  - `app/checkout/page.tsx` (F7: `changeHref` con `buildChangeTicketsHref`).
+  - `app/eventos/[slug]/page.tsx` (F7: `Suspense` + `PreselectedTicketSelector` en la rama sin mapa). Sigue prerenderizada; no lee `searchParams` (decisión 36).
+  - `app/eventos/[slug]/entradas/page.tsx` no se toca aquí (seating, Fase 4).
+- Componentes:
+  - shadcn (instalados): `button` (Base UI; `aria-disabled` manual, decisión 32), `checkbox` (recibe `ref`), `separator` (variante discontinua por `className`, decisión 34). No hay nada que instalar. shadcn no tiene un "botón con motivo de deshabilitado" ni un separador discontinuo: se resuelve con props y clases.
+  - existente, modificado (F5): `modules/checkout/components/CheckoutForm.tsx` (`PayButton` con `termsPending` y aviso, `termsRef`, `onSubmit`), `OrderSummary.tsx` (separador discontinuo). Ya estaban en el plan de la F5.
+  - existente, modificado (F7): `modules/events/components/TicketSelector.tsx` (`initialQuantities?`).
+  - nuevo `modules/events/components/PreselectedTicketSelector.tsx` (F7, `"use client"`): conecta la URL con el selector. Va en `events` porque solo envuelve `TicketSelector`, que es de `events`. No existe en shadcn. Separado de `TicketSelector` porque `useSearchParams` obliga a un `Suspense` cuyo `fallback` es el propio `TicketSelector`, que por eso no puede leer la URL.
+- Utils:
+  - `modules/checkout/utils/checkoutOrder.ts` (+ test) (F7): `buildChangeTicketsHref`.
+  - `modules/events/utils/ticketOrder.ts` (+ test) (F7): `parsePreselectedQuantities`.
+- Barrels (F7): `modules/checkout/index.ts` añade `buildChangeTicketsHref`; `modules/events/index.ts` añade `PreselectedTicketSelector`.
+- Hooks, services, schemas, stores, tipos: sin cambios. Contrato E y contrato C sin cambios.
+- Contratos nuevos:
+  ```ts
+  // modules/checkout/utils/checkoutOrder.ts
+  export function buildChangeTicketsHref(order: Pick<CheckoutOrder, "event" | "items">, hasMap: boolean): string;
+  // hasMap:  "/eventos/<slug>/entradas?general=2&vip=1&asientos=<id>%2C<id>"
+  // !hasMap: "/eventos/<slug>?general=2&vip=1#entradas"
+
+  // modules/events/utils/ticketOrder.ts
+  export function parsePreselectedQuantities(
+    ticketTypes: Pick<TicketType, "id" | "status">[],
+    params: Pick<URLSearchParams, "getAll">,
+  ): Record<string, number>; // solo tipos no agotados, 1..10 cada uno, suma ≤ 10
+
+  // modules/events/components/TicketSelector.tsx
+  type TicketSelectorProps = { slug: string; status: EventStatus; priceFrom: number; ticketTypes: TicketType[]; initialQuantities?: Record<string, number> };
+
+  // modules/events/components/PreselectedTicketSelector.tsx
+  export function PreselectedTicketSelector(props: Omit<TicketSelectorProps, "initialQuantities">): JSX.Element;
+
+  // modules/checkout/components/CheckoutForm.tsx (interno)
+  type PayButtonProps = { totalLabel: string; isProcessing: boolean; disabled: boolean; termsPending: boolean; className?: string };
+  ```
+
 ## Reutilización
 - `auth`: `useZodForm` (sube a `hooks/`), reglas de `registerSchema` (suben a `lib/formFields.ts`), `INLINE_LINK`/`TEXT_LINK` (suben a `lib/linkStyles.ts`), `useAuthStore` (vía `modules/auth/session.ts`), patrón visual y de tests de `RegisterForm` (campos, "+51", `Select`, `Checkbox`, `Alert`, `Spinner`, `vi.mock` de `next/navigation`), patrón de store persistido con `skipHydration` y su test.
 - `checkout` (Fase 1 de `checkout-purchase.md` + extensiones de seating): `getCheckoutOrder`, `CheckoutOrder`, `OrderSummary`, `ReservationTimer`/`useCountdown`, `CheckoutStatusMessage`.
@@ -561,6 +647,13 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - Nativos: `Intl`, `Blob`, `URL.createObjectURL`, `window.print`, `Math.random`, `localStorage` (vía zustand `persist`), Tailwind `print:`.
 - Sin dependencias nuevas.
 - (F5–F6) `formatTime`, `formatEventPrice`, `EVENT_CATEGORY_LABELS` (vía `@/modules/events/format`); `BrandLogo` (`variant="white"`); `TicketQr`; `FieldSet`/`FieldLegend`; `SelectValue` con `children` función; patrón de muescas del talón de `ConfirmationTicketCard`; `DOCUMENT_TYPE_LABELS`; utilidades `print:` y `break-after-page` de Tailwind v4. Sin dependencias nuevas ni componentes shadcn nuevos.
+- (Enmienda F5/F7):
+  - patrón de neutralizado `aria-disabled:*` de `STEPPER_CLASS` (`TicketSelector`);
+  - `useId` para el aviso;
+  - `URLSearchParams` (como `buildCheckoutHref` y `buildSeatingCheckoutHref`);
+  - `MAX_TICKETS_PER_ORDER`;
+  - `useSearchParams` + `Suspense` (documentación de Next 16);
+  - el ancla `id="entradas"` existente del detalle.
 
 ## Tests
 - `hooks/useZodForm.test.ts` (F1): movido sin cambios; junto con los tests de `modules/auth` sin cambios deben pasar. `lib/formFields.ts` queda cubierto por `auth.schema.test.ts` y `payment.schema.test.ts` (sin test propio).

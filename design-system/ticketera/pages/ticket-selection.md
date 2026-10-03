@@ -59,7 +59,7 @@ Muestra en listas: `size-3.5 rounded-sm`, `aria-hidden`.
 
 ## Mapa de zonas
 
-- Lienzo `rounded-xl bg-muted p-3`; SVG `h-auto w-full` con `viewBox` de ≤ 600 de ancho y textos de ≥ 24 unidades (≥ 12 px a 375 px).
+- Lienzo `rounded-xl bg-muted p-3`; SVG `h-auto w-full` con `viewBox` de ≤ 600 de ancho y textos de 26 unidades (~12.4 px a 375 px).
 - Escenario: forma `fill-foreground`, texto `fill-background` en mayúsculas, `aria-hidden`.
 - Etiqueta de zona (`aria-hidden`, `pointer-events-none`, centrada en `labelPos`): nombre en bold, precio o "Agotado" y, si quedan pocas, píldora `fill-warning` "Últimas entradas" (`fill-warning-foreground`).
 
