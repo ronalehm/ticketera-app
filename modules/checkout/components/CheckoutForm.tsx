@@ -256,7 +256,12 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
               labelledBy={PAYMENT_TITLE_ID}
             />
             {paymentError && (
-              <Alert ref={paymentErrorRef} tabIndex={-1} variant="destructive" className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Alert
+                ref={paymentErrorRef}
+                tabIndex={-1}
+                variant="destructive"
+                className="outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <CircleAlert aria-hidden />
                 <AlertTitle>{paymentError}</AlertTitle>
               </Alert>
