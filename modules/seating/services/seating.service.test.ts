@@ -114,7 +114,6 @@ describe("seating.service", () => {
         zones: original.zones.map((zone) => (zone.id === "vip" ? { ...zone, ticketTypeId: "palco" } : zone)),
       };
       try {
-        await expect(getVenueMapForEvent(event)).rejects.toThrow(Error);
         await expect(getVenueMapForEvent(event)).rejects.toThrow(/palco/);
       } finally {
         VENUE_LAYOUTS_MOCK[0] = original;
