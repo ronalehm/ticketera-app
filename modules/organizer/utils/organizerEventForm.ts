@@ -74,3 +74,10 @@ export function toOrganizerEvent(values: OrganizerEventFormValues, id: string): 
     status: values.intent === "publish" ? "published" : "draft",
   };
 }
+
+const ACCEPTED_COVER_IMAGE_TYPES = ["image/png", "image/jpeg"];
+
+/** Solo se aceptan portadas PNG o JPEG (las mismas que filtra el `accept` del input). */
+export function isAcceptedCoverImage(file: File): boolean {
+  return ACCEPTED_COVER_IMAGE_TYPES.includes(file.type);
+}
