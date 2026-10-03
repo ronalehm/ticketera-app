@@ -42,10 +42,11 @@ const build = (overrides: Partial<Parameters<typeof buildOrder>[0]> = {}) =>
 
 describe("createOrderCode", () => {
   it("usa `random` para elegir cada carácter de A-Z0-9", () => {
-    const values = [0, 0.99, 0.5, 26 / 36, 1 / 36, 35 / 36];
+    // Índices 0, 35, 18, 26, 1, 35 de "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".
+    const values = [0, 0.99, 18.5 / 36, 26.5 / 36, 1.5 / 36, 35.5 / 36];
     let call = 0;
     const code = createOrderCode(() => values[call++]);
-    expect(code).toBe("MT-9S0B9");
+    expect(code).toBe("MT-A9S0B9");
   });
 
   it("cumple el formato MT- + 6 caracteres A-Z0-9", () => {
