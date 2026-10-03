@@ -59,6 +59,7 @@ export function SiteHeader() {
                 <SheetTitle>Menú</SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-6 px-4 pb-6">
+                <AuthHeaderActions variant="sheet" />
                 <nav aria-label="Categorías" className="flex flex-col">
                   {categoryLinks.map((link) => (
                     <SheetClose
@@ -71,7 +72,6 @@ export function SiteHeader() {
                     </SheetClose>
                   ))}
                 </nav>
-                <AuthHeaderActions variant="sheet" />
               </div>
             </SheetContent>
           </Sheet>
