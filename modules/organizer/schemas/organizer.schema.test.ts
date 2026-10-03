@@ -270,7 +270,7 @@ describe("organizerEventFormSchema", () => {
     });
 
     it("acepta 00:00 y 23:59", () => {
-      expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "00:00" }).success).toBe(true);
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "00:00", doorsOpen: "00:00" }).success).toBe(true);
       expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "23:59" }).success).toBe(true);
     });
   });
