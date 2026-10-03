@@ -1,10 +1,13 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { CircleCheck } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import type { OrganizerEvent, OrganizerEventFilter } from "../types/organizer.types";
+import { useOrganizerStore } from "../stores/organizer.store";
+import type { OrganizerEvent, OrganizerEventFilter, SavedStatus } from "../types/organizer.types";
 import { filterOrganizerEvents, getDashboardKpis } from "../utils/organizerStats";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 import { OrganizerKpis } from "./OrganizerKpis";
@@ -15,15 +18,49 @@ const FILTERS: { value: OrganizerEventFilter; label: string }[] = [
   { value: "draft", label: "Borradores" },
 ];
 
-export function OrganizerDashboard({ initialEvents }: { initialEvents: OrganizerEvent[] }) {
+const SAVED_MESSAGES: Record<NonNullable<SavedStatus>, { title: string; description: string }> = {
+  publicado: {
+    title: "Evento publicado",
+    description: "Ya aparece en Mis eventos con el estado Publicado.",
+  },
+  borrador: {
+    title: "Borrador guardado",
+    description: "Lo encontrarás en Mis eventos con el estado Borrador.",
+  },
+};
+
+type OrganizerDashboardProps = {
+  initialEvents: OrganizerEvent[];
+  saved?: SavedStatus;
+};
+
+export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardProps) {
   const [filter, setFilter] = useState<OrganizerEventFilter>("all");
   const headingId = useId();
+  const storeEvents = useOrganizerStore((state) => state.events);
+
+  // skipHydration: el servidor y el primer render del cliente parten de [] y los eventos guardados llegan tras montar.
+  useEffect(() => {
+    useOrganizerStore.persist.rehydrate();
+  }, []);
+
+  // Los creados (más recientes primero) van antes que los del mock.
+  const events = [...storeEvents, ...initialEvents];
   // Los KPIs resumen todos los eventos; el filtro solo afecta a la lista.
-  const kpis = getDashboardKpis(initialEvents);
-  const visible = filterOrganizerEvents(initialEvents, filter);
+  const kpis = getDashboardKpis(events);
+  const visible = filterOrganizerEvents(events, filter);
+  const savedMessage = saved ? SAVED_MESSAGES[saved] : null;
 
   return (
     <div className="space-y-8 md:space-y-10">
+      {savedMessage && (
+        <Alert className="px-4 py-3">
+          <CircleCheck aria-hidden />
+          <AlertTitle className="font-bold">{savedMessage.title}</AlertTitle>
+          <AlertDescription>{savedMessage.description}</AlertDescription>
+        </Alert>
+      )}
+
       <OrganizerKpis {...kpis} />
 
       <section aria-labelledby={headingId}>
