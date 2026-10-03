@@ -1,7 +1,7 @@
 # Crear evento: asientos por zona y datos del evento público (UI con mock data)
 
 - Módulo: organizer (y una entrada pública nueva en seating)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Completar el formulario "Crear evento" del panel de organizador (`/organizador/eventos/nuevo`) para que quien organiza pueda registrar un evento con todo lo necesario:

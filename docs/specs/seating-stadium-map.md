@@ -502,10 +502,33 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
 - [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta el plano curvo, el fondo atenuado, el minimapa y la decisión de sacar el minimapa y el zoom del lienzo.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
+### Fase 4. Precarga de la selección desde la URL
+- [ ] Dado `/eventos/festival-vive-latino-lima/entradas?campo-vip=2&oriente=2&asientos=<id1>%2C<id2>`, con dos butacas disponibles de Tribuna Oriente, cuando carga, entonces:
+  - se ve el sub-paso 1 ("Paso 1 de 2 · Elige una zona");
+  - la tarjeta "Campo VIP" dice "2 entradas elegidas" y "Tribuna Oriente", "2 butacas elegidas";
+  - "Tu compra" muestra "2 × Campo VIP … S/ 660.00" y "2 × Tribuna Oriente … S/ 310.00", con el total "S/ 970.00". A 375 px, la barra inferior dice "Total · 4 entradas" / "S/ 970.00";
+  - "Continuar" lleva a `/checkout?evento=festival-vive-latino-lima&campo-vip=2&oriente=2&asientos=<id1>%2C<id2>`.
+- [ ] Dado ese estado, cuando se abre "Tribuna Oriente", entonces las dos butacas aparecen elegidas, el contador dice "2 de 8 butacas" y se pueden quitar o cambiar como cualquier selección.
+- [ ] Dado `/checkout?evento=…` con mapa (y asientos) y su "Cambiar entradas" (Fase 7 de `checkout-mock-payment.md`), cuando se vuelve al paso 1 y se pulsa "Continuar" sin cambiar nada, entonces `/checkout` muestra el mismo resumen (ida y vuelta).
+- [ ] Dados parámetros inválidos, entonces se ignoran uno a uno, sin avisos, y el resto se precarga:
+  - una butaca ocupada, un id inexistente o repetido, o una butaca de una zona de pie;
+  - `mesa=2` en `/eventos/risas-sin-filtro/entradas` (zona agotada);
+  - `oriente=2` sin `asientos` (zona numerada sin butacas);
+  - `campo-vip=abc`, `campo-vip=0`, `campo-vip=11` o `campo-vip` repetido;
+  - `asientos` repetido.
+- [ ] Dados más de 10 en total (p. ej. `campo-vip=8&campo-general=5`), entonces se precargan 10, recortando en el orden de las zonas (Campo VIP 8, Campo General 2), y se ve el estado de límite de siempre.
+- [ ] Dados los mapas rectangulares (p. ej. `/eventos/noche-de-sintetizadores-lima/entradas?general=2&vip=1`), entonces se precargan igual, con total "S/ 910.00".
+- [ ] Dado `/eventos/<slug>/entradas` sin parámetros, entonces la pantalla es idéntica a la de la Fase 2, y `npm run build` sigue generando las 4 rutas prerenderizadas (SSG, no dinámicas `ƒ`).
+- [ ] Dado el código, entonces `TicketSelection` no lee la URL, `PreselectedTicketSelection` solo conecta `useSearchParams` con `parseSeatingPreselection` y la página no lee `searchParams`.
+- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta la precarga (de dónde viene, el sub-paso inicial y la tolerancia).
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
 ## Diseño técnico
 
 ### Rutas (`app/`)
-Sin cambios. `app/eventos/[slug]/entradas/page.tsx` ya genera los slugs con `hasVenueMap`, así que el festival se añade solo. `app/eventos/[slug]/page.tsx` tampoco cambia.
+Sin cambios en F1–F3. `app/eventos/[slug]/entradas/page.tsx` ya genera los slugs con `hasVenueMap`, así que el festival se añade solo. `app/eventos/[slug]/page.tsx` tampoco cambia.
+
+F4: `app/eventos/[slug]/entradas/page.tsx` envuelve `PreselectedTicketSelection` en `Suspense` (requisito 25). Sigue prerenderizada y no lee `searchParams`.
 
 ### Componentes
 - shadcn (instalados; no hay nada que instalar): `card`, `button`, `badge` y `breadcrumb` (`Breadcrumb`, `BreadcrumbList`, `BreadcrumbItem`, `BreadcrumbLink` con `render`, `BreadcrumbSeparator` y `BreadcrumbPage`).
@@ -525,6 +548,9 @@ Sin cambios. `app/eventos/[slug]/entradas/page.tsx` ya genera los slugs con `has
   - `ZoneQuantityPanel.tsx` (F2): props `zone: GeneralVenueZone`, `quantity`, `atLimit`, `headingId`, `onChangeQuantity` y `onBack`.
   - `SeatPlanMinimap.tsx` (F3): props `viewBox`, `stage`, `zones` (solo `id`/`path`), `activeZoneId`, `planTransform`, `planWidth` y `planHeight`.
 - Se elimina `ZoneList.tsx` (F2).
+- F4:
+  - existente, modificado: `TicketSelection.tsx` (prop `initialSelection?`);
+  - nuevo `PreselectedTicketSelection.tsx` (`"use client"`; solo `seating`). Separado de `TicketSelection` porque `useSearchParams` obliga a un `Suspense` cuyo `fallback` es el propio `TicketSelection`, que por eso no puede leer la URL. No existe en shadcn.
 - No se tocan: `EventPurchaseStrip`, `MobilePurchaseBar`, `SelectedSeatChips`, `ZonePricesCard`, `MobileBuyBar` ni `components/shared/PurchaseStepper.tsx`.
 
 ### Schemas, tipos, utils, hooks, datos y service (`modules/seating`)
@@ -548,13 +574,15 @@ Utils (puros):
 - `utils/seatNavigation.ts` y `utils/bestSeats.ts` (F1): requisito 6.
 - `utils/planViewport.ts` (F3): `type Rect = { x: number; y: number; width: number; height: number }`, `getVisiblePlanRect` y `toVenueRect` (requisito 19).
 
-Hook `hooks/useSeatSelection.ts` (F2): `selectZone` ignora zonas agotadas o inexistentes, y se añade `closeZone(): void`. El resto de la firma no cambia.
+Hook `hooks/useSeatSelection.ts` (F2): `selectZone` ignora zonas agotadas o inexistentes, y se añade `closeZone(): void`. El resto de la firma no cambia. F4: segundo parámetro opcional `initialSelection?: SeatSelection` (requisito 22).
+
+Utils (F4): `utils/selectionSummary.ts` añade `parseSeatingPreselection(map: VenueMap, params: Pick<URLSearchParams, "getAll">): SeatSelection` (requisito 21). Reutiliza `parseSeatId`, `resolveSeats` y `MAX_TICKETS_PER_ORDER` (de `@/modules/events/purchase`, la entrada de la que el archivo ya importa `buildCheckoutHref`).
 
 Datos `data/venueMaps.mock.ts` (F1): exporta `STADIUM_CENTER` y `VIVE_LATINO_SECTORS: Record<"stage" | "campo-vip" | "campo-general" | "occidente" | "oriente" | "norte", AnnularSector>`, y añade el layout del requisito 7 construido con `getAnnularSectorPath`, `getArcPoints` y `generateArcSeatRows`.
 
 Service: sin cambios de código. `getVenueMapBySlug`, `getVenueMapForEvent` y `hasVenueMap` cubren el evento nuevo con los datos.
 
-`index.ts` y `seats.ts`: sin cambios.
+`index.ts` y `seats.ts`: sin cambios en F1–F3. F4: `index.ts` exporta `PreselectedTicketSelection`.
 
 ### Otros módulos
 - `modules/events/data/events.mock.ts` (F1): requisito 1.
