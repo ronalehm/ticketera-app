@@ -4,13 +4,16 @@ import { Plus } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { OrganizerDashboard, getOrganizerEvents } from "@/modules/organizer";
+import { OrganizerDashboard, getOrganizerEvents, savedStatusSchema } from "@/modules/organizer";
 
 export const metadata: Metadata = {
   title: "Panel de organizador | Mentec Tickets",
 };
 
-export default async function OrganizerPage() {
+export default async function OrganizerPage({ searchParams }: PageProps<"/organizador">) {
+  const { guardado } = await searchParams;
+  // Cualquier valor distinto de "publicado" | "borrador" (o repetido) da undefined: sin aviso.
+  const saved = savedStatusSchema.parse(guardado);
   const events = await getOrganizerEvents();
 
   return (
@@ -31,7 +34,7 @@ export default async function OrganizerPage() {
           Crear evento
         </Link>
       </header>
-      <OrganizerDashboard initialEvents={events} />
+      <OrganizerDashboard initialEvents={events} saved={saved} />
     </div>
   );
 }

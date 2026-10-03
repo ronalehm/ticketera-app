@@ -834,7 +834,7 @@ Coordinación de la Fase 7:
 2. **"Enviamos tus entradas a tu correo"** (confirmación y "Qué sigue"): no se envía ningún correo. ¿Se mantiene el texto del diseño o se cambia mientras no exista envío?
 3. **Confirmar correo:** el diseño no lo tiene y se omitió, pero "Mis entradas" filtra por `ownerEmail`: un error al escribir el correo deja la compra fuera de "Mis entradas" de esa cuenta. ¿Se añade "Confirmar correo electrónico"?
 4. **Duración en el calendario:** los eventos no tienen hora de fin, así que el `.ics` no lleva `DTEND` (algunos calendarios lo muestran como un evento de 0 minutos). ¿Se fija una duración por defecto (p. ej. 3 h) o se añade `endsAt` a los eventos?
-5. **"Cambiar entradas"** vuelve al paso 1 sin conservar la selección actual (ni el `TicketSelector` ni, que yo sepa, el plano de seating leen parámetros de preselección). ¿Debe conservarse?
+5. ~~**"Cambiar entradas"** vuelve al paso 1 sin conservar la selección actual. ¿Debe conservarse?~~ **Resuelta: sí se conserva** (decisiones 35–37, Fase 7 de esta spec y Fase 4 de `seating-stadium-map.md`).
 6. **Tarjetas aceptadas:** solo 16 dígitos con formato 4-4-4-4 (no Amex de 15), aunque el CVV admite 4 dígitos como en el diseño. ¿Se aceptan también tarjetas de 15 dígitos?
 7. **Autocompletado de tarjeta:** se usa `autoComplete="off"` (decisión 5) en lugar de `cc-*` del diseño. ¿De acuerdo, al menos mientras el pago sea simulado?
 8. **Alcance del almacenamiento:** las órdenes viven solo en el `localStorage` de ese navegador; en otro dispositivo no aparecen y la confirmación muestra "No encontramos tu compra". ¿Aceptable para la demo?
@@ -850,4 +850,9 @@ Ampliación (Fases 5 y 6):
 15. **"Precio final, sin cargos ocultos"**: la captura del resumen no lo muestra, pero se mantiene bajo el total (era requisito de `checkout-purchase.md` y del MASTER, anti-patrón "cargos ocultos"). ¿Se mantiene?
 16. **Impresión:** al "Descargar PDF" solo salen las entradas, una por página, sin la cabecera "¡Compra confirmada!" ni la tarjeta-entrada (decisión 29). ¿De acuerdo?
 17. **Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket` (misma salida en ambos sitios)? Si es así, `buildPrintableTickets` se publicaría en `modules/checkout/orders.ts`.
+Enmienda (Fase 5, captura del resumen, y Fase 7):
+
+19. **Mayúsculas en la fecha corta:** la nueva captura del resumen muestra "Dom 15 Nov · Arena Costa Verde, Lima" (con mayúscula inicial), y la F5 define `formatShortDayMonth` en minúsculas ("lun 5 oct", decisión 23). Se mantienen las minúsculas. ¿Prefieres "Dom 15 Nov"? Solo cambiaría `formatShortDayMonth` y su test, y "Mis entradas" heredaría el formato.
+20. **Enter en un campo con Términos sin marcar:** lleva el foco a la casilla de Términos, igual que pulsar "Pagar" (decisión 33), porque es el envío implícito del formulario. ¿De acuerdo, o prefieres que Enter no haga nada mientras "Pagar" esté bloqueado?
+21. **"Volver a elegir entradas" tras expirar** conserva también la selección (mismo enlace que "Cambiar entradas", decisión 35). ¿De acuerdo, o debe volver al paso 1 vacío, porque la reserva "se liberó"?
 18. **`formatTicketCount` triplicado:** hay copias idénticas en seating (`utils/selectionSummary.ts`), tickets (`utils/myOrders.ts`) y ahora checkout (`utils/summaryFormat.ts`), porque ninguna es pública y esta fase no toca otros módulos (decisión 31). ¿Se sube a `lib/` en una enmienda conjunta de las tres specs, y se borran las copias?
