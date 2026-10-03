@@ -2,8 +2,9 @@
 
 import { type ReactNode, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
 
+import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +23,6 @@ type TicketCardProps = {
 
 const NOTCH_CLASS = "absolute -top-3 size-6 rounded-full bg-muted ring-1 ring-border";
 
-const NAV_BUTTON_CLASS =
-  "size-11 cursor-pointer duration-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-background";
-
 const ACTION_CLASS =
   "h-11 w-full cursor-pointer gap-2 px-4 font-semibold text-primary-strong duration-200 hover:bg-accent hover:text-primary-strong sm:w-auto [&_svg:not([class*='size-'])]:size-5";
 
@@ -38,8 +36,6 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
   const [ticketIndex, setTicketIndex] = useState(0);
   const { event, tickets } = order;
   const ticket = tickets[ticketIndex];
-  const isFirst = ticketIndex === 0;
-  const isLast = ticketIndex === tickets.length - 1;
   const chip = getDateChipParts(event.startsAt);
 
   function handleAddToCalendar() {
@@ -102,35 +98,12 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
         </div>
 
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
-          <div className="flex items-center justify-between gap-3 print:hidden">
-            <p aria-live="polite" className="text-lg font-bold">
-              Entrada {ticketIndex + 1} de {tickets.length}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Entrada anterior"
-                disabled={isFirst}
-                focusableWhenDisabled
-                onClick={() => setTicketIndex((index) => index - 1)}
-                className={NAV_BUTTON_CLASS}
-              >
-                <ChevronLeft aria-hidden className="size-5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Entrada siguiente"
-                disabled={isLast}
-                focusableWhenDisabled
-                onClick={() => setTicketIndex((index) => index + 1)}
-                className={NAV_BUTTON_CLASS}
-              >
-                <ChevronRight aria-hidden className="size-5" />
-              </Button>
-            </div>
-          </div>
+          <TicketPager
+            index={ticketIndex}
+            count={tickets.length}
+            onIndexChange={setTicketIndex}
+            className="print:hidden"
+          />
 
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
             <TicketDetail label="Zona">{ticket.ticketTypeName}</TicketDetail>
