@@ -1,10 +1,12 @@
 # Renovación de UI: búsqueda, detalle de evento y acceso
 
-- Módulo: events (Fases 1–2) · auth (Fase 3)
-- Estado: aprobado
+- Módulo: events (Fases 1–2, 4–5) · auth (Fase 3)
+- Estado: borrador
 
 ## Objetivo
 Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2 · Búsqueda y listado", "3 · Detalle de evento" y "7 · Login y registro"), manteniendo la identidad Mentec (`design-system/ticketera/MASTER.md`). El objetivo es que el comprador filtre `/eventos` con facetas y conteos, entienda mejor el detalle de un evento (hero de marca, información clave, guardar y compartir) y acceda a su cuenta desde una pantalla con presencia de marca. Solo UI con datos mock. Se amplía lo existente sin romperlo: los tests actuales siguen pasando (salvo los casos de `eventFilters.test.ts` que se indican, que se adaptan al nuevo contrato multivalor) y las URLs de filtros actuales siguen funcionando.
+
+**Ampliación (Fases 4–5, tras implementar F1–F3):** dos capturas nuevas del usuario afinan lo construido. Fase 4: h1 "Explora eventos", un buscador tipo píldora (texto + fecha + precio) único para `/eventos` y la landing, y la tarjeta de evento del diseño (chip de fecha, estado sobre la imagen, talón y pie "Desde / Ver entradas"). Fase 5: ajustes del detalle (fecha sin año, hora con " h", "Inicio del show", título del hero más contenido).
 
 ## Alcance
 - Incluye:
@@ -12,6 +14,8 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
   - **Fase 2 · Detalle `/eventos/[slug]`**: hero con bloque `bg-brand-navy`, CTA "Comprar entradas · desde S/ X", botones Guardar (persistido en local) y Compartir, barra móvil con volver/guardar/compartir, "Información importante" en grilla 2×2, "Lugar" con mapa de marcador y "Cómo llegar", y relacionados en carrusel con scroll-snap en móvil.
   - **Fase 3 · Acceso `/login` y `/registro`**: layout en dos columnas en `lg` con panel de marca, cabecera de marca en móvil y pestañas segmentadas (enlaces) entre ambas rutas.
   - Archivos de diseño por página: `design-system/ticketera/pages/events-list.md` y `event-detail.md` (se actualizan) y `auth.md` (nuevo).
+  - **Fase 4 · Búsqueda y tarjeta (captura del usuario)**: h1 "Explora eventos" en `/eventos`; `EventSearchBar` pasa a una única barra tipo píldora ("Qué quieres ver", "Fecha" por mes, "Precio" por rango y "Buscar") que usan `/eventos` y la landing; nueva anatomía de `EventCard` (`layout="grid"` y ajuste de `layout="ticket"`), que afecta a `/eventos`, la landing (Destacados, Próximos) y los relacionados del detalle. Se actualizan `events-list.md` y el MASTER (§5, §7, §8, §10).
+  - **Fase 5 · Detalle (captura del usuario)**: fecha del hero sin año ("sábado 14 de noviembre"), horas con sufijo " h" en el hero y en "Información importante", etiqueta "Inicio del show" ("Inicio del partido" en deportes) y título del hero un paso más pequeño. Se actualiza `event-detail.md`.
 - No incluye:
   - El aside de compra del detalle para eventos con mapa, la barra fija móvil "Desde S/ X · Comprar entradas" y la ruta `/eventos/<slug>/entradas`: son de la spec seating (contrato H). Aquí no se rehacen. Para eventos sin mapa sigue `TicketSelector` sin cambios.
   - Barra fija móvil de compra para eventos **sin** mapa (el diseño la muestra en todos; ver Preguntas abiertas).
@@ -21,7 +25,12 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
   - Paginación, búsqueda por texto con autocompletado, filtro por rango libre de fechas en el panel, nuevas categorías o ciudades (el diseño trae "Cine", "Comedia", etc.; se usan las 6 categorías y 5 ciudades del modelo).
   - Rangos de precio del diseño (S/ 50–150, 150–300, > 300): se conservan los actuales por compatibilidad de URL.
   - Cambiar `SiteHeader`, `SiteFooter` o el layout raíz.
+  - (F4) El fondo gris (`bg-muted`) del cuerpo de `/eventos` que muestra la captura, las categorías del diseño (Cine, Comedia, Arte…), ciudades fuera de Perú y precios en otra moneda ("US$ 150"): se mantienen las 6 categorías, las 5 ciudades y PEN. Selector de día concreto en el buscador (el diseño dice "Cualquier día"; aquí es por mes, decisión 12). Autocompletado en "Qué quieres ver".
+  - (F4) Cambiar `EVENT_STATUS_BADGE` (también lo usa `TicketSelector`), `EventPreviewCard` del organizador (replica la anatomía antigua; ver Preguntas abiertas) o `modules/tickets/**` (su `getDateChipParts` local se unificará después; ver Preguntas abiertas).
+  - (F5) `ZonePricesCard`, el aside de compra y la barra móvil de los eventos con mapa (spec seating, contrato H). La captura no muestra el h2 "Entradas" encima de "Entradas desde"; si se quiere quitar, es una enmienda de seating (ver Preguntas abiertas). Tampoco cambia `formatLongDate` ni `formatTime`, que usan checkout y tickets.
+  - (F4–F5) `modules/events/data/events.mock.ts`: el evento "Festival Vive Latino Lima" de la captura lo añade la spec seating (F6); aquí no se toca y los criterios usan eventos ya existentes.
 - Reemplaza (de specs aprobadas, solo en lo indicado): en `events-listing.md`, el texto del contador ("n eventos encontrados" → "n eventos"), el buscador completo en `/eventos` (pasa a compacto) y los chips de categoría en `lg` (pasan a la barra lateral). En `events-detail.md`, el bloque de cabecera, la sección "Detalles" (pasa a "Información importante" y a la cabecera) y "Ubicación" (pasa a "Lugar" con "Cómo llegar"). En `auth-login-register.md`, la decisión 5 ("sin panel lateral").
+- Reemplaza (Fases 4–5, dentro de esta misma spec y de las aprobadas que se citan; las casillas de F1–F3 no se tocan): F1 requisito 3 y los criterios que fijan el h1 "Eventos" o "Teatro" (pasa a "Explora eventos", decisión 11); F1 requisito 4 y los criterios del buscador compacto y del buscador de la landing con ciudad (pasa a la barra única, decisión 12); F1 requisito 10 (tarjeta ticket, ajustada por F4-4). En `events-landing.md` y MASTER §7–§8, el buscador "texto + ciudad + fecha + precio" y la anatomía de `EventCard` (categoría como badge sobre la imagen, fecha overline, estado "Disponible" visible). En `events-detail.md`/F2 de esta spec, la fecha larga con año en el hero, la hora sin sufijo y la etiqueta "Inicio" (F2 requisito 2 y 6; decisión 16).
 
 ## Decisiones tomadas
 1. **Filtros con la URL como fuente de verdad y mejora progresiva.** El panel es un `<form action="/eventos" method="get">` con inputs nativos. Sin JS se envía con un botón "Aplicar filtros" dentro de `<noscript>`. Con JS, cada cambio navega al momento con `router.push(href, { scroll: false })` y `useOptimistic` (la casilla responde sin esperar al servidor). El filtrado y los conteos se calculan siempre en el servidor. No se usa `key` para remontar el formulario porque se perdería el foco del control.

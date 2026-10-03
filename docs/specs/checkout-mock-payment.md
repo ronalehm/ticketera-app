@@ -336,6 +336,62 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 - [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de `/checkout` y `/checkout/confirmacion` de esta spec y ya no menciona Stripe.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
+### Fase 5 — "Datos y pago" según las capturas
+- [ ] Dado `/checkout?evento=noche-de-sintetizadores-lima&general=2&vip=1` en 1440 px:
+  - entonces bajo el stepper solo se ve el banner "Reservamos tus entradas por 10:00. Completa el pago antes de que se liberen." (no se ve el título "Finalizar compra");
+  - el DOM tiene un único h1 "Finalizar compra" con `sr-only`.
+- [ ] Dado 1440 px, entonces "Datos del comprador" muestra el subtítulo "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios." y tres filas:
+  - Nombres * | Apellidos *;
+  - Correo electrónico * a todo el ancho;
+  - Celular * (+51) | Documento de identidad * con el selector "DNI" estrecho y el número en la misma fila.
+  - No hay huecos en la grilla y los `*` van en color destructivo.
+- [ ] Dado 375 px, entonces los campos van en una columna en ese orden, el selector de tipo y el número caben en una fila sin scroll horizontal, y el resumen plegado y la barra inferior "Pagar S/ 910.00" funcionan como en la Fase 3.
+- [ ] Dado "Carné de extranjería" elegido, entonces el selector muestra "CE" y la lista desplegada muestra los nombres completos.
+- [ ] Dado un lector de pantalla:
+  - entonces cada campo obligatorio se anuncia como requerido (`required`) y su nombre no incluye "asterisco" ni "*" (p. ej. "Nombres");
+  - el grupo se anuncia como "Documento de identidad", con "Tipo de documento" y "Número de documento";
+  - el h1 "Finalizar compra" es el primer encabezado.
+- [ ] Dado el teclado, entonces el orden de tabulación es Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible; con el formulario vacío, "Pagar" sigue enfocando "Nombres".
+- [ ] Dada la tarjeta "Método de pago", entonces:
+  - no hay aviso arriba de los métodos;
+  - al pie se lee "Demo: no se realiza ningún cobro real." con icono de información;
+  - con Tarjeta se añaden las tarjetas de prueba (4242… aprobada y 4000…0002 rechazada), y con Yape o PagoEfectivo no aparecen;
+  - los 4 campos de tarjeta llevan `*`.
+- [ ] Dado 1440 px, entonces el resumen (columna derecha, sticky) es compacto:
+  - miniatura, título y "sáb 14 nov · <Lugar>, <Ciudad>" (en minúsculas, sin hora);
+  - líneas "2 × General … S/ 500.00" y "1 × VIP … S/ 410.00", sin precio unitario;
+  - "Cambiar entradas", "Total S/ 910.00" y el botón primario azul "Pagar S/ 910.00" con candado **dentro** de la misma tarjeta.
+- [ ] Dado 375 px, entonces al desplegar el resumen no se ve un segundo botón "Pagar" dentro de la tarjeta: solo el de la barra inferior.
+- [ ] Dado un checkout con dos asientos de filas distintas (p. ej. `L-9` y `M-8` de "Tribuna Oriente" en el evento que añade seating F6, o cualquier zona numerada existente), entonces el resumen muestra "2 × Tribuna Oriente" y debajo "Fila L · 9 · Fila M · 8" (y el lector lee "Asientos: …").
+- [ ] Dado Términos, entonces sigue debajo de "Método de pago" en todos los anchos y sin marcar impide pagar con su mensaje.
+- [ ] Dados importes, entonces siguen el formato del MASTER (`S/ 910.00`).
+- [ ] Dado `formatShortDayMonth`/`formatLongDayMonth` y `formatCompactSeats`, entonces cumplen los ejemplos de los requisitos 30–31 (tests).
+- [ ] Dado el código, entonces ningún archivo de `modules/checkout` importa de `modules/seating/**` salvo sus entradas públicas, no se modifica `modules/seating/**`, y `OrderSummary` no importa el barrel `@/modules/events`.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 6 — "Confirmación" y entrada imprimible
+- [ ] Dado un pago aprobado con el correo `luis@correo.pe`, entonces la confirmación dice "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." (correo en negrita) y conserva "Pedido N.º MT-XXXXXX".
+- [ ] Dada la tarjeta-entrada de una compra con asientos (ejemplo de la captura: `Tribuna Oriente`, L-9 y M-8, el 5 de octubre en Costa Verde, Lima; con otro evento, sus datos en el mismo formato), entonces muestra:
+  - "lunes 5 de octubre · Costa Verde, Lima" (sin año ni hora);
+  - debajo, "Tribuna Oriente: Fila L · 9 · Fila M · 8";
+  - "Zona" Tribuna Oriente, "Entradas" 2 y "Total pagado" S/ 310.00;
+  - no aparece el bloque "Asientos".
+  - Sin asientos, no aparece la línea de asientos.
+- [ ] Dada una compra con General y VIP, entonces "Zona" muestra "General, VIP".
+- [ ] Dado 1440 px, entonces "Qué sigue" no tiene título visible y sus 3 tarjetas siguen en fila. Con lector de pantalla existe el h2 "Qué sigue", y el único h1 es "¡Compra confirmada!".
+- [ ] Dado 375 px, entonces la tarjeta-entrada es vertical, un correo largo no provoca scroll horizontal y las acciones se ven como en la Fase 4.
+- [ ] Dado "Descargar PDF" con una compra de 2 entradas, entonces la vista previa de impresión tiene 2 páginas, cada una con una entrada vertical:
+  - franja azul de marca con el logo Mentec Tickets en blanco y "Entrada n de 2", impresa en color;
+  - imagen del evento, categoría, título, Fecha "lunes 5 de octubre", Hora "14:00 h" y Lugar "Costa Verde, Lima";
+  - talón punteado con muescas;
+  - QR de esa entrada, Zona "Tribuna Oriente", Ubicación "Fila L, asiento 9" (y "Fila M, asiento 8" en la segunda), Titular, Código `MT-XXXXXX-01`/`-02` y Pedido `MT-XXXXXX`;
+  - pie "Presenta este QR en el ingreso. Cada entrada es válida para una persona.";
+  - no salen header, footer, stepper, cabecera de confirmación, tarjeta-entrada, acciones ni "Qué sigue".
+- [ ] Dada una entrada de zona general (sin asiento), entonces la entrada imprimible omite "Ubicación".
+- [ ] Dado `PrintableTicket`, entonces no importa nada de `modules/` ni el tipo `Order`, solo usa tokens y acepta `className`.
+- [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de las Fases 5 y 6 (incluida la anatomía de la entrada imprimible).
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
 ## Diseño técnico
 - Rutas (`app/`), consultar `node_modules/next/dist/docs/` (`searchParams` es Promise, `PageProps<"…">`, `useRouter` de `next/navigation`):
   - `app/checkout/page.tsx` (modificada, Fase 3).
@@ -402,6 +458,56 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   ```
   - URL de confirmación: `GET /checkout/confirmacion?orden=MT-XXXXXX` (`orden` validado con `orderCodeSchema`).
 
+### Ampliación (Fases 5 y 6)
+- Rutas: `app/checkout/page.tsx` (modificada, F5: h1 `sr-only`, sin `summary`). `app/checkout/confirmacion/page.tsx` no cambia.
+- Componentes:
+  - shadcn (instalados): `card`, `field` (incluye `FieldSet`, `FieldLegend`), `select` (`SelectValue` con `children` función), `input`, `input-group`, `checkbox`, `separator`, `button`, `radio-group`. No hay que instalar nada. Se revisó shadcn para la marca de obligatorio y para el ticket imprimible: no existe un "required indicator" ni un componente de ticket/boleto. No pude ejecutar `npx shadcn@latest search` (el registro no responde desde este entorno; ver la nota de la Fase 1).
+  - existente (`components/shared/BrandLogo.tsx`): `variant="white"` en la franja de la entrada imprimible.
+  - existente (`components/shared/TicketQr.tsx`): QR de cada entrada imprimible.
+  - existente, modificados: `modules/checkout/components/OrderSummary.tsx` (F5), `CheckoutSummaryPanel.tsx` (F5), `CheckoutForm.tsx` (F5), `PaymentMethodFields.tsx` (F5), `ConfirmationTicketCard.tsx` (F6), `OrderConfirmation.tsx` (F6).
+  - nuevo `modules/checkout/components/RequiredMark.tsx` (F5): marca `*` `aria-hidden`. La usan dos componentes del módulo (`CheckoutForm`, `PaymentMethodFields`) en 10 etiquetas. No existe en shadcn. Si otro dominio la necesita (p. ej. el registro), sube a `components/shared`.
+  - nuevo `components/shared/PrintableTicket.tsx` (F6): entrada imprimible con props planas. Va en `shared` porque la usan checkout y, en una enmienda posterior, tickets (dos dominios). No existe en shadcn.
+- Utils:
+  - `modules/events/utils/formatEvent.ts` (+ test) y `modules/events/format.ts` (F5): `formatShortDayMonth`, `formatLongDayMonth`.
+  - nuevo `modules/checkout/utils/seatSummary.ts` (+ test) (F5): `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
+  - nuevo `modules/checkout/utils/printableTickets.ts` (+ test) (F6): `buildPrintableTickets`.
+- Hooks, services, schemas, stores, tipos: sin cambios. **Contrato E sin cambios** (`Order`, `OrderTicket`, `OrderBuyer`).
+- `modules/checkout/index.ts` (F5): quita `OrderSummary`.
+- Contratos nuevos (entre capas):
+  ```ts
+  // modules/events/utils/formatEvent.ts (reexportados en modules/events/format.ts)
+  export function formatShortDayMonth(iso: string): string; // "lun 5 oct"
+  export function formatLongDayMonth(iso: string): string;  // "lunes 5 de octubre"
+
+  // modules/checkout/utils/seatSummary.ts
+  export function parseSeatPosition(seatId: string): { row: string; number: number } | null; // "tribuna-oriente-L-9" → { row: "L", number: 9 }
+  export function formatSeatPosition(row: string, number: number): string;                    // "Fila L, asiento 9"
+  export function formatCompactSeats(seats: { id: string; label: string }[]): string;         // "Fila L · 9 · Fila M · 8"
+
+  // components/shared/PrintableTicket.tsx
+  export type PrintableTicketProps = {
+    ticketNumber: number; ticketCount: number;
+    imageUrl: string; categoryLabel: string; title: string;
+    dateLabel: string; timeLabel: string; placeLabel: string;
+    zoneLabel: string; seatLabel?: string;
+    holderName: string; ticketCode: string; orderCode: string;
+    className?: string;
+  };
+  export function PrintableTicket(props: PrintableTicketProps): JSX.Element;
+
+  // modules/checkout/utils/printableTickets.ts
+  export function buildPrintableTickets(order: Order): Omit<PrintableTicketProps, "className">[];
+
+  // modules/checkout/components/OrderSummary.tsx
+  type OrderSummaryProps = { order: CheckoutOrder; changeHref?: string; footer?: ReactNode };
+
+  // modules/checkout/components/CheckoutForm.tsx
+  type CheckoutFormProps = { order: CheckoutOrder; changeHref: string }; // sin `summary`
+
+  // modules/checkout/components/CheckoutSummaryPanel.tsx
+  type CheckoutSummaryPanelProps = { title: string; imageUrl: string; ticketCount: number; totalLabel: string; children: ReactNode; className?: string }; // sin `footer`
+  ```
+
 ## Reutilización
 - `auth`: `useZodForm` (sube a `hooks/`), reglas de `registerSchema` (suben a `lib/formFields.ts`), `INLINE_LINK`/`TEXT_LINK` (suben a `lib/linkStyles.ts`), `useAuthStore` (vía `modules/auth/session.ts`), patrón visual y de tests de `RegisterForm` (campos, "+51", `Select`, `Checkbox`, `Alert`, `Spinner`, `vi.mock` de `next/navigation`), patrón de store persistido con `skipHydration` y su test.
 - `checkout` (Fase 1 de `checkout-purchase.md` + extensiones de seating): `getCheckoutOrder`, `CheckoutOrder`, `OrderSummary`, `ReservationTimer`/`useCountdown`, `CheckoutStatusMessage`.
@@ -410,6 +516,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 - shadcn ya instalados (lista en Diseño técnico) + `radio-group`.
 - Nativos: `Intl`, `Blob`, `URL.createObjectURL`, `window.print`, `Math.random`, `localStorage` (vía zustand `persist`), Tailwind `print:`.
 - Sin dependencias nuevas.
+- (F5–F6) `formatTime`, `formatEventPrice`, `EVENT_CATEGORY_LABELS` (vía `@/modules/events/format`); `BrandLogo` (`variant="white"`); `TicketQr`; `FieldSet`/`FieldLegend`; `SelectValue` con `children` función; patrón de muescas del talón de `ConfirmationTicketCard`; `DOCUMENT_TYPE_LABELS`; utilidades `print:` y `break-after-page` de Tailwind v4. Sin dependencias nuevas ni componentes shadcn nuevos.
 
 ## Tests
 - `hooks/useZodForm.test.ts` (F1): movido sin cambios; junto con los tests de `modules/auth` sin cambios deben pasar. `lib/formFields.ts` queda cubierto por `auth.schema.test.ts` y `payment.schema.test.ts` (sin test propio).
