@@ -617,6 +617,36 @@ Coordinación:
 - [x] T4 — `OrderConfirmation` (estados, acciones, Qué sigue, lista de impresión) con test · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
 - [x] T5 — Página `/checkout/confirmacion`, barrel y diseño de página (sección confirmación; quitar menciones a Stripe) · archivos: `app/checkout/confirmacion/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T4 · secuencial
 
+Coordinación de la ampliación (Fases 5 y 6):
+- **Seating (Fase 6 en paralelo: mapa curvo, "Festival Vive Latino Lima", butacas en arco):**
+  - Estas fases no tocan `modules/seating/**` y no dependen de esa fase: funcionan con cualquier evento con o sin mapa.
+  - `parseSeatPosition` depende solo del formato de id del contrato C (`<zoneId>-<fila>-<número>`, fila `[A-Z]{1,2}`). Si seating F6 cambia ese formato (p. ej. filas numéricas en el arco), debe avisar y esta función se adapta en la misma enmienda.
+  - Si seating publica `parseSeatId` en una entrada pública, checkout puede sustituir su regex (Preguntas abiertas).
+  - La etiqueta `seat.label` puede cambiar libremente: checkout ya no la parsea.
+- **Events:**
+  - F5 T1 añade dos funciones a `modules/events/utils/formatEvent.ts` y a la entrada `modules/events/format.ts` (que creó esta spec).
+  - No cambia las existentes ni sus tests.
+  - `events-ui-refresh` debe conservarlas si edita esos archivos.
+- **Tickets (Mis entradas):**
+  - `PrintableTicket` y los formateadores de F5 quedan disponibles.
+  - Adoptarlos en el "Descargar PDF" de `/mis-entradas` (Fase 2 de `tickets-my-tickets.md`) requiere una enmienda de esa spec. Esta spec no la edita.
+  - Si tickets necesita `buildPrintableTickets`, se expondrá en `modules/checkout/orders.ts` en esa enmienda (hoy YAGNI).
+- F6 depende de F5 (formateadores y `seatSummary`). Se ejecuta una fase por sesión.
+
+### Fase 5 — "Datos y pago" según las capturas
+- [ ] T1 — Formateadores de fecha en events (+ casos de test) y utils de asientos compactos con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/seatSummary.ts`, `modules/checkout/utils/seatSummary.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
+- [ ] T2 — Resumen compacto con `footer` y panel sin `footer` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
+- [ ] T3 — `RequiredMark` y `PaymentMethodFields` (nota de demo al pie, tarjetas de prueba solo con Tarjeta, `*` y `required` en tarjeta) · archivos: `modules/checkout/components/RequiredMark.tsx`, `modules/checkout/components/PaymentMethodFields.tsx` · depende de: T1 · paralelo con T2 y T5
+- [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial
+- [ ] T5 — Diseño de página, sección `/checkout` (layout sin h1 visible, disposición del comprador, nota de demo, resumen compacto con "Pagar" dentro, `*`) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2 y T3 (y con T4: archivos disjuntos)
+
+### Fase 6 — "Confirmación" y entrada imprimible
+- [ ] T1 — `PrintableTicket` (props planas, franja de marca, talón, `[print-color-adjust:exact]`, imágenes `eager`) · archivos: `components/shared/PrintableTicket.tsx` · depende de: Fase 5 · secuencial (`components/shared/`)
+- [ ] T2 — `buildPrintableTickets` con test · archivos: `modules/checkout/utils/printableTickets.ts`, `modules/checkout/utils/printableTickets.test.ts` · depende de: T1 · paralelo con T3 y T5
+- [ ] T3 — `ConfirmationTicketCard` (fecha "lunes 5 de octubre" sin año ni hora, asientos compactos por zona, sin "Asientos", `aria-labelledby`, `print:hidden`) · archivos: `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2 y T5
+- [ ] T4 — `OrderConfirmation` (correo en negrita, "Qué sigue" `sr-only`, cabecera `print:hidden`, lista de `PrintableTicket` con salto de página) con tests actualizados y nuevos · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
+- [ ] T5 — Diseño de página, sección confirmación e impresión (anatomía de la entrada imprimible) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2, T3 y T4
+
 ## Preguntas abiertas
 1. **Yape y PagoEfectivo:** los textos del diseño prometen un QR de Yape y un código de pago, pero en la simulación "Pagar" aprueba al instante. ¿Se mantienen los textos tal cual, se cambian por algo como "En esta demo el pago se aprueba al instante", o se simula un paso intermedio con QR/código?
 2. **"Enviamos tus entradas a tu correo"** (confirmación y "Qué sigue"): no se envía ningún correo. ¿Se mantiene el texto del diseño o se cambia mientras no exista envío?
@@ -627,3 +657,14 @@ Coordinación:
 7. **Autocompletado de tarjeta:** se usa `autoComplete="off"` (decisión 5) en lugar de `cc-*` del diseño. ¿De acuerdo, al menos mientras el pago sea simulado?
 8. **Alcance del almacenamiento:** las órdenes viven solo en el `localStorage` de ese navegador; en otro dispositivo no aparecen y la confirmación muestra "No encontramos tu compra". ¿Aceptable para la demo?
 9. **`checkout-purchase.md`:** sigue aprobada con sus Fases 2–3 (Stripe) sin marcar. ¿Quieres anotar tú en ese archivo que quedan reemplazadas por esta spec? (Los agentes no la editan.)
+
+Ampliación (Fases 5 y 6):
+
+10. **Importes sin decimales:** las capturas muestran "S/ 310" y la app usa "S/ 310.00" (formato del MASTER §10). Se mantiene el MASTER. ¿Quieres "S/ 310" en todo el sitio? Eso cambiaría `formatEventPrice`, el MASTER y los tests de varios módulos, fuera de esta spec.
+11. **Ubicación en entradas sin asiento:** la entrada imprimible omite "Ubicación" en zonas de pie (decisión 30). ¿Prefieres un texto, p. ej. "Entrada general · sin asiento asignado"?
+12. **Tarjetas de prueba:** se muestran en la nota de demo solo con el método Tarjeta (decisión 20). ¿Las quieres en otro sitio o fuera de la UI (p. ej. solo en la documentación)?
+13. **Lectura del id de asiento en checkout:** `parseSeatPosition` repite el conocimiento de `SEAT_ID_PATTERN` (seating), porque `parseSeatId` no está en ninguna entrada pública de seating y esta fase no toca `modules/seating/**`. ¿Se pide a la spec seating que exponga `parseSeatId` (p. ej. en `seats.ts`) en su próxima enmienda, para que checkout lo use y borre su regex?
+14. **Precio unitario en el resumen:** la captura no lo muestra y se quita (decisión 23). ¿De acuerdo, o se conserva "2 × S/ 155.00" en pequeño?
+15. **"Precio final, sin cargos ocultos"**: la captura del resumen no lo muestra, pero se mantiene bajo el total (era requisito de `checkout-purchase.md` y del MASTER, anti-patrón "cargos ocultos"). ¿Se mantiene?
+16. **Impresión:** al "Descargar PDF" solo salen las entradas, una por página, sin la cabecera "¡Compra confirmada!" ni la tarjeta-entrada (decisión 29). ¿De acuerdo?
+17. **Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket` (misma salida en ambos sitios)? Si es así, `buildPrintableTickets` se publicaría en `modules/checkout/orders.ts`.

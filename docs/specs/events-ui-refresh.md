@@ -152,6 +152,65 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
 4. **Páginas:** `/login` y `/registro` componen `<AuthTabs current=…/>` + el formulario en una columna con el ancho de su tarjeta (`max-w-md` / `max-w-lg`) y `gap-6`. Metadata sin cambios.
 5. **Formularios intactos:** `LoginForm` y `RegisterForm` (y sus tests) no se modifican.
 
+### Fase 4 · Búsqueda y tarjeta de evento
+1. **h1 y título de `/eventos`** (decisión 11): h1 "Explora eventos" siempre, con las mismas clases de hoy. `<title>`: "<Categoría> | Mentec Tickets" con exactamente una categoría; si no, "Explora eventos | Mentec Tickets".
+2. **Buscador (`EventSearchBar`, Server Component)**, igual en `/eventos` y en la landing (decisiones 12 y 13):
+   - `<section aria-label="Buscar eventos">` con el contenedor actual y `<form action="/eventos" method="get" role="search">`.
+   - **Píldora:** `rounded-2xl bg-card ring-1 ring-border shadow-lg shadow-foreground/5 p-2`.
+   - **Segmentos:** cada uno es un bloque `relative` cuyo control ocupa todo el segmento (`h-14`, `rounded-xl`, sin borde ni sombra propios, `pt-5 px-4`). Su `<label htmlFor>` va encima del valor, en posición absoluta y `pointer-events-none`: `text-xs font-bold text-foreground`, `top-2 left-4`. Pulsar en cualquier parte del segmento activa el control. El objetivo táctil es de 56 px.
+     - "Qué quieres ver": `Input` `type="search"` `name="q"`, placeholder "Artista, evento o ciudad". Sin icono dentro: la lupa va en el botón.
+     - "Fecha": `NativeSelect` `name="mes"` con "Cualquier fecha" (`value=""`) y los meses de `months` ("Noviembre 2026"…).
+     - "Precio": `NativeSelect` `name="precio"` con "Cualquier precio" (`value=""`) y los 5 rangos de `PRICE_RANGES`.
+   - **Foco:** anillo visible en el segmento (`focus-visible:ring-2 focus-visible:ring-ring` en el control); hover `hover:bg-accent/60` en los segmentos.
+   - **Botón:** "Buscar" primario (`bg-primary text-primary-foreground hover:bg-primary-strong font-semibold`), icono `Search` (`aria-hidden`), `h-12 rounded-xl px-6`.
+   - **Layout:**
+     - `< md`: segmentos apilados a todo el ancho, separados por divisores horizontales (`divide-y divide-border`), y el botón a todo el ancho debajo (`mt-2 w-full`).
+     - `md+`: una fila `grid-cols-[minmax(0,1fr)_minmax(0,11rem)_minmax(0,11rem)_auto] items-center`, con divisores verticales entre los segmentos (`md:divide-y-0 md:divide-x`, solo entre los tres segmentos, no junto al botón), y el botón a la derecha dentro de la píldora.
+     - `lg+`: los selects a `13rem`.
+   - **Valores iniciales** desde `defaultValues` (`q`, `mes`, `precio`) y `key` del `<form>` = `buildEventsHref(defaultValues ?? {})`.
+   - **Inputs ocultos:** uno por cada entrada de `toSearchParamEntries(defaultValues ?? {})` cuya clave no sea `q`, `mes` ni `precio`. En la landing no hay ninguno.
+   - **Props:** `{ months: MonthOption[]; defaultValues?: EventFilters; className?: string }`. La landing pasa `getEventMonths(events)` y la página de eventos los `months` que ya calcula.
+3. **Tarjeta `EventCard layout="grid"`** (todas las anchuras en la landing y en relacionados; desde `sm` en `/eventos`):
+   - **Contenedor:** `Card` `rounded-2xl ring-1 ring-border` (sin sombra en reposo; hover `shadow-lg shadow-foreground/5`), `h-full`, columna.
+   - **Imagen:** `relative h-44` (176 px) con `next/image fill object-cover` y el mismo alt. Enlace al detalle con `tabIndex={-1}` `aria-hidden` (como hoy) y zoom `motion-safe:group-hover:scale-105`.
+     - **Chip de fecha** (`aria-hidden`), arriba a la izquierda (`absolute top-3 left-3`): `rounded-xl bg-background px-2.5 py-1.5 text-center leading-none ring-1 ring-border/60`. Arriba el mes (`text-xs font-bold tracking-wider text-primary-strong`, "NOV") y debajo el día (`text-2xl font-extrabold text-foreground tabular-nums`, "14"), de `getDateChipParts`.
+     - **Estado**, arriba a la derecha (`absolute top-3 right-3`, `Badge` `h-6 rounded-full px-2.5 font-bold`): "Últimas entradas" `bg-warning text-warning-foreground` o "Agotado" `bg-brand-navy text-primary-foreground`. Si está disponible, no hay badge.
+   - **Cuerpo** (`flex flex-1 flex-col gap-1.5 p-4`):
+     - Overline de categoría (`<p>`, `text-xs font-bold tracking-wider uppercase text-primary-strong`).
+     - h3 con el enlace al detalle (`text-base md:text-lg leading-snug font-bold line-clamp-2`, foco visible).
+     - Dos metadatos `text-sm font-medium text-muted-foreground`, con iconos `size-4` (`aria-hidden`) y `mt-1`:
+       - `MapPin` + "Lugar · Ciudad" (`truncate`).
+       - `CalendarDays` + `<time dateTime={startsAt}>` "sáb 14 nov" (`formatShortDate`).
+   - **Talón** (`aria-hidden`, solo desde `sm` en `ticket`; siempre en `grid`): `relative mt-auto border-t border-dashed border-border` con dos muescas `absolute top-0 size-5 -translate-y-1/2 rounded-full ring-1 ring-border`, una en `-left-2.5` y otra en `-right-2.5`, con el fondo según `surface` (`bg-background` o `bg-muted`). El `overflow-hidden` de `Card` las recorta a media luna.
+   - **Pie** (`flex flex-wrap items-end justify-between gap-3 p-4`):
+     - **Precio** a la izquierda: `<p>` con "Desde" (`block text-xs font-medium text-muted-foreground`) y el precio (`block text-xl font-extrabold tracking-tight tabular-nums`, `formatEventPrice` → "S/ 180.00"). Gratis: solo "Entrada libre" (`text-xl font-extrabold`), sin "Desde". Agotado: precio en `text-muted-foreground line-through`.
+     - **CTA** a la derecha: enlace "Ver entradas" con `buttonVariants({ variant: "outline" })` + `h-11 rounded-xl px-4 font-semibold text-primary-strong hover:bg-accent`, con `<span className="sr-only"> de {título}</span>`. Si está agotado: `<button type="button" disabled>` "Agotado" (`h-11 rounded-xl px-4 bg-muted text-muted-foreground font-semibold`, no enfocable) con `<span className="sr-only">: {título}</span>`.
+   - **Enlaces:** el CTA es el enlace principal; el título también enlaza y la imagen queda fuera del orden de tabulación. La tarjeta entera nunca se envuelve en un enlace.
+4. **Tarjeta `layout="ticket"`** (< sm, decisión 16):
+   - Fila con la imagen de `w-27` (108 px) y el chip de fecha en su esquina superior izquierda (`top-2 left-2`).
+   - Cuerpo con `border-l border-dashed border-border` y muescas arriba y abajo en la unión (como hoy, del color de `surface`). El cuerpo lleva overline, título `line-clamp-2`, lugar y fecha.
+   - Pie en una fila: precio a la izquierda ("Desde" + precio `text-base font-extrabold`, o "Entrada libre") y badge de estado a la derecha (solo "Últimas entradas"/"Agotado", con las mismas clases).
+   - El badge de la imagen, el talón horizontal y el CTA se ocultan (`max-sm:hidden`), y el título se estira sobre la tarjeta (`max-sm:after:absolute max-sm:after:inset-0`). Así cada dato está una sola vez en el árbol de accesibilidad: el badge que se ve en el pie es el de `ticket` (`hidden max-sm:inline-flex`) y el de la imagen tiene `max-sm:hidden`.
+5. **Superficie (`surface`)** (decisión 15): `RelatedEvents` pasa `surface="muted"`; el resto usa el valor por defecto.
+6. **Grillas:** sin cambios de columnas ni gaps en `/eventos`, Destacados, Próximos ni relacionados. Las tarjetas de una fila siguen alineando el pie (`h-full` + `mt-auto` en el talón).
+7. **Accesibilidad:**
+   - Un único h1.
+   - Nombres accesibles: "Ver entradas de <título>"; los campos del buscador "Qué quieres ver", "Fecha" y "Precio"; el botón "Buscar".
+   - Estado con texto, nunca solo color. El chip de fecha es decorativo y la fecha está en texto.
+   - Objetivos táctiles ≥ 44 px: segmentos de 56 px, botón de 48, CTA de 44.
+   - Foco visible en todo lo interactivo. Sin scroll horizontal de página a 375 / 768 / 1024 / 1440, incluido el carrusel de relacionados con tarjetas `w-64`: el pie hace `flex-wrap` si el CTA no cabe.
+
+### Fase 5 · Detalle `/eventos/[slug]`
+1. **Hero (`EventDetailHeader`):**
+   - Fecha con `formatDayMonth(startsAt)` → "sábado 14 de noviembre", en minúscula y sin año, dentro de `<time dateTime={startsAt}>`. Se quita la mayúscula inicial manual.
+   - Hora con `formatHour(startsAt)` → "21:00 h".
+   - h1 con `text-4xl md:text-5xl lg:text-4xl xl:text-5xl` (resto de clases igual, decisión 18).
+2. **Información importante (`EventDetailInfo`):**
+   - "Apertura de puertas": `formatHour(doorsOpenAt)` ("18:00 h").
+   - Inicio: `formatHour(startsAt)` ("21:00 h"), con la etiqueta "Inicio del show", o "Inicio del partido" si `category === "deportes"`.
+   - El resto (iconos, edad, ingreso, `<time dateTime>`) no cambia.
+3. **Sin cambios:** precio del CTA del hero (ya usa `formatEventPrice`, "S/ 180.00"), barra móvil, breadcrumb, Guardar/Compartir, "Lugar", relacionados (salvo `surface` de F4), el aside de compra, `TicketSelector` y lo de seating.
+
 ## Criterios de aceptación
 
 ### Fase 1
