@@ -172,7 +172,9 @@ describe("OrganizerEventForm", () => {
   });
 
   it("'Fecha' solo tiene min (hoy en Lima) en cliente: el HTML del servidor no lo incluye", () => {
-    expect(renderToString(<OrganizerEventForm />)).not.toMatch(/type="date"[^>]*min=/);
+    const serverHtml = renderToString(<OrganizerEventForm />);
+    expect(serverHtml).toMatch(/<input[^>]*type="date"/);
+    expect(serverHtml).not.toMatch(/<input[^>]*type="date"[^>]*min=/);
 
     render(<OrganizerEventForm />);
     expect(input("Fecha").getAttribute("min")).toBe(getTodayInLima());
