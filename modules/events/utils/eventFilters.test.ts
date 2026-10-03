@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import type { Event } from "../types/events.types";
-import { buildEventsHref, filterEvents, parseEventFilters } from "./eventFilters";
+import {
+  buildEventsHref,
+  filterEvents,
+  formatMonthLabel,
+  getActiveFilterChips,
+  getEventMonths,
+  getFacetCounts,
+  parseEventFilters,
+  toggleFilterValue,
+  toSearchParamEntries,
+} from "./eventFilters";
 
 function makeEvent(overrides: Partial<Event> & Pick<Event, "id">): Event {
   return {
@@ -25,7 +35,7 @@ describe("parseEventFilters", () => {
   it("acepta valores válidos", () => {
     expect(
       parseEventFilters({ q: " rock ", ciudad: "Cusco", fecha: "2027-01-01", precio: "0-50", categoria: "teatro" }),
-    ).toEqual({ q: "rock", ciudad: "Cusco", fecha: "2027-01-01", precio: "0-50", categoria: "teatro" });
+    ).toEqual({ q: "rock", ciudad: ["Cusco"], fecha: "2027-01-01", precio: "0-50", categoria: ["teatro"] });
   });
 
   it("convierte cada valor inválido en undefined e ignora params desconocidos", () => {
@@ -35,15 +45,15 @@ describe("parseEventFilters", () => {
       fecha: "2027-13-45",
       precio: "xyz",
       categoria: "opera",
-      orden: "desc",
+      pagina: "2",
     });
     expect(filters).toEqual({ q: "ok" });
-    expect(filters).not.toHaveProperty("orden");
+    expect(filters).not.toHaveProperty("pagina");
   });
 
-  it("toma el primer valor cuando un param llega como array", () => {
+  it("conserva todos los valores multivalor y el primero en los de valor único", () => {
     expect(parseEventFilters({ ciudad: ["Arequipa", "Lima"], precio: ["xyz", "gratis"] })).toEqual({
-      ciudad: "Arequipa",
+      ciudad: ["Arequipa", "Lima"],
       precio: undefined,
     });
   });
@@ -51,6 +61,66 @@ describe("parseEventFilters", () => {
   it("trata valores vacíos como undefined", () => {
     const filters = parseEventFilters({ q: "   ", ciudad: "", fecha: "", precio: "", categoria: "" });
     expect(Object.values(filters).every((value) => value === undefined)).toBe(true);
+  });
+
+  it("un string en un parámetro multivalor pasa a array", () => {
+    expect(parseEventFilters({ categoria: "teatro", ciudad: "Lima" })).toEqual({
+      categoria: ["teatro"],
+      ciudad: ["Lima"],
+    });
+  });
+
+  it("descarta los valores inválidos de un array y conserva los válidos en orden de llegada", () => {
+    expect(
+      parseEventFilters({ categoria: ["opera", "teatro", "conciertos"], ciudad: ["Tokio", "Cusco", ""] }),
+    ).toEqual({ categoria: ["teatro", "conciertos"], ciudad: ["Cusco"] });
+  });
+
+  it("elimina los valores duplicados", () => {
+    expect(parseEventFilters({ ciudad: ["Lima", "Cusco", "Lima"] })).toEqual({ ciudad: ["Lima", "Cusco"] });
+  });
+
+  it("un multivalor con todos los valores inválidos queda undefined", () => {
+    const filters = parseEventFilters({ categoria: ["opera", "cine"], ciudad: ["Tokio"] });
+    expect(filters.categoria).toBeUndefined();
+    expect(filters.ciudad).toBeUndefined();
+  });
+
+  it.each([
+    ["2027-01", "2027-01"],
+    ["2026-12", "2026-12"],
+    ["2027-13", undefined],
+    ["2027-1", undefined],
+    ["2027-00", undefined],
+    ["enero", undefined],
+  ])("mes %s → %s", (mes, expected) => {
+    expect(parseEventFilters({ mes }).mes).toBe(expected);
+  });
+
+  it.each([
+    ["fecha", "fecha"],
+    ["precio", "precio"],
+    ["xyz", undefined],
+    ["", undefined],
+  ])("orden %s → %s", (orden, expected) => {
+    expect(parseEventFilters({ orden }).orden).toBe(expected);
+  });
+
+  it("en q, mes y precio toma el primer valor si llegan como array", () => {
+    expect(
+      parseEventFilters({ q: ["rock", "jazz"], mes: ["2027-01", "2027-02"], precio: ["gratis", "0-50"] }),
+    ).toEqual({ q: "rock", mes: "2027-01", precio: "gratis" });
+  });
+
+  it("aplica solo los valores válidos de una URL con varios inválidos", () => {
+    expect(
+      parseEventFilters({
+        categoria: ["opera", "teatro"],
+        ciudad: "Tokio",
+        mes: "2027-13",
+        orden: "xyz",
+      }),
+    ).toEqual({ categoria: ["teatro"] });
   });
 });
 
@@ -97,7 +167,7 @@ describe("filterEvents", () => {
 
   it("filtra por ciudad exacta", () => {
     const events = [makeEvent({ id: "lima" }), makeEvent({ id: "cusco", city: "Cusco" })];
-    expect(ids(filterEvents(events, { ciudad: "Cusco" }))).toEqual(["cusco"]);
+    expect(ids(filterEvents(events, { ciudad: ["Cusco"] }))).toEqual(["cusco"]);
   });
 
   describe("fecha (zona America/Lima, ese día o después)", () => {
@@ -136,7 +206,7 @@ describe("filterEvents", () => {
 
   it("filtra por categoría", () => {
     const events = [makeEvent({ id: "rock" }), makeEvent({ id: "obra", category: "teatro" })];
-    expect(ids(filterEvents(events, { categoria: "teatro" }))).toEqual(["obra"]);
+    expect(ids(filterEvents(events, { categoria: ["teatro"] }))).toEqual(["obra"]);
   });
 
   it("combina todos los filtros con AND", () => {
@@ -160,10 +230,10 @@ describe("filterEvents", () => {
       ids(
         filterEvents(events, {
           q: "andino",
-          ciudad: "Cusco",
+          ciudad: ["Cusco"],
           fecha: "2027-01-01",
           precio: "0-50",
-          categoria: "festivales",
+          categoria: ["festivales"],
         }),
       ),
     ).toEqual(["match-2", "match"]);
@@ -177,7 +247,7 @@ describe("buildEventsHref", () => {
   });
 
   it("omite los valores vacíos", () => {
-    expect(buildEventsHref({ ciudad: "Lima", precio: undefined, categoria: "conciertos" })).toBe(
+    expect(buildEventsHref({ ciudad: ["Lima"], precio: undefined, categoria: ["conciertos"] })).toBe(
       "/eventos?ciudad=Lima&categoria=conciertos",
     );
   });
