@@ -59,7 +59,7 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
     - Precio grande en `text-foreground`: el naranja de la captura no es de la marca y el azul se reserva para la acción (MASTER §2).
 15. **Muescas del talón del color de la superficie.** Las muescas son círculos del color del fondo donde está la tarjeta, recortados por el `overflow-hidden` de `Card`. Como `RelatedEvents` está sobre `bg-muted` y el resto sobre `bg-background`, `EventCard` recibe la prop `surface?: "background" | "muted"` (cva, por defecto `"background"`). Es una variante explícita y tipada, no un color arbitrario.
 16. **Variante `ticket` (< sm) conservada y alineada.** Sigue horizontal y sin CTA (toda la tarjeta enlaza), porque en `/eventos` a 375 px permite ver más resultados. Adopta la anatomía nueva: imagen de 108 px con el chip de fecha (sin badge de categoría), cuerpo con overline de categoría, título, lugar y fecha con iconos, y pie con "Desde" + precio y el badge de estado (si lo hay). El separador sigue siendo el borde izquierdo discontinuo con muescas arriba y abajo (el talón horizontal se oculta < sm). Desde `sm` es idéntica a `grid`.
-17. **Formateadores puros en `modules/events/utils/formatEvent.ts`**, con tests, sin cambiar los existentes (los usan checkout, tickets, seating y organizer). F4: `getDateChipParts` ("NOV"/"14"; misma firma y criterio que la función local de `modules/tickets/utils/myOrders.ts`, para poder unificarlas después) y `formatShortDate` ("sáb 14 nov"). F5: `formatDayMonth` ("sábado 14 de noviembre") y `formatHour` ("21:00 h").
+17. **Formateadores: se reutilizan los de checkout F5 y solo se añade el del chip.** `checkout-mock-payment.md` (Fase 5 · T1) crea en `modules/events/utils/formatEvent.ts`, con tests, `formatShortDayMonth` ("sáb 14 nov") y `formatLongDayMonth` ("sábado 14 de noviembre"), y los reexporta en `modules/events/format.ts`. Esta spec no define equivalentes: los usa la tarjeta (F4) y el hero (F5). La hora con sufijo es `` `${formatTime(iso)} h` `` (mismo criterio que checkout; no se crea otro formateador). Lo único nuevo es `getDateChipParts` ("NOV"/"14", F4). Tiene la misma firma y criterio que la función local de `modules/tickets/utils/myOrders.ts`, para poder unificarlas después. Los formateadores existentes no cambian. **Orden:** la Fase 4 depende de checkout F5 · T1 (ver Plan de tareas).
 18. **Detalle (F5).**
     - Fecha del hero sin año y en minúscula, como la captura y la norma del español (días y meses en minúscula; la línea no es una oración). El año no hace falta porque el catálogo solo tiene eventos de los próximos 12 meses, y el `<time dateTime>` conserva el ISO completo.
     - Horas con " h" en el hero y en "Información importante".
@@ -180,7 +180,7 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
      - h3 con el enlace al detalle (`text-base md:text-lg leading-snug font-bold line-clamp-2`, foco visible).
      - Dos metadatos `text-sm font-medium text-muted-foreground`, con iconos `size-4` (`aria-hidden`) y `mt-1`:
        - `MapPin` + "Lugar · Ciudad" (`truncate`).
-       - `CalendarDays` + `<time dateTime={startsAt}>` "sáb 14 nov" (`formatShortDate`).
+       - `CalendarDays` + `<time dateTime={startsAt}>` "sáb 14 nov" (`formatShortDayMonth`, de checkout F5 · T1).
    - **Talón** (`aria-hidden`, solo desde `sm` en `ticket`; siempre en `grid`): `relative mt-auto border-t border-dashed border-border` con dos muescas `absolute top-0 size-5 -translate-y-1/2 rounded-full ring-1 ring-border`, una en `-left-2.5` y otra en `-right-2.5`, con el fondo según `surface` (`bg-background` o `bg-muted`). El `overflow-hidden` de `Card` las recorta a media luna.
    - **Pie** (`flex flex-wrap items-end justify-between gap-3 p-4`):
      - **Precio** a la izquierda: `<p>` con "Desde" (`block text-xs font-medium text-muted-foreground`) y el precio (`block text-xl font-extrabold tracking-tight tabular-nums`, `formatEventPrice` → "S/ 180.00"). Gratis: solo "Entrada libre" (`text-xl font-extrabold`), sin "Desde". Agotado: precio en `text-muted-foreground line-through`.
@@ -202,12 +202,12 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
 
 ### Fase 5 · Detalle `/eventos/[slug]`
 1. **Hero (`EventDetailHeader`):**
-   - Fecha con `formatDayMonth(startsAt)` → "sábado 14 de noviembre", en minúscula y sin año, dentro de `<time dateTime={startsAt}>`. Se quita la mayúscula inicial manual.
-   - Hora con `formatHour(startsAt)` → "21:00 h".
+   - Fecha con `formatLongDayMonth(startsAt)` (de checkout F5 · T1) → "sábado 14 de noviembre", en minúscula y sin año, dentro de `<time dateTime={startsAt}>`. Se quita la mayúscula inicial manual.
+   - Hora `` `${formatTime(startsAt)} h` `` → "21:00 h".
    - h1 con `text-4xl md:text-5xl lg:text-4xl xl:text-5xl` (resto de clases igual, decisión 18).
 2. **Información importante (`EventDetailInfo`):**
-   - "Apertura de puertas": `formatHour(doorsOpenAt)` ("18:00 h").
-   - Inicio: `formatHour(startsAt)` ("21:00 h"), con la etiqueta "Inicio del show", o "Inicio del partido" si `category === "deportes"`.
+   - "Apertura de puertas": `` `${formatTime(doorsOpenAt)} h` `` ("18:00 h").
+   - Inicio: `` `${formatTime(startsAt)} h` `` ("21:00 h"), con la etiqueta "Inicio del show", o "Inicio del partido" si `category === "deportes"`.
    - El resto (iconos, edad, ingreso, `<time dateTime>`) no cambia.
 3. **Sin cambios:** precio del CTA del hero (ya usa `formatEventPrice`, "S/ 180.00"), barra móvil, breadcrumb, Guardar/Compartir, "Lugar", relacionados (salvo `surface` de F4), el aside de compra, `TicketSelector` y lo de seating.
 
@@ -282,7 +282,8 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
 - [ ] Dado `/eventos/clasico-del-pacifico`, entonces la celda de inicio se llama "Inicio del partido" y muestra "15:30 h", con apertura "12:30 h". Dado `/eventos/noche-de-sintetizadores-lima`, entonces el hero muestra "sábado 14 de noviembre" y "21:00 h", y la celda "Inicio del show" "21:00 h".
 - [ ] Dado `/eventos/noche-de-sintetizadores-lima` a 1440 px, entonces el h1 del hero se renderiza a 48 px (`xl:text-5xl`) y ocupa como máximo 3 líneas. A 375 px sigue a 36 px sin desbordar.
 - [ ] Dado un evento con mapa, entonces el aside de precios (`ZonePricesCard`) y la barra móvil son los de la spec seating, sin cambios. Dado uno sin mapa, `TicketSelector` sin cambios. El CTA del hero sigue mostrando el precio en formato "S/ 180.00".
-- [ ] Dado `npx vitest run`, entonces pasan los casos nuevos de `formatEvent.test.ts` y los existentes, incluidos los de `formatLongDate`/`formatTime` sin cambios. `npm run lint` y `npm run build` terminan sin errores.
+- [ ] Dado el código de Fase 5, entonces no hay formateadores de fecha u hora nuevos: el hero usa `formatLongDayMonth` (checkout F5 · T1) y las horas `` `${formatTime(x)} h` ``.
+- [ ] Dado `npx vitest run`, entonces pasan todos los tests (incluidos los de `formatLongDate`/`formatTime`, sin cambios). `npm run lint` y `npm run build` terminan sin errores.
 
 ## Diseño técnico
 
@@ -389,11 +390,65 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
   - `app/(auth)/login/page.tsx` y `app/(auth)/registro/page.tsx` (modificar): `<div className="flex w-full max-w-md flex-col gap-6"><AuthTabs current="login" /><LoginForm /></div>`, o `max-w-lg` y `register` en registro.
 - **Contrato de API:** no aplica.
 
+### Fase 4
+- **shadcn (instalar: `npx shadcn@latest add native-select`)** → `components/ui/native-select.tsx` (`NativeSelect`, `NativeSelectOption`). Verificado con `npx shadcn@latest view @shadcn/native-select` (base-nova): sin dependencias nuevas, solo `cn`. Tras instalar, revisar que el icono generado sea `ChevronDownIcon` de `lucide-react` (el registro usa un `IconPlaceholder` que el CLI resuelve según `components.json`). `className` se aplica al **wrapper**, así que el `<select>` se estiliza desde el wrapper con `*:data-[slot=native-select]:…` (p. ej. `*:data-[slot=native-select]:h-14 *:data-[slot=native-select]:border-0 …`), sin editar el componente generado.
+- **Utils** `modules/events/utils/formatEvent.ts` (modificar sobre la versión de checkout F5 · T1, que ya trae `formatShortDayMonth` y `formatLongDayMonth`; no se tocan esas ni las existentes):
+  ```ts
+  /** "2026-11-14T21:00:00-05:00" → { month: "NOV", day: "14" } (America/Lima; mes corto en mayúsculas sin punto; día de 2 dígitos). */
+  export function getDateChipParts(iso: string): { month: string; day: string };
+  ```
+  `getDateChipParts` usa `Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", day: "2-digit", month: "short" })`, igual que la de `tickets`. Con es-PE, septiembre es "SET" (setiembre): se acepta. No se exporta en `index.ts` ni en `format.ts`: solo la usa `EventCard` (YAGNI hasta que `tickets` la adopte; ver Preguntas abiertas). `EventCard` importa `formatShortDayMonth` de `../utils/formatEvent`.
+- **Componentes** (`modules/events/components/`):
+  - existente `EventCard.tsx` (modificar). Props `{ event: Event; layout?: "grid" | "ticket"; surface?: "background" | "muted"; className?: string }`.
+    - Las clases por parte se definen con `cva`, como hoy (variantes `layout` y `surface`). Requisitos F4-3 a F4-5.
+    - El mapa local `CARD_STATUS_BADGE: Partial<Record<EventStatus, string>>` guarda las clases de `low-stock` y `sold-out`. El label sale de `EVENT_STATUS_BADGE[status].label`.
+    - Subcomponentes locales del mismo archivo, presentacionales: `DateChip`, `CardPrice` y `Notch`.
+    - Se quitan el `Badge` de categoría sobre la imagen y la fecha overline.
+    - La imagen pasa de `aspect-[4/3]` a `h-44`. `IMAGE_SIZES` no cambia.
+  - existente `EventSearchBar.tsx` (modificar, Server Component; requisito F4-2):
+    - Se eliminan `variant`, `FORM_CLASS`, `SelectField`, `CITY_ITEMS`, `PRICE_ITEMS` y el import de `Select`.
+    - Nuevo subcomponente local `SearchSegment` (`{ id; label; children }`): renderiza el bloque, el `<label htmlFor>` y el control.
+    - Orden en el DOM: `q`, `mes`, `precio`, luego los inputs ocultos y después el botón. Así la query sale en ese orden (criterio de "nacional").
+  - existente `RelatedEvents.tsx` (modificar): `<EventCard event={event} surface="muted" />` (solo esa línea).
+- **Rutas:**
+  - `app/eventos/page.tsx` (modificar):
+    - h1 fijo "Explora eventos".
+    - `pageTitle` → `categoria?.length === 1 ? EVENT_CATEGORY_LABELS[categoria[0]] : "Explora eventos"`, solo en `generateMetadata`.
+    - `<EventSearchBar months={months} defaultValues={filters} />`.
+  - `app/page.tsx` (modificar): `<EventSearchBar months={getEventMonths(events)} />`. `getEventMonths` ya está en el barrel.
+- `modules/events/index.ts`: sin cambios.
+- **Contrato de URL:** no cambia (mismos parámetros que F1). El buscador solo envía `q`, `mes` y `precio` visibles, y el resto ocultos. Los vacíos (`q=`, `mes=`, `precio=`) del GET sin JS se ignoran al parsear, como hoy.
+- **Diseño:**
+  - `design-system/ticketera/pages/events-list.md`:
+    - h1 "Explora eventos" y título.
+    - Diagrama y tabla del buscador píldora (segmentos, divisores, apilado en móvil).
+    - Regla de sincronización buscador ↔ panel (decisión 13).
+    - Tarjeta `grid`/`ticket` nueva.
+  - `design-system/ticketera/MASTER.md`:
+    - §5: la tarjeta pasa a `h-44` en vez de `aspect-[4/3]`.
+    - §7: el buscador es `Input` + `NativeSelect` + `Button`, y la anatomía de EventCard se reescribe con chip de fecha, estado sobre la imagen (sin "Disponible"; "Agotado" en `brand-navy`), overline de categoría, metadatos con iconos, talón con muescas según `surface` y pie "Desde / precio / Ver entradas" o "Agotado".
+    - §8: el buscador de la landing pasa a "texto + fecha (mes) + precio + Buscar".
+    - §10: la fecha de tarjeta es "sáb 14 nov" y el chip "NOV/14".
+
+### Fase 5
+- **Utils:** sin cambios. Se reutilizan `formatLongDayMonth` (checkout F5 · T1) y `formatTime` + `" h"` (decisión 17); sus tests ya los cubre checkout F5 · T1 y `formatEvent.test.ts`.
+- **Componentes:**
+  - `EventDetailHeader.tsx` (modificar): requisito F5-1. Se eliminan la variable `longDate` y la mayúscula manual; importa `formatLongDayMonth` en lugar de `formatLongDate`.
+  - `EventDetailInfo.tsx` (modificar): requisito F5-2. Constante local `START_LABEL = (category: EventCategory) => category === "deportes" ? "Inicio del partido" : "Inicio del show"` (o expresión inline equivalente).
+- **Diseño** `design-system/ticketera/pages/event-detail.md`: fecha sin año en minúscula, horas con " h", "Inicio del show"/"Inicio del partido", tamaño del h1 del hero (override del Display del MASTER).
+- **Contrato de API:** no aplica.
+
 ## Reutilización
 - **Events:** `EventCard` (se extiende con `layout`), `EventSearchBar` (se extiende con `variant`), `CategoryFilter`, `EventsResults`, `EventDetailHeader`, `EventDetailInfo`, `RelatedEvents`, `TicketSelector` (intacto), `parseEventFilters`/`filterEvents`/`buildEventsHref`, `CITIES`, `PRICE_RANGES`, `EVENT_CATEGORY_LABELS`, `EVENT_STATUS_BADGE`, `formatEventDate`/`formatLongDate`/`formatTime`/`formatEventPrice`, `getEvents`/`getRelatedEvents`.
 - **Shared y UI:** `SectionHeader` (con `action`), `BrandLogo` (`variant="white"`), shadcn instalados: `Sheet`, `Button`/`buttonVariants`, `Badge`, `Card`, `Breadcrumb`, `Input`, `Select`, `Toggle` (opcional en Guardar).
 - **Otros módulos y librerías:** patrón de store con `persist` + `skipHydration` + rehidratación en `useEffect` de `modules/auth/stores/auth.store.ts`, y `AuthHeaderActions`; `hasVenueMap` de `@/modules/seating` (contrato B); `cn` de `@/lib/utils`; `cva` (`class-variance-authority`, ya instalado); `lucide-react`.
 - **Nativo:** `<form method="get">`, `<noscript>`, inputs checkbox/radio, `Intl.DateTimeFormat`, `URLSearchParams`, Web Share API y Clipboard API, scroll-snap de CSS.
+- **Fases 4–5:**
+  - **Events:** `EventCard` (se rediseña; conserva `layout`), `EventSearchBar` (se unifica y pierde `variant`), `getEventMonths`, `PRICE_RANGES`, `toSearchParamEntries`/`buildEventsHref`, `EVENT_STATUS_BADGE` (solo labels), `EVENT_CATEGORY_LABELS`, `formatEventPrice`, `formatTime`.
+  - **De checkout F5 · T1:** `formatShortDayMonth` y `formatLongDayMonth`.
+  - **UI:** shadcn `Card`, `Badge`, `Button`/`buttonVariants`, `Input` (instalados) y `NativeSelect` (a instalar); `cva`; iconos `MapPin`, `CalendarDays`, `Search`.
+  - **Patrones:** el chip de fecha y el talón con muescas de `pages/my-tickets.md` (mismas clases, para coherencia visual).
+  - **Descartado:** `Select` de Base UI en el buscador (necesita JS; decisión 12).
 - **Sin dependencias nuevas ni instalaciones de shadcn.** El registro de shadcn no se pudo consultar desde este entorno (el proxy bloquea `ui.shadcn.com`). La decisión de no usar `Checkbox`/`RadioGroup` es deliberada (decisión 2) y el resto de piezas ya está instalado.
 
 ## Tests
