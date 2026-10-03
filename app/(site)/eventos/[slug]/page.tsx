@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import {
   EventDetailHeader,
@@ -7,6 +8,7 @@ import {
   getEventBySlug,
   getEvents,
   getRelatedEvents,
+  PreselectedTicketSelector,
   RelatedEvents,
   TicketSelector,
 } from "@/modules/events";
@@ -37,10 +39,18 @@ export default async function EventDetailPage({ params }: PageProps<"/eventos/[s
   if (!event) notFound();
 
   const purchaseHref = hasVenueMap(slug) ? `/eventos/${slug}/entradas` : "#entradas";
+  const selectorProps = {
+    slug: event.slug,
+    status: event.status,
+    priceFrom: event.priceFrom,
+    ticketTypes: event.ticketTypes,
+  };
 
   // DOM (= orden móvil): hero → aside de compra → información. En lg el aside pasa a la columna derecha
   // y su celda se estira con la fila para que el sticky tenga recorrido.
   // Con mapa del recinto, el aside es la tarjeta de precios por zona y se añade la barra móvil (contrato H).
+  // Sin mapa, el selector precarga la selección de la URL ("Cambiar entradas") en el cliente, dentro de un
+  // Suspense cuyo fallback es el selector vacío: la página no lee searchParams y sigue prerenderizada.
   return (
     <>
       <div className="mx-auto max-w-7xl px-4 pt-4 md:px-6 md:pt-8 lg:px-8">
@@ -56,12 +66,9 @@ export default async function EventDetailPage({ params }: PageProps<"/eventos/[s
               zones={venueMap.zones}
             />
           ) : (
-            <TicketSelector
-              slug={event.slug}
-              status={event.status}
-              priceFrom={event.priceFrom}
-              ticketTypes={event.ticketTypes}
-            />
+            <Suspense fallback={<TicketSelector {...selectorProps} />}>
+              <PreselectedTicketSelector {...selectorProps} />
+            </Suspense>
           )}
         </div>
         <div className="lg:col-start-1 lg:row-start-1">

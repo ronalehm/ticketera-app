@@ -18,7 +18,7 @@ import {
 } from "@/modules/events";
 
 function pageTitle({ categoria }: EventFilters): string {
-  return categoria?.length === 1 ? EVENT_CATEGORY_LABELS[categoria[0]] : "Eventos";
+  return categoria?.length === 1 ? EVENT_CATEGORY_LABELS[categoria[0]] : "Explora eventos";
 }
 
 export async function generateMetadata({ searchParams }: PageProps<"/eventos">): Promise<Metadata> {
@@ -35,9 +35,9 @@ export default async function EventsPage({ searchParams }: PageProps<"/eventos">
   return (
     <>
       <h1 className="mx-auto max-w-7xl px-4 pt-8 text-3xl font-extrabold tracking-tight md:px-6 md:pt-12 md:text-5xl lg:px-8">
-        {pageTitle(filters)}
+        Explora eventos
       </h1>
-      <EventSearchBar variant="compact" defaultValues={filters} />
+      <EventSearchBar months={months} defaultValues={filters} />
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 md:px-6 md:py-12 lg:grid-cols-[288px_minmax(0,1fr)] lg:items-start lg:gap-10 lg:px-8">
         <EventFiltersSidebar className="hidden lg:block" filters={filters} facets={facets} months={months} />
         <section aria-label="Resultados" className="flex min-w-0 flex-col gap-4 md:gap-6">

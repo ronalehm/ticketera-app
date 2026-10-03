@@ -2,6 +2,7 @@ import {
   CategoryGrid,
   EventSearchBar,
   FeaturedEventsRail,
+  getEventMonths,
   getEvents,
   getFeaturedEvents,
   HeroCarousel,
@@ -15,7 +16,7 @@ export default async function HomePage() {
   return (
     <>
       <HeroCarousel events={featuredEvents} />
-      <EventSearchBar />
+      <EventSearchBar months={getEventMonths(events)} />
       <CategoryGrid />
       <FeaturedEventsRail events={featuredEvents} />
       <UpcomingEvents events={events} />
