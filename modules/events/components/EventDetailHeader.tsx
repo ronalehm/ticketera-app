@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 import { EVENT_CATEGORY_LABELS } from "../data/categories";
 import type { EventDetail } from "../types/events.types";
-import { formatEventPrice, formatLongDate, formatTime } from "../utils/formatEvent";
+import { formatEventPrice, formatLongDayMonth, formatTime } from "../utils/formatEvent";
 import { SaveEventButton } from "./SaveEventButton";
 import { ShareEventButton } from "./ShareEventButton";
 
@@ -39,7 +39,6 @@ type EventDetailHeaderProps = {
 
 export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProps) {
   const categoryLabel = EVENT_CATEGORY_LABELS[event.category];
-  const longDate = formatLongDate(event.startsAt);
   const ctaLabel =
     event.priceFrom === 0
       ? "Ver entradas · Entrada libre"
@@ -98,17 +97,17 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
             <Badge variant="outline" className="h-7 border-primary-foreground/30 px-3 text-primary-foreground">
               {categoryLabel}
             </Badge>
-            <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance wrap-break-word md:text-6xl lg:text-5xl xl:text-6xl">
+            <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance wrap-break-word md:text-5xl lg:text-4xl xl:text-5xl">
               {event.title}
             </h1>
             <ul className="flex flex-col gap-2 text-base font-medium text-primary-foreground/80">
               <li className="flex items-center gap-2">
                 <CalendarDays className="size-4 shrink-0" aria-hidden />
-                <time dateTime={event.startsAt}>{`${longDate.charAt(0).toUpperCase()}${longDate.slice(1)}`}</time>
+                <time dateTime={event.startsAt}>{formatLongDayMonth(event.startsAt)}</time>
               </li>
               <li className="flex items-center gap-2">
                 <Clock className="size-4 shrink-0" aria-hidden />
-                <span>{formatTime(event.startsAt)}</span>
+                <span>{`${formatTime(event.startsAt)} h`}</span>
               </li>
               <li className="flex items-center gap-2">
                 <MapPin className="size-4 shrink-0" aria-hidden />

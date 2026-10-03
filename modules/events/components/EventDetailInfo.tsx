@@ -33,6 +33,8 @@ function InfoItem({ icon: Icon, label, children }: { icon: LucideIcon; label: st
 
 export function EventDetailInfo({ event }: { event: EventDetail }) {
   const location = { venue: event.venue, address: event.address, city: event.city };
+  // Un partido no es un show.
+  const startLabel = event.category === "deportes" ? "Inicio del partido" : "Inicio del show";
 
   return (
     <div className="flex flex-col gap-12 md:gap-16">
@@ -50,10 +52,10 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
         <SectionHeader title="Información importante" />
         <dl className="grid grid-cols-2 gap-3 md:gap-4">
           <InfoItem icon={Clock} label="Apertura de puertas">
-            <time dateTime={event.doorsOpenAt}>{formatTime(event.doorsOpenAt)}</time>
+            <time dateTime={event.doorsOpenAt}>{`${formatTime(event.doorsOpenAt)} h`}</time>
           </InfoItem>
-          <InfoItem icon={CalendarClock} label="Inicio">
-            <time dateTime={event.startsAt}>{formatTime(event.startsAt)}</time>
+          <InfoItem icon={CalendarClock} label={startLabel}>
+            <time dateTime={event.startsAt}>{`${formatTime(event.startsAt)} h`}</time>
           </InfoItem>
           <InfoItem icon={Users} label="Edad mínima">
             {event.minAge === 0 ? "Todo público" : `+${event.minAge}`}

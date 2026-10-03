@@ -1,9 +1,11 @@
 import Image from "next/image";
+import { useId } from "react";
 
 import { TicketQr } from "@/components/shared/TicketQr";
 import { cn } from "@/lib/utils";
-import { EVENT_CATEGORY_LABELS, formatEventPrice, formatLongDate, formatTime } from "@/modules/events/format";
+import { EVENT_CATEGORY_LABELS, formatEventPrice, formatLongDayMonth } from "@/modules/events/format";
 import type { Order } from "../types/checkout.types";
+import { formatCompactSeats } from "../utils/summaryFormat";
 
 type ConfirmationTicketCardProps = {
   order: Order;
@@ -14,12 +16,16 @@ const NOTCH_CLASS = "absolute size-6 rounded-full bg-background ring-1 ring-bord
 /** Tarjeta-entrada de la confirmación: vertical en móvil y horizontal con el talón a la derecha desde `md`. */
 export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
   const { event, items, ticketCount, total, tickets } = order;
+  const titleId = useId();
   const zones = items.map((item) => item.name).join(", ");
-  const seatLabels = items.flatMap((item) => item.seats?.map((seat) => seat.label) ?? []);
+  const itemsWithSeats = items.filter((item) => item.seats && item.seats.length > 0);
   const [firstTicket] = tickets;
 
   return (
-    <article className="flex w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border md:flex-row">
+    <article
+      aria-labelledby={titleId}
+      className="flex w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border md:flex-row"
+    >
       <div className="relative h-32 w-full shrink-0 bg-muted md:h-auto md:w-48">
         <Image src={event.imageUrl} alt="" fill sizes="(min-width: 768px) 192px, 100vw" className="object-cover" />
       </div>
@@ -28,13 +34,17 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
         <p className="text-xs font-bold tracking-wider text-primary-strong uppercase">
           {EVENT_CATEGORY_LABELS[event.category]}
         </p>
-        <h2 className="text-xl leading-tight font-bold tracking-tight md:text-2xl">{event.title}</h2>
+        <h2 id={titleId} className="text-xl leading-tight font-bold tracking-tight md:text-2xl">
+          {event.title}
+        </h2>
         <p className="text-muted-foreground">
-          <time dateTime={event.startsAt}>
-            {formatLongDate(event.startsAt)} · {formatTime(event.startsAt)}
-          </time>{" "}
-          · {event.venue}, {event.city}
+          <time dateTime={event.startsAt}>{formatLongDayMonth(event.startsAt)}</time> · {event.venue}, {event.city}
         </p>
+        {itemsWithSeats.map((item) => (
+          <p key={item.ticketTypeId} className="text-sm text-muted-foreground">
+            {item.name}: {formatCompactSeats(item.seats ?? [])}
+          </p>
+        ))}
 
         <dl className="mt-auto grid grid-cols-3 gap-x-4 gap-y-3 pt-3">
           <div className="flex min-w-0 flex-col">
@@ -49,12 +59,6 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
             <dt className="text-xs text-muted-foreground">Total pagado</dt>
             <dd className="font-semibold tabular-nums">{formatEventPrice(total)}</dd>
           </div>
-          {seatLabels.length > 0 && (
-            <div className="col-span-3 flex flex-col">
-              <dt className="text-xs text-muted-foreground">Asientos</dt>
-              <dd className="font-semibold">{seatLabels.join(", ")}</dd>
-            </div>
-          )}
         </dl>
       </div>
 

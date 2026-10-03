@@ -133,6 +133,8 @@ Footer            (igual que la landing)
 
 ## Paso 3: `/checkout/confirmacion`
 
+> Spec: `docs/specs/checkout-mock-payment.md` Fase 4, alineada a las capturas en la Fase 6 (decisiones 24–27). El PDF de "Descargar PDF" lo define `docs/specs/tickets-pdf-download.md`.
+
 URL `/checkout/confirmacion?orden=MT-XXXXXX` (a ella se llega con `router.replace` tras el pago aprobado). La página (Server Component) valida `orden` (`parseOrderCode`); si falta o es inválido muestra directamente "No encontramos tu compra". Si es válido, `OrderConfirmation` lee la orden del store persistido (`useStoredOrder`).
 
 ### Layout
@@ -142,28 +144,36 @@ Header sticky     (igual que la landing; oculto al imprimir)
 Stepper           franja border-b, paso 3 "Confirmación" activo (oculto al imprimir)
         (CircleCheck en círculo bg-accent)
         h1 "¡Compra confirmada!"
-        Enviamos tus entradas a tu correo. También las tienes siempre en Mis entradas.
+        Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas.
         ( Pedido N.º MT-AB12CD )
-┌────────┬───────────────────────────────────┬╌╌╌╌╌╌╌╌╌╌┐
-│ imagen │ CATEGORÍA                         ┆  [QR]    │  tarjeta-entrada
-│        │ Título del evento                 ┆ Entrada  │  (md+: horizontal,
-│        │ Fecha · hora · Lugar, Ciudad      ┆ 1 de N   │   talón a la derecha)
-│        │ Zona | Entradas | Total pagado    ┆          │
-└────────┴───────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌┘
+┌────────┬──────────────────────────────────────────┬╌╌╌╌╌╌╌╌╌╌┐
+│ imagen │ CATEGORÍA                                ┆  [QR]    │  tarjeta-entrada
+│        │ Título del evento                        ┆ Entrada  │  (md+: horizontal,
+│        │ lunes 5 de octubre · Costa Verde, Lima   ┆ 1 de N   │   talón a la derecha)
+│        │ Tribuna Oriente: Fila L · 9 · Fila M · 8 ┆          │  (una línea por zona
+│        │ Zona | Entradas | Total pagado           ┆          │   con asientos)
+└────────┴──────────────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌┘
 [Ver mis entradas]  [Agregar al calendario]  [Descargar PDF]   (ocultos al imprimir)
-Qué sigue: [Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
+(h2 sr-only "Qué sigue")
+[Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
 Footer            (igual que la landing; oculto al imprimir)
 ```
 
 - Stepper (`PurchaseStepper currentStep={3}`): la página lo pasa como prop `stepper` a `OrderConfirmation`, que lo pinta fuera del contenedor, a ancho completo y envuelto en `print:hidden`, solo cuando encuentra la orden.
 - Contenedor `mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
 - Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full ring-1 ring-border` "Pedido N.º **MT-AB12CD**".
+- **Correo del comprador** en el texto de la cabecera: "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
 
 ### Tarjeta-entrada (`ConfirmationTicketCard`)
 
-- `<article>` `rounded-2xl ring-1 ring-border overflow-hidden`, `flex-col md:flex-row`.
+- `<article aria-labelledby>` apuntando al id del h2 (nombre accesible = título del evento), `rounded-2xl ring-1 ring-border overflow-hidden`, `flex-col md:flex-row`.
 - Imagen `next/image` (`alt=""`, `object-cover`): móvil `h-32 w-full`, `md:w-48 md:h-auto`.
-- Cuerpo: overline de categoría (`text-xs font-bold uppercase tracking-wider text-primary-strong`), h2 título, "Fecha · hora · Lugar, Ciudad" (`text-muted-foreground`), `<dl>` en `grid-cols-3`: "Zona" (nombres de las zonas unidos por ", "), "Entradas", "Total pagado" (`S/ 910.00`); "Asientos" si la compra los tiene.
+- Cuerpo:
+  1. Overline de categoría (`text-xs font-bold uppercase tracking-wider text-primary-strong`).
+  2. h2 título.
+  3. Línea de fecha y lugar (`text-muted-foreground`): `<time dateTime>` con la fecha larga **sin año ni hora** ("lunes 5 de octubre", minúsculas, America/Lima; `formatLongDayMonth`) + " · Lugar, Ciudad". Ejemplo: "lunes 5 de octubre · Costa Verde, Lima". La hora no se muestra aquí (sí va en el PDF y en el `.ics`).
+  4. **Asientos compactos por zona:** debajo, una `<p className="text-sm text-muted-foreground">` por tipo de entrada con asientos: "{zona}: {asientos}", p. ej. "Tribuna Oriente: Fila L · 9 · Fila M · 8". Agrupados por fila: varios en la misma fila, "Fila L · 9, 10"; filas ordenadas por longitud y luego alfabéticamente (A…Z, AA…), números de menor a mayor (`formatCompactSeats`, mismo formato que el resumen del paso 2). Si el id de un asiento no se puede leer, se usa su etiqueta completa. Los tipos sin asientos no tienen línea; una compra sin asientos no tiene ninguna.
+  5. `<dl>` en `grid-cols-3`: "Zona" (nombres de las zonas unidos por ", ", p. ej. "General, VIP"), "Entradas", "Total pagado" (`S/ 310.00`). **Sin bloque "Asientos"**: los asientos solo aparecen en las líneas compactas.
 - Talón: separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-background ring-1 ring-border rounded-full`, `aria-hidden`); `TicketQr` de la primera entrada (`size-40 md:size-32`) y "Entrada 1 de N".
 - **Móvil:** vertical (imagen, datos, separador, QR). **md+:** horizontal con el talón a la derecha.
 
@@ -179,7 +189,8 @@ Footer            (igual que la landing; oculto al imprimir)
 
 ### Qué sigue
 
-- h2 "Qué sigue" + `<ol>` `grid gap-3 md:grid-cols-3` de tarjetas `rounded-2xl ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`):
+- `<section aria-labelledby>` con h2 "Qué sigue" **`sr-only`**: no se ve, pero nombra la sección para el lector y mantiene la jerarquía h1 → h2 sin saltos.
+- `<ol>` `grid gap-3 md:grid-cols-3` (en `md+` las 3 tarjetas en fila) de tarjetas `rounded-2xl ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`):
   - "Revisa tu correo" — "Ahí llegan tus entradas y el comprobante de pago."
   - "Muestra tu QR" — "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso."
   - "Todo en Mis entradas" — "Entra con tu cuenta para ver y descargar tus entradas cuando quieras."
@@ -198,6 +209,8 @@ Ningún botón imprime; las clases `print:` solo limpian la impresión manual de
 
 ### Reglas específicas
 
+- Un único h1 ("¡Compra confirmada!"). Jerarquía h1 → h2: título del evento en la tarjeta-entrada y "Qué sigue" (`sr-only`).
+- A 375 y 1440 px la pantalla sigue las capturas de "Confirmación".
 - El QR (`TicketQr`) es decorativo y determinista (`role="img"` con `aria-label` "Código QR de la entrada <código>"); no es legible por lectores.
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440; targets ≥ 44 px; solo tokens; sin emojis; `prefers-reduced-motion` respetado.
 - Metadata: `Confirmación de compra | Mentec Tickets`.
