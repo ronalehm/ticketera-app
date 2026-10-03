@@ -13,7 +13,7 @@ import type { OrderTimeframe } from "../types/tickets.types";
 import { OrderList } from "./OrderList";
 import { TicketCard } from "./TicketCard";
 
-const PAGE_TITLE = <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">Mis entradas</h1>;
+const PAGE_TITLE = <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">Mis entradas</h1>;
 
 const PANEL_GRID = "grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[400px_minmax(0,1fr)]";
 

@@ -1,4 +1,4 @@
-import { EVENT_CATEGORY_LABELS, formatEventDate } from "@/modules/events/format";
+import { EVENT_CATEGORY_LABELS, formatShortDayMonth, getDateChipParts } from "@/modules/events/format";
 import type { EventPreview, OrganizerEventFormValues } from "../types/organizer.types";
 import { buildStartsAt, getMinTicketPrice } from "./organizerEventForm";
 
@@ -8,12 +8,13 @@ export function buildEventPreview(values: OrganizerEventFormValues, imageUrl: st
   const place = [values.venue, values.city]
     .map((part) => part.trim())
     .filter(Boolean)
-    .join(", ");
+    .join(" · ");
 
   return {
     title: values.name.trim() || null,
     categoryLabel: EVENT_CATEGORY_LABELS[values.category],
-    dateLabel: startsAt ? formatEventDate(startsAt) : null,
+    dateLabel: startsAt ? formatShortDayMonth(startsAt) : null,
+    dateChip: startsAt ? getDateChipParts(startsAt) : null,
     place: place || null,
     priceFrom: getMinTicketPrice(values.ticketTypes),
     imageUrl,

@@ -24,6 +24,7 @@ describe("buildEventPreview", () => {
       title: null,
       categoryLabel: "Conciertos",
       dateLabel: null,
+      dateChip: null,
       place: null,
       priceFrom: null,
       imageUrl: null,
@@ -47,18 +48,33 @@ describe("buildEventPreview", () => {
     expect(buildEventPreview(values, "blob:http://localhost/abc")).toEqual({
       title: "Hamlet",
       categoryLabel: "Teatro",
-      dateLabel: "SÁB 5 DIC · 20:00",
-      place: "Teatro Municipal, Lima",
+      dateLabel: "sáb 5 dic",
+      dateChip: { month: "DIC", day: "05" },
+      place: "Teatro Municipal · Lima",
       priceFrom: 80,
       imageUrl: "blob:http://localhost/abc",
     });
+  });
+
+  it("une lugar y ciudad con un punto medio", () => {
+    expect(buildEventPreview({ ...empty, venue: "Estadio Nacional", city: "Lima" }, null).place).toBe(
+      "Estadio Nacional · Lima",
+    );
   });
 
   it("con solo la ciudad, el lugar es la ciudad", () => {
     expect(buildEventPreview({ ...empty, venue: "  ", city: "Lima" }, null).place).toBe("Lima");
   });
 
-  it("sin hora no hay fecha", () => {
-    expect(buildEventPreview({ ...empty, date: "2026-12-05" }, null).dateLabel).toBeNull();
+  it("sin hora no hay fecha ni chip", () => {
+    const preview = buildEventPreview({ ...empty, date: "2026-12-05" }, null);
+    expect(preview.dateLabel).toBeNull();
+    expect(preview.dateChip).toBeNull();
+  });
+
+  it("con una fecha inválida no hay fecha ni chip", () => {
+    const preview = buildEventPreview({ ...empty, date: "2026-13-45", time: "20:00" }, null);
+    expect(preview.dateLabel).toBeNull();
+    expect(preview.dateChip).toBeNull();
   });
 });

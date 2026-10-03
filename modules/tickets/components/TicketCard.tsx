@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import Image from "next/image";
 import { CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
 
+import { DateChip } from "@/components/shared/DateChip";
 import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
@@ -60,13 +61,7 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
           sizes="(min-width: 1024px) 60vw, 100vw"
           className="object-cover"
         />
-        <span
-          aria-hidden
-          className="absolute top-3 left-3 flex w-14 flex-col items-center rounded-xl bg-background pt-1.5 pb-2"
-        >
-          <span className="text-xs font-bold tracking-wider text-primary-strong">{chip.month}</span>
-          <span className="text-2xl leading-none font-extrabold tabular-nums">{chip.day}</span>
-        </span>
+        <DateChip month={chip.month} day={chip.day} className="absolute top-3 left-3" />
       </div>
 
       <div className="flex flex-col gap-3 p-5 md:px-8 md:py-6">
@@ -74,9 +69,12 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
         <ul className="flex flex-col gap-1.5 text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
           <li className="flex items-center gap-2">
             <CalendarDays aria-hidden className="size-4 shrink-0" />
-            <time dateTime={event.startsAt}>{capitalize(formatLongDate(event.startsAt))}</time>
+            <span>
+              <time dateTime={event.startsAt}>{capitalize(formatLongDate(event.startsAt))}</time>
+              <span className="sm:hidden"> · {formatTime(event.startsAt)}</span>
+            </span>
           </li>
-          <li className="flex items-center gap-2">
+          <li className="hidden items-center gap-2 sm:flex">
             <Clock aria-hidden className="size-4 shrink-0" />
             {formatTime(event.startsAt)}
           </li>
