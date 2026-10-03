@@ -1,7 +1,7 @@
 # Selección de entradas con mapa de zonas y asientos (paso 1 de la compra)
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Que el comprador elija sus entradas sobre el mapa del recinto en `/eventos/<slug>/entradas` (paso 1 de 3 de la compra): zonas de pie por cantidad (Campo, General) y, en zonas numeradas (Tribunas, Platea, Mezanine), asientos individuales sobre un plano con zoom. Al continuar se pasa a `/checkout` con la selección. El detalle del evento enlaza a esta pantalla cuando el evento tiene mapa. Solo UI/UX con datos mock (sin backend ni reserva real), español (Perú), PEN.
@@ -23,6 +23,11 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
   - **Fase 4. Plano de asientos y detalle:**
     - Plano de asientos con `react-zoom-pan-pinch`, leyenda, chips de asientos elegidos y botón "Mejor asiento disponible".
     - Integración en `/eventos/[slug]` (contrato H): tarjeta de precios por zona + "Elegir entradas" y barra móvil "Desde S/ X · Comprar entradas".
+  - **Fase 5. Ajustes post-revisión** (sin cambios visibles salvo la ocupación de los planos y el texto "ESCENARIO" centrado):
+    - Hash compartido `lib/hash.ts` (FNV-1a + mezclado), usado por `seatRows`, `TicketQr` y `lib/calendar.ts` (decisión 14).
+    - Entrada pública de servidor `modules/seating/seats.ts` para `checkout`, y una sola carga del evento en `resolveCheckoutOrder` (decisión 13).
+    - Ocupación de los planos mejor repartida (requisito 4) y etiqueta "ESCENARIO" centrada en su forma (tabla de mocks).
+    - Texto de la spec alineado con lo implementado (decisión 10, diseño técnico).
 - No incluye:
   - Reserva, bloqueo o liberación real de asientos o cupos. La ocupación es fija y sale del mock: dos compradores pueden elegir el mismo asiento.
   - Backend, API, persistencia de la selección (al recargar se pierde) y temporizador en este paso.
@@ -31,6 +36,8 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
   - Rehacer la UI de `/checkout` ni su flujo de pago. Esta spec solo amplía validación, tipos y `OrderSummary` para asientos. El resto lo cubre la nueva spec de checkout, que reemplaza funcionalmente a `docs/specs/checkout-purchase.md`; esa spec no se edita.
   - Extraer el stepper −/+ a `components/shared`. El de la lista de zonas sigue el visual del diseño (pastilla), que es distinto del de `TicketSelector`, y `TicketSelector` deja de usarse en los eventos con mapa. Se sube a `shared` cuando una tercera pantalla lo necesite.
   - Mostrar la capacidad de las zonas de pie: el dato existe en el modelo, pero no se muestra.
+  - (F5) Cambiar la carga del evento y del mapa en las páginas `/eventos/[slug]` y `/eventos/[slug]/entradas` (siguen con `Promise.all`; ver Preguntas abiertas) y extraer las clases repetidas del CTA y de las barras móviles (no cabe en la fase; ver Preguntas abiertas).
+  - (F5) Cambiar las salidas observables de `TicketQr` o del `UID` del `.ics`: deben quedar idénticas.
 
 ## Decisiones
 1. **Mapa híbrido (decisión del usuario):** las zonas `general` (de pie) se compran por cantidad. Las zonas `numbered` abren un plano y se eligen asientos. Solo se dibujan los asientos de la zona elegida.
@@ -70,10 +77,27 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
 
    Precios iguales comparten tono. Desde el 4.º precio distinto, todos usan `tier-4`.
 10. **Tamaños legibles a 375 px:**
-    - Mapa de zonas: `viewBox` de ≤ 600 de ancho y textos de ≥ 24 unidades, lo que da ≥ 12 px (MASTER §3) en un SVG de ~311 px de ancho.
+    - Mapa de zonas: `viewBox` de ≤ 600 de ancho y textos de 26 unidades.
+      - Cuenta a 375 px: el contenido de la `Card` mide ~311 px y el lienzo resta su `p-3` (24 px), así que el SVG mide ~287 px (0.478 px por unidad). 26 unidades dan ~12.44 px, ≥ 12 px (MASTER §3). Con 24 unidades serían ~11.5 px, que no llega.
+      - Constantes de `VenueMapView`: `LABEL_FONT_SIZE = 26`, `LABEL_LINE_HEIGHT = 30`, `PILL_WIDTH = 264` y `PILL_HEIGHT = 32`. El bloque de 3 líneas mide 2·30 + 2 + 32 = 94 unidades y cabe en las zonas `low-stock` (≥ 96 de alto).
     - Plano de asientos: distancia entre asientos (pitch) de 32 unidades, márgenes laterales de 40 y ≤ 10 asientos por fila. El `seatViewBox` queda en ≤ 400 de ancho, así que con el plano entero a la vista cada asiento ocupa ≥ 24 px (WCAG 2.5.8).
 11. **Barras inferiores móviles con `sticky bottom-0`**, no `fixed`. Van como último hijo del contenedor de la página, así que se quedan pegadas abajo mientras se recorre el contenido y no tapan el footer.
-12. **Fases:** los límites de ~15 archivos por fase obligan a separar el dominio (F1) de la UI (F2). La integración en el detalle (contrato H) va en F4, con el plano de asientos, para que el detalle solo enlace a `/entradas` cuando también se puedan comprar las zonas numeradas. En F2 y F3, `/entradas` funciona entrando por la URL, y las zonas numeradas se ven pero aún no se compran.
+12. **Fases:** los límites de ~15 archivos por fase obligan a separar el dominio (F1) de la UI (F2). La integración en el detalle (contrato H) va en F4, con el plano de asientos, para que el detalle solo enlace a `/entradas` cuando también se puedan comprar las zonas numeradas. En F2 y F3, `/entradas` funciona entrando por la URL, y las zonas numeradas se ven pero aún no se compran. F5 recoge los ajustes que salieron de la revisión de F1–F4.
+13. **Entrada pública de servidor `modules/seating/seats.ts`** (F5, SETUP §1 regla 4):
+    - Problema: `checkout.service.ts` y `checkoutOrder.ts` importan el barrel `@/modules/seating`, que exporta `TicketSelection` (`"use client"`). Next incluye ese árbol cliente en el JS de `/checkout`: en el build actual, `.next/server/app/checkout/page_client-reference-manifest.js` referencia `modules/seating/components/TicketSelection` y el chunk de `/checkout` contiene "Elige tu zona".
+    - `seats.ts` solo reexporta lo que usa el servidor de otros módulos: `getVenueMapBySlug`, `getVenueMapForEvent`, `hasVenueMap`, `parseSeatIds`, `resolveSeats`, `formatSeatLabel` y los tipos `VenueMap`, `VenueZone`, `NumberedVenueZone`, `Seat`, `SeatStatus` y `ResolvedSeat`. No lleva lógica propia.
+    - `modules/checkout` importa de `@/modules/seating/seats`. El barrel `index.ts` no cambia: lo siguen usando las páginas de `app/`.
+    - **Una sola carga del evento en `resolveCheckoutOrder`:** hoy hace `Promise.all([getEventBySlug(slug), getVenueMapBySlug(slug)])`, y `getVenueMapBySlug` vuelve a llamar a `getEventBySlug`. Se evita sin cambiar firmas ni resultados:
+      - el service de `seating` extrae `getVenueMapForEvent(event)`, que construye el mapa a partir de un evento ya cargado;
+      - `getVenueMapBySlug(slug)` conserva firma y resultados: comprueba que haya layout, carga el evento y delega en `getVenueMapForEvent`;
+      - `resolveCheckoutOrder` carga el evento una vez y, si existe, llama a `getVenueMapForEvent(event)`.
+      - `getVenueMapForEvent` es una función pública **nueva** (amplía el contrato B, no cambia nada existente). Es `async` como el resto del service, porque con API el layout se pedirá al servidor.
+14. **Hash compartido (DRY, F5):** hoy hay tres FNV-1a de 32 bits privados e idénticos (`modules/seating/utils/seatRows.ts`, `components/shared/TicketQr.tsx` y `lib/calendar.ts`). Se sube a `lib/hash.ts`:
+    - `hashString(value: string): number`: FNV-1a de 32 bits, sin signo (entero en [0, 2³²)). Lo usan los tres sin cambiar el algoritmo, así que `TicketQr` y el `UID` del `.ics` dan exactamente lo mismo que ahora.
+    - `mixHash(hash: number): number`: finalizador `fmix32` de MurmurHash3 (`h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0`). Solo lo usa `generateSeatRows`.
+    - Motivo del mezclado: FNV-1a sin mezclar apenas cambia los bits altos entre ids parecidos (`norte-A-1` … `norte-A-10`), así que la ocupación sale agrupada por filas. Ejemplo: en Tribuna Norte, las filas A y G quedan con 9/10 ocupados y el resto casi vacías, y "Mejor asiento disponible" elige `norte-A-10`.
+    - No es un hash criptográfico; solo sirve para datos mock deterministas.
+    - `TicketQr.tsx` y `lib/calendar.ts` pertenecen a la spec `checkout-mock-payment.md`. Esta spec solo cambia su import interno y añade tests que fijan su salida.
 
 ## Requisitos
 
@@ -96,7 +120,10 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
    - Recibe `rowLabels` (la primera fila es la más cercana al escenario), `seatsPerRow` (un número, o un array con un valor por fila), `occupiedRatio` (0..1) y `accessibleSeats?` (ids).
    - Devuelve `{ seatViewBox, rows }`, con asientos numerados de 1 a n de izquierda a derecha.
    - Las filas más cortas se centran.
-   - Ocupación determinista: un hash del id (p. ej. FNV-1a) menor que `occupiedRatio` hace que el asiento quede `occupied`. Si no está ocupado y figura en `accessibleSeats`, queda `accessible`. Si no, `available`.
+   - Ocupación determinista: el asiento queda `occupied` si `mixHash(hashString(id)) / 2³² < occupiedRatio` (`lib/hash.ts`, decisión 14). Si no está ocupado y figura en `accessibleSeats`, queda `accessible`. Si no, `available`.
+     - En F1 se usó FNV-1a sin mezclar. F5 añade `mixHash` para que la ocupación no salga agrupada por filas.
+     - Reparto (F5), verificado con los mapas mock: en las zonas con `occupiedRatio` ≤ 0.4 (`norte` 0.3 y `platea` 0.4), ninguna fila tiene más del 70 % de sus asientos ocupados.
+     - Se mantienen las invariantes del requisito 7. Además, cada zona con `accessibleSeats` conserva al menos un asiento `accessible`, para que la leyenda tenga un ejemplo en el plano.
    - Un id de `accessibleSeats` que no existe lanza `Error` (es un error del mock).
    - Geometría:
      - `SEAT_PITCH = 32`;
@@ -110,6 +137,11 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
      - valida el layout con `venueLayoutSchema` y le une a cada zona `name`/`price`/`status` del `ticketType` con su `ticketTypeId`, y `venue` del evento;
      - si una zona apunta a un tipo inexistente, lanza `Error`.
    - `hasVenueMap(slug): boolean` es síncrono y mira solo los layouts mock.
+   - `getVenueMapForEvent(event: Pick<EventDetail, "slug" | "venue" | "ticketTypes">): Promise<VenueMap | null>` (F5, decisión 13):
+     - busca el layout de `event.slug` y devuelve `null` si no hay;
+     - valida y completa las zonas igual que `getVenueMapBySlug`, y lanza `Error` si una zona apunta a un tipo inexistente;
+     - no vuelve a cargar el evento.
+   - Desde F5, `getVenueMapBySlug` delega en `getVenueMapForEvent` tras cargar el evento. Firma y resultados no cambian.
 6. **Ids y validación** (contrato B):
    - `parseSeatIds(raw: string | string[] | undefined): string[] | null`:
      - `undefined` → `[]`;
@@ -124,7 +156,9 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
    - zona numerada `sold-out` ⇒ ningún asiento `available`/`accessible`;
    - zona numerada no agotada ⇒ al menos 1 asiento `available`;
    - ≤ 10 asientos por fila y ≤ 12 filas;
-   - ancho del `seatViewBox` ≤ 400 y ancho del `viewBox` del mapa ≤ 600.
+   - ancho del `seatViewBox` ≤ 400 y ancho del `viewBox` del mapa ≤ 600;
+   - (F5) el `labelPos` del escenario y el de cada zona son el centro de su forma. Los mocks usan rectángulos `M x1 y1 H x2 V y2 H x1 Z`, cuyo centro es ((x1+x2)/2, (y1+y2)/2);
+   - (F5) en las zonas con `occupiedRatio` ≤ 0.4, ninguna fila supera el 70 % de asientos ocupados, y cada zona con `accessibleSeats` tiene ≥ 1 asiento `accessible` (requisito 4).
 
 ### Página `/eventos/[slug]/entradas` (Fase 2)
 8. **Ruta** (Server Component; `params` es una Promise en Next 16):
@@ -164,7 +198,7 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
       - h2 "Elige tu zona" y, a la derecha, "Toca una zona del mapa" (`text-sm text-muted-foreground`).
       - Lienzo `rounded-xl bg-muted p-3`.
       - `<svg viewBox={map.viewBox} className="h-auto w-full" role="group" aria-label="Mapa de zonas de <venue>">`.
-      - Escenario: forma `fill-foreground` con texto `fill-background` en mayúsculas, `aria-hidden`.
+      - Escenario: forma `fill-foreground` con texto `fill-background` en mayúsculas, `aria-hidden`, centrado en `stage.labelPos` (`dominant-baseline="central"`). `stage.labelPos` es el centro de la forma del escenario (F5; ver la tabla de mocks).
     - **Cada zona** es un `<path>` con:
       - `role="button"`, `tabIndex={0}`, `aria-pressed` (zona activa) y clases del tono (decisión 9);
       - `aria-label`: "<nombre>, <precio>" o "<nombre>, agotado", más ", asientos numerados" si es numerada y ", últimas entradas" si es `low-stock`;
@@ -173,7 +207,7 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
     - **Estados visuales:**
       - Zona activa: halo exterior (copia del `path` detrás, `fill-none stroke-brand-navy`, 8 unidades) y trazo interior `stroke-background` de 3 unidades.
       - Foco: `focus-visible` con trazo `stroke-ring` de 4 unidades discontinuo (`[stroke-dasharray:8_6]`) y `outline-none`.
-    - **Etiqueta de cada zona** (`<text>` `aria-hidden`, `pointer-events-none`, `text-anchor="middle"`, ≥ 24 unidades, centrada en `labelPos`):
+    - **Etiqueta de cada zona** (`<text>` `aria-hidden`, `pointer-events-none`, `text-anchor="middle"`, 26 unidades según la decisión 10, bloque centrado en `labelPos`):
       - línea 1: nombre (bold);
       - línea 2: precio (`formatEventPrice`) o "Agotado";
       - si es `low-stock`, línea 3: píldora `fill-warning` con "Últimas entradas" (`fill-warning-foreground`).
@@ -260,7 +294,7 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
     - **Tipos y parámetros:**
       - `CheckoutOrderItem` gana `seats?: { id: string; label: string }[]`.
       - `getCheckoutOrder` separa `asientos` del resto de parámetros y lo parsea con `parseSeatIds`.
-      - `resolveCheckoutOrder(slug, quantities, seatIds: string[] | null = [])` carga el evento y `getVenueMapBySlug(slug)`.
+      - `resolveCheckoutOrder(slug, quantities, seatIds: string[] | null = [])` carga el evento y su mapa. Desde F5 carga el evento una sola vez (`getEventBySlug`): si no existe, devuelve `not-found`; si existe, obtiene el mapa con `getVenueMapForEvent(event)` (decisión 13). La firma y los resultados no cambian.
       - `buildCheckoutOrder(event, quantities, seating = { map: null, seatIds: [] })`.
     - **Reglas, tras las actuales y antes del cálculo del total** (cualquier fallo → `invalid-tickets`):
       1. `seatIds === null`: inválido.
@@ -466,6 +500,46 @@ Diseño de referencia: pantalla "4 · Selección de entradas" (`Tickets.dc.html`
   - "Pago seguro · Entrada digital con QR".
 - [ ] Dado `/eventos/noche-de-sintetizadores-lima` a 375 px, entonces hay una barra inferior pegada "Desde S/ 180.00 · Comprar entradas" que lleva a `/entradas`.
 - [ ] Dado `/eventos/clasico-del-pacifico` (sin mapa), entonces se ve `TicketSelector` como antes y no hay barra inferior.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 5. Ajustes post-revisión
+Hash compartido (T1):
+- [ ] Dado `hashString`, entonces da los valores de prueba oficiales de FNV-1a de 32 bits:
+  - `""` → `0x811c9dc5` (2166136261);
+  - `"a"` → `0xe40c292c`;
+  - `"foobar"` → `0xbf9cf968`.
+- [ ] Dado `mixHash`, entonces `mixHash(0)` → `0` y `mixHash(1)` → `0x514e28b7`. Con cualquier entrada, devuelve un entero en [0, 2³²) y es determinista.
+- [ ] Dado `getQrModules("MT-AB12CD-01")`, entonces la matriz es exactamente la del código anterior al cambio. El test la fija como 21 strings de `0`/`1`, calculadas con el código actual **antes** de tocar el import:
+  - primera fila `111111101010001111111`;
+  - fila de índice 8 `111010000101001000101`;
+  - última fila `111111100111011111101`;
+  - 217 módulos oscuros.
+- [ ] Dado `buildIcsEvent` con `title` "Noche de sintetizadores" y `startsAt` `2026-11-14T21:00:00-05:00` (el `baseInput` de `lib/calendar.test.ts`), entonces el `UID` es exactamente `UID:b9c9de17@mentectickets.pe`, el mismo que antes del cambio. El developer lo confirma con el código actual antes de cambiar el import.
+- [ ] Dado el código, entonces `0x811c9dc5` y `0x01000193` solo aparecen en `lib/hash.ts` (y su test). `seatRows.ts`, `TicketQr.tsx` y `lib/calendar.ts` importan `@/lib/hash` y no tienen copias privadas de FNV-1a.
+
+Entrada de servidor y una sola carga del evento (T2):
+- [ ] Dado `modules/seating/seats.ts`, entonces solo contiene reexportaciones (decisión 13).
+- [ ] Dado `modules/checkout`, entonces `checkout.service.ts` y `checkoutOrder.ts` importan de `@/modules/seating/seats`. Ningún archivo de `modules/checkout` importa valores de `@/modules/seating`; solo se admite `import type`, como en `checkoutOrder.test.ts`.
+- [ ] Dado `npm run build`, entonces `.next/server/app/checkout/page_client-reference-manifest.js` ya no referencia `modules/seating/components/TicketSelection` ni ningún otro archivo de `modules/seating/components/`. Antes del cambio sí lo referencia.
+- [ ] Dado `resolveCheckoutOrder("noche-de-sintetizadores-lima", { norte: 1 }, [<asiento disponible del mapa real>])`, entonces el resultado es el mismo que antes y `getEventBySlug` se llama exactamente 1 vez por llamada. Antes eran 2.
+- [ ] Dado `getVenueMapForEvent(event)`, entonces:
+  - para los 3 eventos con mapa, devuelve lo mismo (`toEqual`) que `getVenueMapBySlug(event.slug)`;
+  - para `clasico-del-pacifico` devuelve `null`;
+  - si una zona apunta a un tipo inexistente, lanza `Error`.
+- [ ] Dados los tests existentes de `modules/checkout` y de `seating.service`, entonces pasan sin cambiar sus aserciones. En `checkout.service.test.ts` solo cambian el import y la simulación de `getEventBySlug` (ver Tests).
+
+Ocupación y escenario (T3):
+- [ ] Dado `generateSeatRows`, entonces cada asiento está `occupied` si y solo si `mixHash(hashString(id)) / 2³² < occupiedRatio`. El test lo comprueba con los ids generados, sin escribirlos a mano. Los tests de F1 siguen pasando: determinismo, ratios 0 y 1, y entre 15 y 45 ocupados con 0.3 sobre 100 asientos.
+- [ ] Dados los mapas mock, entonces:
+  - en `norte` (0.3) y `platea` (0.4), ninguna fila tiene más del 70 % de asientos ocupados;
+  - se cumplen las invariantes del requisito 7: `mesa` sin asientos elegibles; `mezanine` y la `preferencial` de `risas-sin-filtro` con ≥ 1 disponible;
+  - `norte`, `platea` y la `preferencial` de `risas-sin-filtro` tienen ≥ 1 asiento `accessible` cada una.
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima/entradas` con "Tribuna Norte" activa, entonces:
+  - la ocupación se ve repartida por todas las filas, sin filas casi llenas junto a filas vacías;
+  - "Mejor asiento disponible" sin selección elige un asiento de la fila A que no está en un extremo de la fila.
+- [ ] Dados los 3 mocks, entonces `stage.labelPos` es el centro de la forma del escenario: (300, 38) en `noche-de-sintetizadores-lima` (forma de y=16 a 60), y (300, 40) en `la-casa-de-los-espejos` y `risas-sin-filtro` (forma de y=16 a 64). Un test lo comprueba para el escenario y para cada zona a partir de su `path` rectangular.
+- [ ] Dado el mapa de zonas, entonces el texto "ESCENARIO" se ve centrado verticalmente en su forma.
+- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces dice "textos de 26 unidades (~12.4 px a 375 px)" en lugar de "≥ 24 unidades (≥ 12 px)".
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
 ## Diseño técnico
