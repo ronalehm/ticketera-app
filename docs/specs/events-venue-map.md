@@ -244,10 +244,10 @@ export function VenueMap(props: { venue: string; embedUrl: string | null }): JSX
 
 ## Plan de tareas
 ### Fase 1 — Mapa con click-to-load y "Cómo llegar" con ruta (4 tareas, 10 archivos)
-- [ ] T1 — Variable de entorno validada con zod, con test, y ejemplo versionado · archivos: `lib/env.ts`, `lib/env.test.ts`, `.env.example` (nuevo), `.gitignore` (añadir `!.env.example`) · depende de: — · secuencial (base: `lib/` y configuración compartida)
-- [ ] T2 — Utilidades `VENUE_COUNTRY`, `buildVenueQuery`, `buildDirectionsUrl` y `buildMapEmbedUrl`, con tests · archivos: `modules/events/utils/venueMap.ts`, `modules/events/utils/venueMap.test.ts` · depende de: T1 (orden de base compartida; no importa `lib/env`) · paralelo con T3
-- [ ] T3 — Componente cliente `VenueMap` (marcador sin clave, fachada "Ver mapa" con aviso, iframe con foco), con test · archivos: `modules/events/components/VenueMap.tsx`, `modules/events/components/VenueMap.test.tsx` · depende de: T1 (orden de base) · paralelo con T2
-- [ ] T4 — Integración en "Lugar" (`VenueMap` + `buildMapEmbedUrl(publicEnv…)` + "Cómo llegar" con `buildDirectionsUrl`) y diseño de página · archivos: `modules/events/components/EventDetailInfo.tsx`, `design-system/ticketera/pages/event-detail.md` · depende de: T1, T2, T3 y **no concurrente** con `events-ui-refresh` F5 · T1/T2 (mismos archivos; ver Coordinación) · secuencial
+- [x] T1 — Variable de entorno validada con zod, con test, y ejemplo versionado · archivos: `lib/env.ts`, `lib/env.test.ts`, `.env.example` (nuevo), `.gitignore` (añadir `!.env.example`) · depende de: — · secuencial (base: `lib/` y configuración compartida)
+- [x] T2 — Utilidades `VENUE_COUNTRY`, `buildVenueQuery`, `buildDirectionsUrl` y `buildMapEmbedUrl`, con tests · archivos: `modules/events/utils/venueMap.ts`, `modules/events/utils/venueMap.test.ts` · depende de: T1 (orden de base compartida; no importa `lib/env`) · paralelo con T3
+- [x] T3 — Componente cliente `VenueMap` (marcador sin clave, fachada "Ver mapa" con aviso, iframe con foco), con test · archivos: `modules/events/components/VenueMap.tsx`, `modules/events/components/VenueMap.test.tsx` · depende de: T1 (orden de base) · paralelo con T2
+- [x] T4 — Integración en "Lugar" (`VenueMap` + `buildMapEmbedUrl(publicEnv…)` + "Cómo llegar" con `buildDirectionsUrl`) y diseño de página · archivos: `modules/events/components/EventDetailInfo.tsx`, `design-system/ticketera/pages/event-detail.md` · depende de: T1, T2, T3 y **no concurrente** con `events-ui-refresh` F5 · T1/T2 (mismos archivos; ver Coordinación) · secuencial
 
 ## Preguntas abiertas
 1. **Clave de API:** ¿tienes o vas a crear un proyecto en Google Cloud con la "Maps Embed API" habilitada?

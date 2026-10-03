@@ -215,10 +215,10 @@ Notas de ejecución:
 - Los developers en paralelo verifican con `npx vitest run <archivo>` y `npx eslint <archivos>`, sin `build`. El reviewer ejecuta el `build` al final.
 
 ### Fase 1 — Cómo funciona y newsletter (4 tareas, 10 archivos)
-- [ ] T1 — Schema y service mock del newsletter, con test · archivos: `modules/marketing/schemas/newsletter.schema.ts`, `modules/marketing/services/newsletter.service.ts`, `modules/marketing/services/newsletter.service.test.ts` · depende de: — · base, paralelo con T2
-- [ ] T2 — Sección "Cómo funciona" · archivos: `modules/marketing/components/HowItWorks.tsx` · depende de: — · paralelo con T1 y T3
-- [ ] T3 — Bloque y formulario del newsletter, con test · archivos: `modules/marketing/components/NewsletterSignup.tsx`, `modules/marketing/components/NewsletterForm.tsx`, `modules/marketing/components/NewsletterForm.test.tsx` · depende de: T1 · paralelo con T2
-- [ ] T4 — API pública, composición de la landing y diseño de página · archivos: `modules/marketing/index.ts`, `app/page.tsx`, `design-system/ticketera/pages/landing.md` (nuevo) · depende de: T2, T3 y cualquier tarea de events-ui-refresh F4 que modifique `app/page.tsx` · secuencial
+- [x] T1 — Schema y service mock del newsletter, con test · archivos: `modules/marketing/schemas/newsletter.schema.ts`, `modules/marketing/services/newsletter.service.ts`, `modules/marketing/services/newsletter.service.test.ts` · depende de: — · base, paralelo con T2
+- [x] T2 — Sección "Cómo funciona" · archivos: `modules/marketing/components/HowItWorks.tsx` · depende de: — · paralelo con T1 y T3
+- [x] T3 — Bloque y formulario del newsletter, con test · archivos: `modules/marketing/components/NewsletterSignup.tsx`, `modules/marketing/components/NewsletterForm.tsx`, `modules/marketing/components/NewsletterForm.test.tsx` · depende de: T1 · paralelo con T2
+- [x] T4 — API pública, composición de la landing y diseño de página · archivos: `modules/marketing/index.ts`, `app/page.tsx`, `design-system/ticketera/pages/landing.md` (nuevo) · depende de: T2, T3 y cualquier tarea de events-ui-refresh F4 que modifique `app/page.tsx` · secuencial
 
 ## Preguntas abiertas
 1. **Flecha en "Ver todos los eventos".** `UpcomingEvents` ya tiene el enlace a `/eventos` con el estilo outline, pero sin el icono `ArrowRight` que muestran el diseño y la captura. Hay dos opciones:

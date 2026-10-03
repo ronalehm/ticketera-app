@@ -983,7 +983,7 @@ Coordinación:
   - Archivos: `lib/hash.ts`, `lib/hash.test.ts`, `components/shared/TicketQr.tsx`, `components/shared/TicketQr.test.tsx`, `lib/calendar.ts`, `lib/calendar.test.ts`.
   - Depende de: Fase 4 y Fase 2 de `checkout-mock-payment.md`.
   - Secuencial (base: `lib/` y `components/shared/`).
-- [ ] T2. Entrada de servidor `seats.ts`, `getVenueMapForEvent` y una sola carga del evento en `resolveCheckoutOrder`; `checkout` importa de `@/modules/seating/seats`. Con tests.
+- [x] T2. Entrada de servidor `seats.ts`, `getVenueMapForEvent` y una sola carga del evento en `resolveCheckoutOrder`; `checkout` importa de `@/modules/seating/seats`. Con tests.
   - Archivos: `modules/seating/seats.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`, `modules/checkout/services/checkout.service.ts`, `modules/checkout/services/checkout.service.test.ts`, `modules/checkout/utils/checkoutOrder.ts`.
   - Depende de: T1 (orden de la fase) y Fase 2 de `checkout-mock-payment.md`.
   - Secuencial (entrada pública del módulo y archivos de `checkout`).
