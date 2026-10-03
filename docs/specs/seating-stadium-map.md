@@ -1,7 +1,7 @@
 # Mapa de estadio curvo y selección de entradas en dos sub-pasos
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Llevar la pantalla `/eventos/<slug>/entradas` (paso 1 "Entradas" de la compra) al nuevo diseño "Elige tus entradas":
@@ -1015,7 +1015,12 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
   - pellizcar o arrastrar hace zoom o paneo sin elegir butacas.
 - [ ] Dados los planos en cuadrícula, entonces no tienen fondo ni minimapa y conservan su proporción.
 - [ ] Dado el plano curvo, entonces el teclado, el tooltip y "Mejores butacas" funcionan igual sobre el fondo (`pointer-events-none`).
-- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta el fondo del estadio, el lienzo apaisado y el minimapa superpuesto desde `sm` (en la barra en móvil).
+- [ ] Dado el sub-paso 2 de "Tribuna Oriente" y el de "Tribuna Norte" de `noche-de-sintetizadores-lima` (cuadrícula), cuando se inspeccionan las letras de fila, entonces (T0, decisión 30):
+  - cada `<text>` de letra tiene `font-size="13"` y conserva `fill-muted-foreground font-bold`, `text-anchor="middle"`, `dominant-baseline="central"` y su `<g aria-hidden>`;
+  - sus posiciones no cambian: en arco, los puntos de `getRowEdgeLabelPoints` (0.8 pitch); en cuadrícula, `x = 20` y `x = ancho − 20`;
+  - en la captura a 1440, la letra mide alrededor de la mitad del diámetro de la butaca (como `images/15.png`) y no toca ninguna butaca;
+  - `git diff` de T0 no toca `arcSeatRows.ts`, `arcSeatRows.test.ts` ni `seating.service.test.ts`.
+- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta el fondo del estadio, el lienzo apaisado, el minimapa superpuesto desde `sm` (en la barra en móvil) y las letras de fila a 13 unidades.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
 ### Fase 6. Precarga de la selección desde la URL
@@ -1065,7 +1070,7 @@ F6: `app/(site)/eventos/[slug]/entradas/page.tsx` envuelve `PreselectedTicketSel
   - `SeatPlan.tsx`:
     - F3: sin `Card` ni h2, ayuda arriba, `headingId` del h3 externo y `parseViewBox` (requisito 16);
     - F4: estados v2, nivel de detalle, tooltip, letras en los dos extremos, zoom superpuesto desde `sm`, leyenda nueva y bandeja con `BestSeatsPicker` (requisitos 21–27);
-    - F5: prop `venue: Pick<VenueMap, "viewBox" | "stage" | "zones">` (sustituye a `stageLabel`; `stage.label` sigue sirviendo para la cuadrícula), fondo, lienzo apaisado y minimapa.
+    - F5: letras de fila a 13 unidades (`ROW_LABEL_FONT_SIZE`; requisito 25 enmendado, decisión 30); prop `venue: Pick<VenueMap, "viewBox" | "stage" | "zones">` (sustituye a `stageLabel`; `stage.label` sigue sirviendo para la cuadrícula), fondo, lienzo apaisado y minimapa.
   - `SeatLegend.tsx` (F4): `SeatShape` v2 (`number?`) y `SeatLegend({ price, selectedCount, hasAccessible })`.
   - `PurchaseSummary.tsx` (F3): texto vacío y `PurchaseSummaryContent` exportado.
   - `MobilePurchaseBar.tsx` (F3): prop `lines` y hoja inferior.
@@ -1293,6 +1298,7 @@ No hay API: son datos mock.
     - el grupo "Zoom del plano" con sus 3 botones;
     - 2 letras por fila en cuadrícula.
 - **F5:**
+  - **T0 (letras a 13 unidades, decisión 30):** sin tests nuevos ni modificados. Es una constante de un componente presentacional (`docs/SETUP.md`, "No requieren unit tests"). Siguen pasando sin cambios los tests de `getRowEdgeLabelPoints` (`arcSeatRows.test.ts`), la invariante de margen ≥ 12 (`seating.service.test.ts`) y el de las `x` en cuadrícula (`TicketSelection.test.tsx`).
   - `modules/seating/utils/planViewport.test.ts` (se amplía):
     - escala 1 sin desplazamiento → el plano entero;
     - escala 2 con `position` (−w/2, −h/2) → el cuarto central correcto;
@@ -1416,18 +1422,23 @@ No hay API: son datos mock.
   - Depende de: T4.
   - Secuencial. El reviewer comprueba con capturas a 768 y 1440 que los controles superpuestos no tapan butacas.
 
-### Fase 5. Plano curvo con contexto y minimapa (3 tareas, 6 archivos)
+### Fase 5. Plano curvo con contexto y minimapa (4 tareas, 6 archivos; T0 y T3 comparten 2)
+- [ ] T0. Letras de fila a 13 unidades (requisito 25 enmendado, decisión 30): `ROW_LABEL_FONT_SIZE = 13` y el comentario de geometría de `SeatPlan.tsx` (13 unidades ≈ 10 px a 375 px); sección "Plano (SVG)" del diseño de página (24 → 13 unidades).
+  - Archivos: `modules/seating/components/SeatPlan.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
+  - No se modifican (posiciones sin cambios, decisión 30): `modules/seating/utils/arcSeatRows.ts`, `modules/seating/utils/arcSeatRows.test.ts` (el desplazamiento de 0.8 pitch se mantiene) ni `modules/seating/components/TicketSelection.test.tsx` (ningún test depende del tamaño de letra).
+  - Depende de: Fase 4.
+  - En paralelo con T1 (archivos disjuntos). Verificar `npx vitest run modules/seating` y `npx eslint modules/seating/components/SeatPlan.tsx`.
 - [ ] T1. `getVisiblePlanRect` y `toVenueRect`, con test (requisito 31).
   - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`.
   - Depende de: Fase 4.
-  - Secuencial (base de T2).
+  - Secuencial respecto a T2 (es su base); en paralelo con T0.
 - [ ] T2. Minimapa (requisito 30).
   - Archivos: `modules/seating/components/SeatPlanMinimap.tsx`.
   - Depende de: T1.
   - Secuencial.
 - [ ] T3. Fondo del estadio, lienzo apaisado desde `sm` y minimapa superpuesto o en la barra en `SeatPlan`; test ampliado; diseño de página (requisitos 28 y 29).
   - Archivos: `modules/seating/components/SeatPlan.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
-  - Depende de: T2.
+  - Depende de: T0 (comparte `SeatPlan.tsx` y `ticket-selection.md`) y T2.
   - Secuencial.
 
 ### Fase 6. Precarga de la selección desde la URL (4 tareas, 10 archivos)
@@ -1473,3 +1484,4 @@ No hay API: son datos mock.
 18. **Cantidad inicial de "Mejores butacas":** 2 (decisión 25). ¿O 1?
 19. **Referencias sin verificar en vivo:** el proxy bloqueó Ticketmaster, SeatGeek, Seats.io, Joinnus y Teleticket, así que los patrones salen del conocimiento de esos productos (ver "Investigación y diagnóstico"). Si tienes capturas del paso de butacas de Joinnus o Ticketmaster que quieras imitar en algo concreto (p. ej. la bandeja de selección o el tooltip), compártelas.
 20. **Luces del escenario:** en las capturas son amarillas. Se usan en cian Mentec (`highlight`), porque el amarillo cercano (`warning`) significa "Últimas entradas". ¿Se acepta?
+21. **Letras de fila por debajo de 12 px en móvil** (decisión 30). A 13 unidades, con el plano entero a la vista a 375 px, la letra mide ~10 px, por debajo del mínimo de MASTER §3 ("nada por debajo de 12px"). Se acepta como excepción por ser decorativa (`aria-hidden`; la fila está en el `aria-label` y en el tooltip). ¿Se acepta, o se prefiere un tamaño mayor solo por debajo de `sm` (p. ej. 16 unidades ≈ 12.5 px), a costa de que en móvil la letra compita algo más con la butaca?
