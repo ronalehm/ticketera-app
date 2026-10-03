@@ -690,7 +690,9 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
   - `renderForm()` deja de pasar `summary`. El `OrderSummary` real se renderiza dentro: el test del botón del resumen (`aria-expanded`) sigue igual.
   - El helper `input(label)` pasa de `getByLabelText(label)` a `getByRole("textbox", { name: label })`, y el `queryByLabelText("Número de tarjeta")` del test de Yape a `queryByRole("textbox", { name: "Número de tarjeta" })`. Con el `*` dentro del `<label>`, el texto de la etiqueta es "Nombres*", y la búsqueda exacta por texto falla. El nombre accesible excluye el `aria-hidden` y sigue siendo "Nombres". Que esto funcione verifica la decisión 17. "Número de documento" se busca igual, por su etiqueta `sr-only`.
   - El caso del botón del resumen (`aria-expanded`) añade que su texto contiene "3 entradas · S/ 910.00" (hoy solo busca por `/Resumen del pedido:/`).
-  - Los demás casos (errores, formato, Yape, pago aprobado/rechazado, precarga, expiración) no cambian de expectativas.
+  - "envío vacío muestra los errores (comprador, tarjeta y Términos), enfoca 'Nombres'…" pasa a "con Términos marcados, el envío vacío muestra los errores del comprador y de la tarjeta, enfoca 'Nombres' y no llama al service". Primero marca la casilla; ya no espera el mensaje de Términos (decisión 33).
+  - "muestra los botones 'Pagar' con el total del pedido" comprueba además que, al cargar, ambos tienen `aria-disabled="true"`, no tienen el atributo `disabled` y su `aria-describedby` apunta a un elemento con el texto "Acepta los términos para continuar.".
+  - Los demás casos (formato, Yape, pago aprobado/rechazado, doble envío, precarga, expiración) no cambian de expectativas: sus helpers (`fillBuyer`) ya marcan los Términos antes de pagar.
 - `modules/checkout/components/CheckoutForm.test.tsx` (F5, **casos nuevos**):
   - Los campos Nombres, Apellidos, Correo electrónico, Celular, Número de documento y los 4 de tarjeta tienen `required`. El checkbox de Términos tiene `aria-required="true"` o `required`. Ningún nombre accesible contiene "*". Hay `*` con `aria-hidden="true"` en el DOM.
   - Existe un `group` con nombre "Documento de identidad" que contiene el combobox "Tipo de documento" y el textbox "Número de documento". El combobox muestra "DNI".
@@ -701,6 +703,12 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
     - las líneas "2 × General" y "1 × VIP";
     - "sáb 14 nov · Estadio, Lima".
     - Con un `ORDER` con asientos `[{ id: "tribuna-oriente-L-9", … }, { id: "tribuna-oriente-M-8", … }]` se lee "Fila L · 9 · Fila M · 8".
+    - El aviso "Acepta los términos para continuar." del botón de la tarjeta está dentro de ese `complementary`.
+  - **Términos y "Pagar"** (decisiones 32–33):
+    - con comprador y tarjeta válidos pero Términos sin marcar, `pay()` no llama al service, no muestra ningún mensaje de error (ni el de Términos), no muestra "Procesando pago…" y deja el foco en el `checkbox` de Términos. Lo mismo con `fireEvent.submit(form)`, que es el envío implícito con Enter;
+    - al marcar los Términos desaparecen los dos avisos (`queryAllByText("Acepta los términos para continuar.")` vacío) y los botones pierden `aria-disabled` y `aria-describedby`; al desmarcarlos, vuelven;
+    - con Términos marcados y datos válidos, el pago sigue el flujo de siempre (cubierto por el caso existente);
+    - con la reserva expirada y Términos sin marcar, los botones tienen `disabled` y no hay aviso de términos.
 - `modules/checkout/utils/printableTickets.test.ts` (F6, nuevo; fixture con 2 items, uno con asientos y otro sin ellos):
   - una entrada por ticket, en orden, con `ticketNumber` 1..N y `ticketCount` N;
   - `categoryLabel` de la categoría, `dateLabel` `"sábado 14 de noviembre"` para `2026-11-14T21:00:00-05:00`, `timeLabel` `"21:00 h"` y `placeLabel` `"Estadio, Lima"`;
@@ -724,6 +732,25 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
   - Nuevo: con una orden sin asientos, ni las entradas imprimibles muestran "Ubicación" ni la tarjeta-entrada líneas de asientos.
   - Los casos de carga, calendario, `window.print` y "No encontramos tu compra" no cambian.
 - Sin tests propios: `PrintableTicket` (presentacional, cubierto por `OrderConfirmation.test`), `RequiredMark`, `OrderSummary`, `CheckoutSummaryPanel`, `ConfirmationTicketCard`, páginas.
+
+**Fase 7:**
+- `modules/checkout/utils/checkoutOrder.test.ts` (**se añaden casos**; los existentes no cambian). `buildChangeTicketsHref`:
+  - sin mapa, `general` 2 + `vip` 1 → `"/eventos/<slug>?general=2&vip=1#entradas"`;
+  - con mapa y sin asientos → `"/eventos/<slug>/entradas?general=2&vip=1"`;
+  - con mapa y asientos en dos items → los ids en orden de items y de `seats`, unidos por `%2C`, en `asientos` al final;
+  - ida y vuelta: los parámetros de la URL (sin `asientos`), pasados por `parseTicketQuantities`, dan las mismas cantidades que el pedido.
+- `modules/events/utils/ticketOrder.test.ts` (**se añaden casos**). `parsePreselectedQuantities` con `new URLSearchParams(...)`:
+  - `"general=2&vip=1"` → `{ general: 2, vip: 1 }`;
+  - parámetros desconocidos (`evento`, `asientos`, `foo`) ignorados;
+  - `"abc"`, `"0"`, `"11"`, `"1.5"`, `"-1"`, `""` y un parámetro repetido (`general=1&general=2`) → ese tipo se ignora;
+  - un tipo `sold-out` se ignora;
+  - `"general=8&vip=5"` → `{ general: 8, vip: 2 }` (recorte en el orden de `ticketTypes`);
+  - sin parámetros → `{}`.
+- `modules/events/components/TicketSelector.test.tsx` (**se añaden casos**; los existentes no cambian):
+  - con `initialQuantities={{ general: 2 }}` se ven la cantidad 2, el total y el enlace "Continuar con la compra" con `general=2`, y "−" la baja a 1;
+  - con `status="sold-out"` e `initialQuantities` se ve "Entradas agotadas" sin controles;
+  - `PreselectedTicketSelector`, con `vi.mock("next/navigation", async (importOriginal) => ({ ...(await importOriginal()), useSearchParams: () => new URLSearchParams("general=2&vip=1") }))`, muestra esas cantidades.
+- Sin tests propios: `app/eventos/[slug]/page.tsx`, `app/checkout/page.tsx`, barrels.
 
 ## Plan de tareas
 Coordinación:
@@ -775,10 +802,10 @@ Coordinación de la ampliación (Fases 5 y 6):
 
 ### Fase 5 — "Datos y pago" según las capturas
 - [ ] T1 — Formateadores de fecha en events (+ casos de test) y formateadores del resumen (`formatTicketCount`, asientos compactos) con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/summaryFormat.ts`, `modules/checkout/utils/summaryFormat.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
-- [ ] T2 — Resumen compacto con `footer` y "Total (N entradas)"; panel sin `footer` y con `formatTicketCount` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
+- [ ] T2 — Resumen compacto con `footer`, separador discontinuo antes del total y "Total (N entradas)"; panel sin `footer` y con `formatTicketCount` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
 - [ ] T3 — `RequiredMark` y `PaymentMethodFields` (nota de demo al pie, tarjetas de prueba solo con Tarjeta, `*` y `required` en tarjeta) · archivos: `modules/checkout/components/RequiredMark.tsx`, `modules/checkout/components/PaymentMethodFields.tsx` · depende de: T1 · paralelo con T2 y T5
-- [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial
-- [ ] T5 — Diseño de página, sección `/checkout` (layout sin h1 visible, disposición del comprador, nota de demo, resumen compacto con "Pagar" dentro, `*`) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2 y T3 (y con T4: archivos disjuntos)
+- [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`; `PayButton` con `termsPending`, `aria-disabled` y aviso "Acepta los términos para continuar."; `termsRef` y foco a Términos en `onSubmit`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial
+- [ ] T5 — Diseño de página, sección `/checkout` (layout sin h1 visible, disposición del comprador, nota de demo, resumen compacto con separador discontinuo y "Pagar" dentro, `*`, estados de "Pagar": procesando / expirado / Términos pendientes con aviso / activo) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2 y T3 (y con T4: archivos disjuntos)
 
 ### Fase 6 — "Confirmación" y entrada imprimible
 - [ ] T1 — `PrintableTicket` (props planas, franja de marca, talón, `[print-color-adjust:exact]`, imágenes `eager`) · archivos: `components/shared/PrintableTicket.tsx` · depende de: Fase 5 · secuencial (`components/shared/`)
@@ -786,6 +813,21 @@ Coordinación de la ampliación (Fases 5 y 6):
 - [ ] T3 — `ConfirmationTicketCard` (fecha "lunes 5 de octubre" sin año ni hora, asientos compactos por zona, sin "Asientos", `aria-labelledby`, `print:hidden`) · archivos: `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2 y T5
 - [ ] T4 — `OrderConfirmation` (correo en negrita, "Qué sigue" `sr-only`, cabecera `print:hidden`, lista de `PrintableTicket` con salto de página) con tests actualizados y nuevos · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
 - [ ] T5 — Diseño de página, sección confirmación e impresión (anatomía de la entrada imprimible) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2, T3 y T4
+
+Coordinación de la Fase 7:
+- **Depende de la Fase 5** (modifica de nuevo `app/checkout/page.tsx` y `modules/checkout/index.ts`, que toca la F5 T4). **No depende de la Fase 6**: se puede ejecutar antes o después, pero no en la misma sesión que otra fase de esta spec.
+- **Events:**
+  - toca `modules/events/utils/ticketOrder.ts`(+test), `TicketSelector.tsx`(+test), `modules/events/index.ts` y `app/eventos/[slug]/page.tsx`;
+  - no se ejecuta a la vez que una fase de `events-ui-refresh.md` que toque esos archivos;
+  - sin parámetros, `TicketSelector` se comporta igual, así que sus criterios de "`TicketSelector` sin cambios" siguen cumpliéndose.
+- **Seating:**
+  - la precarga del mapa es la **Fase 4 de `seating-stadium-map.md`**, que usa el mismo formato de URL (contrato C sin `evento`);
+  - las dos fases son independientes: cada una funciona sola. La prueba de ida y vuelta con mapa necesita las dos.
+
+### Fase 7 — "Cambiar entradas" conserva la selección (3 tareas, 11 archivos)
+- [ ] T1 — `buildChangeTicketsHref` con tests, exportarla en el barrel y usarla en la página `/checkout` · archivos: `modules/checkout/utils/checkoutOrder.ts`, `modules/checkout/utils/checkoutOrder.test.ts`, `modules/checkout/index.ts`, `app/checkout/page.tsx` · depende de: Fase 5 · paralelo con T2 (archivos disjuntos, otro módulo)
+- [ ] T2 — `parsePreselectedQuantities` con tests, `initialQuantities` en `TicketSelector` y nuevo `PreselectedTicketSelector`, con tests · archivos: `modules/events/utils/ticketOrder.ts`, `modules/events/utils/ticketOrder.test.ts`, `modules/events/components/TicketSelector.tsx`, `modules/events/components/TicketSelector.test.tsx`, `modules/events/components/PreselectedTicketSelector.tsx` · depende de: Fase 5 · paralelo con T1
+- [ ] T3 — Barrel de events y página de detalle con `Suspense` + `PreselectedTicketSelector` (rama sin mapa); diseño de página (`/checkout`: "Cambiar entradas" conserva la selección) · archivos: `modules/events/index.ts`, `app/eventos/[slug]/page.tsx`, `design-system/ticketera/pages/checkout.md` · depende de: T1, T2 · secuencial. Verificar en `npm run build` (lo ejecuta el reviewer) que `/eventos/[slug]` sigue prerenderizada.
 
 ## Preguntas abiertas
 1. **Yape y PagoEfectivo:** los textos del diseño prometen un QR de Yape y un código de pago, pero en la simulación "Pagar" aprueba al instante. ¿Se mantienen los textos tal cual, se cambian por algo como "En esta demo el pago se aprueba al instante", o se simula un paso intermedio con QR/código?

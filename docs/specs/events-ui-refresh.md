@@ -1,7 +1,7 @@
 # Renovación de UI: búsqueda, detalle de evento y acceso
 
 - Módulo: events (Fases 1–2, 4–5) · auth (Fase 3)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2 · Búsqueda y listado", "3 · Detalle de evento" y "7 · Login y registro"), manteniendo la identidad Mentec (`design-system/ticketera/MASTER.md`). El objetivo es que el comprador filtre `/eventos` con facetas y conteos, entienda mejor el detalle de un evento (hero de marca, información clave, guardar y compartir) y acceda a su cuenta desde una pantalla con presencia de marca. Solo UI con datos mock. Se amplía lo existente sin romperlo: los tests actuales siguen pasando (salvo los casos de `eventFilters.test.ts` que se indican, que se adaptan al nuevo contrato multivalor) y las URLs de filtros actuales siguen funcionando.
