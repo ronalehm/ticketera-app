@@ -125,7 +125,7 @@ Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Guarda
 │ │            [ ESCENARIO ]                        ││
 │ │            ○ ○ ○ ○ ○ ○ ○ ○                      ││
 │ │            ○ ○ ○ ○ ○ ○ ○ ○                      ││
-│ │ Filas A–J · 20 asientos por fila · S/ 120.00 c/u│  │  figcaption
+│ │Filas A–J · 20 asientos por fila · S/ 120.00 c/u ││  figcaption
 │ └─────────────────────────────────────────────────┘│
 └────────────────────────────────────────────────────┘
 ```
