@@ -29,8 +29,22 @@ export const savedStatusSchema = z.enum(["publicado", "borrador"]).optional().ca
 export const formDateSchema = z.iso.date();
 export const formTimeSchema = z.iso.time({ precision: -1 });
 
-// Reglas de una fila de tipo de entrada al publicar. `abort` deja un único mensaje por campo vacío.
-export const ticketTypeFormSchema = z.object({
+// Límites de una zona numerada (decisión 4): los usan el schema, las utils, los textos de ayuda y los `max` de los inputs.
+export const SEAT_GRID_LIMITS = { maxRows: 30, maxSeatsPerRow: 60 } as const;
+
+// Mismos valores que `VenueZoneLayout.kind` de seating (decisión 13).
+export const ticketTypeKindSchema = z.enum(["general", "numbered"]);
+
+/** Texto no vacío (con trim) que es un entero entre 1 y `max`. `abort` deja un único mensaje por campo vacío. */
+function intInRange(empty: string, invalid: string, max: number) {
+  return z
+    .string()
+    .trim()
+    .min(1, { error: empty, abort: true })
+    .refine((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= max, invalid);
+}
+
+const ticketTypeBase = {
   id: z.string(),
   name: z.string().trim().min(1, "Ingresa el nombre del tipo de entrada"),
   price: z
@@ -38,12 +52,38 @@ export const ticketTypeFormSchema = z.object({
     .trim()
     .min(1, { error: "Ingresa el precio", abort: true })
     .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, "El precio debe ser 0 o mayor"),
-  quantity: z
-    .string()
-    .trim()
-    .min(1, { error: "Ingresa la cantidad", abort: true })
-    .refine((v) => Number.isInteger(Number(v)) && Number(v) >= 1, "La cantidad debe ser un número entero mayor o igual a 1"),
-});
+};
+
+// Reglas de una fila de tipo de entrada al publicar. Solo se validan los campos del tipo elegido (decisión 7):
+// una zona general ignora `rows`/`seatsPerRow` y una numerada ignora `quantity`.
+export const ticketTypeFormSchema = z.discriminatedUnion("kind", [
+  z.object({
+    ...ticketTypeBase,
+    kind: z.literal("general"),
+    quantity: z
+      .string()
+      .trim()
+      .min(1, { error: "Ingresa la cantidad", abort: true })
+      .refine((v) => Number.isInteger(Number(v)) && Number(v) >= 1, "La cantidad debe ser un número entero mayor o igual a 1"),
+    rows: z.string(),
+    seatsPerRow: z.string(),
+  }),
+  z.object({
+    ...ticketTypeBase,
+    kind: z.literal("numbered"),
+    quantity: z.string(),
+    rows: intInRange(
+      "Ingresa el número de filas",
+      `Las filas deben ser un número entero entre 1 y ${SEAT_GRID_LIMITS.maxRows}`,
+      SEAT_GRID_LIMITS.maxRows,
+    ),
+    seatsPerRow: intInRange(
+      "Ingresa los asientos por fila",
+      `Los asientos por fila deben ser un número entero entre 1 y ${SEAT_GRID_LIMITS.maxSeatsPerRow}`,
+      SEAT_GRID_LIMITS.maxSeatsPerRow,
+    ),
+  }),
+]);
 
 // "en-CA" formatea como YYYY-MM-DD, comparable como string con el valor del input date.
 const limaDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" });
@@ -70,7 +110,20 @@ export const organizerEventFormSchema = z
     time: z.string(), // "HH:MM" o ""
     venue: z.string(),
     city: z.string(),
-    ticketTypes: z.array(z.object({ id: z.string(), name: z.string(), price: z.string(), quantity: z.string() })).min(1),
+    // Fila "cruda" del formulario: sus reglas (ticketTypeFormSchema) solo se aplican al publicar.
+    ticketTypes: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          price: z.string(),
+          kind: ticketTypeKindSchema,
+          quantity: z.string(),
+          rows: z.string(),
+          seatsPerRow: z.string(),
+        }),
+      )
+      .min(1),
   })
   .superRefine((data, ctx) => {
     if (data.intent === "draft") return;

@@ -99,7 +99,7 @@ Reglas:
 
 - Fuente: Unsplash (`images.unsplash.com`, licencia libre), configurado en `next.config.ts` → `images.remotePatterns`.
 - Siempre `next/image` con `sizes` correcto; hero con `priority` solo en el primer slide.
-- Proporciones fijas para evitar CLS: hero `aspect-[16/9] md:aspect-[21/8]`, tarjeta `aspect-[4/3]`, categoría `aspect-square` o icono.
+- Proporciones fijas para evitar CLS: hero `aspect-[16/9] md:aspect-[21/8]`, tarjeta de evento altura fija `h-44` (176 px, `fill` + `object-cover`; 108 px de ancho en la variante `ticket` < sm), categoría `aspect-square` o icono.
 - `alt` descriptivo con nombre del evento. Overlay del hero: `bg-gradient-to-t from-brand-navy/90 via-brand-navy/40 to-transparent` para asegurar contraste del texto blanco.
 
 ---
@@ -121,7 +121,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Botones | `Button` (variants default / outline / ghost / secondary) | `components/ui` |
 | Tarjeta de evento | `Card` + `Badge` + `next/image` | `modules/events/components/EventCard.tsx` |
 | Hero slider y rails | `Carousel` (Embla) + `embla-carousel-autoplay` (solo hero) | `components/ui` / `modules/events` |
-| Buscador | `Input` + `Select` + `Button` | `modules/events` |
+| Buscador | `Input` + `NativeSelect` + `Button` (barra píldora única para la landing y `/eventos`; `<select>` nativo, funciona sin JS) | `modules/events/components/EventSearchBar.tsx` |
 | Filtro por categoría | Landing (Próximos eventos, filtro local): `ToggleGroup` (chips). `/eventos`: chips-enlace que cambian `?categoria=` (ver `pages/events-list.md`) | `modules/events` |
 | Menú móvil | `Sheet` | `components/shared/SiteHeader.tsx` |
 | Separadores | `Separator` | footer |
@@ -131,21 +131,30 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 ### EventCard (anatomía)
 
 ```
-┌──────────────────────────┐
-│ [imagen 4:3]   [Badge]   │  Badge: siempre categoría (secondary)
-├──────────────────────────┤
-│ SÁB 15 NOV · 20:00       │  overline, text-primary-strong
-│ Nombre del evento (2 l.) │  H3, enlace al detalle
-│ ◎ Estadio Nacional, Lima │  small, muted-foreground, icono MapPin
-│                          │
-│ Desde S/ 120  [Disponible]│  precio bold + badge de estado (abajo, mt-auto)
-│ [    Ver entradas    ]   │  outline: fondo blanco, text-primary-strong, h-11
-└──────────────────────────┘
+┌──────────────────────────────┐
+│┌───┐          [Últimas entr.]│  imagen h-44; chip de fecha (aria-hidden) arriba izq.;
+││NOV│                         │  estado arriba der. solo si informa
+││14 │                         │
+│└───┘                         │
+├──────────────────────────────┤
+│ CONCIERTOS                   │  overline de categoría, text-primary-strong
+│ Nombre del evento (2 l.)     │  H3, enlace al detalle
+│ ◎ Estadio Nacional · Lima    │  text-sm muted, icono MapPin
+│ ▣ sáb 14 nov                 │  text-sm muted, icono CalendarDays + <time>
+◖┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄◗  talón discontinuo (mt-auto) con muescas
+│ Desde                        │
+│ S/ 120.00     [Ver entradas] │  precio text-xl extrabold + CTA outline h-11
+└──────────────────────────────┘
 ```
-- Estado siempre visible: "Disponible" (`bg-accent`), "Últimas entradas" (`bg-warning`), "Agotado" (`bg-destructive`, texto navy).
-- Enlaces: título e imagen llevan a `/eventos/<slug>` (la imagen con `tabIndex={-1}` para no duplicar foco); el CTA "Ver entradas" es el enlace principal. Nunca envolver la tarjeta entera en un enlace si contiene un botón.
-- Agotado: precio atenuado y tachado; "Ver entradas" como `<button disabled>` (sin href, no enfocable).
-- Bloque precio + botón alineado abajo (`Card h-full flex flex-col`) para que las tarjetas de una fila coincidan.
+- Contenedor `Card` `h-full rounded-2xl ring-1 ring-border`, sin sombra en reposo; hover `shadow-lg shadow-foreground/5`.
+- Chip de fecha: `rounded-xl bg-background ring-1 ring-border/60`, mes "NOV" (`text-xs font-bold tracking-wider text-primary-strong`) sobre día "14" (`text-2xl font-extrabold tabular-nums`). Decorativo: la fecha está en texto en el cuerpo.
+- Estado sobre la imagen (`Badge h-6 rounded-full font-bold`) solo cuando informa: "Últimas entradas" (`bg-warning text-warning-foreground`) y "Agotado" (`bg-brand-navy text-primary-foreground`). "Disponible" es el caso normal y no se muestra.
+- Overline de categoría `text-primary-strong` (no `text-primary`: no llega a 4.5:1 en texto pequeño). Sin hora en la tarjeta (está en el detalle).
+- Talón: `border-t border-dashed border-border` con dos muescas `size-5 rounded-full ring-1 ring-border` en los laterales, del color de la superficie donde va la tarjeta (prop `surface`: `background` por defecto, `muted` en relacionados sobre `bg-muted`). El `overflow-hidden` de `Card` las recorta a media luna.
+- Pie `flex flex-wrap`: "Desde" + precio en `text-foreground` (el azul se reserva para la acción); gratis: "Entrada libre" sin "Desde". CTA "Ver entradas" outline (`text-primary-strong hover:bg-accent`, `h-11 rounded-xl`, nombre accesible "Ver entradas de <título>").
+- Enlaces: título e imagen llevan a `/eventos/<slug>` (la imagen con `tabIndex={-1}` `aria-hidden` para no duplicar foco); el CTA es el enlace principal. Nunca envolver la tarjeta entera en un enlace si contiene un botón.
+- Agotado: precio atenuado y tachado; en lugar del CTA, `<button disabled>` "Agotado" (`bg-muted text-muted-foreground`, sin href, no enfocable).
+- Variante `layout="ticket"` (< sm, en `/eventos`): horizontal, imagen de 108 px con el chip, cuerpo con borde izquierdo discontinuo y muescas arriba y abajo, estado en el pie y sin CTA (el título se estira sobre la tarjeta). Desde `sm` es igual a `grid`. Detalle en `pages/events-list.md`.
 - Hover: imagen `motion-safe:scale-105` (300ms), sombra suave. Sin desplazar layout.
 
 ### Botones
@@ -206,7 +215,7 @@ Si cambia un token en §2 / `app/globals.css`, se actualiza también esta tabla 
 Header sticky  [logo] [categorías xl+] [Iniciar sesión] [Crear cuenta] (sm+)  ☰ menú < xl (categorías + ambos botones)
 Título         h1 "Encuentra tu próximo plan en vivo" + subtítulo (dentro de HeroCarousel)
 Hero slider    imagen full-bleed + overlay navy, título (h2), fecha, lugar, CTA "Comprar entradas"
-Buscador       barra: texto + ciudad + fecha + precio + Buscar
+Buscador       barra píldora (EventSearchBar, la misma de /eventos): texto "Qué quieres ver" + fecha (mes) + precio + Buscar
 Categorías     6 tiles con icono (scroll horizontal en móvil)
 Destacados     rail (carousel) de EventCard
 Próximos       chips de categoría + grilla 1/2/3/4 columnas + "Ver todos"
@@ -230,7 +239,7 @@ Breakpoints verificados: 375, 768, 1024, 1440. Sin scroll horizontal de página.
 ## 10. Contenido y formato
 
 - Idioma visible: español (Perú). Moneda **PEN**, formato `S/ 120.00` (`Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" })`).
-- Fecha corta: `SÁB 15 NOV` (`Intl.DateTimeFormat("es-PE")`, mayúsculas, sin punto). Zona horaria `America/Lima`.
+- Fecha corta (tarjeta de evento): `sáb 14 nov` (`formatShortDayMonth`, `Intl.DateTimeFormat("es-PE")`, minúsculas, sin punto). Chip de fecha: `NOV` / `14` (`getDateChipParts`, mes en mayúsculas sin punto, día de 2 dígitos). Zona horaria `America/Lima`.
 - Precio siempre "Desde S/ X" (mínimo de las zonas). Sin cargos ocultos (anti-patrón de la categoría).
 
 ---

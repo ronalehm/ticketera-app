@@ -5,6 +5,7 @@ import {
   EVENT_CATEGORY_OPTIONS,
   organizerEventFormSchema,
   organizerEventSchema,
+  SEAT_GRID_LIMITS,
   savedStatusSchema,
   ticketTypeFormSchema,
 } from "./organizer.schema";
@@ -50,7 +51,7 @@ describe("organizerEventSchema", () => {
   });
 });
 
-const emptyRow = { id: "row-1", name: "", price: "", quantity: "" };
+const emptyRow = { id: "row-1", name: "", price: "", kind: "general" as const, quantity: "", rows: "", seatsPerRow: "" };
 
 const emptyForm: OrganizerEventFormValues = {
   intent: "publish",
@@ -74,10 +75,12 @@ const completeForm: OrganizerEventFormValues = {
   venue: "Estadio Nacional",
   city: "Lima",
   ticketTypes: [
-    { id: "row-1", name: "General", price: "50", quantity: "100" },
-    { id: "row-2", name: "VIP", price: "80", quantity: "50" },
+    { id: "row-1", name: "General", price: "50", kind: "general", quantity: "100", rows: "", seatsPerRow: "" },
+    { id: "row-2", name: "VIP", price: "80", kind: "general", quantity: "50", rows: "", seatsPerRow: "" },
   ],
 };
+
+const numberedRow = { id: "row-3", name: "Platea", price: "120", kind: "numbered" as const, quantity: "", rows: "10", seatsPerRow: "20" };
 
 /** Mensajes agrupados por ruta ("ticketTypes.0.name"). */
 function getMessages(values: OrganizerEventFormValues): Record<string, string> {
@@ -148,11 +151,31 @@ describe("organizerEventFormSchema", () => {
     });
 
     it("asigna el error de una fila a su índice y campo", () => {
-      const ticketTypes = [completeForm.ticketTypes[0], { id: "row-2", name: "VIP", price: "-5", quantity: "0" }];
+      const ticketTypes = [completeForm.ticketTypes[0], { ...emptyRow, id: "row-2", name: "VIP", price: "-5", quantity: "0" }];
       expect(getMessages({ ...completeForm, ticketTypes })).toEqual({
         "ticketTypes.1.price": "El precio debe ser 0 o mayor",
         "ticketTypes.1.quantity": "La cantidad debe ser un número entero mayor o igual a 1",
       });
+    });
+
+    it("acepta zonas generales y numeradas mezcladas", () => {
+      const ticketTypes = [...completeForm.ticketTypes, numberedRow];
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes }).success).toBe(true);
+    });
+
+    it("asigna el error de una zona numerada a su índice y campo", () => {
+      const ticketTypes = [completeForm.ticketTypes[0], { ...numberedRow, rows: "31", seatsPerRow: "" }];
+      expect(getMessages({ ...completeForm, ticketTypes })).toEqual({
+        "ticketTypes.1.rows": "Las filas deben ser un número entero entre 1 y 30",
+        "ticketTypes.1.seatsPerRow": "Ingresa los asientos por fila",
+      });
+    });
+  });
+
+  describe("borrador con zona numerada", () => {
+    it("con filas fuera de rango no da errores", () => {
+      const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", ticketTypes: [{ ...numberedRow, rows: "500" }] };
+      expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
     });
   });
 
@@ -188,12 +211,69 @@ describe("organizerEventFormSchema", () => {
 });
 
 describe("ticketTypeFormSchema", () => {
-  const row = { id: "row-1", name: "General", price: "50", quantity: "100" };
+  const row = { id: "row-1", name: "General", price: "50", kind: "general", quantity: "100", rows: "", seatsPerRow: "" };
 
-  function getRowMessages(values: Partial<typeof row>): string[] {
+  function getRowMessages(values: Partial<Record<keyof typeof row, string>>): string[] {
     const result = ticketTypeFormSchema.safeParse({ ...row, ...values });
     return result.success ? [] : result.error.issues.map((issue) => issue.message);
   }
+
+  /** Mensajes por campo (`issue.path`), para comprobar que cada campo da uno solo. */
+  function getRowMessagesByField(values: Partial<Record<keyof typeof row, string>>): Record<string, string[]> {
+    const result = ticketTypeFormSchema.safeParse({ ...row, ...values });
+    if (result.success) return {};
+    const byField: Record<string, string[]> = {};
+    for (const issue of result.error.issues) (byField[issue.path.join(".")] ??= []).push(issue.message);
+    return byField;
+  }
+
+  it("define los límites de la zona numerada", () => {
+    expect(SEAT_GRID_LIMITS).toEqual({ maxRows: 30, maxSeatsPerRow: 60 });
+  });
+
+  it("una fila general válida pasa aunque filas y asientos sean basura", () => {
+    expect(getRowMessages({ rows: "abc", seatsPerRow: "-1" })).toEqual([]);
+  });
+
+  it("una fila numerada válida pasa aunque la cantidad esté vacía", () => {
+    expect(getRowMessages({ kind: "numbered", quantity: "", rows: "10", seatsPerRow: "20" })).toEqual([]);
+  });
+
+  it("acepta los límites de la zona numerada (1 × 1 y 30 × 60)", () => {
+    expect(getRowMessages({ kind: "numbered", rows: "1", seatsPerRow: "1" })).toEqual([]);
+    expect(getRowMessages({ kind: "numbered", rows: "30", seatsPerRow: "60" })).toEqual([]);
+  });
+
+  it.each([
+    ["", "Ingresa el número de filas"],
+    ["  ", "Ingresa el número de filas"],
+    ["0", "Las filas deben ser un número entero entre 1 y 30"],
+    ["31", "Las filas deben ser un número entero entre 1 y 30"],
+    ["2.5", "Las filas deben ser un número entero entre 1 y 30"],
+    ["abc", "Las filas deben ser un número entero entre 1 y 30"],
+  ])("numerada con filas %j → %s", (rows, message) => {
+    expect(getRowMessagesByField({ kind: "numbered", rows, seatsPerRow: "20" })).toEqual({ rows: [message] });
+  });
+
+  it.each([
+    ["", "Ingresa los asientos por fila"],
+    ["0", "Los asientos por fila deben ser un número entero entre 1 y 60"],
+    ["61", "Los asientos por fila deben ser un número entero entre 1 y 60"],
+    ["1.5", "Los asientos por fila deben ser un número entero entre 1 y 60"],
+  ])("numerada con asientos por fila %j → %s", (seatsPerRow, message) => {
+    expect(getRowMessagesByField({ kind: "numbered", rows: "10", seatsPerRow })).toEqual({ seatsPerRow: [message] });
+  });
+
+  it("numerada con filas y asientos vacíos da un mensaje por campo", () => {
+    expect(getRowMessagesByField({ kind: "numbered", rows: "", seatsPerRow: "" })).toEqual({
+      rows: ["Ingresa el número de filas"],
+      seatsPerRow: ["Ingresa los asientos por fila"],
+    });
+  });
+
+  it("rechaza un tipo de ubicación desconocido", () => {
+    expect(ticketTypeFormSchema.safeParse({ ...row, kind: "vip" }).success).toBe(false);
+  });
 
   it("acepta una fila completa y el precio 0", () => {
     expect(getRowMessages({})).toEqual([]);

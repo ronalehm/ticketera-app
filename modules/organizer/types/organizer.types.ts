@@ -4,6 +4,7 @@ import type {
   organizerEventSchema,
   organizerEventStatusSchema,
   savedStatusSchema,
+  ticketTypeKindSchema,
 } from "../schemas/organizer.schema";
 
 export type OrganizerEvent = z.infer<typeof organizerEventSchema>;
@@ -15,7 +16,10 @@ export type DashboardKpis = { revenue: number; ticketsSold: number; publishedCou
 export type SavedStatus = z.infer<typeof savedStatusSchema>;
 export type OrganizerEventFormValues = z.input<typeof organizerEventFormSchema>;
 export type TicketTypeRow = OrganizerEventFormValues["ticketTypes"][number];
-export type TicketTypeRowErrors = Partial<Record<"name" | "price" | "quantity", string>>;
+export type TicketTypeKind = z.infer<typeof ticketTypeKindSchema>;
+export type TicketTypeRowErrors = Partial<Record<"name" | "price" | "quantity" | "rows" | "seatsPerRow", string>>;
+/** Filas y asientos por fila de una zona numerada válida. */
+export type SeatGridSize = { rows: number; seatsPerRow: number };
 
 /** Datos de la tarjeta de vista previa (Fase 3); `null` = marcador por falta de datos. */
 export type EventPreview = {
