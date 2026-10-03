@@ -324,11 +324,11 @@ Coordinación:
 - [x] T4 — Página `/checkout`, barrel y diseño de página (sección `/checkout`) · archivos: `app/checkout/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T3 · secuencial
 
 ### Fase 4 — Paso 3 `/checkout/confirmacion`
-- [ ] T1 — `print:hidden` en header y footer del sitio · archivos: `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx` · depende de: Fase 3 · secuencial (`components/shared/`)
-- [ ] T2 — Hook `useStoredOrder` con test · archivos: `modules/checkout/hooks/useStoredOrder.ts`, `modules/checkout/hooks/useStoredOrder.test.ts` · depende de: T1 · paralelo con T3
-- [ ] T3 — `CheckoutStatusMessage` (variantes de la decisión 13) y `ConfirmationTicketCard` · archivos: `modules/checkout/components/CheckoutStatusMessage.tsx`, `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2
-- [ ] T4 — `OrderConfirmation` (estados, acciones, Qué sigue, lista de impresión) con test · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
-- [ ] T5 — Página `/checkout/confirmacion`, barrel y diseño de página (sección confirmación; quitar menciones a Stripe) · archivos: `app/checkout/confirmacion/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T4 · secuencial
+- [x] T1 — `print:hidden` en header y footer del sitio · archivos: `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx` · depende de: Fase 3 · secuencial (`components/shared/`)
+- [x] T2 — Hook `useStoredOrder` con test · archivos: `modules/checkout/hooks/useStoredOrder.ts`, `modules/checkout/hooks/useStoredOrder.test.ts` · depende de: T1 · paralelo con T3
+- [x] T3 — `CheckoutStatusMessage` (variantes de la decisión 13) y `ConfirmationTicketCard` · archivos: `modules/checkout/components/CheckoutStatusMessage.tsx`, `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2
+- [x] T4 — `OrderConfirmation` (estados, acciones, Qué sigue, lista de impresión) con test · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
+- [x] T5 — Página `/checkout/confirmacion`, barrel y diseño de página (sección confirmación; quitar menciones a Stripe) · archivos: `app/checkout/confirmacion/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T4 · secuencial
 
 ## Preguntas abiertas
 1. **Yape y PagoEfectivo:** los textos del diseño prometen un QR de Yape y un código de pago, pero en la simulación "Pagar" aprueba al instante. ¿Se mantienen los textos tal cual, se cambian por algo como "En esta demo el pago se aprueba al instante", o se simula un paso intermedio con QR/código?
