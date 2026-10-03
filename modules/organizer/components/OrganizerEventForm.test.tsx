@@ -329,7 +329,8 @@ describe("OrganizerEventForm", () => {
       fireEvent.click(kindRadio(1, "Numerada"));
       fireEvent.click(publishButton());
       expect(screen.getByText("Ingresa el número de filas")).toBeTruthy();
-      expect(screen.queryByText(/cantidad/i)).toBeNull();
+      expect(screen.queryByText("Ingresa la cantidad")).toBeNull();
+      expect(screen.queryByText("La cantidad debe ser un número entero mayor o igual a 1")).toBeNull();
 
       fireEvent.click(kindRadio(1, "General (de pie)"));
       expect(rowInput(1, "Cantidad").value).toBe("100");
