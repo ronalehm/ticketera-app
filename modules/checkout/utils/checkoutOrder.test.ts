@@ -215,20 +215,19 @@ describe("buildCheckoutOrder con asientos", () => {
 });
 
 describe("buildChangeTicketsHref", () => {
-  const orderEvent = { ...event, slug: "evento-prueba" };
   const items = [
     { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 2 },
     { ticketTypeId: "vip", name: "VIP", unitPrice: 120.5, quantity: 1 },
   ];
 
   it("sin mapa → detalle del evento con las cantidades y el ancla #entradas", () => {
-    expect(buildChangeTicketsHref({ event: orderEvent, items }, false)).toBe(
+    expect(buildChangeTicketsHref({ event, items }, false)).toBe(
       "/eventos/evento-prueba?general=2&vip=1#entradas",
     );
   });
 
   it("con mapa y sin asientos → selección de entradas con las cantidades", () => {
-    expect(buildChangeTicketsHref({ event: orderEvent, items }, true)).toBe(
+    expect(buildChangeTicketsHref({ event, items }, true)).toBe(
       "/eventos/evento-prueba/entradas?general=2&vip=1",
     );
   });
@@ -254,7 +253,7 @@ describe("buildChangeTicketsHref", () => {
         seats: [{ id: "vip-A-2", label: "VIP · Fila A · Asiento 2" }],
       },
     ];
-    expect(buildChangeTicketsHref({ event: orderEvent, items: seatedItems }, true)).toBe(
+    expect(buildChangeTicketsHref({ event, items: seatedItems }, true)).toBe(
       "/eventos/evento-prueba/entradas?platea=2&general=1&vip=1&asientos=platea-B-3%2Cplatea-B-1%2Cvip-A-2",
     );
   });

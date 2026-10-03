@@ -22,6 +22,7 @@ const renderSelector = (status: TicketType["status"] = "available", ticketTypes 
 const add = (name: string) => screen.getByRole("button", { name: `Añadir una entrada ${name}` }) as HTMLButtonElement;
 const remove = (name: string) => screen.getByRole("button", { name: `Quitar una entrada ${name}` }) as HTMLButtonElement;
 const cta = () => screen.getByText("Continuar con la compra");
+const total = () => screen.getByText("Total").nextElementSibling?.textContent;
 
 afterEach(cleanup);
 
@@ -116,13 +117,13 @@ describe("TicketSelector con initialQuantities", () => {
     );
 
     expect(add("General").parentElement?.textContent).toContain("2");
-    expect(screen.getByText("S/ 360.00")).toBeTruthy();
+    expect(total()).toBe("S/ 360.00");
     expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=2");
 
     fireEvent.click(remove("General"));
 
     expect(add("General").parentElement?.textContent).toContain("1");
-    expect(screen.getByText("S/ 180.00")).toBeTruthy();
+    expect(total()).toBe("S/ 180.00");
     expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=1");
   });
 
@@ -149,7 +150,7 @@ describe("PreselectedTicketSelector", () => {
 
     expect(add("General").parentElement?.textContent).toContain("2");
     expect(add("VIP").parentElement?.textContent).toContain("1");
-    expect(screen.getByText("S/ 910.00")).toBeTruthy();
+    expect(total()).toBe("S/ 910.00");
     expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=2&vip=1");
   });
 });
