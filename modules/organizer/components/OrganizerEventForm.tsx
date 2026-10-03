@@ -291,7 +291,7 @@ export function OrganizerEventForm() {
 
       <aside
         aria-labelledby={PREVIEW_TITLE_ID}
-        className="flex flex-col gap-3 self-start lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1"
+        className="flex flex-col gap-3 self-start lg:sticky lg:top-10 lg:col-start-2 lg:row-span-2 lg:row-start-1"
       >
         <h2 id={PREVIEW_TITLE_ID} className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
           Vista previa

@@ -63,7 +63,7 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
 
       <OrganizerKpis {...kpis} />
 
-      <section aria-labelledby={headingId}>
+      <section aria-labelledby={headingId} className="rounded-2xl bg-card p-4 ring-1 ring-border md:p-6">
         <div className="mb-4 flex flex-col gap-3 md:mb-6 md:flex-row md:items-center md:justify-between">
           <h2 id={headingId} className="text-2xl font-bold tracking-tight md:text-3xl">
             Mis eventos

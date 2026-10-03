@@ -2,7 +2,8 @@
 // del módulo se importan entre sí por ruta relativa (Decisión 17).
 export { OrganizerDashboard } from "./components/OrganizerDashboard";
 export { OrganizerEventForm } from "./components/OrganizerEventForm";
-export { OrganizerNav } from "./components/OrganizerNav";
+export { OrganizerMobileBar } from "./components/OrganizerMobileBar";
+export { OrganizerSidebar } from "./components/OrganizerSidebar";
 export { savedStatusSchema } from "./schemas/organizer.schema";
 export { getOrganizerEvents } from "./services/organizer.service";
 export type { OrganizerEvent } from "./types/organizer.types";

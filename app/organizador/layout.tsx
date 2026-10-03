@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteShell } from "@/components/shared/SiteShell";
-import { OrganizerNav } from "@/modules/organizer";
+import { OrganizerMobileBar, OrganizerSidebar } from "@/modules/organizer";
 
 export const metadata: Metadata = {
   robots: { index: false },
@@ -9,13 +8,12 @@ export const metadata: Metadata = {
 
 export default function OrganizerLayout({ children }: LayoutProps<"/organizador">) {
   return (
-    <SiteShell>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:px-6 md:py-12 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10 lg:px-8">
-        <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-          <OrganizerNav />
-        </div>
-        <div className="min-w-0">{children}</div>
-      </div>
-    </SiteShell>
+    <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+      <OrganizerSidebar />
+      <OrganizerMobileBar />
+      <main className="min-w-0 px-4 py-6 md:px-6 md:py-8 lg:px-10 lg:py-10">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
+    </div>
   );
 }
