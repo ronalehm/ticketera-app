@@ -217,32 +217,40 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
           <CardContent className="grid gap-5 sm:grid-cols-2 sm:gap-4">
             <Field data-invalid={!!errors.firstName}>
               <FieldLabel htmlFor="checkout-firstName">
-                Nombres
-                <RequiredMark />
+                <span>
+                  Nombres
+                  <RequiredMark />
+                </span>
               </FieldLabel>
               <Input {...textProps("firstName")} autoComplete="given-name" className="h-11" />
               {fieldError("firstName")}
             </Field>
             <Field data-invalid={!!errors.lastName}>
               <FieldLabel htmlFor="checkout-lastName">
-                Apellidos
-                <RequiredMark />
+                <span>
+                  Apellidos
+                  <RequiredMark />
+                </span>
               </FieldLabel>
               <Input {...textProps("lastName")} autoComplete="family-name" className="h-11" />
               {fieldError("lastName")}
             </Field>
             <Field data-invalid={!!errors.email} className="sm:col-span-2">
               <FieldLabel htmlFor="checkout-email">
-                Correo electrónico
-                <RequiredMark />
+                <span>
+                  Correo electrónico
+                  <RequiredMark />
+                </span>
               </FieldLabel>
               <Input {...textProps("email")} type="email" autoComplete="email" className="h-11" />
               {fieldError("email")}
             </Field>
             <Field data-invalid={!!errors.phone}>
               <FieldLabel htmlFor="checkout-phone">
-                Celular
-                <RequiredMark />
+                <span>
+                  Celular
+                  <RequiredMark />
+                </span>
               </FieldLabel>
               <InputGroup className="h-11">
                 <InputGroupAddon>

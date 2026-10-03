@@ -101,8 +101,10 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Field data-invalid={!!errors.cardNumber} className="col-span-2">
             <FieldLabel htmlFor="checkout-cardNumber">
-              Número de tarjeta
-              <RequiredMark />
+              <span>
+                Número de tarjeta
+                <RequiredMark />
+              </span>
             </FieldLabel>
             <Input
               {...cardProps("cardNumber", formatCardNumber)}
@@ -114,24 +116,30 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
           </Field>
           <Field data-invalid={!!errors.cardExpiry}>
             <FieldLabel htmlFor="checkout-cardExpiry">
-              Vencimiento
-              <RequiredMark />
+              <span>
+                Vencimiento
+                <RequiredMark />
+              </span>
             </FieldLabel>
             <Input {...cardProps("cardExpiry", formatCardExpiry)} inputMode="numeric" maxLength={5} placeholder="MM/AA" />
             {fieldError("cardExpiry")}
           </Field>
           <Field data-invalid={!!errors.cardCvv}>
             <FieldLabel htmlFor="checkout-cardCvv">
-              CVV
-              <RequiredMark />
+              <span>
+                CVV
+                <RequiredMark />
+              </span>
             </FieldLabel>
             <Input {...cardProps("cardCvv", onlyDigits)} inputMode="numeric" maxLength={4} placeholder="3 o 4 dígitos" />
             {fieldError("cardCvv")}
           </Field>
           <Field data-invalid={!!errors.cardName} className="col-span-2 sm:col-span-4">
             <FieldLabel htmlFor="checkout-cardName">
-              Nombre en la tarjeta
-              <RequiredMark />
+              <span>
+                Nombre en la tarjeta
+                <RequiredMark />
+              </span>
             </FieldLabel>
             <Input {...cardProps("cardName")} placeholder="Como aparece en la tarjeta" />
             {fieldError("cardName")}
