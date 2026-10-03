@@ -4,8 +4,11 @@ import type { OrganizerEventFormValues, TicketTypeRow } from "../types/organizer
 import {
   buildStartsAt,
   createTicketTypeRow,
+  formatSeatGridSummary,
   formatTicketCount,
   getMinTicketPrice,
+  getRowCapacity,
+  getSeatGridSize,
   getTicketCapacity,
   getTicketTypeErrors,
   isAcceptedCoverImage,
@@ -13,15 +16,85 @@ import {
 } from "./organizerEventForm";
 
 function row(price: string, quantity: string, name = "General"): TicketTypeRow {
-  return { id: `row-${price}-${quantity}`, name, price, quantity };
+  return { id: `row-${price}-${quantity}`, name, price, kind: "general", quantity, rows: "", seatsPerRow: "" };
+}
+
+function numbered(rows: string, seatsPerRow: string, price = "120", name = "Platea"): TicketTypeRow {
+  return { id: `row-${rows}-${seatsPerRow}`, name, price, kind: "numbered", quantity: "", rows, seatsPerRow };
 }
 
 describe("createTicketTypeRow", () => {
-  it("crea una fila vacía con un id único", () => {
+  it("crea una fila general vacía con un id único", () => {
     const first = createTicketTypeRow();
     const second = createTicketTypeRow();
-    expect(first).toEqual({ id: expect.any(String), name: "", price: "", quantity: "" });
+    expect(first).toEqual({
+      id: expect.any(String),
+      name: "",
+      price: "",
+      kind: "general",
+      quantity: "",
+      rows: "",
+      seatsPerRow: "",
+    });
     expect(first.id).not.toBe(second.id);
+  });
+});
+
+describe("getSeatGridSize", () => {
+  it("devuelve filas y asientos de una zona numerada válida", () => {
+    expect(getSeatGridSize(numbered("10", "20"))).toEqual({ rows: 10, seatsPerRow: 20 });
+  });
+
+  it("acepta los límites 30 × 60 y recorta espacios", () => {
+    expect(getSeatGridSize(numbered("30", "60"))).toEqual({ rows: 30, seatsPerRow: 60 });
+    expect(getSeatGridSize(numbered(" 1 ", "1"))).toEqual({ rows: 1, seatsPerRow: 1 });
+  });
+
+  it.each([
+    ["31", "20"],
+    ["10", "61"],
+    ["", "20"],
+    ["2.5", "20"],
+    ["0", "20"],
+    ["10", "abc"],
+  ])("(%j, %j) → null", (rows, seatsPerRow) => {
+    expect(getSeatGridSize(numbered(rows, seatsPerRow))).toBeNull();
+  });
+
+  it("una fila general → null aunque tenga filas y asientos", () => {
+    expect(getSeatGridSize({ ...row("50", "100"), rows: "10", seatsPerRow: "20" })).toBeNull();
+  });
+});
+
+describe("getRowCapacity", () => {
+  it("general: la cantidad", () => {
+    expect(getRowCapacity(row("50", "100"))).toBe(100);
+  });
+
+  it("numerada: filas × asientos por fila", () => {
+    expect(getRowCapacity(numbered("10", "20"))).toBe(200);
+  });
+
+  it.each([row("50", ""), row("50", "0"), row("50", "1.5"), numbered("31", "20"), numbered("", "")])(
+    "inválida → null (%#)",
+    (value) => {
+      expect(getRowCapacity(value)).toBeNull();
+    },
+  );
+
+  it("numerada: ignora la cantidad", () => {
+    expect(getRowCapacity({ ...numbered("", ""), quantity: "999" })).toBeNull();
+  });
+});
+
+describe("formatSeatGridSummary", () => {
+  it.each<[{ rows: number; seatsPerRow: number }, number | null, string]>([
+    [{ rows: 10, seatsPerRow: 20 }, 120, "Filas A–J · 20 asientos por fila · S/ 120.00 c/u"],
+    [{ rows: 1, seatsPerRow: 1 }, null, "Fila A · 1 asiento por fila"],
+    [{ rows: 10, seatsPerRow: 20 }, 0, "Filas A–J · 20 asientos por fila · Entrada libre"],
+    [{ rows: 30, seatsPerRow: 60 }, null, "Filas A–AD · 60 asientos por fila"],
+  ])("%j con precio %j → %s", (size, price, expected) => {
+    expect(formatSeatGridSummary(size, price)).toBe(expected);
   });
 });
 
@@ -36,6 +109,14 @@ describe("getTicketCapacity", () => {
 
   it("da 0 sin cantidades válidas", () => {
     expect(getTicketCapacity([row("", "")])).toBe(0);
+  });
+
+  it("suma generales y numeradas; las numeradas inválidas no cuentan", () => {
+    expect(getTicketCapacity([row("50", "100"), numbered("10", "20"), numbered("31", "20")])).toBe(300);
+  });
+
+  it("una numerada no suma su cantidad", () => {
+    expect(getTicketCapacity([{ ...numbered("", ""), quantity: "999" }])).toBe(0);
   });
 });
 
@@ -88,6 +169,22 @@ describe("getTicketTypeErrors", () => {
       { price: "El precio debe ser 0 o mayor", quantity: "La cantidad debe ser un número entero mayor o igual a 1" },
     ]);
   });
+
+  it("devuelve los mensajes por campo de una zona numerada", () => {
+    const rows = [numbered("10", "20"), numbered("", ""), numbered("31", "61"), numbered("2.5", "0")];
+    expect(getTicketTypeErrors(rows)).toEqual([
+      {},
+      { rows: "Ingresa el número de filas", seatsPerRow: "Ingresa los asientos por fila" },
+      {
+        rows: "Las filas deben ser un número entero entre 1 y 30",
+        seatsPerRow: "Los asientos por fila deben ser un número entero entre 1 y 60",
+      },
+      {
+        rows: "Las filas deben ser un número entero entre 1 y 30",
+        seatsPerRow: "Los asientos por fila deben ser un número entero entre 1 y 60",
+      },
+    ]);
+  });
 });
 
 describe("toOrganizerEvent", () => {
@@ -118,6 +215,16 @@ describe("toOrganizerEvent", () => {
       capacity: 150,
       status: "published",
     });
+    expect(organizerEventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it("con zonas mixtas suma los asientos de las numeradas", () => {
+    const values: OrganizerEventFormValues = {
+      ...published,
+      ticketTypes: [row("50", "100"), numbered("10", "20"), numbered("31", "20", "80", "Galería")],
+    };
+    const event = toOrganizerEvent(values, "org-789");
+    expect(event).toMatchObject({ capacity: 300, priceFrom: 50 });
     expect(organizerEventSchema.safeParse(event).success).toBe(true);
   });
 

@@ -170,6 +170,12 @@ describe("organizerEventFormSchema", () => {
         "ticketTypes.1.seatsPerRow": "Ingresa los asientos por fila",
       });
     });
+
+    it("el error de filas tiene el path [\"ticketTypes\", i, \"rows\"]", () => {
+      const ticketTypes = [completeForm.ticketTypes[0], { ...numberedRow, rows: "0" }];
+      const result = organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes });
+      expect(result.error?.issues.map((issue) => issue.path)).toEqual([["ticketTypes", 1, "rows"]]);
+    });
   });
 
   describe("borrador con zona numerada", () => {
