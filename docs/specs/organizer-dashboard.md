@@ -25,7 +25,7 @@ Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus even
 2. **Navegación del panel solo con destinos reales:** "Resumen" (`/organizador`) y "Crear evento" (`/organizador/eventos/nuevo`). "Mis eventos", "Ventas" y "Configuración" **no se muestran** (YAGNI): enlaces muertos rompen la navegación por teclado y elementos deshabilitados con "Próximamente" prometen funciones sin spec. "Mis eventos" sigue existiendo como título de la sección de la lista en Resumen. En móvil, en lugar del menú hamburguesa del diseño ("Abrir menú del panel"), los dos enlaces se muestran como chips horizontales: con dos destinos un `Sheet` añade un clic sin aportar nada (KISS). El bloque de marca "Ticketera · Organizadores" del sidebar se sustituye por el título "Panel de organizador", porque el logo ya está en el header global.
 3. **Sin columna de acción en la lista.** "Ver ventas" necesita la pantalla Ventas y "Editar" necesita una ruta de edición, un formulario precargado y actualizar el store (y el borrador mock no está en el store), las dos fuera de alcance. Un botón deshabilitado o que no hace nada es ruido y no se puede enfocar. Se eliminan la columna y los botones; la edición de borradores queda como pregunta abierta.
 4. **La vista previa no reutiliza `EventCard`.** Sus props no lo permiten: exige un `Event` completo (`imageUrl` obligatoria; `startsAt` ISO válido, porque `formatEventDate` lanza `RangeError` con una fecha vacía) y siempre muestra enlaces reales a `/eventos/<slug>`, que no existe para un evento sin guardar. Adaptarla obligaría a añadir props solo de preview a un componente de compra (rompe S/YAGNI en `events`). Se crea `EventPreviewCard` en `organizer`, presentacional y sin elementos interactivos, que replica la anatomía de EventCard del MASTER §7 con los mismos primitivos (`Card`, `Badge`) y **reutiliza** `formatEventDate`, `formatEventPrice` y `EVENT_CATEGORY_LABELS` del barrel de `events`.
-5. **Categorías:** se usan las 6 del proyecto (`EVENT_CATEGORIES` / `EVENT_CATEGORY_LABELS`: Conciertos, Teatro, Deportes, Festivales, Stand-up, Familia), no las 8 del diseño (Cine, Comedia, Arte…), para que el evento encaje con el listado y la tarjeta. Por defecto, "Conciertos" (como en el diseño).
+5. **Categorías:** se usan las 6 del proyecto (Conciertos, Teatro, Deportes, Festivales, Stand-up, Familia), no las 8 del diseño (Cine, Comedia, Arte…), para que el evento encaje con el listado y la tarjeta. Por defecto, "Conciertos" (como en el diseño). La lista de valores se **deriva** en `organizer.schema.ts` de `EVENT_CATEGORY_LABELS` (de `@/modules/events/format`): `export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]]` (con `import type { EventCategory } from "@/modules/events"`). No se pasa como prop desde la página servidor porque quien la necesita es el **schema** (`z.enum(EVENT_CATEGORY_OPTIONS)`), que se evalúa a nivel de módulo en el cliente (formulario, utils), no solo el `Select`. La aserción es segura: `EVENT_CATEGORY_LABELS` es un `Record<EventCategory, string>`, así que TypeScript obliga a que tenga todas las claves y ninguna más, y conserva el orden de inserción (el mismo que el enum). Un test compara la lista derivada con `EVENT_CATEGORIES` para detectar cualquier desvío. No se modifican `modules/events/format.ts` ni `modules/events/index.ts`.
 6. **Entrada al panel:** en `OrganizerBanner` (hoy `/organizadores`, ruta que no existe), "Publica tu evento" pasa a `/organizador/eventos/nuevo` (su texto describe esa acción) y "Conoce más" pasa a `/organizador`. Es el cambio mínimo: solo dos `href`.
 7. **La imagen no se persiste.** Una URL `blob:` deja de valer al recargar y guardar la imagen como data URL podría superar el límite de localStorage. En el panel, los eventos creados muestran un marcador neutro (icono) en lugar de la imagen.
 8. **Borrador y publicación con un solo schema:** `useZodForm` recibe un único `ZodObject`. El formulario lleva un campo `intent: "draft" | "publish"`. Cada botón es `type="submit"` y, en su `onClick`, hace `setValue("intent", …)` antes del submit; `setValue` actualiza la ref de forma síncrona, así que `handleSubmit` ve el valor nuevo. El `superRefine` solo exige el resto de campos cuando `intent === "publish"`. El borrador solo valida el nombre. Si se pulsa Enter en un campo, el envío implícito activa el primer botón de envío (estándar HTML), que es "Guardar borrador": la opción que no publica nada.
@@ -37,11 +37,16 @@ Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus even
 14. **Orden de KPIs:** Ingresos, Entradas vendidas, Eventos publicados en todos los breakpoints (en móvil, Ingresos ocupa el ancho completo, como en el diseño). Un solo orden en el DOM evita que el orden visual y el de lectura no coincidan. La etiqueta es siempre "Eventos publicados" (el móvil del diseño la acortaba a "Publicados").
 15. **Una fila inicial de tipo de entrada** (el mínimo), en lugar de las dos vacías del diseño, para no obligar a borrar una fila para publicar.
 16. **Breakpoint del panel: `lg` (1024 px)** para sidebar, tabla, formulario en dos columnas y barra estática.
+17. **Nada del cliente importa valores del barrel `@/modules/events`** (Decisión 10 de `checkout-mock-payment.md`): el barrel arrastra componentes cliente (carrusel, `TicketSelector`…) al bundle. Los componentes `"use client"` de organizer, todo lo que estos importan (`organizer.schema.ts`, `utils/*`, `hooks/*`) y el store usan `@/modules/events/format` para `formatEventDate`, `formatEventPrice` y `EVENT_CATEGORY_LABELS`, e `import type` de `@/modules/events` para los tipos. El único archivo que importa valores del barrel es `services/organizer.service.ts` (`getEvents`), que solo se ejecuta en el servidor (lo llama `app/organizador/page.tsx`). Por la misma razón, los componentes cliente de organizer importan los archivos internos del módulo por ruta relativa, nunca desde `@/modules/organizer` (cuyo barrel exporta el service).
 
 ## Requisitos
 
 ### Comunes
-1. `app/` solo enruta. Todo el código vive en `modules/organizer`, que importa de otros módulos solo por sus entradas públicas: `@/modules/events` (`getEvents`, `EVENT_CATEGORIES`, `EVENT_CATEGORY_LABELS`, `formatEventDate`, `formatEventPrice`, tipo `EventCategory`) y, desde la Fase 2, `@/hooks/useZodForm`. No se necesitan exportaciones nuevas en `modules/events/index.ts`.
+1. `app/` solo enruta. Todo el código vive en `modules/organizer`, que importa de otros módulos solo por sus entradas públicas (Decisión 17):
+   - `@/modules/events/format` (creada por checkout-mock-payment, Fase 1): `formatEventDate`, `formatEventPrice`, `EVENT_CATEGORY_LABELS`. La usan todos los archivos que acaban en el cliente.
+   - `@/modules/events`: solo `getEvents` en `services/organizer.service.ts` (servidor), e `import type { EventCategory }` donde haga falta.
+   - Desde la Fase 2, `@/hooks/useZodForm`.
+   - No se modifican `modules/events/index.ts` ni `modules/events/format.ts`.
 2. Solo tokens del tema (MASTER §2), Creato Display, iconos `lucide-react` con `aria-hidden`. Ningún hex ni color por defecto de Tailwind.
 3. Responsive sin scroll horizontal de página en 375 / 768 / 1024 / 1440. Targets ≥ 44 px (`h-11`). Foco visible en todo lo interactivo. Un único `<h1>` por página. No se añade otro `<main>`: el layout raíz ya lo tiene.
 4. Formatos: importes con `formatEventPrice` (`S/ 1,387,530.00`), conteos con `Intl.NumberFormat("es-PE")` (`8,146`), fechas con `formatEventDate` (`SÁB 14 NOV · 21:00`).
@@ -79,7 +84,7 @@ Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus even
 15. `OrganizerEventForm` (cliente) usa `useZodForm(organizerEventFormSchema, INITIAL_VALUES)` de `@/hooks/useZodForm` con `<form noValidate>`. Valores iniciales: `{ intent: "publish", name: "", category: "conciertos", description: "", date: "", time: "", venue: "", city: "", ticketTypes: [nuevaFila()] }`, donde `nuevaFila() = { id: crypto.randomUUID(), name: "", price: "", quantity: "" }`. Patrón de campos de `RegisterForm`: `Field` con `data-invalid`, `FieldLabel htmlFor`, `aria-invalid`, `aria-describedby` → `FieldError` con id; revalidación en `onBlur` con `handleBlur`. Al montar rehidrata `useOrganizerStore` (si no, el primer `addEvent` sobrescribiría los eventos guardados). Las secciones son `Card` `rounded-2xl` con `<h2>` `text-lg font-bold`:
     - **"Información básica":**
       - "Nombre del evento": `Input`, placeholder "Ej. Festival de verano 2026", `maxLength={100}`.
-      - "Categoría": `Select` de shadcn con `items={EVENT_CATEGORY_LABELS}` (patrón de `RegisterForm`), opciones `EVENT_CATEGORIES`.
+      - "Categoría": `Select` de shadcn con `items={EVENT_CATEGORY_LABELS}` (de `@/modules/events/format`, patrón de `RegisterForm`), opciones `EVENT_CATEGORY_OPTIONS` (Decisión 5).
       - "Descripción": `Textarea` `rows={4}`, `maxLength={2000}`, placeholder "Cuenta de qué trata el evento, quiénes se presentan y qué incluye la entrada."
     - **"Fecha y lugar":** grilla `grid-cols-2` en todos los anchos para "Fecha" (`Input type="date"`, `min` = hoy en Lima) y "Hora de inicio" (`Input type="time"`). Debajo, "Lugar" (placeholder "Ej. Estadio Nacional") y "Ciudad" (placeholder "Ej. Lima"), ambos `maxLength={100}`. En `md+`, Lugar y Ciudad van en dos columnas.
     - **"Tipos de entrada"** (`TicketTypesField`) con el subtítulo "Cada tipo tiene su precio y su cantidad disponible.":
@@ -134,7 +139,8 @@ Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus even
 - [ ] Dado el filtro, cuando se pulsa "Borradores", entonces solo se lista "Feria Familiar de Verano" y el botón tiene `aria-pressed="true"`; con "Publicados" se listan 3; con "Todos", 4. Los KPIs no cambian con el filtro.
 - [ ] Dado el filtro, cuando se recorre con Tab y se activa con Enter/Espacio, entonces cambia la selección y el foco es visible en cada opción.
 - [ ] Dado `/organizador` a 375 px, entonces no hay scroll horizontal de página; la navegación son chips horizontales `h-11`; el botón "Crear evento" ocupa todo el ancho; Ingresos ocupa una fila completa y los otros dos KPIs comparten la siguiente; los eventos se muestran como tarjetas (lista `<ul>`, título en `<h3>`, badge de estado con texto, "vendidas", ingresos y barra) y la tabla no está en el árbol de accesibilidad.
-- [ ] Dado el código, entonces `getDashboardKpis`, `getEventRevenue`, `getSoldPercentage`, `filterOrganizerEvents` y `getOrganizerEvents` tienen tests que pasan, y `design-system/ticketera/pages/organizer.md` existe.
+- [ ] Dado el código, entonces `getDashboardKpis`, `getEventRevenue`, `getSoldPercentage`, `filterOrganizerEvents`, `getOrganizerEvents` y `EVENT_CATEGORY_OPTIONS` tienen tests que pasan, y `design-system/ticketera/pages/organizer.md` existe.
+- [ ] Dado `modules/organizer`, entonces solo `services/organizer.service.ts` importa valores de `@/modules/events`; el resto de archivos usa `@/modules/events/format` o `import type`, y ningún archivo interno del módulo importa `@/modules/organizer` (comprobable con `grep`).
 
 ### Fase 2 — Crear evento y guardar
 - [ ] Dada la landing, cuando se pulsa "Publica tu evento" en el banner de organizadores, entonces se navega a `/organizador/eventos/nuevo`; "Conoce más" lleva a `/organizador`.
@@ -193,16 +199,19 @@ Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus even
 
 ### Schemas, tipos, utils, services, stores, hooks
 ```ts
-// modules/organizer/schemas/organizer.schema.ts
+// modules/organizer/schemas/organizer.schema.ts — se ejecuta en el cliente: sin valores del barrel de events (Decisión 17)
 import { z } from "zod";
-import { EVENT_CATEGORIES } from "@/modules/events";
+import type { EventCategory } from "@/modules/events";
+import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 // Fase 1
+// Record<EventCategory, string> garantiza por tipo que estén todas las claves; el test lo compara con EVENT_CATEGORIES.
+export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]];
 export const organizerEventStatusSchema = z.enum(["published", "draft"]);
 export const organizerEventSchema = z.object({
   id: z.string(),
   title: z.string().min(1),
-  category: z.enum(EVENT_CATEGORIES),
+  category: z.enum(EVENT_CATEGORY_OPTIONS),
   startsAt: z.iso.datetime({ offset: true }).nullable(), // null: borrador sin fecha/hora
   venue: z.string(),
   city: z.string(),
@@ -229,7 +238,7 @@ export const organizerEventFormSchema = z
   .object({
     intent: z.enum(["draft", "publish"]),
     name: z.string().trim().min(1, "Ingresa el nombre del evento"),
-    category: z.enum(EVENT_CATEGORIES),
+    category: z.enum(EVENT_CATEGORY_OPTIONS),
     description: z.string(),
     date: z.string(),   // "YYYY-MM-DD" (input date) o ""
     time: z.string(),   // "HH:MM" (input time) o ""
@@ -269,15 +278,26 @@ export type EventPreview = {
 |---|---|---|---|
 | Stats | `modules/organizer/utils/organizerStats.ts` | `getEventRevenue(e): number` (borrador → 0; publicado → `sold × (priceFrom ?? 0)`). `getDashboardKpis(events): DashboardKpis`. `getSoldPercentage(sold, capacity): number` (entero 0–100; capacidad 0 → 0; tope 100). `filterOrganizerEvents(events, filter)`. `formatCount(n): string` (`Intl.NumberFormat("es-PE")`) | 1 |
 | Mock | `modules/organizer/data/organizerEvents.mock.ts` | `ORGANIZER_SALES_MOCK: { slug; sold; capacity }[]`, `ORGANIZER_DRAFTS_MOCK` (Requisito 11) | 1 |
-| Service | `modules/organizer/services/organizer.service.ts` | `getOrganizerEvents(): Promise<OrganizerEvent[]>`: publicados en el orden de `ORGANIZER_SALES_MOCK` (`id`, `title`, `category`, `startsAt`, `venue`, `city`, `imageUrl`, `priceFrom` del `Event`), después los borradores; ignora los slugs que no existan; `organizerEventSchema.array().parse` | 1 |
+| Service | `modules/organizer/services/organizer.service.ts` | Solo servidor; es el único archivo que importa valores de `@/modules/events` (`getEvents`). `getOrganizerEvents(): Promise<OrganizerEvent[]>`: publicados en el orden de `ORGANIZER_SALES_MOCK` (`id`, `title`, `category`, `startsAt`, `venue`, `city`, `imageUrl`, `priceFrom` del `Event`), después los borradores; ignora los slugs que no existan; `organizerEventSchema.array().parse` | 1 |
 | Form utils | `modules/organizer/utils/organizerEventForm.ts` | `createTicketTypeRow(): TicketTypeRow`, `getTicketCapacity(rows)`, `getMinTicketPrice(rows): number \| null`, `formatTicketCount(n)` ("1 entrada" / "N entradas" con separador es-PE), `buildStartsAt(date, time): string \| null` (offset fijo `-05:00`, Perú sin horario de verano), `getTicketTypeErrors(rows): TicketTypeRowErrors[]` (usa `ticketTypeFormSchema`), `toOrganizerEvent(values, id): OrganizerEvent`. Fase 3: `isAcceptedCoverImage(file): boolean` | 2 (mod. 3) |
 | Store | `modules/organizer/stores/organizer.store.ts` | `useOrganizerStore`: `{ events: OrganizerEvent[]; addEvent(event): void }` (`addEvent` antepone). `persist` con `name: "mentec-organizer-events"`, `partialize: ({ events }) => ({ events })`, `skipHydration: true` (patrón de `auth.store.ts`); la rehidratación la hacen `OrganizerDashboard` y `OrganizerEventForm` al montar | 2 |
-| Preview util | `modules/organizer/utils/eventPreview.ts` | `buildEventPreview(values, imageUrl): EventPreview`: `title` = nombre con trim o `null`; `categoryLabel` = `EVENT_CATEGORY_LABELS[category]`; `dateLabel` = `formatEventDate(buildStartsAt(...))` o `null`; `place` = `[venue, city]` con trim, sin vacíos, unidos por ", ", o `null`; `priceFrom` = `getMinTicketPrice` | 3 |
+| Preview util | `modules/organizer/utils/eventPreview.ts` | Importa `EVENT_CATEGORY_LABELS` y `formatEventDate` de `@/modules/events/format`. `buildEventPreview(values, imageUrl): EventPreview`: `title` = nombre con trim o `null`; `categoryLabel` = `EVENT_CATEGORY_LABELS[category]`; `dateLabel` = `formatEventDate(buildStartsAt(...))` o `null`; `place` = `[venue, city]` con trim, sin vacíos, unidos por ", ", o `null`; `priceFrom` = `getMinTicketPrice` | 3 |
 | Hook | `modules/organizer/hooks/useObjectUrl.ts` | `useObjectUrl(file: File \| null): string \| null`; crea con `URL.createObjectURL` y revoca la anterior al cambiar y al desmontar | 3 |
 
 ### Barrel `modules/organizer/index.ts`
 - Fase 1: `OrganizerNav`, `OrganizerDashboard`, `getOrganizerEvents`, tipo `OrganizerEvent`.
 - Fase 2: añade `OrganizerEventForm` y `savedStatusSchema`.
+- Solo lo importan las rutas de `app/organizador/*` (servidor). Los archivos internos del módulo se importan entre sí por ruta relativa (Decisión 17).
+
+### Imports de `events` por archivo
+| Archivo (se ejecuta en) | Importa |
+|---|---|
+| `services/organizer.service.ts` (servidor) | `getEvents` de `@/modules/events` |
+| `schemas/organizer.schema.ts` (cliente vía form/utils) | `EVENT_CATEGORY_LABELS` de `@/modules/events/format`; `import type { EventCategory }` |
+| `utils/organizerStats.ts` (cliente) | nada de events (`formatCount` usa `Intl`) |
+| `utils/organizerEventForm.ts`, `utils/eventPreview.ts` (cliente) | `@/modules/events/format` (`formatEventDate`, `EVENT_CATEGORY_LABELS`); tipos con `import type` |
+| `stores/organizer.store.ts` (cliente) | nada de events (tipos propios) |
+| `components/OrganizerEventsTable.tsx`, `OrganizerKpis.tsx`, `OrganizerDashboard.tsx`, `EventPreviewCard.tsx`, `OrganizerEventForm.tsx` (cliente) | `@/modules/events/format` (`formatEventDate`, `formatEventPrice`, `EVENT_CATEGORY_LABELS`) |
 
 ### Contrato de API
 No hay API HTTP. Contratos internos:
@@ -290,7 +310,8 @@ No hay API HTTP. Contratos internos:
 Override del MASTER para `/organizador` y `/organizador/eventos/nuevo`, con la misma estructura que `pages/checkout.md`: esquema de layout de ambas páginas (sidebar en `lg` / chips en móvil, KPIs, lista tabla/tarjetas, formulario de dos columnas con vista previa, barra inferior `sticky` en móvil), reglas específicas (badges Publicado/Borrador, `Progress` con `aria-valuetext`, "—" con "Sin ingresos", marcadores sin imagen o sin fecha, dropzone, Decisiones 2, 3, 4, 12 y 14 en forma breve) y metadata de cada página.
 
 ## Reutilización
-- `@/modules/events`: `getEvents` (origen del mock), `EVENT_CATEGORIES`, `EVENT_CATEGORY_LABELS`, `formatEventDate`, `formatEventPrice`, tipo `EventCategory`. Sin cambios en el módulo.
+- `@/modules/events/format` (entrada pública de checkout-mock-payment, Fase 1): `formatEventDate`, `formatEventPrice`, `EVENT_CATEGORY_LABELS`, en todo el código que se ejecuta en el cliente.
+- `@/modules/events`: `getEvents` (origen del mock, solo en el service de servidor) y el tipo `EventCategory` (`import type`). Sin cambios en el módulo `events`.
 - `@/hooks/useZodForm` (contrato D, movido por la spec de checkout con pago simulado): estado, errores, foco en el primer campo inválido y revalidación en blur. Sin cambios.
 - Patrones: `RegisterForm` (campos `Field` + `aria-invalid`/`aria-describedby`, `Select` con `items`, `Spinner` en el envío); `auth.store.ts` + `AuthHeaderActions` (`persist` + `skipHydration` + `rehydrate` al montar); `UpcomingEvents` (`ToggleGroup` de selección única); `CategoryFilter` (chips `h-11` con scroll horizontal); `EVENT_STATUS_BADGE` (mapa de badge con texto); `EventCard` (anatomía replicada en `EventPreviewCard`, Decisión 4); `pages/checkout.md` (formato del archivo de diseño).
 - shadcn instalados: `toggle-group`, `badge`, `card`, `button`, `alert`, `field`, `input`, `textarea`, `select`, `spinner`. A instalar: `table`, `progress`.
@@ -308,7 +329,8 @@ Ubicados junto al archivo probado (`npx vitest run modules/organizer`).
   - Devuelve 4 eventos; el primero es `evt-001` con los datos del evento (título, `imageUrl`, `priceFrom: 180`) y la venta 7420/8000, `published`.
   - El último es el borrador `org-draft-001`.
   - Con `@/modules/events` mockeado sin uno de los slugs, ese evento se omite.
-- **`schemas/organizer.schema.test.ts`** (Fase 2; `vi.useFakeTimers({ toFake: ["Date"] })` + `vi.setSystemTime`):
+- **`schemas/organizer.schema.test.ts`** (se crea en la Fase 1 con el caso de categorías; la Fase 2 añade el resto con `vi.useFakeTimers({ toFake: ["Date"] })` + `vi.setSystemTime`):
+  - Fase 1: `EVENT_CATEGORY_OPTIONS` es igual a `EVENT_CATEGORIES` de `@/modules/events` (el test puede importar el barrel: no forma parte del bundle) y `organizerEventSchema` acepta el borrador mock y rechaza una categoría inexistente.
   - Borrador: solo con el nombre es válido; con el nombre en blanco (`"  "`) da el error de nombre; el resto de campos vacíos no da errores.
   - Publicar: con todo vacío da los errores de `name`, `description`, `date`, `time`, `venue`, `city` y `ticketTypes` (con path `["ticketTypes", 0, …]`); un formulario completo es válido.
   - Fecha: ayer da "La fecha no puede ser anterior a hoy"; hoy en Lima es válido, incluso cuando en UTC ya es mañana (p. ej. `2026-10-03T03:00:00Z` con fecha `2026-10-02`); `"2026-13-45"` da "Elige una fecha válida".
@@ -347,20 +369,21 @@ Ubicados junto al archivo probado (`npx vitest run modules/organizer`).
 ## Plan de tareas
 Coordinación:
 - **Orden global de esta ronda:** seating → checkout → tickets → **organizer** → events-ui-refresh. Esta spec se implementa después de checkout-mock-payment.
-- **Prerrequisito de la Fase 2:** `hooks/useZodForm.ts` debe existir (contrato D, lo mueve la spec de checkout). Si no existe, se detiene la fase y se avisa: no se copia el hook ni se importa desde `modules/auth`.
+- **Prerrequisito de la Fase 1:** `modules/events/format.ts` debe existir (`checkout-mock-payment.md`, Fase 1 T2, Decisión 10). Si no existe, se detiene la fase y se avisa: no se crea desde esta spec ni se importa el barrel `@/modules/events` en archivos que acaban en el cliente.
+- **Prerrequisito de la Fase 2:** `hooks/useZodForm.ts` debe existir (contrato D, `checkout-mock-payment.md` Fase 1). Si no existe, se detiene la fase y se avisa: no se copia el hook ni se importa desde `modules/auth`.
 - **Archivos compartidos con otras specs:** `components/ui/progress.tsx` y `components/ui/table.tsx` (si otra spec ya los instaló, Fase 1 T1 solo lo comprueba y se marca hecha sin reinstalar ni sobrescribir); `modules/marketing/components/OrganizerBanner.tsx` (si events-ui-refresh lo modifica después, debe partir de este cambio de `href`).
 - **Registro de shadcn:** al redactar esta spec, `ui.shadcn.com` no era accesible desde el proxy (403), así que no se pudieron ejecutar `npx shadcn search`/`docs`; `table` y `progress` son componentes conocidos del registro `base-nova`. Si `npx shadcn@latest add` falla, se detiene y se avisa al usuario: no se escriben a mano.
 - Nadie hace commits ni ejecuta `npm run build` en paralelo: el build lo corre el reviewer al cerrar cada fase.
 
-### Fase 1 — Panel con datos mock (17 archivos, 2 generados por shadcn)
+### Fase 1 — Panel con datos mock (18 archivos, 2 generados por shadcn)
 - [ ] T1 — Instalar componentes shadcn: `npx shadcn@latest add table progress` · archivos: `components/ui/table.tsx`, `components/ui/progress.tsx` · depende de: — · secuencial (base, `components/ui/`)
-- [ ] T2 — Schema y tipos del evento de organizador, y utils de estadísticas con test · archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerStats.ts`, `modules/organizer/utils/organizerStats.test.ts` · depende de: T1 · secuencial (base del módulo)
+- [ ] T2 — Schema (con `EVENT_CATEGORY_OPTIONS` derivado de `@/modules/events/format`) y tipos del evento de organizador, y utils de estadísticas, con tests · archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerStats.ts`, `modules/organizer/utils/organizerStats.test.ts` · depende de: T1, `modules/events/format.ts` (checkout-mock-payment F1) · secuencial (base del módulo)
 - [ ] T3 — Datos mock y service `getOrganizerEvents` con test · archivos: `modules/organizer/data/organizerEvents.mock.ts`, `modules/organizer/services/organizer.service.ts`, `modules/organizer/services/organizer.service.test.ts` · depende de: T2 · paralelo con T4
-- [ ] T4 — Componentes del panel: navegación, KPIs, lista tabla/tarjetas y dashboard con filtro · archivos: `modules/organizer/components/OrganizerNav.tsx`, `modules/organizer/components/OrganizerKpis.tsx`, `modules/organizer/components/OrganizerEventsTable.tsx`, `modules/organizer/components/OrganizerDashboard.tsx` · depende de: T1, T2 · paralelo con T3
+- [ ] T4 — Componentes del panel: navegación, KPIs, lista tabla/tarjetas y dashboard con filtro (formateadores desde `@/modules/events/format`) · archivos: `modules/organizer/components/OrganizerNav.tsx`, `modules/organizer/components/OrganizerKpis.tsx`, `modules/organizer/components/OrganizerEventsTable.tsx`, `modules/organizer/components/OrganizerDashboard.tsx` · depende de: T1, T2 · paralelo con T3
 - [ ] T5 — Rutas, barrel y diseño de página · archivos: `app/organizador/layout.tsx`, `app/organizador/page.tsx`, `modules/organizer/index.ts`, `design-system/ticketera/pages/organizer.md` · depende de: T3, T4 · secuencial
 
 ### Fase 2 — Crear evento, store y aviso (15 archivos)
-- [ ] T1 — Schema del formulario (`savedStatusSchema`, `ticketTypeFormSchema`, `organizerEventFormSchema`), tipos del formulario y utils del formulario, con tests · archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerEventForm.ts`, `modules/organizer/utils/organizerEventForm.test.ts` · depende de: Fase 1 · paralelo con T2
+- [ ] T1 — Schema del formulario (`savedStatusSchema`, `ticketTypeFormSchema`, `organizerEventFormSchema`), tipos del formulario y utils del formulario, con tests (amplía `organizer.schema.test.ts` de la Fase 1) · archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerEventForm.ts`, `modules/organizer/utils/organizerEventForm.test.ts` · depende de: Fase 1 · paralelo con T2
 - [ ] T2 — Store `useOrganizerStore` con persist y test · archivos: `modules/organizer/stores/organizer.store.ts`, `modules/organizer/stores/organizer.store.test.ts` · depende de: Fase 1 · paralelo con T1
 - [ ] T3 — Formulario `OrganizerEventForm` + `TicketTypesField` con test · archivos: `modules/organizer/components/OrganizerEventForm.tsx`, `modules/organizer/components/TicketTypesField.tsx`, `modules/organizer/components/OrganizerEventForm.test.tsx` · depende de: T1, T2, `hooks/useZodForm.ts` (spec de checkout) · paralelo con T4
 - [ ] T4 — El dashboard combina el store y muestra el `Alert` de guardado · archivos: `modules/organizer/components/OrganizerDashboard.tsx` · depende de: T1 (tipo `SavedStatus`), T2 · paralelo con T3
