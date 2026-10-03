@@ -228,7 +228,7 @@ export function EventCard({ event, layout = "grid", surface = "background", clas
             </button>
           ) : (
             <Link href={href} className={ctaVariants({ layout })}>
-              Ver entradas<span className="sr-only"> de {event.title}</span>
+              Ver entradas <span className="sr-only">de {event.title}</span>
             </Link>
           )}
           {layout === "ticket" && statusClass && (

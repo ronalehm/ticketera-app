@@ -17,3 +17,23 @@ export function buildCheckoutHref(slug: string, quantities: Record<string, numbe
   }
   return `/checkout?${params}`;
 }
+
+const QUANTITY_PATTERN = /^\d+$/;
+
+export function parsePreselectedQuantities(
+  ticketTypes: Pick<TicketType, "id" | "status">[],
+  params: Pick<URLSearchParams, "getAll">,
+) {
+  const quantities: Record<string, number> = {};
+  let remaining = MAX_TICKETS_PER_ORDER;
+  for (const type of ticketTypes) {
+    if (type.status === "sold-out" || remaining === 0) continue;
+    const values = params.getAll(type.id);
+    if (values.length !== 1 || !QUANTITY_PATTERN.test(values[0])) continue;
+    const quantity = Number(values[0]);
+    if (quantity < 1 || quantity > MAX_TICKETS_PER_ORDER) continue;
+    quantities[type.id] = Math.min(quantity, remaining);
+    remaining -= quantities[type.id];
+  }
+  return quantities;
+}

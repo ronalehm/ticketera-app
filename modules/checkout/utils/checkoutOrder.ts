@@ -2,7 +2,7 @@ import type { EventDetail } from "@/modules/events";
 import { getOrderTotal, MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { resolveSeats, type VenueMap } from "@/modules/seating/seats";
 import { ticketQuantitySchema } from "../schemas/checkout.schema";
-import type { CheckoutOrderItem, CheckoutOrderResult } from "../types/checkout.types";
+import type { CheckoutOrder, CheckoutOrderItem, CheckoutOrderResult } from "../types/checkout.types";
 
 type OrderSeat = NonNullable<CheckoutOrderItem["seats"]>[number];
 
@@ -20,6 +20,21 @@ export function parseTicketQuantities(
     quantities[id] = parsed.data;
   }
   return Object.keys(quantities).length > 0 ? quantities : null;
+}
+
+/**
+ * Enlace de "Cambiar entradas" al paso 1 con la selección del pedido (inversa de `parseTicketQuantities`):
+ * `<ticketTypeId>=<quantity>` en el orden de `items` y, si hay asientos, `asientos` al final con sus ids unidos
+ * por `,`. Con mapa va a `/eventos/<slug>/entradas`; sin mapa, al ancla `#entradas` del detalle.
+ */
+export function buildChangeTicketsHref(order: Pick<CheckoutOrder, "event" | "items">, hasMap: boolean): string {
+  const params = new URLSearchParams();
+  for (const { ticketTypeId, quantity } of order.items) params.append(ticketTypeId, String(quantity));
+  const seatIds = order.items.flatMap((item) => item.seats?.map((seat) => seat.id) ?? []);
+  if (seatIds.length > 0) params.append("asientos", seatIds.join(","));
+
+  const { slug } = order.event;
+  return hasMap ? `/eventos/${slug}/entradas?${params}` : `/eventos/${slug}?${params}#entradas`;
 }
 
 /**

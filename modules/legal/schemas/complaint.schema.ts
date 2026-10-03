@@ -39,7 +39,12 @@ const limitedText = (emptyMessage: string, max: number, maxMessage: string) =>
 
 // RadioGroup sin opción elegida (`""`) al inicio: sin elegir no vale y la salida es una de las opciones.
 const requiredChoice = <const T extends readonly [string, ...string[]]>(options: T, message: string) =>
-  z.enum(["", ...options]).pipe(z.enum(options, { error: message }));
+  z.enum(["", ...options]).transform((value, ctx) => {
+    // Descartado `""`, el valor es una de `options` (TS no estrecha el tipo genérico).
+    if (value !== "") return value as T[number];
+    ctx.addIssue({ code: "custom", message });
+    return z.NEVER;
+  });
 
 // Datos del padre, madre o apoderado: solo se validan si el consumidor es menor de edad.
 const guardianSchema = z

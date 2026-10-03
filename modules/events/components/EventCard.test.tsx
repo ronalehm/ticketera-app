@@ -59,7 +59,7 @@ describe("EventCard", () => {
 
   it("agotado: badge 'Agotado', botón deshabilitado y sin enlace 'Ver entradas'", () => {
     render(<EventCard event={getEvent("los-ecos-del-sur-arequipa")} />);
-    expect(screen.getAllByText("Agotado")).toHaveLength(1);
+    expect(screen.getAllByText("Agotado", { selector: "span" })).toHaveLength(1);
     const button = screen.getByRole("button", { name: "Agotado: Los Ecos del Sur en vivo" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(screen.queryByRole("link", { name: /^Ver entradas/ })).toBeNull();

@@ -15,11 +15,12 @@ import type { EventStatus, TicketType } from "../types/events.types";
 import { formatEventPrice } from "../utils/formatEvent";
 import { MAX_TICKETS_PER_ORDER, buildCheckoutHref, getOrderTotal, getTicketCount } from "../utils/ticketOrder";
 
-type TicketSelectorProps = {
+export type TicketSelectorProps = {
   slug: string;
   status: EventStatus;
   priceFrom: number;
   ticketTypes: TicketType[];
+  initialQuantities?: Record<string, number>;
 };
 
 const CTA_CLASS = cn(
@@ -31,9 +32,11 @@ const CTA_CLASS = cn(
 const STEPPER_CLASS =
   "size-11 cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-background aria-disabled:dark:hover:bg-input/30 aria-disabled:active:not-aria-[haspopup]:translate-y-0";
 
-export function TicketSelector({ slug, status, priceFrom, ticketTypes }: TicketSelectorProps) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+export function TicketSelector({ slug, status, priceFrom, ticketTypes, initialQuantities }: TicketSelectorProps) {
   const soldOut = status === "sold-out";
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    soldOut ? {} : (initialQuantities ?? {}),
+  );
   const count = getTicketCount(quantities);
   const atLimit = count >= MAX_TICKETS_PER_ORDER;
 

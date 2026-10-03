@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { PurchaseStepper } from "@/components/shared/PurchaseStepper";
-import { CheckoutForm, CheckoutStatusMessage, getCheckoutOrder } from "@/modules/checkout";
+import { buildChangeTicketsHref, CheckoutForm, CheckoutStatusMessage, getCheckoutOrder } from "@/modules/checkout";
 import { hasVenueMap } from "@/modules/seating/seats";
 
 export const metadata: Metadata = { title: "Finalizar compra | Mentec Tickets" };
@@ -15,8 +15,7 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   }
 
   const { order } = result;
-  const { slug } = order.event;
-  const changeHref = hasVenueMap(slug) ? `/eventos/${slug}/entradas` : `/eventos/${slug}`;
+  const changeHref = buildChangeTicketsHref(order, hasVenueMap(order.event.slug));
 
   return (
     <>
