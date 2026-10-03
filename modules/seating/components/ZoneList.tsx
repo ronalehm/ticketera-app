@@ -15,7 +15,11 @@ type ZoneListProps = {
   activeZoneId: string | null;
   quantities: Record<string, number>;
   atLimit: boolean;
+  /** Asientos elegidos por zona numerada (las zonas sin asientos pueden faltar). */
+  seatCountByZone: Record<string, number>;
   onChangeQuantity: (zoneId: string, delta: 1 | -1) => void;
+  /** Activa la zona numerada y lleva el foco al plano de asientos. */
+  onChooseSeats: (zoneId: string) => void;
 };
 
 // Como en TicketSelector: focusableWhenDisabled no pone `disabled`, así que se neutralizan a mano el hover y el
@@ -23,7 +27,21 @@ type ZoneListProps = {
 const STEPPER_BUTTON_CLASS =
   "size-11 cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:active:not-aria-[haspopup]:translate-y-0";
 
-export function ZoneList({ zones, tones, activeZoneId, quantities, atLimit, onChangeQuantity }: ZoneListProps) {
+/** "1 asiento elegido" / "3 asientos elegidos". */
+function formatSeatCount(count: number): string {
+  return count === 1 ? "1 asiento elegido" : `${count} asientos elegidos`;
+}
+
+export function ZoneList({
+  zones,
+  tones,
+  activeZoneId,
+  quantities,
+  atLimit,
+  seatCountByZone,
+  onChangeQuantity,
+  onChooseSeats,
+}: ZoneListProps) {
   return (
     <Card className="gap-2 rounded-2xl ring-border">
       <CardHeader>
@@ -33,6 +51,7 @@ export function ZoneList({ zones, tones, activeZoneId, quantities, atLimit, onCh
         <ul className="-mx-3 flex flex-col divide-y divide-border">
           {zones.map((zone) => {
             const quantity = quantities[zone.id] ?? 0;
+            const seatCount = zone.kind === "numbered" ? (seatCountByZone[zone.id] ?? 0) : 0;
 
             return (
               <li
@@ -51,6 +70,9 @@ export function ZoneList({ zones, tones, activeZoneId, quantities, atLimit, onCh
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground tabular-nums">{formatEventPrice(zone.price)} c/u</p>
+                  {seatCount > 0 && (
+                    <p className="text-sm font-medium tabular-nums">{formatSeatCount(seatCount)}</p>
+                  )}
                 </div>
 
                 {zone.status === "sold-out" ? (
@@ -85,9 +107,14 @@ export function ZoneList({ zones, tones, activeZoneId, quantities, atLimit, onCh
                     </Button>
                   </div>
                 ) : (
-                  <p className="max-w-36 shrink-0 text-right text-sm text-muted-foreground">
-                    Elección de asientos próximamente
-                  </p>
+                  <Button
+                    variant="outline"
+                    className="h-11 shrink-0 cursor-pointer px-4 font-semibold"
+                    aria-label={`Elegir asientos en ${zone.name}`}
+                    onClick={() => onChooseSeats(zone.id)}
+                  >
+                    Elegir asientos
+                  </Button>
                 )}
               </li>
             );
