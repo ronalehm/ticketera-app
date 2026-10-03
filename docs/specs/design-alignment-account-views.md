@@ -1,7 +1,7 @@
 # Alineación con Claude Design: acceso (con Google), Mis entradas, panel de organizador y Crear evento
 
 - Módulo: auth · organizer · tickets (más `components/shared` y la entrada pública `modules/events/format.ts`)
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Pedido del usuario: "Vamos a continuar con las siguientes 4 vistas: Login y Registro, Mis Entradas, Panel de organizador, Crear Evento" (artifact de Claude Design `NmeqG8Dta7F7zcSPmbQC8y`). Ampliación posterior: "Agreguemos que en login y registro también usemos Google Auth".
@@ -69,7 +69,7 @@ Mapeo de colores usado en todas las tablas:
 | M4 | Lista de pedidos | Columna de 400 px en `lg`; fila con scroll en móvil, botones de 270 px | Igual | tickets F1 |
 | M5 | Pedido en móvil | Solo "2 entradas" en la tercera línea | "2 entradas · General" | No se adopta: la zona ayuda a distinguir pedidos del mismo evento |
 | M6 | Tarjeta: metadatos en móvil | Dos líneas: "fecha · hora" y "lugar, ciudad" | Tres líneas: fecha, hora y lugar | **Esta spec F3** |
-| M7 | Tarjeta: chip de fecha | Chip blanco MES/día | Igual, pero con el marcado copiado a mano | **Esta spec F3**: pasa a usar `DateChip` compartido (sin cambio visual) |
+| M7 | Tarjeta: chip de fecha | Chip blanco MES/día | Igual, pero con el marcado copiado a mano | **Esta spec F3**: pasa a usar `DateChip` compartido (mismos colores; ~62 px de alto, Decisión 12) |
 | M8 | Navegación entre entradas en móvil | Flechas a los lados de "Entrada n de N", centrado, debajo del QR | Texto a la izquierda y flechas a la derecha | `tickets-ticket-pager` (borrador en paralelo). Esta spec no toca la navegación. |
 | M9 | Orden del `<dl>` en móvil | Zona \| Estado, Titular \| Código | Zona \| Titular, Código \| Estado (el mismo orden que el diseño de escritorio) | No se adopta: un único DOM; reordenar por breakpoint confundiría la lectura |
 | M10 | Acciones en móvil | "PDF" y "Calendario" en dos columnas | Etiquetas completas, apiladas | No se adopta (decisión de `my-tickets.md`: etiquetas completas) |
@@ -181,6 +181,9 @@ Mapeo de colores usado en todas las tablas:
 11. **Mis entradas: un único DOM para fecha y hora.**
     - En móvil, la hora va en la misma línea que la fecha ("Sábado, 14 de noviembre de 2026 · 21:00"), con un `<span className="sm:hidden">`.
     - El `<li>` con `Clock` pasa a `hidden sm:flex`. Con `display: none`, la hora no se duplica en el árbol de accesibilidad.
+12. **Enmienda tras la revisión B4 (aceptada por el usuario).**
+    - **Chip de `TicketCard` (Requisito 16):** adopta el tamaño del `DateChip` compartido (Requisito 12), unos 62 px de alto (antes ~54 px) y anillo `ring-border/60`, con los mismos colores. Motivo: las clases fijadas en el Requisito 12 (`py-1.5`, `ring-1 ring-border/60`) y el interlineado propio de `text-xs`/`text-2xl` en Tailwind v4 hacen imposible conservar el mismo tamaño. Ya está documentado en `design-system/ticketera/pages/my-tickets.md`.
+    - **Vista previa vacía (criterio de F2 a 1440 px):** el overline "CONCIERTOS" va en `text-primary-strong` (Requisito 14): es el valor por defecto de la categoría, no un marcador. Solo "Nombre del evento", "Lugar · Ciudad" y "Fecha por definir" van atenuados.
 
 ### Lo que esta spec cambia de otras specs (no se editan)
 Al implementar y revisar, prevalece esta spec en estos puntos:
@@ -307,7 +310,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
 ### Fase 3: Mis entradas
 15. **`MyTickets`:** `PAGE_TITLE` pasa a `text-3xl font-extrabold tracking-tight md:text-4xl`. Nada más cambia.
 16. **`TicketCard`:**
-    - El chip pasa a `<DateChip month day className="absolute top-3 left-3" />` (sin cambio visual: el mismo tamaño y los mismos colores). Se elimina el marcado propio.
+    - El chip pasa a `<DateChip month day className="absolute top-3 left-3" />` y adopta el tamaño del `DateChip` compartido (Requisito 12): unos 62 px de alto (antes ~54 px) y anillo `ring-border/60`, con los mismos colores (Decisión 12). Se elimina el marcado propio.
     - **Metadatos (Decisión 11):** en el `<li>` de la fecha se añade, tras el `<time>`, `<span className="sm:hidden"> · {formatTime(event.startsAt)}</span>`. El `<li>` de `Clock` pasa a `hidden sm:flex`.
     - No se toca la navegación entre entradas ni las acciones (`tickets-ticket-pager`, `tickets-pdf-download`).
 
@@ -348,7 +351,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
 - [ ] **Vacío por filtro.** Dado un filtro sin eventos de ese estado, entonces "No tienes eventos con este estado." se lee como un bloque gris dentro de la tarjeta en `lg` y como un bloque blanco con anillo sobre el fondo gris por debajo de `lg` (clases del Requisito 13). Los datos mock tienen eventos en todos los filtros, así que el reviewer lo comprueba en el código o vaciando temporalmente el store y el mock en su entorno, sin dejar cambios.
 - [ ] **Vista previa a 1440 px (vacía).** Dado `/organizador/eventos/nuevo` a 1440 px con el formulario vacío, entonces la vista previa muestra:
   - el chip "MES / --" atenuado sobre la imagen vacía;
-  - el overline "CONCIERTOS", "Nombre del evento", "Lugar · Ciudad" y "Fecha por definir", atenuados;
+  - el overline "CONCIERTOS" en `text-primary-strong` (Requisito 14; es la categoría por defecto, no un marcador) y, atenuados, "Nombre del evento", "Lugar · Ciudad" y "Fecha por definir" (Decisión 12);
   - el talón discontinuo con dos muescas grises (del color del fondo);
   - "Desde" + "S/ —" y el falso botón "Ver entradas";
   - ningún badge "Disponible".
@@ -363,7 +366,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
 - [ ] **Título.** Dado `/mis-entradas` con la sesión demo a 1440 px, entonces el h1 "Mis entradas" mide 36 px (`text-4xl`); a 375 px mide 30 px. La tarjeta, la lista y las pestañas no cambian.
 - [ ] **Metadatos en móvil.** Dado `/mis-entradas` a 375 px, entonces la tarjeta muestra "Sábado, 14 de noviembre de 2026 · 21:00" en una línea (o en dos si no cabe) con el icono de calendario y, debajo, el lugar con `MapPin`. No aparece la línea del reloj. Desde 640 px se ven otra vez tres elementos (fecha, reloj con la hora, lugar).
 - [ ] **Hora sin duplicar.** Dado el árbol de accesibilidad a 375 y a 1440 px, entonces la hora se anuncia una sola vez.
-- [ ] **Chip.** Dado el chip de fecha de la tarjeta, entonces se ve igual que antes ("NOV / 14").
+- [ ] **Chip.** Dado el chip de fecha de la tarjeta, entonces muestra "NOV / 14" con los mismos colores que antes y el tamaño del `DateChip` compartido (unos 62 px de alto, anillo `ring-border/60`; Decisión 12).
 - [ ] **Código.** Dado el código, entonces `npx vitest run modules/tickets` pasa y `pages/my-tickets.md` recoge el h1 y los metadatos móviles.
 
 ## Diseño técnico
