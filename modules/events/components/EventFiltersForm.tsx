@@ -64,14 +64,15 @@ function CheckboxOption({
   return (
     <label className={OPTION_CLASS}>
       <input type="checkbox" name={name} value={value} checked={checked} onChange={onChange} className={INPUT_CLASS} />
-      {/* El sr-only va dentro del mismo span: como ítem flex aparte, Chromium añade un espacio antes de la coma. */}
-      <span className="flex-1">
+      {/* El nombre accesible completo va en un único texto sr-only: Chromium trata el sr-only (position: absolute)
+          como bloque y le añade espacios alrededor, así que repartirlo entre varios nodos daría "Lima , 6 eventos". */}
+      <span className="flex-1" aria-hidden>
         {label}
-        <span className="sr-only">, {countLabel(count)}</span>
       </span>
       <span className="text-muted-foreground tabular-nums" aria-hidden>
         {count}
       </span>
+      <span className="sr-only">{`${label}, ${countLabel(count)}`}</span>
     </label>
   );
 }

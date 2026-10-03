@@ -35,22 +35,21 @@ export function EventFiltersSheet({ filters, facets, months, resultCount, classN
         )}
       >
         <SlidersHorizontal className="size-5" aria-hidden />
-        {/* El sr-only va dentro del mismo span: como ítem flex aparte, Chromium añade un espacio antes de la coma. */}
-        <span>
-          Filtros
-          {activeCount > 0 && (
-            <span className="sr-only">
-              , {activeCount} {activeCount === 1 ? "activo" : "activos"}
+        {activeCount > 0 ? (
+          <>
+            {/* Nombre accesible en un único texto sr-only: Chromium rodea de espacios el sr-only (position: absolute),
+                así que "Filtros" + ", n activos" en nodos separados daría "Filtros , n activos". */}
+            <span aria-hidden>Filtros</span>
+            <span
+              aria-hidden
+              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground tabular-nums"
+            >
+              {activeCount}
             </span>
-          )}
-        </span>
-        {activeCount > 0 && (
-          <span
-            aria-hidden
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground tabular-nums"
-          >
-            {activeCount}
-          </span>
+            <span className="sr-only">{`Filtros, ${activeCount} ${activeCount === 1 ? "activo" : "activos"}`}</span>
+          </>
+        ) : (
+          "Filtros"
         )}
       </SheetTrigger>
       <SheetContent
