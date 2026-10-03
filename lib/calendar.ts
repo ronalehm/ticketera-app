@@ -1,5 +1,6 @@
 // Generación de eventos iCalendar (RFC 5545) y su descarga como archivo .ics, sin librerías.
 
+import { downloadBlob } from "@/lib/download";
 import { hashString } from "@/lib/hash";
 
 type IcsEventInput = {
@@ -86,15 +87,5 @@ export function buildIcsEvent({ title, startsAt, location, description }: IcsEve
 
 /** Descarga `content` como archivo `.ics` mediante un enlace temporal. */
 export function downloadIcs(fileName: string, content: string): void {
-  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-
-  URL.revokeObjectURL(url);
+  downloadBlob(fileName, new Blob([content], { type: "text/calendar;charset=utf-8" }));
 }
