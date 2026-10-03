@@ -814,23 +814,23 @@ Coordinación con las otras specs de la ronda (orden: seating → checkout → t
   - En paralelo con T1 y T2.
 
 ### Fase 4. Plano de asientos e integración en el detalle
-- [ ] T1. Instalar `react-zoom-pan-pinch` con `npm install react-zoom-pan-pinch@^4.2.0`.
+- [x] T1. Instalar `react-zoom-pan-pinch` con `npm install react-zoom-pan-pinch@^4.2.0`.
   - Archivos: `package.json`, `package-lock.json`.
   - Depende de: Fase 3.
   - Secuencial (base).
-- [ ] T2. Plano de asientos, leyenda y chips.
+- [x] T2. Plano de asientos, leyenda y chips.
   - Archivos: `modules/seating/components/SeatPlan.tsx`, `modules/seating/components/SeatLegend.tsx`, `modules/seating/components/SelectedSeatChips.tsx`.
   - Depende de: T1.
   - En paralelo con T3.
-- [ ] T3. Tarjeta de precios por zona y barra móvil del detalle (contrato H).
+- [x] T3. Tarjeta de precios por zona y barra móvil del detalle (contrato H).
   - Archivos: `modules/seating/components/ZonePricesCard.tsx`, `modules/seating/components/MobileBuyBar.tsx`.
   - Depende de: T1.
   - En paralelo con T2.
-- [ ] T4. Integrar el plano en `TicketSelection` y el botón "Elegir asientos" en `ZoneList`, con test ampliado.
+- [x] T4. Integrar el plano en `TicketSelection` y el botón "Elegir asientos" en `ZoneList`, con test ampliado.
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/ZoneList.tsx`.
   - Depende de: T2.
   - Secuencial.
-- [ ] T5. Detalle con mapa, barrel y documentación de diseño.
+- [x] T5. Detalle con mapa, barrel y documentación de diseño.
   - `ticket-selection.md`: añadir el plano de asientos, la leyenda y el teclado.
   - `event-detail.md`: añadir el aside con mapa y la barra móvil.
   - Archivos: `app/eventos/[slug]/page.tsx`, `modules/seating/index.ts`, `design-system/ticketera/pages/ticket-selection.md`, `design-system/ticketera/pages/event-detail.md`.
