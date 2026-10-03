@@ -23,9 +23,14 @@ import { ShareEventButton } from "./ShareEventButton";
 const CRUMB_LINK =
   "rounded-sm transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+// Anillo de foco claro: el ring-ring/50 por defecto apenas contrasta sobre el bloque navy.
+const HERO_FOCUS = "focus-visible:border-primary-foreground focus-visible:ring-primary-foreground";
+
 // Guardar y Compartir en `lg`: outline sobre el bloque navy.
-const HERO_ICON_BUTTON =
-  "size-12 border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground";
+const HERO_ICON_BUTTON = cn(
+  "size-12 border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground",
+  HERO_FOCUS,
+);
 
 type EventDetailHeaderProps = {
   event: EventDetail;
@@ -123,6 +128,7 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
                 className={cn(
                   buttonVariants(),
                   "h-auto min-h-12 flex-1 cursor-pointer px-6 py-2 text-center text-base font-semibold whitespace-normal duration-200 hover:bg-primary-strong",
+                  HERO_FOCUS,
                 )}
               >
                 {ctaLabel}

@@ -1,7 +1,7 @@
 # Página: detalle de evento `/eventos/[slug]`
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
-> Spec: `docs/specs/events-ui-refresh.md` (Fase 2). Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa son de `docs/specs/seating-ticket-selection.md` (contrato H).
+> Spec: `docs/specs/events-ui-refresh.md` (Fase 2). Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
 
 ## Layout
 
@@ -42,7 +42,7 @@ Header sticky
 Aside de compra  (id="entradas")
 Acerca del evento · Información importante (2×2) · Lugar
 También te puede interesar  → carrusel con scroll-snap (< sm)
-Barra inferior (solo con mapa y no agotado, ver seating)
+Barra inferior  (< lg, solo con mapa y no agotado)  Desde S/ X   [Comprar entradas →]
 Footer
 ```
 
@@ -84,8 +84,41 @@ Footer
 ## Aside de compra
 
 - Eventos **sin** mapa: `TicketSelector` (ver "Reglas específicas").
-- Eventos **con** mapa (`getVenueMapBySlug`): `ZonePricesCard` en la celda del aside y `MobileBuyBar` como último hijo de la página (solo si no está agotado). Su diseño, la compra en `/eventos/<slug>/entradas` y la barra móvil están en `ticket-selection.md` y en `docs/specs/seating-ticket-selection.md` (contrato H); esta página no los redefine.
+- Eventos **con** mapa (`getVenueMapBySlug`): `ZonePricesCard` en la celda del aside y `MobileBuyBar` como último hijo de la página (solo si no está agotado). Ver "Aside con mapa" y "Barra inferior móvil".
 - Nunca se muestran ambos asides. Los eventos sin mapa no tienen barra inferior móvil.
+
+## Aside con mapa (`ZonePricesCard`)
+
+Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver `ticket-selection.md`); el aside solo resume precios y enlaza allí. Misma celda (`id="entradas"`, columna derecha de 380px en `lg`) y mismo sticky que el selector (`lg:sticky lg:top-24`). En móvil va justo debajo del hero, antes de la información.
+
+```
+┌──────────────────────────────┐
+│ Entradas                     │  h2 text-xl font-bold
+│ Entradas desde               │  text-sm text-muted-foreground
+│ S/ 180.00                    │  text-3xl font-bold tabular-nums
+├──────────────────────────────┤
+│ ■ VIP [Últimas]    S/ 550.00 │  lista divide-y, border-y
+│ ■ Preferencial     S/ 320.00 │
+│ ■ General          S/ 180.00 │
+│ ■ Tribuna Norte    S/ 220.00 │
+├──────────────────────────────┤
+│ [ Elegir entradas → ]        │  primario h-11 w-full
+│ (Lock) Pago seguro · Entr…   │  text-sm text-muted-foreground
+└──────────────────────────────┘
+```
+
+- `Card rounded-2xl`, h2 "Entradas"; "Entradas desde" + `priceFrom`.
+- Una fila por zona (`min-h-14`) en el orden del mapa: muestra de tono (`size-3.5 rounded-sm`, `aria-hidden`, mismos tonos por precio que el mapa), nombre (`text-base font-medium`), `Badge` "Últimas entradas" (`bg-warning text-warning-foreground`) si la zona es `low-stock`, y a la derecha el precio (`font-bold tabular-nums`) o "Agotado" (`text-sm font-bold text-muted-foreground`).
+- CTA "Elegir entradas" + `ArrowRight`: enlace primario `h-11 w-full font-semibold hover:bg-primary-strong` a `/eventos/<slug>/entradas` (el mismo destino que el CTA del hero, `purchaseHref`).
+- Evento agotado: "Entradas agotadas" (`rounded-lg bg-muted p-3 text-center font-bold`) en lugar del CTA.
+- Nota final con `Lock` (`aria-hidden`): "Pago seguro · Entrada digital con QR".
+
+## Barra inferior móvil (`MobileBuyBar`)
+
+- Solo en eventos con mapa y no agotados; la página no la renderiza en el resto (sin mapa, el detalle no tiene barra inferior).
+- Último hijo de la página, después de "También te puede interesar": `sticky bottom-0 z-30 lg:hidden`, a ancho completo, `border-t bg-background shadow-lg shadow-foreground/5`, `px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo al desplazarse y no tapa el footer al final.
+- Izquierda: "Desde" (`text-xs text-muted-foreground`) + `priceFrom` (`text-xl font-bold tabular-nums`). Derecha: enlace primario `h-11 px-6` "Comprar entradas" + `ArrowRight` a `/eventos/<slug>/entradas`.
+- Mismo estilo que la barra de `/entradas`. En `lg+` desaparece: el aside cumple esa función.
 
 ## Información (`EventDetailInfo`)
 

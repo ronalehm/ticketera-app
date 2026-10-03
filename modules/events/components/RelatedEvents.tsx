@@ -11,6 +11,8 @@ import { buildEventsHref } from "../utils/eventFilters";
 import { EventCard } from "./EventCard";
 
 // < sm: fila con scroll-snap que sangra hasta el borde del contenedor (`-mx-4 px-4`); desde sm, grilla.
+// Cada `li` es `relative` para que los `sr-only` (absolute) de EventCard queden dentro del scroll del carrusel
+// y no ensanchen la página.
 export function RelatedEvents({ events, category }: { events: Event[]; category: EventCategory }) {
   if (events.length === 0) return null;
 
@@ -34,7 +36,7 @@ export function RelatedEvents({ events, category }: { events: Event[]; category:
         />
         <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:py-0 md:gap-6 lg:grid-cols-3 xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {events.map((event) => (
-            <li key={event.id} className="w-64 shrink-0 snap-start sm:w-auto">
+            <li key={event.id} className="relative w-64 shrink-0 snap-start sm:w-auto">
               <EventCard event={event} />
             </li>
           ))}
