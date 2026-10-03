@@ -126,6 +126,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
 | Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |
 | Avatar de usuario | `Avatar` + `AvatarFallback` con iniciales (`getInitials` de `lib/userName.ts`) | `components/shared/UserAvatar.tsx` |
+| Paginador de entradas | `Button` outline `size-11` (`focusableWhenDisabled` en los extremos), controlado (`index`, `count`, `onIndexChange`). "Entrada n de N" (`text-lg font-bold tabular-nums whitespace-nowrap`, `aria-live="polite"` `aria-atomic`); flechas "Entrada anterior/siguiente" siempre visibles; ArrowLeft/ArrowRight con el foco en una flecha. Layout por contenedor (`@container`): bajo 16rem (`@3xs`) texto arriba y flechas centradas debajo; desde 16rem, una fila `justify-between`. Confirmación (talón) y Mis entradas, ambos `print:hidden` | `components/shared/TicketPager.tsx` |
 | Separadores | `Separator` | footer |
 | Título de sección | nuevo, presentacional | `components/shared/SectionHeader.tsx` |
 | Logo | SVG de marca | `components/shared/BrandLogo.tsx` |
