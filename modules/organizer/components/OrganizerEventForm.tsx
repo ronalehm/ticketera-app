@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,13 @@ import { useZodForm } from "@/hooks/useZodForm";
 import { cn } from "@/lib/utils";
 import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
-import { EVENT_CATEGORY_OPTIONS, getTodayInLima, organizerEventFormSchema } from "../schemas/organizer.schema";
+import {
+  EVENT_CATEGORY_OPTIONS,
+  getTodayInLima,
+  MIN_AGE_LABELS,
+  MIN_AGE_OPTIONS,
+  organizerEventFormSchema,
+} from "../schemas/organizer.schema";
 import { useObjectUrl } from "../hooks/useObjectUrl";
 import { useOrganizerStore } from "../stores/organizer.store";
 import type { OrganizerEventFormValues } from "../types/organizer.types";
@@ -29,22 +35,28 @@ import { CoverImageField } from "./CoverImageField";
 import { EventPreviewCard } from "./EventPreviewCard";
 import { FORM_CONTROL_SCROLL, TicketTypesField } from "./TicketTypesField";
 
-type TextField = Exclude<keyof OrganizerEventFormValues, "intent" | "category" | "ticketTypes">;
+type TextField = Exclude<keyof OrganizerEventFormValues, "intent" | "category" | "minAge" | "ticketTypes">;
 
 const INPUT_CLASS = cn("h-11", FORM_CONTROL_SCROLL);
 
 const COVER_IMAGE_ERROR = "Sube una imagen en formato JPG o PNG.";
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
+const ORGANIZER_DESCRIPTION_ID = "organizer-event-organizer-description";
+const SELECT_TRIGGER_CLASS = cn("w-full cursor-pointer data-[size=default]:h-11", FORM_CONTROL_SCROLL);
 
 const INITIAL_VALUES: Omit<OrganizerEventFormValues, "ticketTypes"> = {
   intent: "publish",
   name: "",
   category: "conciertos",
+  minAge: "0",
   description: "",
+  organizer: "",
   date: "",
   time: "",
+  doorsOpen: "",
   venue: "",
   city: "",
+  address: "",
 };
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
@@ -107,14 +119,15 @@ export function OrganizerEventForm() {
     setCoverFile(null);
   }
 
-  // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y del error.
-  const textProps = (name: TextField) => ({
+  // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y de la ayuda y del error.
+  const textProps = (name: TextField, descriptionId?: string) => ({
     id: `organizer-event-${name}`,
     value: values[name],
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, event.target.value),
     onBlur: () => handleBlur(name),
     "aria-invalid": !!errors[name],
-    "aria-describedby": errors[name] ? `organizer-event-${name}-error` : undefined,
+    "aria-describedby":
+      [descriptionId, errors[name] && `organizer-event-${name}-error`].filter(Boolean).join(" ") || undefined,
   });
 
   const fieldError = (name: TextField) => (
@@ -133,32 +146,56 @@ export function OrganizerEventForm() {
               {fieldError("name")}
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
-              <Select
-                items={EVENT_CATEGORY_LABELS}
-                value={values.category}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setValue("category", value);
-                  handleBlur("category");
-                }}
-              >
-                <SelectTrigger
-                  id="organizer-event-category"
-                  className={cn("w-full cursor-pointer data-[size=default]:h-11", FORM_CONTROL_SCROLL)}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
+                <Select
+                  items={EVENT_CATEGORY_LABELS}
+                  value={values.category}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setValue("category", value);
+                    handleBlur("category");
+                  }}
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_CATEGORY_OPTIONS.map((category) => (
-                    <SelectItem key={category} value={category} className="min-h-11 cursor-pointer">
-                      {EVENT_CATEGORY_LABELS[category]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+                  <SelectTrigger id="organizer-event-category" className={SELECT_TRIGGER_CLASS}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_CATEGORY_OPTIONS.map((category) => (
+                      <SelectItem key={category} value={category} className="min-h-11 cursor-pointer">
+                        {EVENT_CATEGORY_LABELS[category]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {/* Siempre es una opción válida del Select: no necesita mensaje de error (requisito 8). */}
+              <Field>
+                <FieldLabel htmlFor="organizer-event-minAge">Edad mínima</FieldLabel>
+                <Select
+                  items={MIN_AGE_LABELS}
+                  value={values.minAge}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setValue("minAge", value);
+                    handleBlur("minAge");
+                  }}
+                >
+                  <SelectTrigger id="organizer-event-minAge" className={SELECT_TRIGGER_CLASS}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MIN_AGE_OPTIONS.map((age) => (
+                      <SelectItem key={age} value={age} className="min-h-11 cursor-pointer">
+                        {MIN_AGE_LABELS[age]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
             <Field data-invalid={!!errors.description}>
               <FieldLabel htmlFor="organizer-event-description">Descripción</FieldLabel>
@@ -171,12 +208,27 @@ export function OrganizerEventForm() {
               />
               {fieldError("description")}
             </Field>
+
+            <Field data-invalid={!!errors.organizer}>
+              <FieldLabel htmlFor="organizer-event-organizer">Organizador</FieldLabel>
+              <Input
+                {...textProps("organizer", ORGANIZER_DESCRIPTION_ID)}
+                placeholder="Ej. Pulso Producciones"
+                maxLength={100}
+                className={INPUT_CLASS}
+              />
+              <FieldDescription id={ORGANIZER_DESCRIPTION_ID}>
+                Aparece en la página del evento como «Organiza: …».
+              </FieldDescription>
+              {fieldError("organizer")}
+            </Field>
           </FieldGroup>
         </FormSection>
 
         <FormSection title="Fecha y lugar">
           <FieldGroup>
-            <div className="grid grid-cols-2 gap-4">
+            {/* Móvil: Fecha | Hora de inicio y, en la segunda línea, Apertura de puertas en la primera columna. */}
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               <Field data-invalid={!!errors.date}>
                 <FieldLabel htmlFor="organizer-event-date">Fecha</FieldLabel>
                 <Input {...textProps("date")} type="date" min={today} className={INPUT_CLASS} />
@@ -186,6 +238,11 @@ export function OrganizerEventForm() {
                 <FieldLabel htmlFor="organizer-event-time">Hora de inicio</FieldLabel>
                 <Input {...textProps("time")} type="time" className={INPUT_CLASS} />
                 {fieldError("time")}
+              </Field>
+              <Field data-invalid={!!errors.doorsOpen}>
+                <FieldLabel htmlFor="organizer-event-doorsOpen">Apertura de puertas</FieldLabel>
+                <Input {...textProps("doorsOpen")} type="time" className={INPUT_CLASS} />
+                {fieldError("doorsOpen")}
               </Field>
             </div>
 
@@ -201,6 +258,17 @@ export function OrganizerEventForm() {
                 {fieldError("city")}
               </Field>
             </div>
+
+            <Field data-invalid={!!errors.address}>
+              <FieldLabel htmlFor="organizer-event-address">Dirección</FieldLabel>
+              <Input
+                {...textProps("address")}
+                placeholder="Ej. Av. José Díaz s/n, Cercado de Lima"
+                maxLength={150}
+                className={INPUT_CLASS}
+              />
+              {fieldError("address")}
+            </Field>
           </FieldGroup>
         </FormSection>
 

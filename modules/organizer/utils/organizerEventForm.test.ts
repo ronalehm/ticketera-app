@@ -192,11 +192,15 @@ describe("toOrganizerEvent", () => {
     intent: "publish",
     name: "  Festival de verano 2026 ",
     category: "festivales",
+    minAge: "0",
     description: "Tres escenarios.",
+    organizer: "",
     date: "2026-12-05",
     time: "20:00",
+    doorsOpen: "",
     venue: " Estadio Nacional ",
     city: " Lima ",
+    address: "",
     ticketTypes: [row("50", "100"), row("80", "50", "VIP")],
   };
 
