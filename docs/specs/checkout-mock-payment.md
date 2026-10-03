@@ -850,9 +850,10 @@ Ampliación (Fases 5 y 6):
 15. **"Precio final, sin cargos ocultos"**: la captura del resumen no lo muestra, pero se mantiene bajo el total (era requisito de `checkout-purchase.md` y del MASTER, anti-patrón "cargos ocultos"). ¿Se mantiene?
 16. **Impresión:** al "Descargar PDF" solo salen las entradas, una por página, sin la cabecera "¡Compra confirmada!" ni la tarjeta-entrada (decisión 29). ¿De acuerdo?
 17. **Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket` (misma salida en ambos sitios)? Si es así, `buildPrintableTickets` se publicaría en `modules/checkout/orders.ts`.
+18. **`formatTicketCount` triplicado:** hay copias idénticas en seating (`utils/selectionSummary.ts`), tickets (`utils/myOrders.ts`) y ahora checkout (`utils/summaryFormat.ts`), porque ninguna es pública y esta fase no toca otros módulos (decisión 31). ¿Se sube a `lib/` en una enmienda conjunta de las tres specs, y se borran las copias?
+
 Enmienda (Fase 5, captura del resumen, y Fase 7):
 
 19. **Mayúsculas en la fecha corta:** la nueva captura del resumen muestra "Dom 15 Nov · Arena Costa Verde, Lima" (con mayúscula inicial), y la F5 define `formatShortDayMonth` en minúsculas ("lun 5 oct", decisión 23). Se mantienen las minúsculas. ¿Prefieres "Dom 15 Nov"? Solo cambiaría `formatShortDayMonth` y su test, y "Mis entradas" heredaría el formato.
 20. **Enter en un campo con Términos sin marcar:** lleva el foco a la casilla de Términos, igual que pulsar "Pagar" (decisión 33), porque es el envío implícito del formulario. ¿De acuerdo, o prefieres que Enter no haga nada mientras "Pagar" esté bloqueado?
 21. **"Volver a elegir entradas" tras expirar** conserva también la selección (mismo enlace que "Cambiar entradas", decisión 35). ¿De acuerdo, o debe volver al paso 1 vacío, porque la reserva "se liberó"?
-18. **`formatTicketCount` triplicado:** hay copias idénticas en seating (`utils/selectionSummary.ts`), tickets (`utils/myOrders.ts`) y ahora checkout (`utils/summaryFormat.ts`), porque ninguna es pública y esta fase no toca otros módulos (decisión 31). ¿Se sube a `lib/` en una enmienda conjunta de las tres specs, y se borran las copias?
