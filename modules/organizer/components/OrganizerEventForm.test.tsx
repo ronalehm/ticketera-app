@@ -37,10 +37,13 @@ function fillRow(n: number, name: string, price: string, quantity: string) {
 function fillValid() {
   type(input("Nombre del evento"), "  Festival de verano  ");
   type(input("Descripción"), "Música en vivo todo el día.");
+  type(input("Organizador"), "Pulso Producciones");
   type(input("Fecha"), "2030-01-01");
   type(input("Hora de inicio"), "20:00");
+  type(input("Apertura de puertas"), "18:00");
   type(input("Lugar"), "Estadio Nacional");
   type(input("Ciudad"), "Lima");
+  type(input("Dirección"), "Av. José Díaz s/n, Cercado de Lima");
   fillRow(1, "General", "50", "100");
   fireEvent.click(addButton());
   fillRow(2, "VIP", "80", "50");
@@ -94,6 +97,9 @@ describe("OrganizerEventForm", () => {
     expect(screen.getByText("Ingresa el nombre del evento")).toBeTruthy();
     expect(screen.queryByText("Agrega una descripción del evento")).toBeNull();
     expect(screen.queryByText("Ingresa el precio")).toBeNull();
+    expect(screen.queryByText("Indica el nombre del organizador")).toBeNull();
+    expect(screen.queryByText("Indica la hora de apertura de puertas")).toBeNull();
+    expect(screen.queryByText("Indica la dirección del lugar")).toBeNull();
     expect(document.activeElement).toBe(input("Nombre del evento"));
     expect(push).not.toHaveBeenCalled();
     expect(useOrganizerStore.getState().events).toEqual([]);
@@ -351,6 +357,101 @@ describe("OrganizerEventForm", () => {
 
       await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=borrador"));
       expect(useOrganizerStore.getState().events[0]).toMatchObject({ capacity: 0, status: "draft" });
+    });
+  });
+
+  describe("datos del evento público", () => {
+    const DOORS_ORDER_ERROR = "La apertura de puertas debe ser a la hora de inicio o antes";
+    const ageSelect = () => screen.getByRole("combobox", { name: "Edad mínima" });
+
+    it("muestra Edad mínima junto a Categoría, Organizador tras Descripción y Apertura y Dirección en Fecha y lugar", () => {
+      render(<OrganizerEventForm />);
+
+      expect(ageSelect().querySelector("[data-slot=select-value]")?.textContent).toBe("Todo público");
+      expect(ageSelect().parentElement?.parentElement).toBe(
+        screen.getByRole("combobox", { name: "Categoría" }).parentElement?.parentElement,
+      );
+      expect(ageSelect().parentElement?.parentElement?.className).toContain("md:grid-cols-2");
+
+      const fields = ["Descripción", "Organizador"].map(input);
+      expect(fields[0].compareDocumentPosition(fields[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(document.getElementById(input("Organizador").getAttribute("aria-describedby")!)?.textContent).toBe(
+        "Aparece en la página del evento como «Organiza: …».",
+      );
+      expect(input("Organizador").maxLength).toBe(100);
+      expect(input("Organizador").placeholder).toBe("Ej. Pulso Producciones");
+
+      const doorsOpen = input("Apertura de puertas");
+      expect(doorsOpen.type).toBe("time");
+      const timeGrid = doorsOpen.parentElement?.parentElement;
+      expect(timeGrid).toBe(input("Fecha").parentElement?.parentElement);
+      expect(timeGrid?.className).toContain("md:grid-cols-3");
+
+      const address = input("Dirección");
+      expect(address.maxLength).toBe(150);
+      expect(address.placeholder).toBe("Ej. Av. José Díaz s/n, Cercado de Lima");
+      expect(input("Ciudad").compareDocumentPosition(address) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("'Edad mínima' ofrece las 5 opciones y guarda la elegida", async () => {
+      render(<OrganizerEventForm />);
+      fireEvent.click(ageSelect());
+
+      const options = await screen.findAllByRole("option");
+      expect(options.map((option) => option.textContent)).toEqual(["Todo público", "+12", "+14", "+16", "+18"]);
+      fireEvent.click(screen.getByRole("option", { name: "+18" }));
+      await waitFor(() => expect(ageSelect().querySelector("[data-slot=select-value]")?.textContent).toBe("+18"));
+    });
+
+    it("publicar vacío muestra los errores de organizador, apertura de puertas y dirección en sus campos", () => {
+      render(<OrganizerEventForm />);
+      fireEvent.click(publishButton());
+
+      for (const [label, message] of [
+        ["Organizador", "Indica el nombre del organizador"],
+        ["Apertura de puertas", "Indica la hora de apertura de puertas"],
+        ["Dirección", "Indica la dirección del lugar"],
+      ]) {
+        const field = input(label);
+        expect(field.getAttribute("aria-invalid")).toBe("true");
+        const describedBy = field.getAttribute("aria-describedby")!.split(" ");
+        expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toContain(message);
+      }
+      expect(input("Organizador").getAttribute("aria-describedby")).toBe(
+        "organizer-event-organizer-description organizer-event-organizer-error",
+      );
+      expect(document.activeElement).toBe(input("Nombre del evento"));
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("una apertura posterior al inicio marca 'Apertura de puertas'; la misma hora es válida", () => {
+      render(<OrganizerEventForm />);
+      fillValid();
+      type(input("Apertura de puertas"), "21:00");
+      fireEvent.click(publishButton());
+
+      const doorsOpen = input("Apertura de puertas");
+      expect(doorsOpen.getAttribute("aria-invalid")).toBe("true");
+      expect(document.getElementById(doorsOpen.getAttribute("aria-describedby")!)?.textContent).toBe(DOORS_ORDER_ERROR);
+      expect(input("Hora de inicio").getAttribute("aria-invalid")).toBe("false");
+      expect(push).not.toHaveBeenCalled();
+
+      type(doorsOpen, "20:00");
+      fireEvent.blur(doorsOpen);
+      expect(screen.queryByText(DOORS_ORDER_ERROR)).toBeNull();
+      expect(input("Apertura de puertas").getAttribute("aria-invalid")).toBe("false");
+    });
+
+    it("el evento publicado se guarda sin los datos nuevos", async () => {
+      render(<OrganizerEventForm />);
+      fillValid();
+      fireEvent.click(publishButton());
+
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=publicado"));
+      const [saved] = JSON.parse(localStorage.getItem("mentec-organizer-events")!).state.events;
+      expect(Object.keys(saved).sort()).toEqual(
+        ["id", "title", "category", "startsAt", "venue", "city", "imageUrl", "priceFrom", "sold", "capacity", "status"].sort(),
+      );
     });
   });
 
