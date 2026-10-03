@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { BookOpen } from "lucide-react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Separator } from "@/components/ui/separator";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
+import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 const FOCUS = "cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-highlight";
 

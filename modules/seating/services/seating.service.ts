@@ -1,4 +1,5 @@
-import { type EventDetail, getEventBySlug } from "@/modules/events";
+import type { EventDetail } from "@/modules/events";
+import { getEventBySlug } from "@/modules/events/catalog";
 import { VENUE_LAYOUTS_MOCK } from "../data/venueMaps.mock";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import type { VenueMap, VenueZone } from "../types/seating.types";

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AuthHeaderActions } from "@/modules/auth/header";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
+import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 const NAV_LINK =
   "inline-flex cursor-pointer items-center rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring";
