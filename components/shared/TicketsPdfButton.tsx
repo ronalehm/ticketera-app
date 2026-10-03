@@ -41,7 +41,8 @@ export function TicketsPdfButton({ input, errorClassName, className, ...props }:
         type="button"
         onClick={handleClick}
         disabled={isGenerating}
-        focusableWhenDisabled
+        // Solo mientras genera: Base UI pondría aria-disabled="false" en reposo.
+        focusableWhenDisabled={isGenerating}
         aria-busy={isGenerating || undefined}
         className={cn("aria-busy:cursor-progress aria-busy:opacity-70", className)}
       >
