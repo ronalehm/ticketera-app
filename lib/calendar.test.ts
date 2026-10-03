@@ -132,7 +132,12 @@ describe("downloadIcs", () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
 
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     vi.restoreAllMocks();
@@ -161,6 +166,7 @@ describe("downloadIcs", () => {
     expect(link.getAttribute("href")).toBe("blob:mock-url");
     expect(link.isConnected).toBe(false);
 
+    vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
     expect(revokeObjectURL.mock.invocationCallOrder[0]).toBeGreaterThan(
       click.mock.invocationCallOrder[0],
