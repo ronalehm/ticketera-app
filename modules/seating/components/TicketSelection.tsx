@@ -107,7 +107,8 @@ export function TicketSelection({ map }: TicketSelectionProps) {
             selectedSeatIds={selection.seatIds}
             selectedSeats={selectedSeats}
             notice={selection.notice}
-            canPickBest={!selection.atLimit || selectedInZone > 0}
+            seatLimit={seatLimit}
+            selectedInZone={selectedInZone}
             onToggleSeat={selection.toggleSeat}
             onRemoveSeat={selection.removeSeat}
             onPickBestSeats={selection.pickBestSeats}

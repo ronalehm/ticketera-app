@@ -1,19 +1,25 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatEventPrice } from "@/modules/events/purchase";
 
 import type { GeneralVenueZone, NumberedVenueZone, VenueMap } from "../types/seating.types";
+import { SEAT_PLAN_MARGIN } from "../utils/seatRows";
 import { TicketSelection } from "./TicketSelection";
 
-// jsdom no tiene layout: el zoom se sustituye por contenedores que solo pintan sus hijos.
+const { zoomToElement } = vi.hoisted(() => ({ zoomToElement: vi.fn(() => Promise.resolve()) }));
+
+// jsdom no tiene layout: el zoom se sustituye por contenedores que solo pintan sus hijos. El nivel de detalle
+// (`useTransformInit`/`useTransformEffect`) no se ejecuta; `zoomToElement` se espía para "Mejores butacas".
 vi.mock("react-zoom-pan-pinch", () => ({
   TransformWrapper: ({ children }: { children: ReactNode | ((controls: unknown) => ReactNode) }) => (
     <>{typeof children === "function" ? children({}) : children}</>
   ),
   TransformComponent: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useControls: () => ({ zoomIn: vi.fn(), zoomOut: vi.fn(), fitToView: vi.fn() }),
+  useControls: () => ({ zoomIn: vi.fn(), zoomOut: vi.fn(), fitToView: vi.fn(), zoomToElement }),
+  useTransformInit: vi.fn(),
+  useTransformEffect: vi.fn(),
 }));
 
 type SeatFixture = NumberedVenueZone["rows"][number]["seats"][number];
@@ -119,6 +125,18 @@ const seatCounter = () => screen.getByText(/^\d+ de \d+ butacas$/);
 const seatAt = (row: string, number: number) =>
   screen.getByRole("checkbox", { name: new RegExp(`^Fila ${row}, asiento ${number},`) });
 const removeChip = (label: string) => screen.getByRole("button", { name: `Quitar ${label}` });
+const planGroup = (name = "Tribuna Norte") => screen.getByRole("group", { name: `Plano de asientos de ${name}` });
+const zoomGroup = () => screen.getByRole("group", { name: "Zoom del plano" });
+const legend = () => screen.getByRole("list", { name: "Leyenda del plano" });
+const selectedInZoneText = () => screen.getByText(/^\d+ elegidas?$/);
+const tooltip = () => document.querySelector<HTMLElement>('div[aria-hidden="true"].bg-brand-navy');
+const bestSeatsGroup = () => screen.getByRole("group", { name: "¿Cuántas butacas juntas?" });
+const pickButton = () => screen.getByRole("button", { name: /^Elegir (las mejores butacas|la mejor butaca)$/ });
+const checkedSeatIds = () =>
+  screen
+    .getAllByRole("checkbox")
+    .filter((element) => element.getAttribute("aria-checked") === "true")
+    .map((element) => element.getAttribute("data-seat-id"));
 const animatedStep = (zoomClass: string) => document.querySelector<HTMLElement>(`[class*="${zoomClass}"]`);
 const NORTE_A1 = "Tribuna Norte · Fila A · Asiento 1";
 const NORTE_B1 = "Tribuna Norte · Fila B · Asiento 1";
@@ -377,9 +395,13 @@ describe("TicketSelection · zona numerada", () => {
     expect(screen.getByText("Numerada · elige tu butaca")).toBeTruthy();
     expect(seatCounter().textContent).toBe("0 de 10 butacas");
     expect(seatCounter().getAttribute("aria-live")).toBe("polite");
-    for (const name of ["Acercar", "Alejar", "Ver todo el plano", "Mejor asiento disponible"]) {
-      expect(screen.getByRole("button", { name })).toBeTruthy();
-    }
+    expect(within(zoomGroup()).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Acercar",
+      "Alejar",
+      "Ver todo el plano",
+    ]);
+    expect(screen.getByText("¿Cuántas butacas juntas?")).toBeTruthy();
+    expect(pickButton().textContent).toBe("Elegir las mejores butacas");
     expect(screen.getByRole("group", { name: "Plano de asientos de Tribuna Norte" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Leyenda del plano" })).toBeTruthy();
     expect(screen.getByText("Aún no elegiste asientos.")).toBeTruthy();
@@ -470,16 +492,6 @@ describe("TicketSelection · zona numerada", () => {
     expect(continueLinks()).toHaveLength(0);
   });
 
-  it("'Mejor asiento disponible' elige 1 asiento de la fila más cercana y más centrado y lo anuncia", () => {
-    renderSelection();
-    openNorte();
-    fireEvent.click(screen.getByRole("button", { name: "Mejor asiento disponible" }));
-
-    expect(seatAt("A", 2).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getAllByRole("checkbox").filter((el) => el.getAttribute("aria-checked") === "true")).toHaveLength(1);
-    expect(screen.getByText("Elegimos Fila A · Asiento 2.").getAttribute("role")).toBe("status");
-  });
-
   it("quitar un chip deselecciona el asiento y mueve el foco al chip siguiente o, con el último, al h3", () => {
     renderSelection();
     openNorte();
@@ -517,6 +529,249 @@ describe("TicketSelection · zona numerada", () => {
     expect(seatAt("A", 1).getAttribute("aria-checked")).toBe("true");
     expect(removeChip(NORTE_A1)).toBeTruthy();
     expect(seatCounter().textContent).toBe("1 de 9 butacas");
+  });
+});
+
+describe("TicketSelection · plano renovado", () => {
+  it("las disponibles llevan su número oculto, las ocupadas no y las accesibles tienen el icono", () => {
+    renderSelection();
+    openNorte();
+
+    const number = seatAt("A", 1).querySelector("text");
+    expect(number?.textContent).toBe("1");
+    expect(number?.closest('[aria-hidden="true"]')).toBeTruthy();
+    expect(number?.getAttribute("class")).toContain("group-data-[detail=numbers]/plan:opacity-100");
+    expect(seatAt("A", 3).querySelector("text")).toBeNull();
+    expect(seatAt("B", 2).querySelector("text")).toBeNull();
+    expect(seatAt("B", 2).querySelector("svg.lucide-accessibility")).toBeTruthy();
+  });
+
+  it("la leyenda muestra el precio, 'Elegida', 'Ocupada', la accesible y 'n elegidas', que se actualiza", () => {
+    renderSelection();
+    openNorte();
+
+    expect(within(legend()).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      `Disponible · ${formatEventPrice(220)}`,
+      "Elegida",
+      "Ocupada",
+      "Accesible (silla de ruedas)",
+    ]);
+    expect(selectedInZoneText().textContent).toBe("0 elegidas");
+    expect(selectedInZoneText().getAttribute("aria-live")).toBe("polite");
+
+    fireEvent.click(seatAt("A", 1));
+    expect(selectedInZoneText().textContent).toBe("1 elegida");
+    fireEvent.click(seatAt("B", 2));
+    expect(selectedInZoneText().textContent).toBe("2 elegidas");
+  });
+
+  it("sin butacas accesibles la leyenda no muestra 'Accesible (silla de ruedas)'", () => {
+    const norte = MAP.zones[2] as NumberedVenueZone;
+    const withoutAccessible: NumberedVenueZone = {
+      ...norte,
+      rows: norte.rows.map((row) => ({
+        ...row,
+        seats: row.seats.map((s) => (s.status === "accessible" ? { ...s, status: "available" as const } : s)),
+      })),
+    };
+    render(<TicketSelection map={{ ...MAP, zones: [withoutAccessible] }} />);
+    openNorte();
+
+    expect(within(legend()).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(legend()).queryByText("Accesible (silla de ruedas)")).toBeNull();
+  });
+
+  it("en cuadrícula pinta la letra de cada fila en los dos márgenes y la barra del escenario", () => {
+    renderSelection();
+    openNorte();
+
+    const width = 176; // `seatViewBox` del fixture
+    for (const row of ["A", "B"]) {
+      const labels = within(planGroup()).getAllByText(row);
+      expect(labels.map((label) => label.getAttribute("x"))).toEqual([
+        String(SEAT_PLAN_MARGIN.x / 2),
+        String(width - SEAT_PLAN_MARGIN.x / 2),
+      ]);
+      for (const label of labels) expect(label.closest('[aria-hidden="true"]')).toBeTruthy();
+    }
+    expect(within(planGroup()).getByText("ESCENARIO")).toBeTruthy();
+  });
+});
+
+describe("TicketSelection · tooltip de butaca", () => {
+  it("con el ratón sobre una butaca muestra fila, butaca y precio; al salir se oculta", () => {
+    renderSelection();
+    openNorte();
+    expect(tooltip()).toBeNull();
+
+    fireEvent.pointerOver(seatAt("A", 2), { pointerType: "mouse" });
+    expect(tooltip()?.textContent).toBe(`Fila A · Asiento 2${formatEventPrice(220)}`);
+    expect(within(tooltip()!).getByText("Fila A · Asiento 2").className).toContain("font-bold");
+
+    fireEvent.pointerOut(seatAt("A", 2), { pointerType: "mouse", relatedTarget: document.body });
+    expect(tooltip()).toBeNull();
+  });
+
+  it("dice 'Ocupada', 'Accesible · S/ X' o 'Elegida · S/ X' según la butaca", () => {
+    renderSelection();
+    openNorte();
+
+    fireEvent.pointerOver(seatAt("A", 3), { pointerType: "mouse" });
+    expect(within(tooltip()!).getByText("Ocupada")).toBeTruthy();
+
+    fireEvent.pointerOver(seatAt("B", 2), { pointerType: "mouse" });
+    expect(within(tooltip()!).getByText(`Accesible · ${formatEventPrice(220)}`)).toBeTruthy();
+
+    fireEvent.click(seatAt("A", 1));
+    fireEvent.pointerOver(seatAt("A", 1), { pointerType: "mouse" });
+    expect(within(tooltip()!).getByText(`Elegida · ${formatEventPrice(220)}`)).toBeTruthy();
+  });
+
+  it("en táctil no aparece", () => {
+    renderSelection();
+    openNorte();
+
+    fireEvent.pointerOver(seatAt("A", 2), { pointerType: "touch" });
+    expect(tooltip()).toBeNull();
+  });
+
+  it("el foco por teclado lo muestra y las flechas lo llevan a la butaca enfocada; con blur se oculta", () => {
+    renderSelection();
+    openNorte();
+
+    act(() => seatAt("A", 1).focus());
+    expect(within(tooltip()!).getByText("Fila A · Asiento 1")).toBeTruthy();
+
+    fireEvent.keyDown(seatAt("A", 1), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(seatAt("B", 1));
+    expect(within(tooltip()!).getByText("Fila B · Asiento 1")).toBeTruthy();
+
+    act(() => seatAt("B", 1).blur());
+    expect(tooltip()).toBeNull();
+  });
+});
+
+describe("TicketSelection · mejores butacas", () => {
+  beforeEach(() => zoomToElement.mockClear());
+
+  it("empieza en 2 y elige el bloque más cercano y centrado, lo anuncia y acerca el plano a él", () => {
+    renderSelection();
+    openNorte();
+
+    expect(within(bestSeatsGroup()).getByText("2").getAttribute("aria-live")).toBe("polite");
+    fireEvent.click(pickButton());
+
+    expect(checkedSeatIds()).toEqual(["norte-A-1", "norte-A-2"]);
+    expect(screen.getByText("Elegimos 2 asientos juntos en la fila A.").getAttribute("role")).toBe("status");
+    expect(removeChip(NORTE_A1)).toBeTruthy();
+    expect(seatCounter().textContent).toBe("2 de 10 butacas");
+    expect(zoomToElement).toHaveBeenCalledTimes(1);
+    expect(zoomToElement).toHaveBeenCalledWith([seatAt("A", 1), seatAt("A", 2)], { maxScale: 2, animationTime: 300 });
+  });
+
+  it("con movimiento reducido el zoom a las elegidas es instantáneo", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)" }));
+    try {
+      renderSelection();
+      openNorte();
+      fireEvent.click(pickButton());
+
+      expect(zoomToElement).toHaveBeenCalledWith(expect.any(Array), { maxScale: 2, animationTime: 0 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("con 1 el botón dice 'Elegir la mejor butaca' y elige la butaca más centrada; no baja de 1", () => {
+    renderSelection();
+    openNorte();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar una butaca" }));
+
+    expect(within(bestSeatsGroup()).getByText("1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Quitar una butaca" }).getAttribute("aria-disabled")).toBe("true");
+    expect(pickButton().textContent).toBe("Elegir la mejor butaca");
+
+    fireEvent.click(pickButton());
+    expect(checkedSeatIds()).toEqual(["norte-A-2"]);
+    expect(screen.getByText("Elegimos Fila A · Asiento 2.")).toBeTruthy();
+  });
+
+  it("sustituye las butacas de la zona por el bloque y conserva las demás entradas", () => {
+    renderSelection();
+    fireEvent.click(zoneCard("VIP"));
+    fireEvent.click(add("VIP"));
+    fireEvent.click(backButton());
+    openNorte();
+    fireEvent.click(seatAt("B", 1));
+
+    fireEvent.click(pickButton());
+
+    expect(checkedSeatIds()).toEqual(["norte-A-1", "norte-A-2"]);
+    expect(screen.queryByRole("button", { name: `Quitar ${NORTE_B1}` })).toBeNull();
+    expect(within(summary()).getByText("1 × VIP")).toBeTruthy();
+    expect(within(summary()).getByText("2 × Tribuna Norte")).toBeTruthy();
+    expect(seatCounter().textContent).toBe("2 de 9 butacas");
+  });
+
+  it("empieza en las butacas ya elegidas en la zona", () => {
+    renderSelection();
+    openNorte();
+    fireEvent.click(seatAt("B", 1));
+    fireEvent.click(backButton());
+    openNorte();
+
+    expect(within(bestSeatsGroup()).getByText("1")).toBeTruthy();
+    expect(pickButton().textContent).toBe("Elegir la mejor butaca");
+  });
+
+  it("sin bloque libre de esa cantidad avisa y no cambia nada", () => {
+    renderSelection();
+    openNorte();
+    fireEvent.click(seatAt("B", 1));
+    fireEvent.click(screen.getByRole("button", { name: "Agregar una butaca" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agregar una butaca" }));
+    // El stepper conserva su valor (2) al elegir a mano: 2 + 2 = 4, y la fila A solo tiene 2 libres juntas.
+    expect(within(bestSeatsGroup()).getByText("4")).toBeTruthy();
+
+    fireEvent.click(pickButton());
+
+    expect(screen.getByText("No hay 4 asientos juntos disponibles en esta zona.").getAttribute("role")).toBe("status");
+    expect(checkedSeatIds()).toEqual(["norte-B-1"]);
+    expect(zoomToElement).not.toHaveBeenCalled();
+  });
+
+  it("con 10 entradas en otras zonas el stepper y el botón quedan deshabilitados pero enfocables", () => {
+    renderSelection();
+    fireEvent.click(zoneCard("General"));
+    for (let i = 0; i < 10; i++) fireEvent.click(add("General"));
+    fireEvent.click(backButton());
+    openNorte();
+
+    expect(seatCounter().textContent).toBe("0 de 0 butacas");
+    for (const button of [
+      screen.getByRole("button", { name: "Quitar una butaca" }),
+      screen.getByRole("button", { name: "Agregar una butaca" }),
+      pickButton(),
+    ]) {
+      expect(button.getAttribute("aria-disabled")).toBe("true");
+      expect((button as HTMLButtonElement).disabled).toBe(false);
+    }
+
+    fireEvent.click(pickButton());
+    expect(checkedSeatIds()).toEqual([]);
+    expect(zoomToElement).not.toHaveBeenCalled();
+  });
+
+  it("el '+' no pasa de las butacas que caben en la compra", () => {
+    renderSelection();
+    fireEvent.click(zoneCard("General"));
+    for (let i = 0; i < 7; i++) fireEvent.click(add("General"));
+    fireEvent.click(backButton());
+    openNorte();
+
+    fireEvent.click(screen.getByRole("button", { name: "Agregar una butaca" }));
+    expect(within(bestSeatsGroup()).getByText("3")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Agregar una butaca" }).getAttribute("aria-disabled")).toBe("true");
   });
 });
 

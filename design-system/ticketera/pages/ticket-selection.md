@@ -142,44 +142,106 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
 
 ## Plano de asientos (`SeatPlan`)
 
-Sub-paso 2 de una zona numerada, debajo de `ZoneStepHeader` (que pone el nombre, el precio y el contador). No es una `Card` propia ni tiene h2. Cambiar de zona conserva los asientos de las demás.
+Sub-paso 2 de una zona numerada, debajo de `ZoneStepHeader` (que pone el nombre, el precio y el contador). No es una `Card` propia ni tiene h2. Cambiar de zona conserva los asientos de las demás. Objetivo visual: la captura del paso 2 ("Tribuna Oriente"), con tokens Mentec.
 
-- **Ayuda** arriba: "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
-- **Barra de herramientas** (`flex flex-wrap gap-2`): "Acercar" (`ZoomIn`), "Alejar" (`ZoomOut`) y "Ver todo el plano" (`Maximize`) como `Button outline size-11` solo con icono y `aria-label`; "Mejor asiento disponible" (`Sparkles`) `Button secondary h-11 font-semibold`, alineado a la derecha desde `sm` (`sm:ml-auto`). Este último se deshabilita al llegar al máximo de entradas si no hay asientos elegidos en la zona.
-- **Lienzo:** `rounded-xl bg-muted touch-none overflow-hidden w-full max-h-[70vh]`, con `aspect-ratio` igual al del `seatViewBox` de la zona. Zoom y paneo con `react-zoom-pan-pinch`:
-  - abre con el plano entero a la vista (`fitOnInit="contain"`), escala de 1 a 4 y sin salirse de los bordes;
-  - pellizco y arrastre en táctil; `touch-action: none` evita el zoom de la página;
-  - la rueda sola desplaza la página; con Ctrl/Cmd hace zoom;
-  - doble toque desactivado (no hace zoom y elige a la vez);
-  - soltar tras arrastrar más de 4 px no elige asiento;
-  - con `prefers-reduced-motion: reduce`, los botones de zoom no animan.
-- **SVG** (`viewBox` = `seatViewBox`, ≤ 400 de ancho; a 375 px cada asiento mide ≥ 24 px con el plano entero a la vista):
-  - escenario arriba: barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest` (`aria-hidden`);
-  - etiqueta de fila a la izquierda (`fill-muted-foreground font-bold`, 24 unidades, `aria-hidden`);
-  - asientos con pitch de 32 unidades y área de toque transparente de 32×32.
-- Bajo el lienzo: leyenda, `<p role="status">` con el aviso del plano y "Tus asientos".
+### Estructura (de arriba abajo)
 
-### Estados de asiento (forma y color, no solo color)
+```
+Toca una butaca para elegirla. Acerca el plano…            (ayuda)
+                                        [ + | − | ⤢ ]      (< sm: barra sobre el lienzo, a la derecha)
+┌──────────────────────────────────────────────────┐
+│        A  B  C  D …                               │      lienzo (relative): plano + tooltip
+│     A ○ ○ ✕ ○ ●✓ ○ …            (letras en los    │
+│     B ○ ✕ ○ ○ ○ ○ …               dos extremos)   │
+│                                   [ + | − | ⤢ ]   │      (≥ sm: pastilla abajo a la derecha)
+└──────────────────────────────────────────────────┘
+○ Disponible · S/ 155.00  ● Elegida  ✕ Ocupada  ▣ Accesible        2 elegidas
+──────────────────────────────────────────────────────
+┌ ¿Cuántas butacas juntas? [− 2 +]      [✦ Elegir las mejores butacas] ┐   (bg-muted)
+Elegimos 2 asientos juntos en la fila C.                     (role="status")
+Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
+```
+
+1. **Ayuda:** "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
+2. **Pastilla de zoom** (ver "Controles de zoom"): por debajo de `sm`, en una barra justo encima del lienzo.
+3. **Lienzo:** `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`, con el `aspect-ratio` del `seatViewBox` de la zona. Dentro: el plano con zoom y paneo, el tooltip y, desde `sm`, la pastilla de zoom superpuesta.
+4. **Leyenda** (`SeatLegend`) con el precio y "n elegidas".
+5. **Bandeja** `flex flex-col gap-4 border-t pt-4`: "Mejores butacas" (`BestSeatsPicker`), `<p role="status">` con el aviso del plano y "Tus asientos" (todas las zonas).
+
+### Zoom y paneo (`react-zoom-pan-pinch`)
+
+- Abre con el plano entero a la vista (`fitOnInit="contain"`), escala de 1 a 4 y sin salirse de los bordes.
+- Pellizco y arrastre en táctil; `touch-action: none` evita el zoom de la página.
+- La rueda sola desplaza la página; con Ctrl/Cmd hace zoom.
+- Doble toque desactivado (no hace zoom y elige a la vez).
+- Soltar tras arrastrar más de 4 px no elige asiento.
+- Con `prefers-reduced-motion: reduce`, el zoom no anima (`animationTime` 0).
+
+### Controles de zoom
+
+- **Una sola pastilla** `role="group" aria-label="Zoom del plano"`: `inline-flex gap-1 rounded-xl bg-background p-1 shadow-sm ring-1 ring-border`, con tres `Button variant="ghost" size="icon" class="size-11 cursor-pointer"`: `Plus` "Acercar", `Minus` "Alejar" y `Maximize` "Ver todo el plano" (`aria-label`; iconos `size-5 aria-hidden`).
+- **Por debajo de `sm`:** en la barra sobre el lienzo (`flex items-end justify-between gap-2`), alineada a la derecha. A 375 px, superpuesta taparía butacas (p. ej. `oriente-J-10`, en la esquina inferior derecha).
+- **Desde `sm`:** la barra pasa a `sm:contents` y la pastilla se superpone al lienzo abajo a la derecha (`sm:absolute sm:bottom-3 sm:right-3 sm:z-10`), como en la captura. Con el plano entero a la vista no debe tapar ninguna butaca: el contenido transformado reserva 64 px abajo (`pb-16` desde `sm`). Con zoom, el paneo saca las butacas de debajo.
+- Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
+
+### Plano (SVG)
+
+- `<svg class="group/plan block size-full select-none">` con `viewBox` = `seatViewBox` (≤ 400 de ancho). A 375 px el pitch de 32 unidades (área de toque transparente de 32 × 32) mide ≥ 24 px con el plano entero a la vista.
+- **En cuadrícula** (zona sin `planTransform`): escenario arriba, barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest`.
+- **En arco** (con `planTransform`, p. ej. las tribunas del festival): **sin** barra "ESCENARIO" (contradecía la orientación del sector). El fondo del estadio y el minimapa llegan en la Fase 5.
+- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 24 unidades, `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
+  - en cuadrícula, en los dos márgenes (`x = 20` y `x = ancho − 20`, a la altura de la fila);
+  - en arco, siguiendo la curva: en `getRowEdgeLabelPoints(row).start` y `.end` (a 0.8 pitch por fuera de la primera y la última butaca).
+
+### Estados de butaca (forma y color, no solo color)
 
 | Estado | Forma |
 |---|---|
-| Disponible | círculo r = 12 `fill-background stroke-primary` (2), hover `fill-accent` |
-| Tu selección | círculo `fill-primary` con check `stroke-primary-foreground` |
-| Ocupado | círculo `fill-secondary stroke-input` con "×" `stroke-muted-foreground`; `cursor-not-allowed`, no se puede elegir |
-| Accesible (silla de ruedas) | cuadrado redondeado 24×24 `fill-highlight`; elegido, `fill-primary` con check |
-| Foco (teclado) | anillo `stroke-ring` de 3 unidades alrededor de la forma (círculo r = 15 o cuadrado 30×30), solo con `focus-visible` |
+| Disponible | círculo r = 12 `fill-primary/30 stroke-primary stroke-[1.5]` (el "lavanda" de la captura, igual en todas las zonas), hover `fill-primary/50` |
+| Elegida | círculo r = 12 (o el cuadrado de la accesible) `fill-brand-navy` con check `stroke-background stroke-[2.5]`; el check entra con `motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-150` |
+| Ocupada | círculo `fill-secondary stroke-input stroke-2` con "×" `stroke-muted-foreground`; `cursor-not-allowed`, no se puede elegir |
+| Accesible (silla de ruedas) | cuadrado 24 × 24 `rx` 6 `fill-highlight` con el icono `Accessibility` (lucide, 16 × 16, `text-highlight-foreground`) |
+| Foco (teclado) | anillo `stroke-ring` de 3 unidades alrededor de la forma (círculo r = 15 o cuadrado 30 × 30), solo con `focus-visible` |
 
-Transición de color de 150 ms. "Mejor asiento disponible" nunca elige asientos accesibles; el usuario sí puede elegirlos a mano.
+- Transición de color de 150 ms. El borde `primary` de las disponibles contrasta ≥ 3:1 con `muted` y `accent`.
+- La forma (`SeatShape`) es la misma en el plano, la leyenda y la vista previa del organizer (`SeatGridPreview`).
+
+### Números al acercar (nivel de detalle)
+
+- Cada butaca **disponible sin elegir** lleva su número: `<text>` de 12 unidades `fill-brand-navy font-bold tabular-nums`, centrado, `pointer-events-none`, dentro del `<g aria-hidden>` de la butaca (el lector ya anuncia el `aria-label`). Las elegidas, ocupadas y accesibles no llevan número.
+- Está oculto (`opacity-0`) y solo se ve con `data-detail="numbers"` en el `<svg>` (`group-data-[detail=numbers]/plan:opacity-100`, con `transition-opacity`).
+- `data-detail` lo escribe un componente sin salida visual con `useTransformInit`/`useTransformEffect`, sin re-render: `"numbers"` si la escala es > 1 **y** el número mide ≥ 12 px (`unidad × escala ≥ 1`, con `getPlanFit` y `getSeatDetailLevel`); si no, `"overview"`. Sin atributo cuenta como `"overview"`.
+- Con el plano entero a la vista se ve como la captura, sin números. A 375 px aparecen al primer "Acercar" (≈ 16 px); a 768 y 1440, ya muy por encima de 12 px. "Ver todo el plano" los oculta.
+
+### Tooltip (`SeatTooltip`)
+
+- Uno por plano, solo visual (`aria-hidden`): `pointer-events-none absolute z-20 rounded-lg bg-brand-navy px-3 py-1.5 text-xs text-background shadow-lg whitespace-nowrap`, centrado sobre la butaca (`-translate-x-1/2`) y encima (`-translate-y-full -mt-2`); si la butaca queda a menos de 48 px del borde superior del lienzo, debajo (`mt-2`). El centro se recorta a 64 px de los lados del lienzo para que no se corte.
+- **Texto:** título `font-bold` "Fila C · Asiento 4" y detalle `tabular-nums`: "S/ 155.00" (disponible), "Elegida · S/ 155.00", "Accesible · S/ 155.00" u "Ocupada".
+- **Aparece** con el puntero de ratón o lápiz sobre una butaca (`pointerover` delegado; en táctil no) y al enfocar una butaca con el teclado (sigue a las flechas). Tras un clic de ratón vuelve a mostrarse con el estado nuevo ("Elegida · …").
+- **Se oculta** al salir el puntero de las butacas, con `blur` y al empezar paneo, zoom o pellizco.
+- Se descarta el `Tooltip` de shadcn (Base UI): exigiría un `Tooltip.Root` por butaca dentro de un contenedor transformado, y en táctil se abriría al tocar.
 
 ### Leyenda (`SeatLegend`)
 
-`<ul aria-label="Leyenda del plano">` (`flex flex-wrap gap-x-5 gap-y-2 text-sm`): miniatura de cada forma (`size-6`, SVG `aria-hidden`, misma `SeatShape` que el plano) + texto: "Disponible", "Tu selección", "Ocupado" y "Accesible (silla de ruedas)".
+- Contenedor `flex flex-wrap items-center justify-between gap-x-6 gap-y-2`.
+- `<ul aria-label="Leyenda del plano" class="flex flex-wrap gap-x-5 gap-y-2 text-sm">`: miniatura de cada forma (`size-6`, SVG `aria-hidden`, misma `SeatShape` que el plano) + texto: "Disponible · S/ 155.00", "Elegida", "Ocupada" y, solo si la zona tiene butacas accesibles, "Accesible (silla de ruedas)".
+- A la derecha, `<p aria-live="polite" class="text-sm font-medium tabular-nums">` con las butacas elegidas **en la zona**: "0 elegidas", "1 elegida", "n elegidas".
+
+### "Mejores butacas" (`BestSeatsPicker`)
+
+- Caja `flex flex-col gap-3 rounded-xl bg-muted p-3 sm:flex-row sm:items-center sm:justify-between`: por debajo de `sm`, la pregunta y el stepper arriba y el botón debajo, a todo el ancho.
+- **Izquierda:** "¿Cuántas butacas juntas?" (`text-sm font-semibold`) y un stepper en pastilla con las clases de `ZoneQuantityPanel` (`role="group"` etiquetado por la pregunta): "−" `secondary` "Quitar una butaca", el valor (`tabular-nums`, `aria-live="polite"`) y "+" primario "Agregar una butaca", ambos `size-11`.
+- **Rango** 1…m, con m la del contador "n de m butacas" (las que caben en la compra). "−" se deshabilita en 1 y "+" en m.
+- **Valor inicial:** las butacas ya elegidas en la zona si hay alguna; si no, 2 (la compra más común), recortado a m. Se reinicia al abrir otra zona.
+- **Derecha:** `Button variant="outline" class="h-11 cursor-pointer gap-2 font-semibold text-primary-strong"` con `Sparkles`: "Elegir las mejores butacas" o, con 1, "Elegir la mejor butaca".
+- **Al pulsar:** sustituye las butacas de la zona por el mejor bloque de esa cantidad (fila más cercana al escenario con bloque libre, lo más centrado posible; nunca butacas accesibles). Las de otras zonas no cambian. Oculta el tooltip y acerca el plano al bloque con `zoomToElement` (escala máx. 2, 300 ms; al instante con movimiento reducido), así que los números ya se ven.
+- **Con m = 0** (10 entradas en otras zonas): el stepper y el botón quedan deshabilitados pero enfocables (`focusableWhenDisabled` + `aria-disabled:*`).
 
 ### Avisos del plano (`role="status"`)
 
 - Al llegar al límite: "Máximo 10 entradas por compra".
-- "Mejor asiento disponible" con 1 asiento: "Elegimos Fila C · Asiento 6."; con varios: "Elegimos <k> asientos juntos en la fila C.".
-- Sin bloque libre: "No quedan asientos disponibles en esta zona." (k = 1) o "No hay <k> asientos juntos disponibles en esta zona.".
+- "Mejores butacas" con 1: "Elegimos Fila C · Asiento 6."; con varias: "Elegimos <k> asientos juntos en la fila C.".
+- Sin bloque libre: "No quedan asientos disponibles en esta zona." (k = 1) o "No hay <k> asientos juntos disponibles en esta zona.". La selección no cambia.
 - El aviso se limpia con la siguiente acción que cambia la selección.
 
 ### "Tus asientos" (`SelectedSeatChips`)
@@ -217,9 +279,9 @@ Transición de color de 150 ms. "Mejor asiento disponible" nunca elige asientos 
 - Stepper: `<ol aria-label="Pasos de la compra">` siempre en el DOM (`sr-only` por debajo de `md`), paso actual con `aria-current="step"`; el bloque móvil visual es `aria-hidden`.
 - Indicador de sub-paso con `aria-live="polite"`: el cambio de sub-paso se anuncia.
 - Mapa: `<svg role="group" aria-label="Mapa de zonas de <recinto>">`; cada zona es un `<path role="button" tabIndex={0}>` (sin `aria-pressed`) con `aria-label` "<nombre>, <precio>" o "<nombre>, agotado", más ", asientos numerados", ", últimas entradas" y ", 2 entradas elegidas" / ", 1 butaca elegida" cuando aplica. Se abre con clic, Enter o Espacio (con `preventDefault`, no desplaza la página). Las agotadas llevan `aria-disabled="true"`.
-- Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra"; en el sub-paso 2, "Todas las zonas", el stepper o el plano (una sola parada) y los botones.
+- Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra". En el sub-paso 2: "Todas las zonas" y el stepper de cantidad (de pie), o "Todas las zonas", el grupo "Zoom del plano" (3 botones), el plano (una sola parada), "Mejores butacas" (stepper y botón) y los chips (numerada).
 - Plano: `<svg role="group" aria-label="Plano de asientos de <zona>" aria-describedby>` con ayuda `sr-only` "Usa las flechas para moverte entre asientos y Espacio para elegir o quitar.". Cada asiento es un `<g role="checkbox" aria-checked>` con `aria-label` "Fila F, asiento 12, disponible, S/ 150.00", "Fila F, asiento 12, accesible para silla de ruedas, S/ 150.00" u "Fila F, asiento 12, ocupado" (este con `aria-disabled="true"`). Teclado: ver "Teclado".
-- Cantidades, subtotal, contador "n de m butacas" y totales con `aria-live="polite"`; estados siempre con texto ("Últimas entradas", "Agotado"), nunca solo color.
+- Cantidades, subtotal, contador "n de m butacas", "n elegidas" de la leyenda, valor de "¿Cuántas butacas juntas?" y totales con `aria-live="polite"`; el tooltip de butaca es `aria-hidden` (el lector anuncia el `aria-label`); estados siempre con texto ("Últimas entradas", "Agotado"), nunca solo color.
 - Targets ≥ 44 px (`min-h-11`/`size-11`/`min-h-18`) en tarjetas, migas, steppers, zoom y el botón de la hoja, salvo los asientos (≥ 24 px con el plano entero a la vista; con zoom crecen); foco visible en todo lo interactivo, iconos `aria-hidden`.
 - Animaciones solo con `motion-safe:` (y `animationTime` 0 en el zoom con `prefers-reduced-motion: reduce`).
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440.
