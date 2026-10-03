@@ -71,7 +71,7 @@ const payButtons = () =>
 const pay = () => fireEvent.click(payButtons()[0]);
 
 function renderForm() {
-  return render(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" summary={<p>Resumen</p>} />);
+  return render(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" />);
 }
 
 function fillBuyer() {
