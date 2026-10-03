@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "../stores/auth.store";
 import { ACCOUNT_LINKS } from "./accountLinks";
 import { UserMenu } from "./UserMenu";
-import { UserSummary } from "./UserSummary";
+import { UserSummary } from "@/components/shared/UserSummary";
 
 const PRIMARY_BUTTON = cn(
   buttonVariants(),

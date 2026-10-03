@@ -16,7 +16,7 @@ import {
 import { getFirstName, getFullName } from "@/lib/userName";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_LINKS } from "./accountLinks";
-import { UserSummary } from "./UserSummary";
+import { UserSummary } from "@/components/shared/UserSummary";
 
 const TRIGGER = cn(
   buttonVariants({ variant: "ghost" }),
