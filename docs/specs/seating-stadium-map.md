@@ -1232,32 +1232,70 @@ No hay API: son datos mock.
     - tonos del festival;
     - el test de `labelPos` en el centro del rectángulo (F5 de la spec base) solo para los 3 mapas rectangulares.
 - **F2:**
+  - `modules/seating/utils/zoneTone.test.ts` (se amplía):
+    - 5 precios distintos → `tier-1`…`tier-5`;
+    - 6 precios → el 6.º es `tier-5`;
+    - precios iguales comparten tono;
+    - las agotadas son `sold-out` y no cuentan para el rango;
+    - cada entrada de `ZONE_TONE_CLASSES` tiene `shape` con `fill-`, `label` con `fill-` y `text-`, y `swatch` con `bg-`;
+    - sigue el test de "solo tokens".
+  - `modules/seating/services/seating.service.test.ts`: los tonos del festival pasan a `oriente` → `tier-4` y `norte` → `tier-5` (decisión 28). El resto no cambia.
+- **F3:**
+  - `modules/seating/utils/viewBox.test.ts` (nuevo):
+    - `"0 0 600 412"` → `{ width: 600, height: 412 }`;
+    - formatos inválidos (`"0 0 600"`, `"10 0 600 412"`, texto) → `Error`.
   - `modules/seating/hooks/useSeatSelection.test.ts`:
     - "selectZone activa cualquier zona, incluidas las numeradas y las agotadas" pasa a: activa las numeradas y las de pie, e ignora las agotadas y las inexistentes;
     - nuevo caso `closeZone` (vuelve a `null` y conserva la selección).
   - `modules/seating/components/TicketSelection.test.tsx` (se reescribe la parte de lista y activación; se conservan los casos del plano):
     - el indicador "Paso 1 de 2 · Elige una zona";
-    - clic o Enter en una zona del mapa abre el sub-paso 2, cambia el indicador, enfoca el h3 y quita mapa y tarjetas;
-    - la tarjeta de una zona de pie abre el panel de cantidad; −/+ actualizan cantidad, total y `href`;
+    - la etiqueta HTML de cada zona (nombre y precio) y la insignia con el número de elegidas;
+    - **resaltado:** `pointerEnter`/`focus` en una tarjeta → la zona del mapa tiene el trazo superpuesto y las demás `opacity-40`; `pointerEnter` en el mapa → `data-highlighted="true"` en su tarjeta; `pointerLeave`/`blur` lo quitan; las agotadas no se resaltan;
+    - clic o Enter en una zona del mapa abre el sub-paso 2, cambia el indicador, enfoca el h3 y quita el mapa y las tarjetas;
+    - la tarjeta de una zona de pie abre el panel de cantidad: −/+ actualizan la cantidad, el subtotal, el total y el `href`;
     - "Todas las zonas" vuelve, enfoca la tarjeta y conserva la selección, con "2 entradas elegidas" en su nombre accesible;
     - una zona agotada (mapa y tarjeta) no abre nada y tiene `aria-disabled`;
-    - una zona numerada abre el plano con "n de m butacas", que se actualiza al elegir;
+    - una zona numerada abre el plano con "n de m butacas", que se actualiza al elegir; al quitar el último chip, el foco va al h3;
     - el límite de 10 con el texto del pie;
     - el resumen vacío con el texto nuevo;
+    - "Ver resumen de la compra" abre el diálogo "Tu compra" con las líneas y el total;
     - se mantienen, adaptados al sub-paso 2, los casos de F4 de la spec base: clic en un asiento, Espacio/Enter, flechas y `tabIndex`, ocupado, "Mejor asiento disponible", quitar un chip y cambiar de zona conservando asientos.
-- **F3:**
+- **F4:**
   - `modules/seating/utils/planViewport.test.ts` (nuevo):
+    - `getPlanFit`: plano y viewport de igual proporción (`offset` 0), viewport más ancho (`offsetX` > 0), más alto (`offsetY` > 0) y medidas ≤ 0 → todo 0;
+    - `getSeatDetailLevel`: escala 1 con `unit` 2 → `"overview"`; escala 1.5 con `unit` 0.8 → `"numbers"` (1.2 ≥ 1); escala 1.2 con `unit` 0.8 → `"overview"` (0.96 < 1).
+  - `modules/seating/hooks/useSeatSelection.test.ts` (se reescriben los casos de `pickBestSeats`):
+    - `count` 1 y 2 → el bloque esperado, que se devuelve, con su aviso;
+    - sustituye las butacas de la zona y respeta las de otras zonas;
+    - sin bloque → `null` y el aviso "No hay <n> asientos juntos…" (o "No quedan…" con 1);
+    - por encima del límite → `null` y "Máximo 10 entradas por compra";
+    - `count` 0 o no entero, zona de pie o inexistente → `null` sin cambios;
+    - nunca elige accesibles.
+  - `modules/seating/components/TicketSelection.test.tsx` (se amplía; el `vi.mock("react-zoom-pan-pinch")` añade `useTransformInit: vi.fn()`, `useTransformEffect: vi.fn()` y `zoomToElement` en los controles):
+    - las disponibles llevan su número (`text` `aria-hidden`), las ocupadas no, y las accesibles tienen el icono;
+    - la leyenda "Disponible · S/ X", "Elegida", "Ocupada" y "n elegidas" se actualiza al elegir; "Accesible (silla de ruedas)" solo aparece con butacas accesibles;
+    - **tooltip:** `pointerOver` en una butaca → "Fila A · Asiento 2" + precio; en una ocupada → "Ocupada"; con `pointerType: "touch"` no aparece; `focus` por teclado lo muestra;
+    - **`BestSeatsPicker`:**
+      - empieza en 2 y elige el bloque esperado;
+      - con 1, el texto del botón cambia;
+      - en el límite, deshabilitado;
+      - sin bloque, el aviso;
+    - el grupo "Zoom del plano" con sus 3 botones;
+    - 2 letras por fila en cuadrícula.
+- **F5:**
+  - `modules/seating/utils/planViewport.test.ts` (se amplía):
     - escala 1 sin desplazamiento → el plano entero;
     - escala 2 con `position` (−w/2, −h/2) → el cuarto central correcto;
-    - viewport más alto que el plano (centrado vertical con `off`);
+    - viewport más alto que el plano (centrado vertical con `offset`);
     - recorte a los límites;
     - `toVenueRect` deshace `planTransform`.
-  - `modules/seating/components/TicketSelection.test.tsx` (se amplía; el `vi.mock("react-zoom-pan-pinch")` añade `useTransformEffect: vi.fn()`). Con una zona fixture con `planTransform`:
+  - `modules/seating/components/TicketSelection.test.tsx` (se amplía). Con una zona fixture con `planTransform`:
     - se pinta el minimapa (`svg[aria-hidden]` con el `path` de la zona en `fill-primary`);
-    - hay 2 letras por fila;
+    - el fondo tiene la zona abierta en `fill-accent`;
+    - hay 2 letras por fila en los puntos de `getRowEdgeLabelPoints`;
     - no aparece la barra "ESCENARIO" de cuadrícula;
-    - una zona sin `planTransform` no tiene minimapa.
-- **F4:**
+    - una zona sin `planTransform` no tiene minimapa ni fondo.
+- **F6:**
   - `modules/seating/utils/selectionSummary.test.ts` (se amplía; los casos actuales no cambian). `parseSeatingPreselection` con un mapa fixture (una zona de pie, una numerada y una agotada):
     - cantidad de pie válida → `quantities[zone.id]` (clave = id de zona, parámetro = `ticketTypeId`);
     - butacas válidas, en el orden de la URL;
@@ -1272,10 +1310,11 @@ No hay API: son datos mock.
   - `modules/seating/components/TicketSelection.test.tsx` (se amplía):
     - con `initialSelection`, sub-paso 1 con las tarjetas "…, 2 entradas elegidas" / "…, 2 butacas elegidas" en su nombre accesible, total y `href` de "Continuar";
     - `PreselectedTicketSelection`, con `vi.mock("next/navigation", async (importOriginal) => ({ ...(await importOriginal()), useSearchParams: () => new URLSearchParams("…") }))`, precarga lo mismo.
-- **Sin tests:**
-  - `VenueMapView`, `ZoneCards`, `ZoneStepBreadcrumb`, `ZoneQuantityPanel`, `SeatLegend`, `SeatPlanMinimap` y `PurchaseSummary`: presentacionales, cubiertos por `TicketSelection.test` donde tienen comportamiento;
+- **Sin tests propios:**
+  - `VenueMapView`, `ZoneCards`, `ZoneStepHeader`, `ZoneQuantityPanel`, `SeatLegend`, `SeatTooltip`, `BestSeatsPicker`, `SeatPlanMinimap`, `PurchaseSummary` y `MobilePurchaseBar`: son de `modules/seating/components/` (no de `components/shared/`) y se cubren con `TicketSelection.test` donde tienen comportamiento;
+  - el nivel de detalle y el zoom animado dependen del layout y no se prueban en jsdom (la librería está mockeada): se cubren la función pura (`getSeatDetailLevel`) y las capturas a 375 y 1440 del reviewer;
   - mocks y tipos;
-  - `app/eventos/[slug]/entradas/page.tsx` e `index.ts` (F4).
+  - `app/(site)/eventos/[slug]/entradas/page.tsx` e `index.ts` (F6).
 
 ## Plan de tareas
 **Coordinación:**
@@ -1307,58 +1346,99 @@ No hay API: son datos mock.
   - Depende de: T1, T3 y T4.
   - Secuencial.
 
-### Fase 2. Pantalla en dos sub-pasos (4 tareas, 13 archivos)
-- [ ] T1. Hook: `selectZone` ignora zonas agotadas y nueva acción `closeZone`, con test.
-  - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
+**Coordinación del rediseño (Fases 2–6):**
+- **Orden:** F2 → F3 → F4 → F5, una fase por sesión. F6 depende solo de F3 (tarjetas con "n elegidas", insignias del mapa y hook con `closeZone`). Puede ir antes o después de F4/F5, pero nunca en la misma sesión que otra fase que toque `TicketSelection.test.tsx`, `useSeatSelection.ts` o `ticket-selection.md`.
+- **Sin dependencias nuevas:** ninguna fase toca `package.json`, `app/layout.tsx`, `app/providers.tsx`, `app/globals.css`, `lib/`, `components/ui/` ni `components/shared/`. Lo único compartido son el hook y `TicketSelection.test.tsx`, que van en tareas secuenciales.
+- **Verificación visual del reviewer:** capturas a 375 y 1440 de `/eventos/festival-vive-latino-lima/entradas` y `/eventos/noche-de-sintetizadores-lima/entradas` (sub-paso 1, sub-paso 2 de pie y sub-paso 2 numerado), comparadas con las capturas del usuario (paso 1: la que describe el pedido 2; paso 2: `images/15.png`).
+- **F6 y checkout:** F6 es independiente de la Fase 7 de `checkout-mock-payment.md`, que genera el enlace. El criterio de ida y vuelta necesita las dos.
+
+### Fase 2. Escala de tonos por precio (2 tareas, 5 archivos)
+- [ ] T1. 5 tonos en `getZoneTones` y `ZONE_TONE_CLASSES` (`label` con clase SVG + HTML), con tests (requisito 9).
+  - Archivos: `modules/seating/utils/zoneTone.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/seating/types/seating.types.ts`.
   - Depende de: Fase 1.
-  - En paralelo con T2.
-- [ ] T2. Componentes presentacionales del sub-paso 1 y del panel de cantidad, y texto del resumen.
-  - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`, `modules/seating/components/ZoneStepBreadcrumb.tsx`, `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/PurchaseSummary.tsx`.
-  - Depende de: Fase 1.
-  - En paralelo con T1.
-- [ ] T3. `SeatPlan` como sub-paso 2 (sin `Card`, migas, h3, contador, barra de zoom sobre el lienzo) y leyenda con precio.
-  - Archivos: `modules/seating/components/SeatPlan.tsx`, `modules/seating/components/SeatLegend.tsx`.
-  - Depende de: T2 (`ZoneStepBreadcrumb`).
-  - Secuencial tras T2.
-- [ ] T4. `TicketSelection` con sub-pasos y foco, test reescrito, eliminar `ZoneList` y actualizar el diseño de página.
-  - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/ZoneList.tsx` (se elimina), `design-system/ticketera/pages/ticket-selection.md`.
-  - Depende de: T1 y T3.
+  - Secuencial (base).
+- [ ] T2. Tonos del festival en el test del service y tabla "Tonos por precio" del diseño de página.
+  - Archivos: `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T1.
   - Secuencial.
 
-### Fase 3. Plano curvo con minimapa (3 tareas, 6 archivos)
-- [ ] T1. Utilidad de vista visible, con test.
-  - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`.
+### Fase 3. Sub-paso 1 con el diseño de la captura, sub-paso 2 y resumen móvil (5 tareas, 15 archivos)
+- [ ] T1. `parseViewBox` con test; hook con `closeZone` y `selectZone` que ignora las agotadas, con test (requisito 19).
+  - Archivos: `modules/seating/utils/viewBox.ts`, `modules/seating/utils/viewBox.test.ts`, `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 2.
+  - Secuencial (base).
+- [ ] T2. Mapa con etiquetas HTML, luces, separación, resaltado e insignias, y tarjetas de zona (requisitos 12 y 13).
+  - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
+  - Depende de: T1.
+  - En paralelo con T3 y T4.
+- [ ] T3. Cabecera de zona, panel de cantidad con subtotal, `PurchaseSummaryContent` y barra móvil con hoja inferior (requisitos 14, 15, 17 y 18).
+  - Archivos: `modules/seating/components/ZoneStepHeader.tsx`, `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
+  - Depende de: T1 (orden de la fase).
+  - En paralelo con T2 y T4.
+- [ ] T4. `SeatPlan` como sub-paso 2: sin `Card` ni h2, ayuda arriba, `headingId` externo y `parseViewBox` (requisito 16).
+  - Archivos: `modules/seating/components/SeatPlan.tsx`.
+  - Depende de: T1.
+  - En paralelo con T2 y T3.
+- [ ] T5. `TicketSelection` con la tarjeta única, sub-pasos, foco, resaltado y transición; test reescrito; eliminar `ZoneList`; diseño de página (requisitos 10 y 11).
+  - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/ZoneList.tsx` (se elimina), `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T2, T3 y T4.
+  - Secuencial.
+
+### Fase 4. Plano de butacas renovado (5 tareas, 11 archivos)
+- [ ] T1. `pickBestSeats(zoneId, count)` que devuelve el bloque, con tests (requisito 26).
+  - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
+  - Depende de: Fase 3.
+  - En paralelo con T2 y T3.
+- [ ] T2. `getPlanFit` y `getSeatDetailLevel` con test; `SeatShape` v2 y `SeatLegend` nueva; `SeatTooltip` (requisitos 21, 23 y 24).
+  - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`, `modules/seating/components/SeatLegend.tsx`, `modules/seating/components/SeatTooltip.tsx`.
+  - Depende de: Fase 3.
+  - En paralelo con T1 y T3.
+- [ ] T3. `BestSeatsPicker` (requisito 26).
+  - Archivos: `modules/seating/components/BestSeatsPicker.tsx`.
+  - Depende de: Fase 3.
+  - En paralelo con T1 y T2.
+- [ ] T4. `SeatPlan`: nivel de detalle, tooltip, letras en los dos extremos, zoom superpuesto desde `sm`, leyenda, bandeja con "Mejores butacas" y zoom a las elegidas (requisitos 22, 25, 26 y 27).
+  - Archivos: `modules/seating/components/SeatPlan.tsx`.
+  - Depende de: T1, T2 y T3.
+  - Secuencial.
+- [ ] T5. `TicketSelection` (`seatLimit`, `selectedInZone`, `onPickBestSeats`), test ampliado y diseño de página.
+  - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T4.
+  - Secuencial. El reviewer comprueba con capturas a 768 y 1440 que los controles superpuestos no tapan butacas.
+
+### Fase 5. Plano curvo con contexto y minimapa (3 tareas, 6 archivos)
+- [ ] T1. `getVisiblePlanRect` y `toVenueRect`, con test (requisito 31).
+  - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`.
+  - Depende de: Fase 4.
   - Secuencial (base de T2).
-- [ ] T2. Minimapa.
+- [ ] T2. Minimapa (requisito 30).
   - Archivos: `modules/seating/components/SeatPlanMinimap.tsx`.
   - Depende de: T1.
   - Secuencial.
-- [ ] T3. Fondo del estadio, contorno del sector, letras en los dos bordes y minimapa en `SeatPlan`; test ampliado; diseño de página.
+- [ ] T3. Fondo del estadio, lienzo apaisado desde `sm` y minimapa superpuesto o en la barra en `SeatPlan`; test ampliado; diseño de página (requisitos 28 y 29).
   - Archivos: `modules/seating/components/SeatPlan.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2.
   - Secuencial.
 
-### Fase 4. Precarga de la selección desde la URL (4 tareas, 10 archivos)
+### Fase 6. Precarga de la selección desde la URL (4 tareas, 10 archivos)
 **Coordinación:**
-- Depende de la **Fase 2** (sub-pasos, tarjetas con "n elegidas", hook con `closeZone`). **No depende de la Fase 3**: puede ir antes o después, pero no en la misma sesión, porque las dos tocan `TicketSelection.test.tsx` y `ticket-selection.md`.
-- Es independiente de la Fase 7 de `checkout-mock-payment.md`, que genera el enlace: cada una funciona sola. El criterio de ida y vuelta necesita las dos.
-- Por qué es una fase nueva y no parte de la F2: la F2 ya tiene 13 archivos y la precarga añade 10.
+- Antigua Fase 4, con el mismo alcance.
+- Depende de la **Fase 3**. No depende de F4 ni de F5, pero no va en su misma sesión (ver la coordinación del rediseño).
 
 - [ ] T1. `parseSeatingPreselection` con tests (incluida la ida y vuelta con `buildSeatingCheckoutHref`).
   - Archivos: `modules/seating/utils/selectionSummary.ts`, `modules/seating/utils/selectionSummary.test.ts`.
-  - Depende de: Fase 2.
+  - Depende de: Fase 3.
   - En paralelo con T2.
 - [ ] T2. `initialSelection` en `useSeatSelection`, con tests.
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
-  - Depende de: Fase 2.
+  - Depende de: Fase 3.
   - En paralelo con T1.
 - [ ] T3. `initialSelection` en `TicketSelection` y nuevo `PreselectedTicketSelection`, con tests.
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/PreselectedTicketSelection.tsx`.
   - Depende de: T1 y T2.
   - Secuencial.
 - [ ] T4. Barrel, página con `Suspense` y diseño de página (sección "Precarga").
-  - Archivos: `modules/seating/index.ts`, `app/eventos/[slug]/entradas/page.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Archivos: `modules/seating/index.ts`, `app/(site)/eventos/[slug]/entradas/page.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T3.
   - Secuencial. El reviewer verifica en `npm run build` que las 4 rutas siguen prerenderizadas.
 
@@ -1366,11 +1446,20 @@ No hay API: son datos mock.
 1. **Tribuna Norte de pie** (decisión 4). La captura no deja ver su tarjeta. Se decidió "General · sin butaca" por la convención de tribuna popular y porque un plano del arco exterior no cumple los tamaños mínimos de butaca. ¿Se acepta, o debe ser numerada aunque haga falta otro tipo de plano (por tramos, o empezando con zoom)? **Dato nuevo:** la captura del resumen de checkout que compartió el usuario muestra "5 × Tribuna Norte" con "Fila B · 13 · Fila C · 6 · Fila D · 6 · Fila E · 18 · Fila J · 13". Es decir, Norte numerada, con filas hasta la J y al menos 18 butacas por fila. Eso apunta a la segunda opción y choca con el límite de ≤ 10 butacas por fila.
 2. **Filas A–J en lugar de A–M** (decisión 6). Con 13 filas, el plano de las tribunas laterales supera 400 de ancho y las butacas bajan de 24 px a 375 px. Consecuencia: el ejemplo "L-9 / M-8 de Tribuna Oriente" de `checkout-mock-payment.md` no existe. ¿Se acepta A–J, o se prefiere relajar la invariante (butacas < 24 px con el plano entero, y se elige con zoom)?
 3. **"2 de 6 butacas"** (decisión 11). Se muestra "n de m", con m = lo que cabe en el límite de 10 por compra. ¿O se quiere introducir un límite de 6 por zona (cambiaría la decisión 5 de la spec base, el hook y el checkout)?
-4. **Quinto tono** (decisión 9). Oriente (S/ 155) y Norte (S/ 120) comparten `tier-4`. ¿Se añade un `tier-5` (p. ej. `fill-secondary` con borde, que hoy se parece a "Agotado") o se deja así?
+4. ~~**Quinto tono** (decisión 9).~~ **Resuelta por la decisión 28:** la escala de 5 azules de la captura del paso 1 da a Oriente `tier-4` y a Norte `tier-5`.
 5. **Formato compacto en "Tu compra"** ("Fila L · 9 · Fila M · 8", como la captura). `checkout-mock-payment.md` lo define en `modules/checkout/utils/summaryFormat.ts` (`formatCompactSeats`), y `seating` no puede importarlo sin crear un ciclo (`checkout` → `seating`). ¿Se sube esa función a `lib/` en una enmienda posterior y se usa en ambos resúmenes, o "Tu compra" mantiene "Fila L · Asiento 9, …"?
 6. **Fecha del evento:** `2026-10-05`, a 2 días de hoy (2026-10-03). Al pasar la fecha, el mock no filtra eventos pasados, así que seguirá listado y comprable. ¿Se prefiere `2027-10-04` (también lunes) para que la demo no caduque?
 7. **Datos plausibles** (requisito 1): segundo párrafo de la descripción (la invariante exige 2), dirección, organizador ficticio, edad mínima 0, `featured: true` e imagen de Unsplash sin verificar. ¿Algún valor real que deba usarse?
 8. **Sub-pasos y botón "Atrás" del navegador:** el sub-paso no va en la URL, así que "Atrás" sale de `/entradas` aunque se esté en el sub-paso 2. ¿Se quiere reflejarlo en la URL (p. ej. `?zona=oriente`)? Sería otra ampliación.
-9. **Butacas disponibles sin el tono de la zona** (decisión 10) y textos "Tu selección" / "Ocupado" de la leyenda en lugar de "Elegida" / "Ocupada" (decisión 13). ¿Se aceptan, para mantener la consistencia con los planos actuales?
-10. **Sub-paso al volver con selección (F4):** la pantalla abre siempre en el sub-paso 1 (zonas con "n elegidas" y "Tu compra" completo; decisión 15). ¿O prefieres abrir directamente el sub-paso 2 de la única zona con selección, cuando solo hay una?
-11. **Selección precargada que ya no es válida (F4):** las butacas que estén ocupadas o no existan se descartan sin aviso, así que el total puede ser menor que el del pedido. ¿Se quiere un aviso del tipo "Algunas butacas ya no están disponibles", o basta con que se vea en "Tu compra"? (Con los datos mock deterministas no debería pasar al volver desde checkout.)
+9. **Colores de las butacas** (decisión 10). Ya se adoptan "Elegida" / "Ocupada" y el lavanda de la captura del paso 2, traducido a `primary/30` con borde `primary`, igual en todas las zonas. Las elegidas van en navy (en la captura, casi negras). ¿Se acepta navy, o se prefiere el negro literal (no es un token de UI en MASTER)?
+10. **Sub-paso al volver con selección (F6):** la pantalla abre siempre en el sub-paso 1 (zonas con "n elegidas" y "Tu compra" completo; decisión 15). ¿O prefieres abrir directamente el sub-paso 2 de la única zona con selección, cuando solo hay una?
+11. **Selección precargada que ya no es válida (F6):** las butacas que estén ocupadas o no existan se descartan sin aviso, así que el total puede ser menor que el del pedido. ¿Se quiere un aviso del tipo "Algunas butacas ya no están disponibles", o basta con que se vea en "Tu compra"? (Con los datos mock deterministas no debería pasar al volver desde checkout.)
+12. **Precios sin decimales** ("S/ 330" en las capturas). MASTER §10 fija `S/ 330.00` (`formatEventPrice`) en toda la app, también en "Tu compra" y en checkout. ¿Se mantiene, o se cambia el formato global a "S/ 330" cuando no hay céntimos? Sería una enmienda de MASTER y de `formatEventPrice`, fuera de esta spec.
+13. **Precio en naranja** en las tarjetas de zona de la captura. MASTER reserva el color de marca para la acción y pone los precios en `text-foreground`, y la paleta Mentec no tiene naranja (`--warning` es "Últimas entradas"). Se usa `text-foreground`. ¿Se quiere el precio en `text-primary-strong`?
+14. **Arco punteado decorativo** alrededor del estadio (captura del paso 1). Necesita un dato que el layout no tiene (radio y ángulos del arco), así que sería un campo opcional nuevo en el schema y en el mock de la Fase 1. ¿Se añade en una enmienda posterior o se omite?
+15. **Temporizador de reserva** ("Tus entradas están reservadas por 10:00", como Ticketmaster, Teleticket o Joinnus). Sin backend no hay reserva real: un contador ficticio sería engañoso. ¿Se omite hasta tener reservas (decisión 29), o se quiere un aviso informativo sin cuenta atrás?
+16. **Butaca suelta:** las ticketeras de referencia (Seats.io) impiden dejar una butaca libre aislada entre dos ocupadas o elegidas. ¿Se quiere esa regla? Cambiaría `toggleSeat` y los avisos.
+17. **¿Servicio de pago con datos en terceros?** La recomendación es seguir con el SVG propio mejorado (decisión 22). Si se quiere una librería completa con reservas reales, las opciones viables son Seats.io (madura, pago por butaca reservada, plan gratuito limitado según su web, no verificado) o SeatLayer (0.x; 100 créditos gratis al mes y luego US$ 0.10–0.05 por butaca vendida, según su README). Las dos guardan los planos, la disponibilidad y las reservas en sus servidores y exigen backend para confirmar. ¿Aceptas un servicio así? Si es que sí, ¿cuál? Se especificaría como enmienda (decisión 29), verificable solo en tu máquina (el sandbox bloquea sus dominios).
+18. **Cantidad inicial de "Mejores butacas":** 2 (decisión 25). ¿O 1?
+19. **Referencias sin verificar en vivo:** el proxy bloqueó Ticketmaster, SeatGeek, Seats.io, Joinnus y Teleticket, así que los patrones salen del conocimiento de esos productos (ver "Investigación y diagnóstico"). Si tienes capturas del paso de butacas de Joinnus o Ticketmaster que quieras imitar en algo concreto (p. ej. la bandeja de selección o el tooltip), compártelas.
+20. **Luces del escenario:** en las capturas son amarillas. Se usan en cian Mentec (`highlight`), porque el amarillo cercano (`warning`) significa "Últimas entradas". ¿Se acepta?
