@@ -50,11 +50,13 @@ function angleOf(point: { x: number; y: number }, sector: AnnularSector): number
 }
 
 describe("generateArcSeatRows", () => {
-  it("con el sector de Oriente genera las filas A–J con 4, 4, 5, 6, 6, 7, 8, 9, 9 y 10 butacas", () => {
+  it("con el sector de Oriente genera las filas A–J con 4, 4, 5, 6, 7, 7, 8, 9, 9 y 10 butacas (69 en total)", () => {
     const result = generateArcSeatRows(ORIENTE_SPEC);
+    const counts = result.rows.map((row) => row.seats.length);
 
     expect(result.rows.map((row) => row.label)).toEqual(ROWS_A_TO_J);
-    expect(result.rows.map((row) => row.seats.length)).toEqual([4, 4, 5, 6, 6, 7, 8, 9, 9, 10]);
+    expect(counts).toEqual([4, 4, 5, 6, 7, 7, 8, 9, 9, 10]);
+    expect(counts.reduce((total, count) => total + count, 0)).toBe(69);
   });
 
   it("las filas exteriores tienen al menos tantas butacas como las interiores", () => {
