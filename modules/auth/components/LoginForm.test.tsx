@@ -99,12 +99,13 @@ describe("LoginForm", () => {
     expect(screen.getByRole("button", { name: "Mostrar contraseña" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("muestra los enlaces de recuperar contraseña y crear cuenta", () => {
+  it("muestra el título, el subtítulo y los enlaces de recuperar contraseña y crear cuenta", () => {
     render(<LoginForm />);
     expect(screen.getByRole("link", { name: "¿Olvidaste tu contraseña?" }).getAttribute("href")).toBe(
       "/recuperar-contrasena",
     );
-    expect(screen.getByRole("link", { name: "Crear cuenta" }).getAttribute("href")).toBe("/registro");
-    expect(screen.getByRole("heading", { level: 1, name: "Iniciar sesión" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Crea una gratis" }).getAttribute("href")).toBe("/registro");
+    expect(screen.getByRole("heading", { level: 1, name: "Hola de nuevo" })).toBeTruthy();
+    expect(screen.getByText("Ingresa para ver tus entradas y comprar más rápido.")).toBeTruthy();
   });
 });

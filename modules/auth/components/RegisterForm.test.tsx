@@ -113,13 +113,14 @@ describe("RegisterForm", () => {
     expect(useAuthStore.getState().user).toBeNull();
   });
 
-  it("muestra el título, DNI por defecto y los enlaces", () => {
+  it("muestra el título, el subtítulo, DNI por defecto y los enlaces", () => {
     render(<RegisterForm />);
-    expect(screen.getByRole("heading", { level: 1, name: "Crear cuenta" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Crea tu cuenta" })).toBeTruthy();
+    expect(screen.getByText("Guarda tus entradas y recibe novedades de tus eventos.")).toBeTruthy();
     expect(screen.getByLabelText("Tipo de documento").textContent).toContain("DNI");
     expect(input("Número de documento").maxLength).toBe(8);
     expect(screen.getByRole("link", { name: "Términos y condiciones" }).getAttribute("href")).toBe("/terminos");
     expect(screen.getByRole("link", { name: "Política de privacidad" }).getAttribute("target")).toBe("_blank");
-    expect(screen.getByRole("link", { name: "Iniciar sesión" }).getAttribute("href")).toBe("/login");
+    expect(screen.getByRole("link", { name: "Inicia sesión" }).getAttribute("href")).toBe("/login");
   });
 });
