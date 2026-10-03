@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Ticket } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { EmptyState, type EmptyStateProps } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -40,7 +38,7 @@ const TIMEFRAMES = [
       ...EXPLORE_ACTION,
     },
   },
-] as const satisfies { value: OrderTimeframe; label: string; empty: EmptyStateProps }[];
+] as const satisfies { value: OrderTimeframe; label: string; empty: Omit<EmptyStateProps, "icon"> }[];
 
 /** Página "Mis entradas": límite cliente; el contenido depende de la sesión y las órdenes guardadas en el navegador. */
 export function MyTickets() {
@@ -75,7 +73,7 @@ export function MyTickets() {
                 {state[value].length > 0 ? (
                   <OrdersPanel orders={state[value]} timeframe={value} />
                 ) : (
-                  <EmptyState {...empty} />
+                  <EmptyState icon={Ticket} {...empty} />
                 )}
               </TabsContent>
             ))}
@@ -87,6 +85,7 @@ export function MyTickets() {
               <LoadingState />
             ) : (
               <EmptyState
+                icon={Ticket}
                 title="Inicia sesión para ver tus entradas"
                 description="Ingresa con tu cuenta para ver y descargar tus entradas cuando quieras."
                 actionLabel="Iniciar sesión"
@@ -116,37 +115,6 @@ function OrdersPanel({ orders, timeframe }: OrdersPanelProps) {
       </div>
       <TicketCard key={selected.code} order={selected} timeframe={timeframe} />
     </div>
-  );
-}
-
-type EmptyStateProps = {
-  title: string;
-  description: string;
-  actionLabel: string;
-  actionHref: string;
-};
-
-function EmptyState({ title, description, actionLabel, actionHref }: EmptyStateProps) {
-  return (
-    <Empty className="rounded-2xl border-2 border-dashed border-border bg-background px-6 py-14 md:py-20">
-      <EmptyHeader className="max-w-md">
-        <EmptyMedia variant="icon" aria-hidden className="size-14 rounded-2xl bg-accent text-accent-foreground">
-          <Ticket className="size-7" />
-        </EmptyMedia>
-        <EmptyTitle className="text-xl font-bold">
-          <h2>{title}</h2>
-        </EmptyTitle>
-        <EmptyDescription className="max-w-md text-base text-muted-foreground">{description}</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <Link
-          href={actionHref}
-          className={cn(buttonVariants(), "h-11 cursor-pointer px-6 font-semibold duration-200 hover:bg-primary-strong")}
-        >
-          {actionLabel}
-        </Link>
-      </EmptyContent>
-    </Empty>
   );
 }
 

@@ -38,6 +38,10 @@ describe("login", () => {
       firstName: "Ana",
       lastName: "Quispe",
       email: "demo@mentectickets.pe",
+      phone: "987654321",
+      documentType: "dni",
+      documentNumber: "45781236",
+      createdAt: "2025-03-14T15:00:00.000Z",
     });
     expect(value).not.toHaveProperty("password");
   });
@@ -74,6 +78,17 @@ describe("register", () => {
     });
     expect(value?.id).toEqual(expect.any(String));
     expect(value).not.toHaveProperty("password");
+  });
+
+  it("guarda celular, documento y fecha de alta del registro", async () => {
+    vi.setSystemTime(new Date("2026-10-03T12:00:00.000Z"));
+    const { value } = await settle(register(registerInput));
+    expect(value).toMatchObject({
+      phone: "912345678",
+      documentType: "dni",
+      documentNumber: "12345678",
+      createdAt: "2026-10-03T12:00:00.000Z",
+    });
   });
 
   it("lanza email-taken con el correo de prueba (otra capitalización)", async () => {

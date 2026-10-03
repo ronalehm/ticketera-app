@@ -6,11 +6,15 @@ const empty: OrganizerEventFormValues = {
   intent: "publish",
   name: "",
   category: "conciertos",
+  minAge: "0",
   description: "",
+  organizer: "",
   date: "",
   time: "",
+  doorsOpen: "",
   venue: "",
   city: "",
+  address: "",
   ticketTypes: [{ id: "row-1", name: "", price: "", kind: "general", quantity: "", rows: "", seatsPerRow: "" }],
 };
 

@@ -42,5 +42,9 @@ export async function register(input: RegisterInput): Promise<AuthUser> {
     firstName: input.firstName,
     lastName: input.lastName,
     email: input.email,
+    phone: input.phone,
+    documentType: input.documentType,
+    documentNumber: input.documentNumber,
+    createdAt: new Date().toISOString(),
   });
 }

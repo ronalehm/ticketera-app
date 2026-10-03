@@ -17,6 +17,10 @@ export const authUserSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   email: z.email(),
+  phone: z.string().optional(),
+  documentType: z.enum(DOCUMENT_TYPES).optional(),
+  documentNumber: z.string().optional(),
+  createdAt: z.iso.datetime().optional(),
 });
 
 export const loginSchema = z.object({

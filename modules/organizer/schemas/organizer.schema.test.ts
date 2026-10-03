@@ -3,6 +3,8 @@ import { EVENT_CATEGORIES } from "@/modules/events";
 import type { OrganizerEventFormValues } from "../types/organizer.types";
 import {
   EVENT_CATEGORY_OPTIONS,
+  MIN_AGE_LABELS,
+  MIN_AGE_OPTIONS,
   organizerEventFormSchema,
   organizerEventSchema,
   SEAT_GRID_LIMITS,
@@ -57,11 +59,15 @@ const emptyForm: OrganizerEventFormValues = {
   intent: "publish",
   name: "",
   category: "conciertos",
+  minAge: "0",
   description: "",
+  organizer: "",
   date: "",
   time: "",
+  doorsOpen: "",
   venue: "",
   city: "",
+  address: "",
   ticketTypes: [emptyRow],
 };
 
@@ -69,11 +75,15 @@ const completeForm: OrganizerEventFormValues = {
   intent: "publish",
   name: "Festival de verano 2026",
   category: "festivales",
+  minAge: "18",
   description: "Tres escenarios y comida local.",
+  organizer: "Pulso Producciones",
   date: "2026-12-05",
   time: "20:00",
+  doorsOpen: "18:00",
   venue: "Estadio Nacional",
   city: "Lima",
+  address: "Av. José Díaz s/n, Cercado de Lima",
   ticketTypes: [
     { id: "row-1", name: "General", price: "50", kind: "general", quantity: "100", rows: "", seatsPerRow: "" },
     { id: "row-2", name: "VIP", price: "80", kind: "general", quantity: "50", rows: "", seatsPerRow: "" },
@@ -110,6 +120,12 @@ describe("organizerEventFormSchema", () => {
       });
     });
 
+    it("no da errores de organizador, apertura de puertas ni dirección", () => {
+      const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", time: "20:00", doorsOpen: "21:00" };
+      expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
+      expect(organizerEventFormSchema.safeParse({ ...values, doorsOpen: "25:00" }).success).toBe(true);
+    });
+
     it("guarda campos inválidos sin errores", () => {
       const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", date: "2020-01-01", time: "25:00" };
       expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
@@ -121,10 +137,13 @@ describe("organizerEventFormSchema", () => {
       expect(getMessages(emptyForm)).toEqual({
         name: "Ingresa el nombre del evento",
         description: "Agrega una descripción del evento",
+        organizer: "Indica el nombre del organizador",
         date: "Elige la fecha del evento",
         time: "Indica la hora de inicio",
+        doorsOpen: "Indica la hora de apertura de puertas",
         venue: "Indica el lugar del evento",
         city: "Indica la ciudad",
+        address: "Indica la dirección del lugar",
         "ticketTypes.0.name": "Ingresa el nombre del tipo de entrada",
         "ticketTypes.0.price": "Ingresa el precio",
         "ticketTypes.0.quantity": "Ingresa la cantidad",
@@ -132,11 +151,20 @@ describe("organizerEventFormSchema", () => {
     });
 
     it("trata los textos con solo espacios como vacíos", () => {
-      const messages = getMessages({ ...completeForm, description: "  ", venue: " ", city: "\t" });
+      const messages = getMessages({
+        ...completeForm,
+        description: "  ",
+        organizer: " ",
+        venue: " ",
+        city: "\t",
+        address: "   ",
+      });
       expect(messages).toEqual({
         description: "Agrega una descripción del evento",
+        organizer: "Indica el nombre del organizador",
         venue: "Indica el lugar del evento",
         city: "Indica la ciudad",
+        address: "Indica la dirección del lugar",
       });
     });
 
@@ -182,6 +210,38 @@ describe("organizerEventFormSchema", () => {
     it("con filas fuera de rango no da errores", () => {
       const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", ticketTypes: [{ ...numberedRow, rows: "500" }] };
       expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
+    });
+  });
+
+  describe("apertura de puertas", () => {
+    it("posterior a la hora de inicio da el error de orden", () => {
+      expect(getMessages({ ...completeForm, time: "20:00", doorsOpen: "21:00" })).toEqual({
+        doorsOpen: "La apertura de puertas debe ser a la hora de inicio o antes",
+      });
+    });
+
+    it.each(["20:00", "18:00", "00:00"])("%s con inicio a las 20:00 es válida", (doorsOpen) => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "20:00", doorsOpen }).success).toBe(true);
+    });
+
+    it.each(["", "25:00", "20:60", "8:00"])("%j da \"Indica la hora de apertura de puertas\"", (doorsOpen) => {
+      expect(getMessages({ ...completeForm, doorsOpen })).toEqual({ doorsOpen: "Indica la hora de apertura de puertas" });
+    });
+
+    it("con la hora de inicio no válida no compara el orden", () => {
+      expect(getMessages({ ...completeForm, time: "", doorsOpen: "21:00" })).toEqual({ time: "Indica la hora de inicio" });
+    });
+  });
+
+  describe("edad mínima", () => {
+    it.each(MIN_AGE_OPTIONS)("acepta %j", (minAge) => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, minAge }).success).toBe(true);
+    });
+
+    it("rechaza una edad fuera de la lista, también en borrador", () => {
+      const values = { ...completeForm, minAge: "21" } as unknown as OrganizerEventFormValues;
+      expect(Object.keys(getMessages(values))).toEqual(["minAge"]);
+      expect(Object.keys(getMessages({ ...values, intent: "draft" }))).toEqual(["minAge"]);
     });
   });
 
@@ -305,6 +365,16 @@ describe("ticketTypeFormSchema", () => {
 
   it("exige el nombre", () => {
     expect(getRowMessages({ name: " " })).toEqual(["Ingresa el nombre del tipo de entrada"]);
+  });
+});
+
+describe("MIN_AGE_OPTIONS", () => {
+  it("lista las edades en orden, con \"0\" (Todo público) primero", () => {
+    expect(MIN_AGE_OPTIONS).toEqual(["0", "12", "14", "16", "18"]);
+  });
+
+  it("usa el formato del detalle del evento", () => {
+    expect(MIN_AGE_OPTIONS.map((age) => MIN_AGE_LABELS[age])).toEqual(["Todo público", "+12", "+14", "+16", "+18"]);
   });
 });
 
