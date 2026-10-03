@@ -1,6 +1,6 @@
 # Página: Mis entradas `/mis-entradas`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/tickets-my-tickets.md` (Fase 1: datos, pestañas, lista y entrada; Fase 2: acciones, impresión y enlace en el header).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/tickets-my-tickets.md` (Fase 1: datos, pestañas, lista y entrada; Fase 2: acciones, impresión y enlace en el header). "Descargar PDF": `docs/specs/tickets-pdf-download.md`.
 
 Entradas de los pedidos del comprador con sesión iniciada, separadas en próximas y pasadas, con la entrada seleccionada como un boleto. Es una **maqueta con datos mock**: las órdenes salen del store del navegador (`localStorage`, clave `mentec-orders`, creado por el checkout con pago simulado) y, para la cuenta `demo@mentectickets.pe`, de pedidos demo. Del diseño de referencia (`MyTickets.dc.html`, `MyTicketsMobile.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins del diseño. El QR es decorativo (`TicketQr`): no codifica nada escaneable.
 
@@ -69,11 +69,15 @@ Footer            (igual que la landing)
 | Próximas vacía | Aún no tienes eventos próximos | Cuando compres entradas, las verás aquí. | Explorar eventos → `/eventos` |
 | Pasadas vacía | Aún no tienes eventos pasados | Cuando vayas a tu primer evento, lo verás aquí. | Explorar eventos → `/eventos` |
 
-## Acciones e impresión (Fase 2)
+## Acciones, PDF e impresión (Fase 2)
 
 - Bajo el `<dl>`: `Button variant="outline"` `h-11 font-semibold` "Descargar PDF" (`Download`) y, solo en Próximas, "Agregar al calendario" (`CalendarPlus`). Etiquetas completas en todos los tamaños (no "PDF"/"Calendario" como el diseño móvil); bajo `sm` apilados a todo el ancho, en fila desde `sm`.
-- "Descargar PDF" abre `window.print()` (el usuario elige "Guardar como PDF"); "Agregar al calendario" descarga `<slug>.ics` (`lib/calendar.ts`).
-- Al imprimir solo se ve la tarjeta de la entrada mostrada: `print:hidden` en h1, pestañas, lista, navegación y acciones; contenedor `print:bg-transparent print:p-0`; tarjeta `print:ring-0 print:break-inside-avoid`. Header y footer del sitio ya se ocultan al imprimir.
+- "Descargar PDF" (`TicketsPdfButton`, `components/shared/`) genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-MT-7Q4K2P.pdf`) con **todas las entradas del pedido seleccionado**, una por página A4, aunque se esté viendo "Entrada 2 de 2": las flechas sirven para ver los QR en pantalla, no para elegir qué descargar. Es el mismo PDF que en la confirmación de compra (anatomía, colores RGB y Helvetica en MASTER §7 "PDF de entradas"). No abre el diálogo de impresión.
+  - **Reposo:** `Download` + "Descargar PDF".
+  - **Generando:** `Spinner` (`aria-hidden`, `size-5 motion-reduce:animate-none`) + "Generando…"; `aria-busy="true"`, `aria-disabled="true"` (deshabilitado pero enfocable: conserva el foco y no admite un segundo clic), `cursor-progress opacity-70`; región `sr-only` `role="status"` anuncia "Generando PDF…".
+  - **Error** (falla la carga de jsPDF o la generación): vuelve a reposo y aparece debajo `<p role="alert">` "No pudimos generar el PDF. Inténtalo de nuevo." (`text-sm text-destructive`, `sm:basis-full`: bajo `sm` queda apilado con los botones; desde `sm`, en su propia línea del `flex-wrap`). Al reintentar desaparece.
+- "Agregar al calendario" descarga `<slug>.ics` (`lib/calendar.ts`).
+- **Impresión (Ctrl+P):** ningún botón imprime ya, pero las clases `print:` se conservan para una impresión limpia: solo se ve la tarjeta de la entrada mostrada (`print:hidden` en h1, pestañas, lista, navegación y acciones; contenedor `print:bg-transparent print:p-0`; tarjeta `print:ring-0 print:break-inside-avoid`). Header y footer del sitio ya se ocultan al imprimir.
 
 ## Reglas específicas
 

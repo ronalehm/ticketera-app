@@ -1,7 +1,7 @@
 # Mapa de estadio curvo y selección de entradas en dos sub-pasos
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Llevar la pantalla `/eventos/<slug>/entradas` (paso 1 "Entradas" de la compra) al nuevo diseño "Elige tus entradas":
@@ -140,6 +140,7 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
     - **Zonas numeradas:** su cantidad la dan las butacas válidas, no el parámetro `<ticketTypeId>`, que se ignora (como `getZoneQuantity`).
     - **Límite:** nunca más de `MAX_TICKETS_PER_ORDER` (10). Se recorren las zonas en el orden de `map.zones` y se recorta lo que exceda.
     - **Sub-paso inicial:** siempre el 1 (`activeZoneId = null`). Las tarjetas ya dicen "n entradas elegidas" / "n butacas elegidas" y "Tu compra" muestra las líneas y el total, así que se ve qué se trae y se puede abrir cualquier zona para cambiarlo.
+16. **Corrección aritmética (2026-10-03, detectada en F1 T3; sin cambios de diseño).** Se mantiene la fórmula del requisito 4 (filas centradas en la banda, con `holgura/2`). Las butacas por fila de las tribunas laterales que daban el requisito 7 y el criterio de `generateArcSeatRows` (4, 4, 5, 6, **6**, 7, 8, 9, 9, 10; 68 en total) omitían `holgura/2`. Con la fórmula salen 4, 4, 5, 6, **7**, 7, 8, 9, 9, 10 (69 en total): solo cambia la fila E (ρ = 344.75 → 7 butacas). Afecta igual a Oriente y Occidente. El `seatViewBox` (`0 0 399 401`), los ids de ejemplo (`oriente-C-3`, `oriente-C-4`), las accesibles (`*-J-1`, `*-J-10`) y "0 de 8" / "2 de 8 butacas" no cambian.
 
 ## Requisitos
 
@@ -251,7 +252,8 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
    | `oriente` | numbered | 102–268 · −10°…30° | (484, 84) | `wrapLabel: true`; `generateArcSeatRows({ scale: 1.95, rowLabels: A–J, occupiedRatio: 0.45, accessibleSeats: ["oriente-J-1", "oriente-J-10"] })` |
    | `norte` | general (6000) | 286–350 · 33°…147° | (300, 372) | — |
 
-   - Con escala 1.95, filas A–J y barrido de 40°, cada tribuna lateral queda con 4, 4, 5, 6, 6, 7, 8, 9, 9 y 10 butacas por fila y un `seatViewBox` de ~399 × 401.
+   - Con escala 1.95, filas A–J y barrido de 40°, cada tribuna lateral queda con 4, 4, 5, 6, 7, 7, 8, 9, 9 y 10 butacas por fila (69 en total) y un `seatViewBox` de ~399 × 401 (con los valores de referencia, `0 0 399 401`).
+     - Cálculo (requisito 4): banda = 1.95 · 166 = 323.7, holgura = 3.7, `ρᵢ` = 216.75 + i·32 y `nᵢ` = ⌊(ρᵢ·0.6981 − 16)/32⌋. Por ejemplo, fila E: ρ = 344.75 → ⌊7.02⌋ = 7. Vale igual para Oriente y Occidente (mismos radios, escala y barrido).
 8. **Invariantes del mapa curvo**, verificadas en `seating.service.test.ts` además de las del requisito 7 de la spec base:
    - el escenario y cada zona están dentro del `viewBox` con ≥ 4 unidades de margen (el halo de la zona activa mide 8);
    - ningún par de sectores (escenario incluido) se solapa;
@@ -395,7 +397,7 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
 - [ ] Dado `getAnnularSectorPath` con un sector de 90° (radios 10–20, 0°…90°, centro (0, 0)), entonces da exactamente `M20 0 A20 20 0 0 1 0 20 L0 10 A10 10 0 0 0 10 0 Z`. Con radio interior 0 da la porción `M0 0 L20 0 A20 20 0 0 1 0 20 Z`. Con un barrido > 180° el indicador `large` es 1.
 - [ ] Dados `getAnnularSectorBounds`, `isPointInAnnularSector`, `doAnnularSectorsOverlap` y `getArcPoints`, entonces cumplen el requisito 3 (casos en Tests), incluido el cruce de 0°/360° (p. ej. −10°…30°) y que lanzan error con sectores inválidos o no concéntricos.
 - [ ] Dado `generateArcSeatRows` con el sector de `oriente` de referencia, entonces:
-  - devuelve 10 filas A–J con 4, 4, 5, 6, 6, 7, 8, 9, 9 y 10 butacas;
+  - devuelve 10 filas A–J con 4, 4, 5, 6, 7, 7, 8, 9, 9 y 10 butacas (69 en total);
   - los números van de 1 a n por ángulo creciente;
   - las filas exteriores tienen ≥ butacas que las interiores;
   - las ids siguen `formatSeatId`;

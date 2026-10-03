@@ -98,7 +98,6 @@ Stepper           franja border-b, paso 3 "Confirmación" activo (oculto al impr
 └────────┴───────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌┘
 [Ver mis entradas]  [Agregar al calendario]  [Descargar PDF]   (ocultos al imprimir)
 Qué sigue: [Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
-Tus entradas      solo al imprimir: una ficha por entrada
 Footer            (igual que la landing; oculto al imprimir)
 ```
 
@@ -118,7 +117,10 @@ Footer            (igual que la landing; oculto al imprimir)
 
 - "Ver mis entradas" (primario, `Ticket`, enlace a `/mis-entradas`).
 - "Agregar al calendario" (outline, `CalendarPlus`; texto visible "Calendario" en móvil y "Agregar al calendario" desde `sm`, `aria-label="Agregar al calendario"`): descarga `<slug>.ics` con título, fecha, "Lugar, Ciudad" y "Pedido <código> · N entradas · Mentec Tickets".
-- "Descargar PDF" (outline, `Download`): abre el diálogo de impresión (`window.print()`, "Guardar como PDF"); no se genera un PDF real.
+- "Descargar PDF" (`TicketsPdfButton` outline, `Download`): genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-MT-AB12CD.pdf`), A4 con una página por entrada del pedido (anatomía, colores y fuente en MASTER §7 "PDF de entradas"). Recibe `buildTicketPdfInput(order)`; jsPDF se carga solo al pulsar. No abre el diálogo de impresión.
+  - **Reposo:** `Download` + "Descargar PDF".
+  - **Generando:** `Spinner` (`aria-hidden`, `size-5 motion-reduce:animate-none`) + "Generando…"; `aria-busy="true"` y `aria-disabled="true"` (`disabled` + `focusableWhenDisabled`: conserva el foco y no admite un segundo clic); `cursor-progress opacity-70`; región `sr-only` `role="status"` anuncia "Generando PDF…".
+  - **Error:** vuelve a reposo y muestra debajo "No pudimos generar el PDF. Inténtalo de nuevo." (`role="alert"`, `text-sm text-destructive`, `col-span-2 text-center sm:basis-full`: ocupa las dos columnas en móvil y la línea completa desde `sm`). Al reintentar, el mensaje desaparece.
 - **Móvil:** "Ver mis entradas" a todo el ancho y los otros dos en `grid-cols-2`. **sm+:** en fila. Todos `h-11` mínimo, `cursor-pointer`, iconos `aria-hidden`.
 
 ### Qué sigue
@@ -128,10 +130,12 @@ Footer            (igual que la landing; oculto al imprimir)
   - "Muestra tu QR" — "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso."
   - "Todo en Mis entradas" — "Entra con tu cuenta para ver y descargar tus entradas cuando quieras."
 
-### Impresión ("Descargar PDF")
+### Impresión (Ctrl+P)
+
+Ningún botón imprime; las clases `print:` solo limpian la impresión manual del navegador.
 
 - Ocultos (`print:hidden`): header, footer, stepper, acciones y "Qué sigue".
-- Visibles: cabecera de confirmación, tarjeta-entrada y, solo al imprimir (`hidden print:block`), h2 "Tus entradas" con una ficha por entrada (`break-inside-avoid`): `TicketQr` (`size-28`), código, tipo, asiento (si hay) y "Titular: <nombre>".
+- Visibles: cabecera de confirmación y tarjeta-entrada.
 
 ### Estados
 
