@@ -400,33 +400,33 @@ Coordinación:
 - Nadie hace commits ni ejecuta `npm run build` en paralelo: el build lo corre el reviewer al cerrar cada fase.
 
 ### Fase 1. Asientos y precio por zona (15 archivos)
-- [ ] T1. Utilidad de letras de fila con test, componente `SeatGridPreview` y entrada pública `modules/seating/preview.ts`.
+- [x] T1. Utilidad de letras de fila con test, componente `SeatGridPreview` y entrada pública `modules/seating/preview.ts`.
   - Archivos: `modules/seating/utils/rowLabels.ts`, `modules/seating/utils/rowLabels.test.ts`, `modules/seating/components/SeatGridPreview.tsx`, `modules/seating/preview.ts`.
   - Depende de: la Fase 3 de organizer-dashboard (orden global).
   - Secuencial (base: entrada pública nueva de seating).
-- [ ] T2. Schema de la fila con `kind` y límites, tipos, y las utils `getSeatGridSize`, `getRowCapacity` y `formatSeatGridSummary`, con `getTicketCapacity` y `createTicketTypeRow` ajustados. Con tests.
+- [x] T2. Schema de la fila con `kind` y límites, tipos, y las utils `getSeatGridSize`, `getRowCapacity` y `formatSeatGridSummary`, con `getTicketCapacity` y `createTicketTypeRow` ajustados. Con tests.
   - Archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerEventForm.ts`, `modules/organizer/utils/organizerEventForm.test.ts`, `modules/organizer/utils/eventPreview.test.ts` (este último solo si deja de compilar).
   - Depende de: T1 (`getSeatRowLabels`).
   - Secuencial.
-- [ ] T3. Bloque por tipo de entrada con "Ubicación", campos de zona numerada y vista previa del plano. Con test.
+- [x] T3. Bloque por tipo de entrada con "Ubicación", campos de zona numerada y vista previa del plano. Con test.
   - Archivos: `modules/organizer/components/TicketTypesField.tsx`, `modules/organizer/components/TicketTypeCapacityFields.tsx`, `modules/organizer/components/OrganizerEventForm.tsx` (solo si hace falta para la revalidación al cambiar `kind`), `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T1, T2.
   - Paralelo con T4.
-- [ ] T4. Diseño de página: sección "Crear evento" con el bloque por zona, la vista previa del plano y los límites.
+- [x] T4. Diseño de página: sección "Crear evento" con el bloque por zona, la vista previa del plano y los límites.
   - Archivos: `design-system/ticketera/pages/organizer.md`.
   - Depende de: — (documentación; sigue esta spec).
   - Paralelo con T2 y T3.
 
 ### Fase 2. Datos del evento público (5 archivos)
-- [ ] T1. Schema con `organizer`, `minAge` (`MIN_AGE_LABELS`/`MIN_AGE_OPTIONS`), `doorsOpen` y `address`, y sus reglas al publicar. Con tests.
+- [x] T1. Schema con `organizer`, `minAge` (`MIN_AGE_LABELS`/`MIN_AGE_OPTIONS`), `doorsOpen` y `address`, y sus reglas al publicar. Con tests.
   - Archivos: `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/utils/eventPreview.test.ts` (solo si deja de compilar).
   - Depende de: Fase 1.
   - Secuencial.
-- [ ] T2. Campos nuevos en el formulario (disposición del requisito 8) y valores iniciales. Con test.
+- [x] T2. Campos nuevos en el formulario (disposición del requisito 8) y valores iniciales. Con test.
   - Archivos: `modules/organizer/components/OrganizerEventForm.tsx`, `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T1.
   - Paralelo con T3.
-- [ ] T3. Diseño de página: campos nuevos en la sección "Crear evento".
+- [x] T3. Diseño de página: campos nuevos en la sección "Crear evento".
   - Archivos: `design-system/ticketera/pages/organizer.md`.
   - Depende de: Fase 1.
   - Paralelo con T1 y T2.
