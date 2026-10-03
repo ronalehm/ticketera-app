@@ -136,7 +136,7 @@ Footer            (igual que la landing)
 
 ## Paso 3: `/checkout/confirmacion`
 
-> Spec: `docs/specs/checkout-mock-payment.md` Fase 4, alineada a las capturas en la Fase 6 (decisiones 24–27). El PDF de "Descargar PDF" lo define `docs/specs/tickets-pdf-download.md`.
+> Spec: `docs/specs/checkout-mock-payment.md` Fase 4, alineada a las capturas en la Fase 6 (decisiones 24–27). El PDF de "Descargar PDF" lo define `docs/specs/tickets-pdf-download.md`; el talón navegable, `docs/specs/tickets-ticket-pager.md`.
 
 URL `/checkout/confirmacion?orden=MT-XXXXXX` (a ella se llega con `router.replace` tras el pago aprobado). La página (Server Component) valida `orden` (`parseOrderCode`); si falta o es inválido muestra directamente "No encontramos tu compra". Si es válido, `OrderConfirmation` lee la orden del store persistido (`useStoredOrder`).
 
@@ -149,13 +149,13 @@ Stepper           franja border-b, paso 3 "Confirmación" activo (oculto al impr
         h1 "¡Compra confirmada!"
         Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas.
         ( Pedido N.º MT-AB12CD )
-┌────────┬──────────────────────────────────────────┬╌╌╌╌╌╌╌╌╌╌┐
-│ imagen │ CATEGORÍA                                ┆  [QR]    │  tarjeta-entrada
-│        │ Título del evento                        ┆ Entrada  │  (md+: horizontal,
-│        │ lunes 5 de octubre · Costa Verde, Lima   ┆ 1 de N   │   talón a la derecha)
-│        │ Tribuna Oriente: Fila L · 9 · Fila M · 8 ┆          │  (una línea por zona
-│        │ Zona | Entradas | Total pagado           ┆          │   con asientos)
-└────────┴──────────────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌┘
+┌────────┬──────────────────────────────────────────┬╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐
+│ imagen │ CATEGORÍA                                ┆     [QR]      │  tarjeta-entrada
+│        │ Título del evento                        ┆ MT-AB12CD-01  │  (md+: horizontal,
+│        │ lunes 5 de octubre · Costa Verde, Lima   ┆ Titular: Luis │   talón a la derecha)
+│        │ Tribuna Oriente: Fila L · 9 · Fila M · 8 ┆ Entrada 1 de N│  (una línea por zona
+│        │ Zona | Entradas | Total pagado           ┆    [<] [>]    │   con asientos)
+└────────┴──────────────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
 [Ver mis entradas]  [Agregar al calendario]  [Descargar PDF]   (ocultos al imprimir)
 (h2 sr-only "Qué sigue")
 [Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
@@ -177,8 +177,14 @@ Footer            (igual que la landing; oculto al imprimir)
   3. Línea de fecha y lugar (`text-muted-foreground`): `<time dateTime>` con la fecha larga **sin año ni hora** ("lunes 5 de octubre", minúsculas, America/Lima; `formatLongDayMonth`) + " · Lugar, Ciudad". Ejemplo: "lunes 5 de octubre · Costa Verde, Lima". La hora no se muestra aquí (sí va en el PDF y en el `.ics`).
   4. **Asientos compactos por zona:** debajo, una `<p className="text-sm text-muted-foreground">` por tipo de entrada con asientos: "{zona}: {asientos}", p. ej. "Tribuna Oriente: Fila L · 9 · Fila M · 8". Agrupados por fila: varios en la misma fila, "Fila L · 9, 10"; filas ordenadas por longitud y luego alfabéticamente (A…Z, AA…), números de menor a mayor (`formatCompactSeats`, mismo formato que el resumen del paso 2). Si el id de un asiento no se puede leer, se usa su etiqueta completa. Los tipos sin asientos no tienen línea; una compra sin asientos no tiene ninguna.
   5. `<dl>` en `grid-cols-3`: "Zona" (nombres de las zonas unidos por ", ", p. ej. "General, VIP"), "Entradas", "Total pagado" (`S/ 310.00`). **Sin bloque "Asientos"**: los asientos solo aparecen en las líneas compactas.
-- Talón: separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-background ring-1 ring-border rounded-full`, `aria-hidden`); `TicketQr` de la primera entrada (`size-40 md:size-32`) y "Entrada 1 de N".
-- **Móvil:** vertical (imagen, datos, separador, QR). **md+:** horizontal con el talón a la derecha.
+- **Talón navegable** (spec `docs/specs/tickets-ticket-pager.md`): separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-background ring-1 ring-border rounded-full`, `aria-hidden`). Contenedor `flex flex-col items-center justify-center gap-3 p-6`, `md:w-56` (224 px; no cambia). Recorre **todas** las entradas del pedido (`useState(0)`, empieza en la entrada 1) y muestra, en columna centrada, la entrada actual `tickets[index]`:
+  1. `TicketQr` de la entrada actual (`size-40 md:size-32`).
+  2. Bloque `flex w-full min-w-0 flex-col items-center gap-0.5 text-center`:
+     - código `text-sm font-semibold tabular-nums` con prefijo `sr-only` "Código de entrada: " (p. ej. "MT-AB12CD-01");
+     - "Titular: {nombre}" (`text-sm text-muted-foreground break-words`), solo si el titular no está vacío ni es solo espacios.
+  3. Paginador de entradas compartido (`components/shared/TicketPager`, MASTER §7) con `className="print:hidden"`: "Entrada n de N" (`text-lg font-bold tabular-nums`) y flechas "Entrada anterior" / "Entrada siguiente" (44 × 44 px), siempre visibles; la del extremo queda deshabilitada y enfocable (también ambas con 1 entrada). ArrowLeft/ArrowRight con el foco en una flecha cambian de entrada. Por container query va **apilado y centrado** (texto encima, flechas debajo) con < 256 px de contenedor, como en el talón `md+` (176 px de contenido) y a 320 px; **en fila** (texto a la izquierda, flechas a la derecha) desde 256 px.
+- El cuerpo de la tarjeta (Zona, Entradas, Total pagado y asientos compactos) no cambia al navegar. "Descargar PDF" incluye siempre todas las entradas del pedido, sea cual sea la que se ve.
+- **Móvil:** vertical (imagen, datos, separador, talón con QR, código, titular y paginador). **md+:** horizontal con el talón a la derecha.
 
 ### Acciones
 
@@ -203,7 +209,7 @@ Footer            (igual que la landing; oculto al imprimir)
 Ningún botón imprime; las clases `print:` solo limpian la impresión manual del navegador.
 
 - Ocultos (`print:hidden`): header, footer, stepper, acciones y "Qué sigue".
-- Visibles: cabecera de confirmación y tarjeta-entrada.
+- Visibles: cabecera de confirmación y tarjeta-entrada. El paginador del talón va con `print:hidden`: se imprimen el QR, el código y el titular de la entrada visible. El documento para imprimir todas las entradas es el PDF.
 
 ### Estados
 
