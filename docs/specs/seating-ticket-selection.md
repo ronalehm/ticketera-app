@@ -859,7 +859,7 @@ No hay API: son datos mock.
     - `mixHash(0)` y `mixHash(1)`;
     - resultados enteros en [0, 2³²) para varias entradas;
     - determinismo;
-    - `mixHash` cambia el orden relativo de hashes de ids consecutivos (p. ej. `norte-A-1`…`norte-A-10` no quedan todos en la misma mitad del rango tras mezclar).
+    - reparto: con los ids consecutivos `norte-A-1`…`norte-A-10`, `hashString(id) / 2³²` da 9 de 10 valores agrupados entre 0.17 y 0.23. Tras `mixHash`, hay valores por debajo de 0.25 y por encima de 0.75.
   - `components/shared/TicketQr.test.tsx` (se amplía): `getQrModules("MT-AB12CD-01")` es igual a la matriz fijada (21 strings de `0`/`1`). Se escribe y se pasa **antes** de cambiar el import, y sigue pasando después. Los tests existentes no cambian.
   - `lib/calendar.test.ts` (se amplía): el `UID` del `baseInput` es exactamente `UID:b9c9de17@mentectickets.pe`. Igual que el anterior: se fija antes del cambio. Los tests existentes no cambian.
   - `modules/seating/utils/seatRows.test.ts` (se amplía):
@@ -1001,3 +1001,6 @@ Coordinación:
 5. **Evento sin mapa en `/entradas`:** muestra el 404 del evento ("No encontramos este evento"). ¿Se prefiere redirigir a `/eventos/<slug>`?
 6. **Fases 2 y 3:** las zonas numeradas se ven en `/entradas`, pero dicen "Elección de asientos próximamente" hasta la Fase 4, y el detalle no enlaza a `/entradas` hasta la Fase 4. ¿Es aceptable este estado intermedio, o se prefiere ocultar las zonas numeradas hasta entonces?
 7. **Capacidad de las zonas de pie:** se guarda en el modelo, pero no se muestra ni limita la compra. ¿Debe verse ("Aforo: 12 000") o limitar la cantidad?
+8. **(F5) Doble carga del evento en las páginas:** `/eventos/[slug]` y `/eventos/[slug]/entradas` también hacen `Promise.all([getEventBySlug, …, getVenueMapBySlug])`, y cargan el evento dos veces. Con `getVenueMapForEvent` se podría evitar (2 archivos de `app/`), pero perderían el paralelismo y no se pidió. ¿Se incluye en una fase posterior, o se espera a la API real (que podría devolver el mapa con el evento)?
+9. **(F5) Clases repetidas del CTA y de las barras móviles:** `PurchaseSummary`, `MobilePurchaseBar`, `ZonePricesCard` y `MobileBuyBar` repiten `CTA_CLASS`, y dos de ellos el contenedor de la barra móvil. Extraerlos a una constante compartida dentro de `modules/seating`, p. ej. `modules/seating/components/purchaseStyles.ts`, son 5 archivos y no caben en la Fase 5 (ya tiene 16). ¿Se hace como cambio en modo build después de F5, o en una Fase 6?
+10. **(F5) Ocupación visible distinta:** con el mezclado cambian qué asientos están ocupados en los 3 mapas. Por ejemplo, `platea-J-1` y `preferencial-F-1` pasan a ocupados, mientras `platea-J-10` y `preferencial-F-10` siguen accesibles. No hay órdenes reales que dependan de esto, pero las órdenes guardadas en `localStorage` durante las pruebas pueden llevar asientos que ahora salen ocupados. ¿Es aceptable?
