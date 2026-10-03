@@ -1,7 +1,7 @@
 # Mis entradas
 
 - Módulo: tickets
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Que el comprador con sesión iniciada vea en `/mis-entradas` las entradas de sus pedidos: separadas en próximas y pasadas, con la entrada seleccionada como un boleto (imagen, fecha, QR decorativo, zona, asiento, titular, código y estado), y que pueda imprimirla/guardarla como PDF o agregar el evento a su calendario. Es la pantalla "6 · Mis entradas" del diseño (`design/project/MyTickets.dc.html` y `MyTicketsMobile.dc.html`, ver contexto compartido) adaptada a la identidad Mentec (`design-system/ticketera/MASTER.md`). Solo UI con datos mock: los pedidos salen del store de órdenes del cliente (creado por la spec de checkout con pago simulado) y de pedidos demo para la cuenta de prueba.

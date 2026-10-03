@@ -1,7 +1,7 @@
 # Panel de organizador: resumen de ventas y crear evento (UI con mock data)
 
 - Módulo: organizer
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Dar a quien organiza eventos un panel donde ver cómo van las ventas de sus eventos (KPIs y lista de eventos con su avance de ventas) y un formulario para crear un evento nuevo, guardarlo como borrador o publicarlo, con una vista previa en vivo de cómo lo verán los compradores. Es solo UI/UX con datos mock (sin backend, BD ni roles reales), en español (Perú) y PEN. Pantallas de referencia del diseño: "8 · Panel de organizador" (`OrgDashboard.dc.html`, `OrgDashboardMobile.dc.html`) y "8 · Crear evento" (`OrgCreate.dc.html`, `OrgCreateMobile.dc.html`). Del diseño se toman estructura, flujo, textos y patrones móviles; la identidad visual es la de Mentec (`design-system/ticketera/MASTER.md`: tokens, Creato Display, a11y §11), nunca el índigo/Poppins/hex del diseño. La marca visible es "Mentec Tickets" (la del header global), no "Ticketera".
