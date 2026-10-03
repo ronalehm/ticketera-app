@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <div className="flex w-full max-w-lg flex-col gap-6">
+    <div className="flex w-full max-w-md flex-col gap-6">
       <AuthTabs current="register" />
       <RegisterForm />
     </div>
