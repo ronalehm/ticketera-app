@@ -1,7 +1,7 @@
 # Mapa del lugar y "Cómo llegar" con Google Maps
 
 - Módulo: events (y `lib/` para la variable de entorno)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 En el detalle de un evento (`/eventos/[slug]`), la sección "Lugar" muestra hoy un bloque azul claro con un pin decorativo. Su botón "Cómo llegar" abre una **búsqueda** de Google Maps, no una ruta. El comprador quiere ver dónde está el recinto y llegar sin copiar la dirección. Esta spec hace dos cosas:
