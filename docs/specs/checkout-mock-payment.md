@@ -1,0 +1,342 @@
+# Checkout con pago simulado y confirmación de compra
+
+- Módulo: checkout
+- Estado: aprobado
+
+## Objetivo
+Completar los pasos 2 ("Datos y pago") y 3 ("Confirmación") del flujo de compra con un **pago simulado** (sin pasarela, sin backend), para que quien compra pueda introducir sus datos, elegir un método de pago (Tarjeta, Yape o PagoEfectivo), "pagar" y ver la confirmación con su entrada y su QR. La orden se guarda en el navegador (`useOrdersStore`) para que "Mis entradas" (spec tickets) la muestre después. Esta spec también crea la base compartida que usan otras specs: `useZodForm` en `hooks/`, validadores de persona en `lib/`, la entrada pública de sesión, `TicketQr` y `lib/calendar.ts`.
+
+Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Creato Display, a11y §11) y `design-system/ticketera/pages/checkout.md`. Del diseño de referencia ("5 · Checkout y pago": `Checkout.dc.html` / `CheckoutMobile.dc.html`; "6 · Confirmación de compra": `Confirmation.dc.html` / `ConfirmationMobile.dc.html`) se toman estructura, textos y patrones móviles, **no** sus colores, fuente ni marca ("Ticketera" → "Mentec Tickets"). Español (Perú), PEN.
+
+## Alcance
+- Incluye:
+  - **Fase 1 — Base compartida (contratos D y F):** refactor sin cambios de comportamiento de `auth` (`useZodForm` → `hooks/`, reglas de persona → `lib/formFields.ts`, clases de enlace → `lib/linkStyles.ts`, entrada `modules/auth/session.ts`); instalación de shadcn `radio-group`; entrada pública `modules/events/format.ts`; `components/shared/TicketQr.tsx`; `lib/calendar.ts`.
+  - **Fase 2 — Dominio del pago simulado (contrato E):** schemas del formulario (comprador, tarjeta, términos), utilidades de tarjeta y de orden, store persistido de órdenes con su entrada pública `modules/checkout/orders.ts` y service mock `payment.service.ts`. Sin cambios visibles.
+  - **Fase 3 — Paso 2 `/checkout`:** stepper, banner del temporizador, "Datos del comprador", "Método de pago" (radio cards + campos de tarjeta propios de la simulación + textos de Yape/PagoEfectivo), Términos, resumen sticky en `lg` con "Cambiar entradas" y "Pagar S/ X", resumen plegable y barra inferior con "Pagar" en móvil.
+  - **Fase 4 — Paso 3 `/checkout/confirmacion`:** confirmación leída del store, tarjeta-entrada con talón y `TicketQr`, "Ver mis entradas", "Agregar al calendario" (.ics), "Descargar PDF" (impresión), "Qué sigue" y estado "No encontramos tu compra".
+  - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 3 y 4).
+  - **Reemplazo funcional de `docs/specs/checkout-purchase.md`:** su Fase 1 (ya implementada) se conserva; sus Fases 2–3 (Stripe) **no se implementan**: esta spec las sustituye. Ese archivo no se edita (sigue aprobado; sus casillas de Fases 2–3 quedan sin marcar).
+- No incluye:
+  - Pasarela real (Stripe u otra), Server Actions, Route Handlers, webhooks, claves o variables de entorno, dependencias de pago.
+  - **Envío de datos de tarjeta a cualquier servicio:** los campos de tarjeta solo existen en el estado de React del formulario; no salen del navegador, no se registran en consola y no se guardan (ni siquiera los últimos 4 dígitos).
+  - Flujo real de Yape (QR) o PagoEfectivo (código CIP): en la simulación ambos aprueban al pulsar "Pagar" (ver Preguntas abiertas).
+  - Reserva real de inventario o de asientos: el temporizador sigue siendo solo de UI.
+  - Envío de correos, comprobantes, facturación/boleta, reembolsos, cupones, cargos por servicio.
+  - Un QR legible por lectores: `TicketQr` es decorativo y determinista.
+  - Generación real de PDF (se usa el diálogo de impresión del navegador: "Guardar como PDF").
+  - La página `/mis-entradas` y el enlace del header (spec tickets). El botón "Ver mis entradas" apunta a una ruta que crea esa spec.
+  - El stepper `PurchaseStepper`, el mapa de asientos y la validación de `asientos=` (spec seating, contratos A, B y C).
+  - Exigir sesión para comprar: la compra como invitado sigue permitida.
+  - TanStack Query, toasts, modo oscuro.
+
+## Decisiones tomadas
+1. **Pago simulado en el cliente.** `processMockPayment` es una función asíncrona sin React ni red (latencia `MOCK_PAYMENT_LATENCY_MS = 1200`). Tarjeta `4000 0000 0000 0002` → rechazo; cualquier otra tarjeta válida → aprobada; Yape y PagoEfectivo → aprobados. El número de tarjeta solo se compara en memoria para decidir el rechazo.
+2. **Importe desde el pedido validado.** El formulario recibe el `CheckoutOrder` que `getCheckoutOrder` validó en el servidor a partir de la URL (precios del evento, nunca del cliente). `buildOrder` vuelve a calcular `ticketCount` y `total` a partir de `items` (`unitPrice × quantity`) e ignora `order.total`. Ningún campo editable lleva importes.
+3. **Formulario único con `useZodForm`.** `checkoutFormSchema` es un `z.object` (requisito de `useZodForm`) con los campos del comprador, `paymentMethod`, los 4 campos de tarjeta y `acceptTerms`. Los campos de tarjeta se validan en `superRefine` solo si `paymentMethod === "card"`, reutilizando `cardDetailsSchema`. Mismo patrón que el registro: errores al enviar, revalidación al salir del campo tras el primer intento, foco al primer inválido, `aria-invalid` + `aria-describedby`, `<form noValidate>`.
+4. **Comprador según el contrato E:** "Nombres" y "Apellidos" separados (el diseño usa "Nombre completo", pero la orden guarda `firstName`/`lastName`), "Correo electrónico", "Celular" (+51), "Tipo de documento" y "Número de documento". Sin "Confirmar correo" (el diseño no lo tiene; ver Preguntas abiertas). Precarga desde la sesión de Nombres, Apellidos y Correo **solo si están vacíos** (la rehidratación de `useAuthStore` ya la dispara `AuthHeaderActions` en el header).
+5. **Campos de tarjeta con `autoComplete="off"`** (el diseño usa `cc-*`): en una simulación no se invita al navegador a rellenar ni a guardar tarjetas reales. Aviso visible en la sección: es un pago simulado y se indican las tarjetas de prueba.
+6. **El botón "Pagar" no se deshabilita por Términos sin marcar** (el diseño sí lo hace): se mantiene el patrón del proyecto (validar al enviar y enfocar el primer error, que explica el problema). Solo se deshabilita al expirar la reserva y mientras se procesa.
+7. **Layout de `/checkout` sin duplicar el resumen.** Un único `CheckoutSummaryPanel`, situado en el DOM **después** de las secciones y Términos: en `lg` va en la columna derecha (posición explícita en la grilla), siempre desplegado y `sticky`; en móvil se muestra arriba con `order-first` como botón plegable (`aria-expanded`) con el `OrderSummary` dentro. Así "Pagar" nunca se alcanza con el tabulador antes que los campos; la única diferencia entre orden visual y de tabulación es el botón del resumen móvil (informativo), que se alcanza tras Términos. El botón "Pagar" se renderiza dos veces con el mismo componente interno: dentro del panel (`hidden lg:flex`) y en la barra inferior móvil (`lg:hidden`); en cada ancho solo uno es visible y accesible. La barra móvil es `sticky bottom-0` como último hijo del `<form>` (no `fixed`): queda pegada abajo mientras se rellena y nunca tapa el footer.
+8. **Órdenes en `localStorage`** (`mentec-orders`, zustand `persist` con `skipHydration: true`, igual que `auth`). Antes de añadir una orden siempre se rehidrata (`persistOrder`), para no sobrescribir órdenes guardadas con un store aún sin hidratar. La confirmación rehidrata al montar y distingue "cargando" de "no encontrada".
+9. **Código de orden** `MT-` + 6 caracteres `[A-Z0-9]` aleatorios (sin almacenamiento central; la colisión es despreciable en un mock y `addOrder` reemplaza si el código ya existe). Entradas: `<código>-01`, `-02`… en el orden de `items` (y de `seats` dentro de cada item).
+10. **Formato en código cliente sin el barrel de `events`.** El barrel `@/modules/events` arrastra componentes cliente (carrusel, selector…). Se crea la entrada pública `modules/events/format.ts` (SETUP §1 regla 4, como `modules/auth/header.ts`) que solo reexporta formateadores y etiquetas de categoría. Los archivos de checkout que se ejecutan en el cliente (`payment.schema.ts`, `utils/card.ts`, `utils/order.ts`, `payment.service.ts`, componentes cliente) no importan `@/modules/events` salvo `import type`.
+11. **Stepper:** `/checkout` lo renderiza en la página (`currentStep={2}`); en la confirmación la página lo pasa como prop `stepper` a `OrderConfirmation`, que solo lo muestra si encuentra la orden (los estados de error nunca muestran stepper, igual que en `/checkout`).
+12. **"Cambiar entradas"** lleva al paso 1: `/eventos/<slug>/entradas` si `hasVenueMap(slug)` (contrato B/H) y `/eventos/<slug>` si no. La página lo calcula y lo pasa a `OrderSummary` y al temporizador ("Volver a elegir entradas").
+13. **Variantes Stripe obsoletas:** `CheckoutStatusMessage` pierde `not-configured`, `payment-processing` y `payment-failed` (no se usan y pertenecían al flujo Stripe reemplazado); `order-not-found` se adapta a la confirmación local.
+14. **"Descargar PDF" = `window.print()`** con estilos `print:` de Tailwind: se ocultan header, footer, stepper, botones y "Qué sigue"; se muestra una lista solo-impresión con todas las entradas (QR, código, tipo, asiento, titular).
+15. **`.ics` sin `DTEND`:** los eventos no tienen hora de fin; RFC 5545 permite omitirla. Se registra en Preguntas abiertas.
+
+## Requisitos
+
+### Fase 1 — Base compartida
+1. **`hooks/useZodForm.ts`** (+ `hooks/useZodForm.test.ts`): `git mv` desde `modules/auth/hooks/` sin cambios de código. `modules/auth/hooks/` deja de existir.
+2. **`lib/formFields.ts`** (zod puro, sin React), movido desde `modules/auth/schemas/auth.schema.ts` con los mismos mensajes:
+   - `DOCUMENT_TYPES`, `DOCUMENT_TYPE_LABELS`.
+   - `requiredText(emptyMessage)`, `nameField(emptyMessage, invalidMessage)`, `emailField`, `phoneField` (`"Ingresa tu número de celular"` / `"Ingresa un celular válido de 9 dígitos que empiece con 9"`), `acceptTermsField` (`"Debes aceptar los Términos y condiciones y la Política de privacidad"`).
+   - `getDocumentNumberError(documentType, documentNumber): string | undefined` (reglas `DOCUMENT_RULES` actuales; `undefined` si el número está vacío o es válido).
+   - `auth.schema.ts` los importa y conserva `authUserSchema`, `loginSchema`, `registerSchema` (mismo comportamiento; su `superRefine` usa `getDocumentNumberError`).
+3. **`lib/linkStyles.ts`**: `INLINE_LINK` y `TEXT_LINK` (movidos de `modules/auth/components/formShared.ts`, que conserva solo `GENERIC_ERROR`).
+4. `LoginForm`/`RegisterForm` importan de `@/hooks/useZodForm`, `@/lib/formFields` y `@/lib/linkStyles`. Los tests de `modules/auth` no cambian.
+5. **`modules/auth/session.ts`**: entrada pública que solo reexporta `useAuthStore` (el barrel `@/modules/auth` arrastraría los formularios).
+6. **shadcn `radio-group`** instalado con `npx shadcn@latest add radio-group` (`components/ui/radio-group.tsx`, Base UI, exporta `RadioGroup` y `RadioGroupItem`). Sin edición manual.
+7. **`modules/events/format.ts`**: entrada pública que solo reexporta `formatEventDate`, `formatEventPrice`, `formatLongDate`, `formatTime` (de `utils/formatEvent.ts`) y `EVENT_CATEGORY_LABELS` (de `data/categories.ts`).
+8. **`components/shared/TicketQr.tsx`** (contrato F; sin `"use client"`, sirve en servidor y cliente):
+   - Props `{ value: string; className?: string }`.
+   - `getQrModules(value): boolean[][]` (export nombrado del mismo archivo): matriz 21×21; tres patrones de posición 7×7 (esquinas sup-izq, sup-der, inf-izq: anillo exterior, hueco y núcleo 3×3) con separador claro de 1 módulo; el resto de módulos sale de un PRNG sembrado con un hash del `value` (p. ej. FNV-1a 32 bits + mulberry32), ~50 % oscuros. Mismo `value` → misma matriz; distinto `value` → matriz distinta.
+   - Render: `<svg viewBox="0 0 21 21" role="img" aria-label="Código QR de la entrada {value}" shapeRendering="crispEdges">` con un único `<path fill="currentColor">` para los módulos oscuros; clases base `bg-background text-foreground` unidas con `cn(…, className)`. Sin tamaño fijo (lo pone `className`).
+9. **`lib/calendar.ts`** (contrato F; nativo, sin librerías):
+   - `buildIcsEvent({ title, startsAt, location, description? }): string`: `VCALENDAR` (`VERSION:2.0`, `PRODID:-//Mentec Tickets//ES`, `CALSCALE:GREGORIAN`, `METHOD:PUBLISH`) con un `VEVENT`: `UID` determinista (hash de `title` + `startsAt`, `@mentectickets.pe`), `DTSTAMP` (ahora, UTC), `DTSTART` en UTC (`YYYYMMDDTHHMMSSZ`), `SUMMARY`, `LOCATION` y `DESCRIPTION` (si hay). Sin `DTEND` (decisión 15). Escapa `\`, `;`, `,` y saltos de línea (`\n`); líneas separadas por CRLF; pliega líneas de más de 75 octetos UTF-8 (CRLF + espacio) sin partir caracteres multibyte.
+   - `downloadIcs(fileName: string, content: string): void`: `Blob` `text/calendar;charset=utf-8`, `URL.createObjectURL`, `<a download>` temporal, `click()`, `URL.revokeObjectURL`.
+
+### Fase 2 — Dominio del pago simulado
+10. **Schemas** `modules/checkout/schemas/payment.schema.ts` (sin importar el barrel de `events`):
+    - `PAYMENT_METHODS = ["card", "yape", "pagoefectivo"] as const`, `PAYMENT_METHOD_LABELS = { card: "Tarjeta", yape: "Yape", pagoefectivo: "PagoEfectivo" }`.
+    - `cardDetailsSchema` (campos y mensajes):
+
+      | Campo | Regla | Mensaje |
+      |---|---|---|
+      | cardNumber | vacío | Ingresa el número de tarjeta |
+      | cardNumber | sin espacios ≠ 16 dígitos, o falla Luhn | Ingresa un número de tarjeta válido |
+      | cardExpiry | vacío | Ingresa la fecha de vencimiento |
+      | cardExpiry | no cumple `^(0[1-9]\|1[0-2])\/\d{2}$` | Ingresa una fecha válida (MM/AA) |
+      | cardExpiry | mes/año anterior al actual (vigente hasta fin de mes, hora local) | La tarjeta está vencida |
+      | cardCvv | vacío | Ingresa el CVV |
+      | cardCvv | no son 3 o 4 dígitos | El CVV debe tener 3 o 4 dígitos |
+      | cardName | vacío | Ingresa el nombre que figura en la tarjeta |
+      | cardName | regla `nameField` | Ingresa un nombre válido |
+
+      `cardNumber` se transforma a solo dígitos.
+    - `checkoutFormSchema = z.object({ firstName, lastName, email, phone, documentType, documentNumber, paymentMethod: z.enum(PAYMENT_METHODS), cardNumber: z.string(), cardExpiry: z.string(), cardCvv: z.string(), cardName: z.string(), acceptTerms })` con reglas de `lib/formFields` y mensajes del registro (`"Ingresa tus nombres"`, `"Ingresa un nombre válido"`, `"Ingresa tus apellidos"`, `"Ingresa un apellido válido"`, correo, celular, `"Ingresa tu número de documento"`, términos). `superRefine`: `getDocumentNumberError` → `["documentNumber"]`; si `paymentMethod === "card"`, `cardDetailsSchema.safeParse` y cada issue se copia con su `path`. Con todo vacío deben aparecer a la vez los errores del comprador, de la tarjeta y de Términos (si zod omitiera el `superRefine` por los errores previos, usar su opción `when`).
+    - `orderCodeSchema = z.string().regex(/^MT-[A-Z0-9]{6}$/)`.
+11. **Utils de tarjeta** `modules/checkout/utils/card.ts` (puras):
+    - `formatCardNumber(input)`: solo dígitos, máximo 16, grupos de 4 separados por espacio.
+    - `formatCardExpiry(input)`: solo dígitos, máximo 4; con 3 o más dígitos inserta `/` tras el mes (`"1228"` → `"12/28"`).
+    - `isLuhnValid(digits): boolean`.
+    - `isCardExpired(expiry: "MM/AA", now = new Date()): boolean` (año `2000 + AA`; vencida si el mes/año es anterior al de `now`).
+12. **Tipos** `modules/checkout/types/checkout.types.ts`:
+    - `CheckoutOrder.event` añade `category` (`Pick<EventDetail, "slug" | "title" | "category" | "startsAt" | "venue" | "city" | "imageUrl">`); `buildCheckoutOrder` lo rellena.
+    - `PaymentMethod`, `CheckoutFormValues = z.input<typeof checkoutFormSchema>`, `CheckoutFormData = z.output<…>`.
+    - `OrderTicket`, `Order` y `OrderBuyer = Order["buyer"]` **exactamente** con la forma del contrato E (ver Contrato de API).
+13. **Utils de orden** `modules/checkout/utils/order.ts` (puras, sin barrel de `events`):
+    - `createOrderCode(random = Math.random): string` → `MT-` + 6 caracteres de `A-Z0-9`.
+    - `parseOrderCode(value: unknown): string | null` (con `orderCodeSchema`; arrays, vacío o formato inválido → `null`).
+    - `buildOrder({ code, createdAt, checkout, buyer, paymentMethod }): Order`:
+      - `ownerEmail` = `buyer.email` recortado y en minúsculas; `buyer` sin `acceptTerms` ni campos de tarjeta.
+      - `event` = `checkout.event` (con `category`); `items` = copia de `checkout.items` (`ticketTypeId`, `name`, `unitPrice`, `quantity` y `seats` si existen).
+      - `ticketCount` y `total` recalculados desde `items` (decisión 2).
+      - `tickets`: uno por entrada, en el orden de `items`; `code` = `<code>-NN` (dos dígitos, correlativo desde `01` en toda la orden); `ticketTypeName` = `item.name`; `seatLabel` = `item.seats[i].label` si existe; `holderName` = `"<firstName> <lastName>"`.
+14. **Store** `modules/checkout/stores/orders.store.ts` (contrato E):
+    - `useOrdersStore`: estado `{ orders: Order[]; addOrder(order): void; getOrder(code): Order | undefined }`; `addOrder` inserta al principio y reemplaza si ya existe el mismo `code`; `getOrder` busca con `get()` (sirve como selector: `useOrdersStore((s) => s.getOrder(code))`).
+    - `persist` con `name: "mentec-orders"`, `partialize: ({ orders })`, `skipHydration: true`.
+    - `persistOrder(order): Promise<void>`: `await useOrdersStore.persist.rehydrate()` y luego `addOrder(order)` (decisión 8). Uso interno del módulo (no se exporta en `orders.ts`).
+15. **Entrada pública** `modules/checkout/orders.ts`: solo `export { useOrdersStore }` y `export type { Order, OrderTicket }`.
+16. **Service mock** `modules/checkout/services/payment.service.ts` (sin React ni red; comentario de cabecera: "Simulación: no envía datos a ningún servicio"):
+    - `MOCK_PAYMENT_LATENCY_MS = 1200`; `DECLINED_TEST_CARD = "4000000000000002"`.
+    - `class PaymentError extends Error { code: "card-declined" }` con mensaje `"Tu tarjeta fue rechazada. Prueba con otra tarjeta o elige otro método de pago."`.
+    - `processMockPayment(input: MockPaymentInput): Promise<Order>`: espera la latencia; si `payment.method === "card"` y el número (sin espacios) es `DECLINED_TEST_CARD` → lanza `PaymentError`; si no, devuelve `buildOrder({ code: createOrderCode(), createdAt: new Date().toISOString(), checkout: input.order, buyer: input.buyer, paymentMethod: input.payment.method })`. El número de tarjeta no aparece en la orden ni en logs.
+
+### Fase 3 — Paso 2: `/checkout`
+17. **Página** `app/checkout/page.tsx` (Server Component): igual que hoy para los estados de error. Con `ok`: contenedor `mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 pb-8 md:px-6 md:pt-8 md:pb-12 lg:px-8`; `PurchaseStepper currentStep={2}` (contrato A); h1 "Finalizar compra" (`text-3xl md:text-5xl font-extrabold tracking-tight`); `CheckoutForm` con `order`, `changeHref` (decisión 12, con `hasVenueMap` de `@/modules/seating`) y `summary={<OrderSummary order={order} changeHref={changeHref} />}`. Metadata sin cambios ("Finalizar compra | Mentec Tickets").
+18. **`ReservationTimer`** pasa a banner y cambia su prop `eventSlug` por `retryHref: string`:
+    - Bloque `rounded-2xl border border-warning/50 bg-warning/10 px-4 py-3` con `Clock` (`aria-hidden`): "Reservamos tus entradas por **mm:ss**. Completa el pago antes de que se liberen." (`tabular-nums`). Resto igual: `aria-live` por minuto, `Alert` "Tu reserva expiró" con "Volver a elegir entradas" → `retryHref`, `onExpire` una vez, sin animaciones.
+19. **`OrderSummary`** gana `changeHref?: string`: si viene, enlace "Cambiar entradas" (`TEXT_LINK` de `@/lib/linkStyles`, `font-semibold`) tras la lista de líneas. Lo demás (incluidos asientos de la spec seating y "Precio final, sin cargos ocultos") no cambia.
+20. **`CheckoutForm`** (`"use client"`; props `order: CheckoutOrder`, `changeHref: string`, `summary: ReactNode`). Estructura en orden de DOM:
+    1. `ReservationTimer` (`retryHref={changeHref}`, `onExpire` → `isExpired`).
+    2. `<form noValidate>` en grilla `grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-12` (sin ancestros con `overflow` distinto de `visible`, para que funcionen los `sticky`):
+       - `Card` "Datos del comprador" (`lg:col-start-1 lg:row-start-1`) (h2 `text-xl font-bold`, descripción "Enviaremos tus entradas al correo que indiques."): grilla `sm:grid-cols-2` con Nombres | Apellidos (`given-name`/`family-name`), Correo electrónico (`type="email"`, `email`) | Celular (addon "+51", `type="tel"`, `inputMode="numeric"`, `tel-national`, `maxLength={9}`), Tipo de documento (`Select`, DNI por defecto; al cambiar revalida el número) | Número de documento (`inputMode="numeric"` y `maxLength={8}` solo con DNI). Ids `checkout-<campo>`.
+       - `Card` "Método de pago" (`lg:row-start-2`; h2 con id, usado como `aria-labelledby` del radio group): `PaymentMethodFields` y, debajo, el `Alert` destructivo del error de pago (`role="alert"`, `tabIndex={-1}`, recibe el foco al aparecer).
+       - Checkbox de Términos (`lg:row-start-3`): "Acepto los [Términos y condiciones](/terminos) y la [Política de privacidad](/privacidad)." (pestaña nueva, `rel="noopener noreferrer"`, `INLINE_LINK`).
+       - `CheckoutSummaryPanel` (`order-first lg:order-none lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:sticky lg:top-24 lg:self-start`) con `summary` y, como pie, el botón Pagar (`hidden lg:flex`).
+       - Región `sr-only` `role="status"` que dice "Procesando pago…" mientras se procesa.
+       - Barra inferior móvil (último hijo del form): `sticky bottom-0 z-30 -mx-4 md:-mx-6 border-t bg-background px-4 md:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden` con el botón Pagar a todo el ancho.
+    - **Botón Pagar** (componente interno, `type="submit"`, primario, `h-12 w-full font-semibold`, icono `Lock` `aria-hidden`): "Pagar S/ 910.00" (`formatEventPrice(order.total)` de `@/modules/events/format`). Deshabilitado si `isExpired` o `isSubmitting`. En proceso: `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Procesando pago…".
+    - **Envío:** `useZodForm(checkoutFormSchema)` valida; si es inválido, no se llama al service. Si expiró, no hace nada. Oculta el error anterior y llama a `processMockPayment({ order, buyer, payment })` (`payment` = `{ method: "card", cardNumber }` o `{ method }`). Éxito → `await persistOrder(order)` → `router.replace("/checkout/confirmacion?orden=<code>")`. `PaymentError` → su mensaje en el `Alert`; otro error → "Ocurrió un error inesperado al procesar el pago. Inténtalo de nuevo.". Tras un error el botón se reactiva y los valores se conservan.
+    - **Precarga** (decisión 4) con `useAuthStore` de `@/modules/auth/session`.
+21. **`PaymentMethodFields`** (`"use client"`; props: `values` y `errors` de `paymentMethod`/`cardNumber`/`cardExpiry`/`cardCvv`/`cardName`, `onChange(name, value)`, `onBlur(name)`, `labelledBy`):
+    - Aviso (icono `Info`, `text-sm text-muted-foreground`): "Pago simulado: no se realiza ningún cobro y los datos de tu tarjeta no se envían ni se guardan. Prueba con 4242 4242 4242 4242 (aprobada) o 4000 0000 0000 0002 (rechazada)."
+    - `RadioGroup` (`grid gap-3 sm:grid-cols-3`) con tres radio cards (patrón "choice card" de shadcn: `FieldLabel` > `Field orientation="horizontal"` > `RadioGroupItem` + `FieldTitle`), `min-h-16`, `cursor-pointer`, seleccionada con `has-data-checked:border-primary has-data-checked:bg-accent`; iconos `CreditCard`, `Smartphone`, `Store` (`aria-hidden`); etiquetas de `PAYMENT_METHOD_LABELS`. Al cambiar: `onChange("paymentMethod", v)` y revalida los 4 campos de tarjeta (`onBlur`).
+    - **Tarjeta:** grilla `grid-cols-2 sm:grid-cols-4 gap-4`: "Número de tarjeta" (`col-span-2`, placeholder "0000 0000 0000 0000", `inputMode="numeric"`, `maxLength={19}`, formatea con `formatCardNumber`), "Vencimiento" (placeholder "MM/AA", `inputMode="numeric"`, `maxLength={5}`, `formatCardExpiry`), "CVV" (placeholder "3 o 4 dígitos", `inputMode="numeric"`, `maxLength={4}`, solo dígitos), "Nombre en la tarjeta" (`col-span-2 sm:col-span-4`, placeholder "Como aparece en la tarjeta"). Todos `autoComplete="off"`, `h-11`, ids `checkout-<campo>`, errores con `FieldError`.
+    - **Yape:** bloque `rounded-2xl bg-accent p-4` con `Smartphone`: "Al continuar te mostraremos un código QR para pagar desde tu app de Yape."
+    - **PagoEfectivo:** mismo bloque con `Store`: "Generaremos un código de pago para que pagues en agentes, bodegas o tu banca móvil."
+22. **`CheckoutSummaryPanel`** (`"use client"`; props `title`, `imageUrl`, `ticketCount`, `totalLabel`, `children`, `footer`, `className`): `<aside aria-label="Resumen de la compra">`.
+    - Móvil: botón (`lg:hidden`, `min-h-16`, `rounded-2xl ring-1 ring-border`, `aria-expanded`, `aria-controls`) con miniatura `next/image` 48 px (`alt=""`), título (`line-clamp-1`), "3 entradas · S/ 910.00" ("1 entrada" en singular), `sr-only` "Resumen del pedido:" al inicio y `ChevronDown` (`aria-hidden`, rota 180° abierto, `motion-safe:transition-transform`). Plegado por defecto.
+    - Contenido (`children`) con id del `aria-controls`: `hidden` si está plegado, siempre `lg:block`. `footer` debajo.
+
+### Fase 4 — Paso 3: `/checkout/confirmacion`
+23. **Página** `app/checkout/confirmacion/page.tsx` (Server Component; metadata "Confirmación de compra | Mentec Tickets"): `parseOrderCode(orden)`; `null` → `CheckoutStatusMessage variant="order-not-found"`; si no, `<OrderConfirmation code={code} stepper={<PurchaseStepper currentStep={3} />} />`.
+24. **Hook** `modules/checkout/hooks/useStoredOrder.ts` (`"use client"`): `useStoredOrder(code)` → `{ status: "loading" } | { status: "not-found" } | { status: "found"; order: Order }`. Primer render (servidor y cliente) `loading`; al montar `useOrdersStore.persist.rehydrate()` y, al terminar, `found`/`not-found` según `getOrder(code)` (reactivo a cambios del store).
+25. **`CheckoutStatusMessage`**: elimina `not-configured`, `payment-processing`, `payment-failed`; `order-not-found` = h1 "No encontramos tu compra", "El enlace no es válido o la compra se realizó en otro navegador.", acción "Volver al inicio".
+26. **`OrderConfirmation`** (`"use client"`; props `code`, `stepper: ReactNode`), contenedor `mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 py-8 md:px-6 md:py-12`:
+    - `loading`: `Spinner` + "Cargando tu compra…" (`role="status"`). `not-found`: `CheckoutStatusMessage variant="order-not-found"` (sin stepper).
+    - `found`: `stepper` (envuelto en `print:hidden`, ancho completo); cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`), h1 "¡Compra confirmada!" (`text-3xl md:text-4xl font-extrabold tracking-tight`), "Enviamos tus entradas a tu correo. También las tienes siempre en Mis entradas." (`text-muted-foreground`), chip `rounded-full ring-1 ring-border` "Pedido N.º **MT-AB12CD**".
+    - `ConfirmationTicketCard` (requisito 27).
+    - Acciones (`print:hidden`): "Ver mis entradas" (primario, `Ticket`, → `/mis-entradas`); "Agregar al calendario" (outline, `CalendarPlus`; texto visible "Calendario" en móvil y "Agregar al calendario" desde `sm`, `aria-label="Agregar al calendario"`) → `downloadIcs("<slug>.ics", buildIcsEvent({ title, startsAt, location: "<venue>, <city>", description: "Pedido <code> · N entradas · Mentec Tickets" }))`; "Descargar PDF" (outline, `Download`) → `window.print()`. Móvil: "Ver mis entradas" a todo el ancho y los otros dos en `grid-cols-2`; `sm+`: fila. Todos `h-11` mínimo, `cursor-pointer`.
+    - "Qué sigue" (`print:hidden`): h2 "Qué sigue" + `<ol>` (`grid gap-3 md:grid-cols-3`), tarjetas `rounded-2xl ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`): "Revisa tu correo" — "Ahí llegan tus entradas y el comprobante de pago."; "Muestra tu QR" — "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso."; "Todo en Mis entradas" — "Entra con tu cuenta para ver y descargar tus entradas cuando quieras."
+    - Solo impresión (`hidden print:block`): h2 "Tus entradas" y una fila por `OrderTicket` (`break-inside-avoid`): `TicketQr` (`size-28`), código, tipo, asiento (si hay) y "Titular: <holderName>".
+27. **`ConfirmationTicketCard`** (presentacional; props `order: Order`): `<article>` `rounded-2xl ring-1 ring-border overflow-hidden`, `flex-col md:flex-row`:
+    - Imagen `next/image` (`alt=""`, móvil `h-32 w-full`, `md:w-48 md:h-auto`, `object-cover`).
+    - Cuerpo: overline categoría (`EVENT_CATEGORY_LABELS`, `text-xs font-bold uppercase tracking-wider text-primary-strong`), h2 título, "`<formatLongDate>` · `<formatTime>` · `<venue>`, `<city>`" (`text-muted-foreground`), `<dl>` en `grid-cols-3`: "Zona" (nombres de `items` unidos por ", "), "Entradas" (`ticketCount`), "Total pagado" (`formatEventPrice(total)`). Si algún item tiene asientos: "Asientos" con la lista de etiquetas.
+    - Talón: separador punteado (`border-dashed`, horizontal en móvil y vertical en `md`) con dos muescas decorativas (`bg-background ring-1 ring-border rounded-full`, `aria-hidden`); `TicketQr value={tickets[0].code}` (`size-40 md:size-32`) y "Entrada 1 de N".
+28. **Impresión:** `SiteHeader` (`<header>`) y `SiteFooter` (`<footer>`) añaden `print:hidden`.
+29. **Accesibilidad y responsive (Fases 3–4):** un `<h1>` por página; labels visibles; errores junto al campo; foco al primer inválido; foco visible; targets ≥ 44 px; iconos `aria-hidden`; sin scroll horizontal a 375 / 768 / 1024 / 1440; solo tokens; Creato Display; sin emojis; `prefers-reduced-motion` respetado.
+
+## Criterios de aceptación
+
+### Fase 1 — Base compartida
+- [ ] Dado el refactor, entonces `modules/auth/hooks/` no existe, `LoginForm`/`RegisterForm` importan `@/hooks/useZodForm`, `@/lib/formFields` y `@/lib/linkStyles`, `git diff` sobre `modules/auth/**/*.test.*` está vacío y `npx vitest run modules/auth hooks` pasa.
+- [ ] Dado `/login` y `/registro`, entonces se comportan igual que antes (mismos mensajes, foco y enlaces).
+- [ ] Dado `modules/auth/session.ts` y `modules/events/format.ts`, entonces solo contienen reexportaciones.
+- [ ] Dado `components/ui/radio-group.tsx`, entonces lo generó el CLI de shadcn y exporta `RadioGroup` y `RadioGroupItem`.
+- [ ] Dado `<TicketQr value="MT-AB12CD-01" />`, entonces hay un `svg` con `role="img"`, `aria-label="Código QR de la entrada MT-AB12CD-01"` y `viewBox="0 0 21 21"`; renderizarlo dos veces produce el mismo dibujo y otro valor produce uno distinto.
+- [ ] Dado `buildIcsEvent` con un evento a las 21:00 de Lima, entonces `DTSTART` está en UTC (`…T020000Z` del día siguiente), los textos con `,`/`;` están escapados, las líneas usan CRLF y ninguna supera 75 octetos.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 2 — Dominio del pago simulado
+- [ ] Dado `checkoutFormSchema` con todo vacío y método tarjeta, entonces hay un mensaje para cada campo del comprador, para los 4 de tarjeta y para Términos; con método Yape o PagoEfectivo los campos de tarjeta no se validan.
+- [ ] Dado el número `4242 4242 4242 4241`, `13/30`, una fecha del mes anterior o el CVV `12`, entonces los mensajes son, respectivamente, "Ingresa un número de tarjeta válido", "Ingresa una fecha válida (MM/AA)", "La tarjeta está vencida" y "El CVV debe tener 3 o 4 dígitos"; la fecha del mes actual es válida.
+- [ ] Dado `processMockPayment` con la tarjeta `4000 0000 0000 0002`, entonces tras ~1,2 s lanza `PaymentError` con "Tu tarjeta fue rechazada. Prueba con otra tarjeta o elige otro método de pago."; con `4242 4242 4242 4242`, Yape o PagoEfectivo devuelve una `Order` con la forma del contrato E.
+- [ ] Dado un pedido de 2 General + 1 VIP con un `total` manipulado a 1, entonces la `Order` tiene `total` 910, `ticketCount` 3 y entradas `MT-XXXXXX-01`, `-02` (General) y `-03` (VIP) con `holderName` del comprador; con asientos, cada entrada lleva su `seatLabel`.
+- [ ] Dada la `Order` devuelta y lo guardado en `localStorage["mentec-orders"]`, entonces no contienen número de tarjeta, vencimiento, CVV ni nombre de tarjeta (tampoco los últimos 4 dígitos).
+- [ ] Dado `modules/checkout/orders.ts`, entonces solo reexporta `useOrdersStore` y los tipos `Order` y `OrderTicket`.
+- [ ] Dadas órdenes ya guardadas en `localStorage` y un store sin hidratar, cuando se llama a `persistOrder`, entonces se conservan las anteriores y la nueva queda la primera.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan (sin cambios visibles en la app).
+
+### Fase 3 — Paso 2 `/checkout`
+- [ ] Dado `/checkout?evento=noche-de-sintetizadores-lima&general=2&vip=1` en 1440 px, entonces se ven el stepper en el paso 2 ("Datos y pago" con `aria-current="step"`), h1 "Finalizar compra", el banner "Reservamos tus entradas por 10:00. Completa el pago antes de que se liberen.", las secciones "Datos del comprador" y "Método de pago", Términos y, en la columna derecha sticky, el resumen con "Cambiar entradas", total S/ 910.00 y "Pagar S/ 910.00".
+- [ ] Dado 375 px, entonces no hay scroll horizontal, el resumen aparece plegado arriba ("3 entradas · S/ 910.00", `aria-expanded="false"`), se despliega al pulsarlo (`aria-expanded="true"`) y la barra inferior con "Pagar S/ 910.00" queda pegada abajo mientras se desplaza el formulario sin tapar el footer al final.
+- [ ] Dado el formulario vacío, cuando se pulsa "Pagar", entonces cada campo muestra su mensaje (incluidos tarjeta y Términos), el foco va a "Nombres" y no se llama al service.
+- [ ] Dado "Yape" o "PagoEfectivo" elegido, entonces desaparecen los campos de tarjeta y se ve su texto informativo del diseño; con datos válidos y Términos, "Pagar" aprueba.
+- [ ] Dado que se escribe `4242424242424242` y `1230`, entonces los campos muestran `4242 4242 4242 4242` y `12/30`.
+- [ ] Dada una sesión iniciada (Ana Quispe), cuando se abre `/checkout`, entonces Nombres, Apellidos y Correo vienen rellenados; sin sesión, vacíos; lo ya escrito no se sobrescribe.
+- [ ] Dados datos válidos y la tarjeta `4242 4242 4242 4242`, cuando se pulsa "Pagar", entonces el botón muestra "Procesando pago…" deshabilitado, se anuncia "Procesando pago…" (`role="status"`) y, tras ~1,2 s, se navega (sin entrada en el historial) a `/checkout/confirmacion?orden=MT-XXXXXX`.
+- [ ] Dada la tarjeta `4000 0000 0000 0002`, entonces aparece el `Alert` "Tu tarjeta fue rechazada…" con el foco en él, no hay navegación ni orden guardada y se puede reintentar.
+- [ ] Dado que pasan 10 minutos, entonces aparece "Tu reserva expiró" con "Volver a elegir entradas" y los botones "Pagar" quedan deshabilitados.
+- [ ] Dado "Cambiar entradas" en un evento sin mapa, entonces lleva a `/eventos/<slug>`; en uno con mapa (`hasVenueMap`), a `/eventos/<slug>/entradas`.
+- [ ] Dado un checkout con asientos válidos (contrato C), entonces el resumen los muestra y la orden guarda cada `seatLabel`.
+- [ ] Dado el teclado, entonces el orden de tabulación es: comprador → método → tarjeta → Términos → resumen ("Cambiar entradas"; en móvil, antes el botón del resumen) → Pagar, con foco visible en todo; "Pagar" nunca se alcanza antes que los campos.
+- [ ] Dado el código, entonces ningún archivo de checkout que se ejecute en el cliente importa `@/modules/events` (salvo `import type`) y no hay `fetch`/axios en el pago.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+### Fase 4 — Paso 3 `/checkout/confirmacion`
+- [ ] Dado un pago aprobado, cuando carga la confirmación, entonces el `<title>` es "Confirmación de compra | Mentec Tickets" y se ven el stepper en el paso 3, h1 "¡Compra confirmada!", "Pedido N.º MT-XXXXXX", la tarjeta-entrada con categoría, título, fecha, lugar, "Zona" "General, VIP", "Entradas" 3, "Total pagado" S/ 910.00, el QR de la entrada `-01` y "Entrada 1 de 3".
+- [ ] Dado que se recarga la página de confirmación, entonces la orden se lee de `localStorage` y se ve igual (antes, un breve "Cargando tu compra…").
+- [ ] Dado `/checkout/confirmacion` sin `orden`, con un formato inválido o con un código que no está en el navegador, entonces se ve "No encontramos tu compra" con "Volver al inicio" y sin stepper.
+- [ ] Dado "Agregar al calendario", entonces se descarga `<slug>.ics` y se puede importar en un calendario con título, fecha y lugar del evento.
+- [ ] Dado "Descargar PDF", entonces se abre el diálogo de impresión y la vista previa no muestra header, footer, stepper, botones ni "Qué sigue", y sí la confirmación y una ficha por entrada con su QR, código, tipo, asiento (si hay) y titular.
+- [ ] Dado "Ver mis entradas", entonces enlaza a `/mis-entradas`.
+- [ ] Dado 375 px, entonces la tarjeta-entrada es vertical (imagen, datos, separador punteado, QR), "Ver mis entradas" ocupa todo el ancho, "Calendario" y "Descargar PDF" van en dos columnas y no hay scroll horizontal; en 1440 px la tarjeta es horizontal con el talón a la derecha.
+- [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de `/checkout` y `/checkout/confirmacion` de esta spec y ya no menciona Stripe.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
+
+## Diseño técnico
+- Rutas (`app/`), consultar `node_modules/next/dist/docs/` (`searchParams` es Promise, `PageProps<"…">`, `useRouter` de `next/navigation`):
+  - `app/checkout/page.tsx` (modificada, Fase 3).
+  - `app/checkout/confirmacion/page.tsx` (nueva, Fase 4).
+- Componentes:
+  - shadcn (instalados): `card`, `button`, `field` (`Field`, `FieldLabel`, `FieldTitle`, `FieldError`, `FieldDescription`, `FieldGroup`, `FieldContent`), `input`, `input-group`, `select`, `checkbox`, `alert`, `spinner`, `separator`.
+  - shadcn (instalar: `npx shadcn@latest add radio-group`): radio cards de método de pago. No pude consultar `npx shadcn@latest docs/search` (el registro no responde desde este entorno); `checkout-purchase.md` ya verificó que `radio-group` existe en `base-nova` y `@base-ui/react@1.8.0` incluye `radio` y `radio-group`. Si el CLI falla por red, se consulta al usuario (no se escribe a mano).
+  - existente (`modules/checkout/components/OrderSummary.tsx`): se extiende con `changeHref`.
+  - existente (`modules/checkout/components/ReservationTimer.tsx`): banner y `retryHref`.
+  - existente (`modules/checkout/components/CheckoutStatusMessage.tsx`): variantes ajustadas (decisión 13).
+  - existente (contrato A, spec seating): `components/shared/PurchaseStepper.tsx`.
+  - existente (`components/shared/SiteHeader.tsx`, `SiteFooter.tsx`): solo `print:hidden`.
+  - nuevo `components/shared/TicketQr.tsx`: lo usan checkout y tickets (dos dominios); no existe en shadcn.
+  - nuevo `modules/checkout/components/CheckoutForm.tsx` (`"use client"`): formulario del paso 2; solo checkout.
+  - nuevo `modules/checkout/components/PaymentMethodFields.tsx` (`"use client"`): separado de `CheckoutForm` para que cada archivo tenga una responsabilidad (métodos y tarjeta vs. comprador, envío y layout).
+  - nuevo `modules/checkout/components/CheckoutSummaryPanel.tsx` (`"use client"`): plegable móvil / sticky `lg`; no hay `collapsible` instalado y el comportamiento depende del breakpoint (siempre abierto en `lg`), así que basta un `button` con `aria-expanded`.
+  - nuevo `modules/checkout/components/OrderConfirmation.tsx` (`"use client"`): lee la orden del store.
+  - nuevo `modules/checkout/components/ConfirmationTicketCard.tsx` (presentacional, sin directiva: lo importa `OrderConfirmation`).
+- Hooks: `hooks/useZodForm.ts` (movido); nuevo `modules/checkout/hooks/useStoredOrder.ts`.
+- Schemas: `lib/formFields.ts` (nuevo, Fase 1); `modules/checkout/schemas/payment.schema.ts` (nuevo, Fase 2). `checkout.schema.ts` no se toca (importa el barrel de `events` y solo lo usa el servidor).
+- Utils: `lib/linkStyles.ts`, `lib/calendar.ts` (Fase 1); `modules/checkout/utils/card.ts`, `modules/checkout/utils/order.ts` (Fase 2); `modules/checkout/utils/checkoutOrder.ts` (añade `category`).
+- Store: `modules/checkout/stores/orders.store.ts` (Fase 2).
+- Service: `modules/checkout/services/payment.service.ts` (mock en cliente, Fase 2).
+- Entradas públicas: `modules/auth/session.ts`, `modules/events/format.ts` (Fase 1), `modules/checkout/orders.ts` (Fase 2).
+- `modules/checkout/index.ts`: Fase 3 añade `CheckoutForm` y quita `ReservationTimer` (ya lo renderiza `CheckoutForm`); Fase 4 añade `OrderConfirmation` y `parseOrderCode`. Solo lo importan páginas de `app/`.
+- Contrato de API (no hay HTTP; contratos entre capas):
+  ```ts
+  // modules/checkout/types/checkout.types.ts — contrato E (al pie de la letra)
+  export type OrderTicket = { code: string /* MT-AB12CD-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
+  export type Order = {
+    code: string;            // "MT-" + 6 chars A-Z0-9
+    createdAt: string;       // ISO
+    ownerEmail: string;      // correo del comprador (en minúsculas)
+    event: { slug: string; title: string; category: EventCategory; startsAt: string; venue: string; city: string; imageUrl: string };
+    items: { ticketTypeId: string; name: string; unitPrice: number; quantity: number; seats?: { id: string; label: string }[] }[];
+    ticketCount: number;
+    total: number;           // PEN
+    paymentMethod: "card" | "yape" | "pagoefectivo";
+    buyer: { firstName: string; lastName: string; email: string; phone: string; documentType: "dni" | "ce" | "passport"; documentNumber: string };
+    tickets: OrderTicket[];
+  };
+  export type OrderBuyer = Order["buyer"];
+
+  // modules/checkout/services/payment.service.ts
+  export type MockPaymentInput = {
+    order: CheckoutOrder;    // validado en servidor (getCheckoutOrder)
+    buyer: OrderBuyer;
+    payment: { method: "card"; cardNumber: string } | { method: "yape" } | { method: "pagoefectivo" };
+  };
+  export function processMockPayment(input: MockPaymentInput): Promise<Order>; // rechaza con PaymentError("card-declined")
+
+  // modules/checkout/stores/orders.store.ts — contrato E
+  type OrdersState = { orders: Order[]; addOrder: (order: Order) => void; getOrder: (code: string) => Order | undefined };
+  export const useOrdersStore; // persist "mentec-orders", skipHydration: true
+  export function persistOrder(order: Order): Promise<void>;
+
+  // components/shared/TicketQr.tsx — contrato F
+  export function TicketQr(props: { value: string; className?: string }): JSX.Element;
+  export function getQrModules(value: string): boolean[][]; // 21×21
+
+  // lib/calendar.ts — contrato F
+  export function buildIcsEvent(input: { title: string; startsAt: string; location: string; description?: string }): string;
+  export function downloadIcs(fileName: string, content: string): void;
+  ```
+  - URL de confirmación: `GET /checkout/confirmacion?orden=MT-XXXXXX` (`orden` validado con `orderCodeSchema`).
+
+## Reutilización
+- `auth`: `useZodForm` (sube a `hooks/`), reglas de `registerSchema` (suben a `lib/formFields.ts`), `INLINE_LINK`/`TEXT_LINK` (suben a `lib/linkStyles.ts`), `useAuthStore` (vía `modules/auth/session.ts`), patrón visual y de tests de `RegisterForm` (campos, "+51", `Select`, `Checkbox`, `Alert`, `Spinner`, `vi.mock` de `next/navigation`), patrón de store persistido con `skipHydration` y su test.
+- `checkout` (Fase 1 de `checkout-purchase.md` + extensiones de seating): `getCheckoutOrder`, `CheckoutOrder`, `OrderSummary`, `ReservationTimer`/`useCountdown`, `CheckoutStatusMessage`.
+- `events`: `formatEventPrice`, `formatLongDate`, `formatTime`, `EVENT_CATEGORY_LABELS` (vía `modules/events/format.ts`), `EventCategory`/`EventDetail` (`import type`).
+- `seating` (contratos A, B, C): `PurchaseStepper`, `hasVenueMap`, `seats` en `CheckoutOrderItem` y su presentación en `OrderSummary`.
+- shadcn ya instalados (lista en Diseño técnico) + `radio-group`.
+- Nativos: `Intl`, `Blob`, `URL.createObjectURL`, `window.print`, `Math.random`, `localStorage` (vía zustand `persist`), Tailwind `print:`.
+- Sin dependencias nuevas.
+
+## Tests
+- `hooks/useZodForm.test.ts` (F1): movido sin cambios; junto con los tests de `modules/auth` sin cambios deben pasar. `lib/formFields.ts` queda cubierto por `auth.schema.test.ts` y `payment.schema.test.ts` (sin test propio).
+- `components/shared/TicketQr.test.tsx` (F1): `role="img"` y `aria-label` con el valor; `viewBox="0 0 21 21"`; `className` se une a las clases base; mismo valor → mismo `d` del path; valores distintos → `d` distinto; `getQrModules` devuelve 21×21 y las tres esquinas tienen el patrón de posición (anillo 7×7, hueco, núcleo 3×3) y separador claro.
+- `lib/calendar.test.ts` (F1, `vi.useFakeTimers` + `setSystemTime`): contiene `BEGIN:VCALENDAR`…`END:VCALENDAR` con un `VEVENT`; `DTSTART:20261115T020000Z` para `2026-11-14T21:00:00-05:00`; `DTSTAMP` con la hora fijada; `UID` igual para la misma entrada; escapa `,`, `;`, `\` y saltos de línea; sin `DESCRIPTION` si no viene; todas las líneas separadas por `\r\n`; una descripción larga con tildes se pliega en líneas ≤ 75 octetos y al desplegarla se recupera el texto exacto. `downloadIcs`: con `URL.createObjectURL`/`revokeObjectURL` simulados, crea un `Blob` `text/calendar`, hace `click` en un `<a>` con `download` = nombre dado y revoca la URL.
+- `modules/checkout/schemas/payment.schema.test.ts` (F2, fecha fijada): formulario válido con tarjeta (espacios del número eliminados en la salida, textos recortados); válido con Yape y campos de tarjeta vacíos; todo vacío con tarjeta → mensaje en cada campo (comprador, tarjeta, `acceptTerms`); casos de la tabla del requisito 10 (Luhn, 15 dígitos, `13/30`, `00/30`, mes anterior vencido, mes actual válido, CVV `12`/`12345`/`abc` inválidos y `123`/`1234` válidos, nombre `"A"`); DNI de 7 dígitos y celular `812345678` con los mensajes del registro; `orderCodeSchema` acepta `MT-AB12CD` y rechaza `mt-ab12cd`, `MT-AB12C`, `MT-AB12CD1`, `""`.
+- `modules/checkout/utils/card.test.ts` (F2): `formatCardNumber` (16 dígitos agrupados, guiones/letras ignorados, recorte a 16, vacío); `formatCardExpiry` (`"1"`, `"12"`, `"122"` → `"12/2"`, `"1228"` → `"12/28"`, `"12/28"` estable, letras ignoradas, recorte a 4 dígitos); `isLuhnValid` (`4242424242424242` y `4000000000000002` válidos, `4242424242424241` inválido); `isCardExpired` con `now` explícito (mes anterior, actual y siguiente; cambio de año).
+- `modules/checkout/utils/checkoutOrder.test.ts` (F2): el pedido `ok` incluye `event.category`.
+- `modules/checkout/utils/order.test.ts` (F2): `createOrderCode` con `random` simulado produce el código esperado y cumple `^MT-[A-Z0-9]{6}$`; `parseOrderCode` (válido, inválido, array, `undefined`); `buildOrder` según el requisito 13: `ownerEmail` en minúsculas y recortado, `buyer` sin campos extra, `event` con `category`, `items` con `seats`, `total`/`ticketCount` recalculados ignorando un `total` manipulado, códigos `-01..-NN` en orden de items, `seatLabel` en orden de `seats`, `holderName`, `paymentMethod`.
+- `modules/checkout/stores/orders.store.test.ts` (F2, mismo patrón que `auth.store.test.ts`): `addOrder` guarda y persiste en `mentec-orders` (la más reciente primero); mismo código reemplaza; `getOrder` encuentra o devuelve `undefined`; `persist.rehydrate` restaura; `persistOrder` con órdenes previas en `localStorage` y store vacío conserva ambas.
+- `modules/checkout/services/payment.service.test.ts` (F2, fake timers, `vi.spyOn(globalThis, "fetch")`): no resuelve antes de 1200 ms y sí después; tarjeta `4000 0000 0000 0002` (con espacios) → `PaymentError` `card-declined` con su mensaje; `4242…` → `Order` con `paymentMethod: "card"`; Yape y PagoEfectivo aprueban; `JSON.stringify(order)` no contiene el número de tarjeta; `fetch` nunca se llama.
+- `modules/checkout/components/CheckoutForm.test.tsx` (F3; `vi.mock("next/navigation")` con `replace`; `vi.mock("../services/payment.service")` conservando `PaymentError` real; store de órdenes y `useAuthStore` reales con `localStorage` limpio; `summary` simple): envío vacío muestra los errores, enfoca "Nombres" y no llama al service; formato de número y vencimiento al escribir; cambiar a Yape oculta la tarjeta, muestra su texto y el envío válido llama al service con `{ method: "yape" }`; envío válido con tarjeta muestra "Procesando pago…" (botones deshabilitados y `role="status"`), llama al service con `order` (el de la prop), `buyer` (sin `acceptTerms` ni tarjeta) y `{ method: "card", cardNumber: "4242424242424242" }`, guarda la orden en `useOrdersStore` y llama a `replace("/checkout/confirmacion?orden=<code>")`; `localStorage["mentec-orders"]` no contiene el número ni el CVV; rechazo → `Alert` con el mensaje y el foco, botones reactivados, sin navegación ni orden guardada; con sesión se precargan Nombres, Apellidos y Correo; el botón del resumen alterna `aria-expanded`; con fake timers, a los 10 min aparece "Tu reserva expiró", los botones "Pagar" quedan deshabilitados y enviar no llama al service. (Los botones "Pagar" son dos en el DOM de jsdom: usar `getAllByRole`.)
+- `modules/checkout/hooks/useStoredOrder.test.ts` (F4, `renderHook`): primer render `loading`; con la orden en `localStorage` → `found` tras rehidratar; sin ella → `not-found`; pasa a `found` si se añade la orden después.
+- `modules/checkout/components/OrderConfirmation.test.tsx` (F4; `vi.mock("@/lib/calendar")` conservando `buildIcsEvent` real y `downloadIcs` como `vi.fn`; `window.print` espiado): con una orden guardada muestra h1, "Pedido N.º", datos de la tarjeta (Zona, Entradas, Total pagado), QR con `aria-label` de la entrada `-01`, "Entrada 1 de N", el `stepper` recibido y el enlace "Ver mis entradas" → `/mis-entradas`; "Agregar al calendario" llama a `downloadIcs("<slug>.ics", …)` con un contenido que incluye `SUMMARY:<título>`; "Descargar PDF" llama a `window.print`; la lista de impresión tiene una fila por entrada con su `seatLabel`; código inexistente → "No encontramos tu compra" sin stepper.
+- Sin tests: páginas de `app/`, entradas que solo reexportan (`session.ts`, `format.ts`, `orders.ts`, `index.ts`), `OrderSummary`, `ConfirmationTicketCard`, `CheckoutStatusMessage`, `CheckoutSummaryPanel` y `PaymentMethodFields` (cubiertos por `CheckoutForm.test`), `ReservationTimer` (lógica en `useCountdown`), tipos, `components/ui/`.
+
+## Plan de tareas
+Coordinación:
+- **Orden global:** seating → checkout → tickets → organizer → events-ui-refresh. La Fase 1 no depende de seating; las Fases 2–4 requieren seating implementada (contrato A `PurchaseStepper`, B `hasVenueMap`, C `seats` en `CheckoutOrderItem`, validación de `asientos=` y su presentación en `OrderSummary`). Seating modifica antes que esta spec `checkout.types.ts`, `checkoutOrder.ts`(+test), `checkout.schema.ts`, `checkout.service.ts`(+test) y `OrderSummary.tsx`; aquí se edita sobre su versión.
+- **Archivos que consumen otras specs:** `hooks/useZodForm.ts`, `lib/formFields.ts`, `lib/linkStyles.ts`, `modules/auth/session.ts` (organizer, tickets); `modules/checkout/orders.ts`, `components/shared/TicketQr.tsx`, `lib/calendar.ts` (tickets); `modules/events/format.ts` (disponible para tickets/organizer si formatean en cliente). `SiteHeader`/`SiteFooter` reciben `print:hidden`: events-ui-refresh debe conservarlo.
+- `/mis-entradas` devuelve 404 hasta que se implemente la spec tickets.
+- `docs/specs/checkout-purchase.md`: sus Fases 2–3 quedan reemplazadas; no se implementan ni se marcan.
+- No ejecutar dos `npx shadcn add`/`npm install` a la vez.
+
+### Fase 1 — Base compartida
+- [x] T1 — Subir código compartido de auth sin cambiar comportamiento (`git mv` del hook y su test; reglas a `lib/formFields.ts`; enlaces a `lib/linkStyles.ts`; entrada `session.ts`; actualizar imports) · archivos: `hooks/useZodForm.ts`, `hooks/useZodForm.test.ts`, `lib/formFields.ts`, `lib/linkStyles.ts`, `modules/auth/schemas/auth.schema.ts`, `modules/auth/components/formShared.ts`, `modules/auth/components/LoginForm.tsx`, `modules/auth/components/RegisterForm.tsx`, `modules/auth/session.ts` (se eliminan `modules/auth/hooks/useZodForm.ts` y su test) · depende de: — · secuencial (base: `lib/`, `hooks/`)
+- [x] T2 — Instalar shadcn `radio-group` y crear la entrada `modules/events/format.ts` · archivos: `components/ui/radio-group.tsx` (y `package.json`/`package-lock.json` solo si el CLI los cambia), `modules/events/format.ts` · depende de: T1 · secuencial (`components/ui/`, entrada pública)
+- [x] T3 — `TicketQr` con test · archivos: `components/shared/TicketQr.tsx`, `components/shared/TicketQr.test.tsx` · depende de: T2 · paralelo con T4 (archivos nuevos y disjuntos)
+- [x] T4 — `lib/calendar.ts` con test · archivos: `lib/calendar.ts`, `lib/calendar.test.ts` · depende de: T2 · paralelo con T3 (archivos nuevos y disjuntos)
+
+### Fase 2 — Dominio del pago simulado
+- [x] T1 — Schemas del formulario, utils de tarjeta, tipos (`Order`, `OrderTicket`, `OrderBuyer`, `PaymentMethod`, formulario) y `category` en el pedido, con tests · archivos: `modules/checkout/schemas/payment.schema.ts`, `modules/checkout/schemas/payment.schema.test.ts`, `modules/checkout/utils/card.ts`, `modules/checkout/utils/card.test.ts`, `modules/checkout/types/checkout.types.ts`, `modules/checkout/utils/checkoutOrder.ts`, `modules/checkout/utils/checkoutOrder.test.ts` · depende de: Fase 1 y spec seating · secuencial (base)
+- [x] T2 — Store de órdenes, `persistOrder` y entrada pública `orders.ts`, con test · archivos: `modules/checkout/stores/orders.store.ts`, `modules/checkout/stores/orders.store.test.ts`, `modules/checkout/orders.ts` · depende de: T1 · paralelo con T3
+- [x] T3 — Utils de orden y service mock de pago, con tests · archivos: `modules/checkout/utils/order.ts`, `modules/checkout/utils/order.test.ts`, `modules/checkout/services/payment.service.ts`, `modules/checkout/services/payment.service.test.ts` · depende de: T1 · paralelo con T2
+
+### Fase 3 — Paso 2 `/checkout`
+- [x] T1 — Piezas presentacionales: banner y `retryHref` en `ReservationTimer`, `changeHref` en `OrderSummary`, `CheckoutSummaryPanel` · archivos: `modules/checkout/components/ReservationTimer.tsx`, `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: Fase 2 · paralelo con T2
+- [x] T2 — `PaymentMethodFields` (radio cards, campos de tarjeta, textos Yape/PagoEfectivo, aviso de simulación) · archivos: `modules/checkout/components/PaymentMethodFields.tsx` · depende de: Fase 2 · paralelo con T1
+- [x] T3 — `CheckoutForm` (comprador, Términos, envío, error, precarga, layout, barra móvil) con test · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx` · depende de: T1, T2 · secuencial
+- [x] T4 — Página `/checkout`, barrel y diseño de página (sección `/checkout`) · archivos: `app/checkout/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T3 · secuencial
+
+### Fase 4 — Paso 3 `/checkout/confirmacion`
+- [x] T1 — `print:hidden` en header y footer del sitio · archivos: `components/shared/SiteHeader.tsx`, `components/shared/SiteFooter.tsx` · depende de: Fase 3 · secuencial (`components/shared/`)
+- [x] T2 — Hook `useStoredOrder` con test · archivos: `modules/checkout/hooks/useStoredOrder.ts`, `modules/checkout/hooks/useStoredOrder.test.ts` · depende de: T1 · paralelo con T3
+- [x] T3 — `CheckoutStatusMessage` (variantes de la decisión 13) y `ConfirmationTicketCard` · archivos: `modules/checkout/components/CheckoutStatusMessage.tsx`, `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2
+- [x] T4 — `OrderConfirmation` (estados, acciones, Qué sigue, lista de impresión) con test · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
+- [x] T5 — Página `/checkout/confirmacion`, barrel y diseño de página (sección confirmación; quitar menciones a Stripe) · archivos: `app/checkout/confirmacion/page.tsx`, `modules/checkout/index.ts`, `design-system/ticketera/pages/checkout.md` · depende de: T4 · secuencial
+
+## Preguntas abiertas
+1. **Yape y PagoEfectivo:** los textos del diseño prometen un QR de Yape y un código de pago, pero en la simulación "Pagar" aprueba al instante. ¿Se mantienen los textos tal cual, se cambian por algo como "En esta demo el pago se aprueba al instante", o se simula un paso intermedio con QR/código?
+2. **"Enviamos tus entradas a tu correo"** (confirmación y "Qué sigue"): no se envía ningún correo. ¿Se mantiene el texto del diseño o se cambia mientras no exista envío?
+3. **Confirmar correo:** el diseño no lo tiene y se omitió, pero "Mis entradas" filtra por `ownerEmail`: un error al escribir el correo deja la compra fuera de "Mis entradas" de esa cuenta. ¿Se añade "Confirmar correo electrónico"?
+4. **Duración en el calendario:** los eventos no tienen hora de fin, así que el `.ics` no lleva `DTEND` (algunos calendarios lo muestran como un evento de 0 minutos). ¿Se fija una duración por defecto (p. ej. 3 h) o se añade `endsAt` a los eventos?
+5. **"Cambiar entradas"** vuelve al paso 1 sin conservar la selección actual (ni el `TicketSelector` ni, que yo sepa, el plano de seating leen parámetros de preselección). ¿Debe conservarse?
+6. **Tarjetas aceptadas:** solo 16 dígitos con formato 4-4-4-4 (no Amex de 15), aunque el CVV admite 4 dígitos como en el diseño. ¿Se aceptan también tarjetas de 15 dígitos?
+7. **Autocompletado de tarjeta:** se usa `autoComplete="off"` (decisión 5) en lugar de `cc-*` del diseño. ¿De acuerdo, al menos mientras el pago sea simulado?
+8. **Alcance del almacenamiento:** las órdenes viven solo en el `localStorage` de ese navegador; en otro dispositivo no aparecen y la confirmación muestra "No encontramos tu compra". ¿Aceptable para la demo?
+9. **`checkout-purchase.md`:** sigue aprobada con sus Fases 2–3 (Stripe) sin marcar. ¿Quieres anotar tú en ese archivo que quedan reemplazadas por esta spec? (Los agentes no la editan.)

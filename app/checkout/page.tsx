@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
-import { CheckoutStatusMessage, getCheckoutOrder, OrderSummary, ReservationTimer } from "@/modules/checkout";
+import { PurchaseStepper } from "@/components/shared/PurchaseStepper";
+import { CheckoutForm, CheckoutStatusMessage, getCheckoutOrder, OrderSummary } from "@/modules/checkout";
+import { hasVenueMap } from "@/modules/seating";
 
 export const metadata: Metadata = { title: "Finalizar compra | Mentec Tickets" };
 
@@ -13,11 +15,20 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   }
 
   const { order } = result;
+  const { slug } = order.event;
+  const changeHref = hasVenueMap(slug) ? `/eventos/${slug}/entradas` : `/eventos/${slug}`;
+
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-8 md:px-6 md:py-12">
-      <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">Finalizar compra</h1>
-      <ReservationTimer eventSlug={order.event.slug} />
-      <OrderSummary order={order} />
-    </div>
+    <>
+      <PurchaseStepper currentStep={2} />
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 pb-8 md:px-6 md:pt-8 md:pb-12 lg:px-8">
+        <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">Finalizar compra</h1>
+        <CheckoutForm
+          order={order}
+          changeHref={changeHref}
+          summary={<OrderSummary order={order} changeHref={changeHref} />}
+        />
+      </div>
+    </>
   );
 }

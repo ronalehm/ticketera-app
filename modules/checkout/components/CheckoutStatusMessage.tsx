@@ -32,25 +32,10 @@ const STATUS_CONTENT = {
     description: "No necesitas comprar entradas para asistir.",
     actions: [{ label: "Ver el evento", href: "event", primary: true }],
   },
-  "not-configured": {
-    title: "Pagos no configurados",
-    description: "El pago en línea no está disponible en este momento. Inténtalo más tarde.",
-    actions: [HOME],
-  },
   "order-not-found": {
     title: "No encontramos tu compra",
-    description: "El enlace de confirmación no es válido o ha caducado.",
+    description: "El enlace no es válido o la compra se realizó en otro navegador.",
     actions: [HOME],
-  },
-  "payment-processing": {
-    title: "Estamos procesando tu pago",
-    description: "Tu banco aún no confirma el pago. Actualiza esta página en unos minutos.",
-    actions: [{ ...HOME, primary: false }],
-  },
-  "payment-failed": {
-    title: "Tu pago no se completó",
-    description: "No se realizó ningún cobro. Puedes volver a intentarlo.",
-    actions: [RETRY, { ...HOME, primary: false }],
   },
 } satisfies Record<string, { title: string; description: string; actions: Action[] }>;
 
@@ -58,7 +43,7 @@ const ACTION_CLASS = "h-11 cursor-pointer px-6 font-semibold duration-200";
 
 type CheckoutStatusMessageProps = {
   variant: keyof typeof STATUS_CONTENT;
-  /** Necesario en las variantes con enlace al evento (sold-out, invalid-tickets, free, payment-failed). */
+  /** Necesario en las variantes con enlace al evento (sold-out, invalid-tickets, free). */
   eventSlug?: string;
 };
 

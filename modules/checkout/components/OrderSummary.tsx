@@ -1,12 +1,20 @@
 import Image from "next/image";
+import Link from "next/link";
 import { CalendarDays, MapPin } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { TEXT_LINK } from "@/lib/linkStyles";
+import { cn } from "@/lib/utils";
 import { formatEventDate, formatEventPrice } from "@/modules/events";
 import type { CheckoutOrder } from "../types/checkout.types";
 
-export function OrderSummary({ order }: { order: CheckoutOrder }) {
+type OrderSummaryProps = {
+  order: CheckoutOrder;
+  changeHref?: string;
+};
+
+export function OrderSummary({ order, changeHref }: OrderSummaryProps) {
   const { event, items, total } = order;
 
   return (
@@ -46,11 +54,24 @@ export function OrderSummary({ order }: { order: CheckoutOrder }) {
                 <span className="text-sm text-muted-foreground tabular-nums">
                   {item.quantity} × {formatEventPrice(item.unitPrice)}
                 </span>
+                {item.seats && (
+                  <ul aria-label={`Asientos de ${item.name}`} className="text-sm text-muted-foreground">
+                    {item.seats.map((seat) => (
+                      <li key={seat.id}>{seat.label}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <span className="font-bold tabular-nums">{formatEventPrice(item.unitPrice * item.quantity)}</span>
             </li>
           ))}
         </ul>
+
+        {changeHref && (
+          <Link href={changeHref} className={cn(TEXT_LINK, "w-fit font-semibold")}>
+            Cambiar entradas
+          </Link>
+        )}
 
         <Separator />
 

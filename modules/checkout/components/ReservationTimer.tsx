@@ -12,11 +12,11 @@ import { useCountdown } from "../hooks/useCountdown";
 const RESERVATION_DURATION_MS = 600_000;
 
 type ReservationTimerProps = {
-  eventSlug: string;
+  retryHref: string;
   onExpire?: () => void;
 };
 
-export function ReservationTimer({ eventSlug, onExpire }: ReservationTimerProps) {
+export function ReservationTimer({ retryHref, onExpire }: ReservationTimerProps) {
   const { label, minutesLeft, isExpired } = useCountdown(RESERVATION_DURATION_MS);
   const handleExpire = useEffectEvent(() => onExpire?.());
 
@@ -39,7 +39,7 @@ export function ReservationTimer({ eventSlug, onExpire }: ReservationTimerProps)
             El tiempo para completar la compra terminó. Vuelve a elegir tus entradas para intentarlo de nuevo.
           </AlertDescription>
           <Link
-            href={`/eventos/${eventSlug}`}
+            href={retryHref}
             className={cn(
               buttonVariants({ size: "lg" }),
               "col-start-2 mt-3 h-11 w-fit cursor-pointer px-6 font-semibold duration-200 hover:bg-primary-strong",
@@ -49,10 +49,11 @@ export function ReservationTimer({ eventSlug, onExpire }: ReservationTimerProps)
           </Link>
         </Alert>
       ) : (
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-base">
-          <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-2xl border border-warning/50 bg-warning/10 px-4 py-3 text-base">
+          <Clock className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
-            Tiempo para completar tu compra: <strong className="font-bold tabular-nums">{label}</strong>
+            Reservamos tus entradas por <strong className="font-bold tabular-nums">{label}</strong>. Completa el pago
+            antes de que se liberen.
           </p>
         </div>
       )}
