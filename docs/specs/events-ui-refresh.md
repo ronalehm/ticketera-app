@@ -255,6 +255,35 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
 - [ ] Dado 375 px, entonces arriba se ve la franja navy con los dos textos y la imagen a la derecha, y debajo las pestañas y el formulario, sin scroll horizontal. La imagen es decorativa (`alt=""`).
 - [ ] Dado `npx vitest run modules/auth`, entonces pasan todos los tests existentes sin modificarlos. `npm run lint` y `npm run build` terminan sin errores.
 
+### Fase 4
+- [ ] Dado `/eventos` a 1440 px, cuando carga, entonces el único h1 es "Explora eventos" y el `<title>` es "Explora eventos | Mentec Tickets". Debajo se ve una píldora en una fila con "Qué quieres ver" (placeholder "Artista, evento o ciudad"), "Fecha" ("Cualquier fecha"), "Precio" ("Cualquier precio") separados por divisores verticales, y el botón primario azul "Buscar" con lupa a la derecha.
+- [ ] Dado `/eventos?categoria=teatro`, entonces el h1 sigue siendo "Explora eventos" y el `<title>` es "Teatro | Mentec Tickets". Dado `/eventos?categoria=teatro&categoria=conciertos`, entonces el `<title>` es "Explora eventos | Mentec Tickets".
+- [ ] Dado el desplegable "Fecha" del buscador, entonces ofrece "Cualquier fecha" y los mismos meses que la barra lateral ("Noviembre 2026" … "Marzo 2027"). "Precio" ofrece "Cualquier precio" y los mismos 5 rangos que "Precio desde".
+- [ ] Dado `/eventos?categoria=deportes&orden=precio`, cuando se escribe "nacional", se elige "Noviembre 2026" y "S/ 50 – S/ 100" y se pulsa "Buscar", entonces navega a `/eventos?q=nacional&mes=2026-11&precio=50-100&categoria=deportes&orden=precio`. Se lista 1 evento ("Clásico del Pacífico: final de temporada"), en la barra lateral están marcados "Deportes", "Noviembre 2026" y "S/ 50 – S/ 100", y se ven sus tres chips.
+- [ ] Dado `/eventos` con JS, cuando se marca "Enero 2027" en la barra lateral, entonces el segmento "Fecha" del buscador muestra "Enero 2027". Cuando después se pulsa "Buscar", entonces la URL conserva `mes=2027-01`. Dado `/eventos?mes=2027-01`, cuando se elige "Cualquier fecha" en el buscador y se pulsa "Buscar", entonces el radio "Cualquier fecha" de la barra lateral queda marcado y no hay chip de mes.
+- [ ] Dado JS desactivado en la landing, cuando se elige "Enero 2027" y "Hasta S/ 50" y se pulsa "Buscar", entonces `/eventos` lista 2 eventos ("Aventura en el bosque mágico" y "Micro abierto: comedia en la Ciudad Blanca"), con los chips "Enero 2027" y "Hasta S/ 50" y los mismos valores en el buscador. Dado JS desactivado en `/eventos?ciudad=Lima`, cuando se busca "estadio", entonces la URL conserva `ciudad=Lima`.
+- [ ] Dado la landing, entonces el buscador es el mismo componente, sin campo "Ciudad" ni selector de día, y no envía campos ocultos.
+- [ ] Dado 375 px (en `/eventos` y en la landing), entonces los tres segmentos se apilan a todo el ancho con divisores horizontales, el botón "Buscar" ocupa todo el ancho debajo y no hay scroll horizontal de página.
+- [ ] Dado navegación con teclado en el buscador, entonces el orden de Tab es "Qué quieres ver" → "Fecha" → "Precio" → "Buscar", cada uno con foco visible. Los desplegables se manejan con las flechas (nativos) y cada segmento mide ≥ 44 px de alto.
+- [ ] Dado `/eventos` a 1440 px, entonces la primera tarjeta ("Noche de Sintetizadores: Gira Neón 2026") muestra:
+  - una imagen de 176 px de alto con el chip "NOV" / "14" arriba a la izquierda y sin badge de estado;
+  - la overline "CONCIERTOS", el título, "Estadio Nacional · Lima" con pin y "sáb 14 nov" con calendario;
+  - el talón discontinuo con dos muescas laterales;
+  - "Desde" sobre "S/ 180.00" y el botón outline "Ver entradas", cuyo nombre accesible es "Ver entradas de Noche de Sintetizadores: Gira Neón 2026".
+- [ ] Dado "Risas sin filtro: especial de fin de año", entonces la imagen muestra "Últimas entradas" (fondo `warning`). Dado "Los Ecos del Sur en vivo", entonces muestra "Agotado" oscuro (`brand-navy`), el precio "S/ 95.00" atenuado y tachado y, en lugar de "Ver entradas", un botón deshabilitado "Agotado" que no recibe foco. Dado "Aventura en el bosque mágico", entonces el pie dice "Entrada libre" sin "Desde".
+- [ ] Dado la landing (Destacados y Próximos eventos) y "También te puede interesar" en un detalle, entonces las tarjetas tienen la misma anatomía. En relacionados (sobre `bg-muted`), las muescas son del color `muted` y no se ven círculos blancos.
+- [ ] Dado `/eventos` a 375 px, entonces cada tarjeta es horizontal: imagen de 108 px con el chip de fecha, cuerpo con borde izquierdo discontinuo, overline, título, lugar, fecha y "Desde S/ X". "Últimas entradas"/"Agotado" va en el pie, sin botón "Ver entradas", y toda la tarjeta enlaza al detalle. El lector de pantalla anuncia el estado una sola vez. No hay scroll horizontal.
+- [ ] Dado "También te puede interesar" a 375 px (tarjetas `w-64`), entonces el pie de cada tarjeta cabe (o salta de línea) sin desbordar la tarjeta ni causar scroll horizontal de página.
+- [ ] Dado navegación con teclado por una tarjeta, entonces se alcanzan el título y "Ver entradas" (no la imagen), los dos con foco visible, y "Ver entradas" mide ≥ 44 px.
+- [ ] Dado `npx vitest run`, entonces pasan los tests nuevos (`formatEvent`, `EventCard`, `EventSearchBar`) y todos los existentes sin modificarlos. `npm run lint` y `npm run build` terminan sin errores. En el código de Fase 4 no hay hex, colores por defecto de Tailwind (`indigo-*`, `orange-*`…) ni la prop `variant` de `EventSearchBar`.
+
+### Fase 5
+- [ ] Dado `/eventos/festival-sol-de-verano`, entonces el hero muestra "sábado 20 de febrero" (sin año, en un `<time>` cuyo `dateTime` es el ISO completo) y "14:00 h". "Información importante" muestra "Apertura de puertas" "12:00 h" e "Inicio del show" "14:00 h".
+- [ ] Dado `/eventos/clasico-del-pacifico`, entonces la celda de inicio se llama "Inicio del partido" y muestra "15:30 h", con apertura "12:30 h". Dado `/eventos/noche-de-sintetizadores-lima`, entonces el hero muestra "sábado 14 de noviembre" y "21:00 h", y la celda "Inicio del show" "21:00 h".
+- [ ] Dado `/eventos/noche-de-sintetizadores-lima` a 1440 px, entonces el h1 del hero se renderiza a 48 px (`xl:text-5xl`) y ocupa como máximo 3 líneas. A 375 px sigue a 36 px sin desbordar.
+- [ ] Dado un evento con mapa, entonces el aside de precios (`ZonePricesCard`) y la barra móvil son los de la spec seating, sin cambios. Dado uno sin mapa, `TicketSelector` sin cambios. El CTA del hero sigue mostrando el precio en formato "S/ 180.00".
+- [ ] Dado `npx vitest run`, entonces pasan los casos nuevos de `formatEvent.test.ts` y los existentes, incluidos los de `formatLongDate`/`formatTime` sin cambios. `npm run lint` y `npm run build` terminan sin errores.
+
 ## Diseño técnico
 
 ### Fase 1
