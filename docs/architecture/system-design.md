@@ -11,7 +11,20 @@ Este documento describe la arquitectura objetivo. No es una spec implementable: 
 
 ## 1. Contexto y objetivo
 
-Hoy la app es solo frontend: `events` y `auth` leen mocks y el checkout (spec `checkout-purchase.md`) cobra con Stripe sin base de datos. El objetivo es una ticketera con:
+Hoy la app es solo frontend, con datos mock:
+
+| Pieza | Estado actual | Fuente |
+|---|---|---|
+| Eventos | `modules/events/data/events.mock.ts` | specs `events-*` |
+| Mapa de zonas y asientos | `modules/seating/data/venueMaps.mock.ts` (zonas `general`/`numbered`, asientos con `x`/`y`) en `/eventos/[slug]/entradas` | `seating-ticket-selection.md` (borrador) |
+| Login / registro | `modules/auth` con `users.mock.ts` | `auth-login-register.md` |
+| Pago | **Simulado** (tarjeta, Yape, PagoEfectivo); orden guardada en el navegador (`useOrdersStore`, `localStorage` `mentec-orders`) | `checkout-mock-payment.md` (sustituye las fases 2–3 de `checkout-purchase.md`) |
+| Mis entradas | Lee el store del navegador + `modules/tickets/data/demoOrders.ts` | `tickets-my-tickets.md` |
+| Panel de organizador | `modules/organizer/data/organizerEvents.mock.ts` | `organizer-dashboard.md` |
+
+Los services mantienen su firma; cada fase cambia el mock por la BD sin tocar la UI.
+
+El objetivo es una ticketera con:
 
 - Venta de entradas con inventario por zona **mixto** (zonas generales con cupo y zonas con asientos numerados) y reserva temporal de 10 minutos.
 - Reparto del dinero entre la plataforma (comisión) y los organizadores.
@@ -84,11 +97,11 @@ drizzle/                 migraciones SQL generadas y versionadas
 |---|---|
 | `events` (existe) | Listado, detalle, filtros; lee de la BD. |
 | `auth` (existe) | Clerk, `ensureUser()`, sesión, `can()`. |
-| `checkout` (existe) | Página de compra; usa `orders` para reservar y pagar. |
-| `orders` | Reserva de asientos, órdenes, emisión de entradas, "Mis entradas". |
+| `seating` (existe) | Mapa de zonas y asientos; lee recinto + disponibilidad de `event_seats`. Gestión del catálogo de recintos (admin). |
+| `checkout` (existe) | Reserva (`reserveSeats`), orden y pago con Stripe; reemplaza el store del navegador. |
+| `tickets` (existe) | "Mis entradas" desde la BD, QR real (`qr_token`). |
+| `organizer` (existe) | Perfil, dashboard de ventas, CRUD de eventos, `event_staff`. |
 | `payments` | Webhooks de Stripe, reembolsos, payouts. |
-| `venues` | Catálogo de recintos, secciones y asientos. |
-| `organizers` | Perfil, dashboard de ventas, CRUD de eventos, `event_staff`. |
 | `checkin` | Escáner y validación de QR. |
 | `admin` | Gestión de usuarios y roles, eventos, reembolsos, cancelación, auditoría. |
 | `complaints` | Libro de Reclamaciones. |
@@ -360,9 +373,9 @@ Cada fase es una spec en `docs/specs/` con su aprobación.
 
 | # | Fase | Contenido |
 |---|---|---|
-| F1 | Fundación de datos | Drizzle + `pg`, `lib/env.ts`, esquema completo y migraciones, seed desde los mocks (recintos, secciones, asientos, eventos); `events` lee de la BD. |
+| F1 | Fundación de datos | Drizzle + `pg`, `lib/env.ts`, esquema completo y migraciones, seed desde los mocks (`events.mock.ts`, `venueMaps.mock.ts` con su geometría, `organizerEvents.mock.ts`); `events` y `seating` leen de la BD. |
 | F2 | Identidad y legal | Clerk, `users`, roles, `ensureUser`, webhook, `proxy.ts`, documentos legales con editor, páginas legales y footer, consentimientos, reaceptación, banner de cookies. |
-| F3 | Compra | Reserva, PaymentIntent, webhook, entradas con QR, correos (Resend), "Mis entradas". Reemplaza las fases 2 y 3 de `checkout-purchase.md`. |
+| F3 | Compra | Reserva, PaymentIntent, webhook, entradas con QR, correos (Resend), "Mis entradas" desde la BD. Reemplaza el pago simulado y el store del navegador de `checkout-mock-payment.md`. |
 | F4 | Libro de Reclamaciones y admin | Formulario público, respuestas, reembolsos, cancelación de evento, gestión de roles, `audit_logs`. |
 | F5 | Organizadores | Dashboard, crear evento, catálogo de recintos, `event_staff`. |
 | F6 | Check-in | Escáner en puerta. |
@@ -381,7 +394,7 @@ F1 se implementa primero; el resto se especifica cuando le toque.
 - Reprogramación de eventos.
 - Comprobantes electrónicos SUNAT (`invoices`) e impuestos (IGV, espectáculos públicos).
 - Transferencia de entradas entre personas.
-- Mapa de asientos numerados en la UI (el modelo ya lo soporta).
+- Editor visual de mapas de recinto (la geometría se carga por seed o datos; el mapa ya se muestra en `/eventos/[slug]/entradas`).
 - Check-in sin conexión.
 - Cupones, newsletter, staging, cola o sala de espera para picos de demanda.
 - Organizaciones con varios miembros.
@@ -394,3 +407,4 @@ F1 se implementa primero; el resto se especifica cuando le toque.
 4. **Feriados** no considerados en `due_at`.
 5. **Picos de venta** (eventos masivos): `SKIP LOCKED` reduce la contención; medir antes de decidir una sala de espera.
 6. **Tamaño de Cloud SQL y pool** a ajustar con carga real.
+7. **Yape y PagoEfectivo en la UI:** hoy el checkout simulado los ofrece; con Stripe real (F3) solo hay tarjeta. Decidir en F3 si se ocultan o se muestran como "Próximamente".

@@ -241,7 +241,11 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 | `city` | text | |
 | `lat`, `lng` | double precision NULL | Google Maps. |
 | `place_id` | text NULL | Google Maps. |
+| `map_view_box` | text NULL | `viewBox` del SVG del mapa (`0 0 W H`), como `venueLayoutSchema.viewBox` de `modules/seating`. |
+| `stage` | jsonb NULL | `{ label, path, labelPos: { x, y } }` del escenario. |
 | `created_by` | uuid → `users.id` | |
+
+Sin geometría (`map_view_box NULL`), la UI usa la lista de zonas sin mapa.
 
 **`venue_sections`**: zona del recinto.
 
@@ -249,12 +253,16 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 |---|---|---|
 | `id` | uuid PK | |
 | `venue_id` | uuid → `venues.id` | |
+| `slug` | text | kebab-case; es el `zoneId` de `modules/seating` y prefijo de los ids de asiento (`norte-F-12`). |
 | `name` | text | P. ej. "Tribuna Occidente". |
 | `sort_order` | integer | |
-| `seating` | `seating_type` | |
+| `seating` | `seating_type` | Equivale a `kind` (`general`/`numbered`) de `venueZoneLayoutSchema`. |
 | `capacity` | integer NULL | Solo `general`. |
+| `map_path` | text NULL | Trazo SVG de la zona en el mapa. |
+| `label_x`, `label_y` | real NULL | Posición de la etiqueta. |
+| `seat_view_box` | text NULL | Solo `numbered`: `viewBox` del plano de asientos. |
 
-Restricciones: `UNIQUE (venue_id, name)`; `CHECK ((seating = 'general' AND capacity > 0) OR (seating = 'numbered' AND capacity IS NULL))`.
+Restricciones: `UNIQUE (venue_id, name)`; `UNIQUE (venue_id, slug)`; `CHECK ((seating = 'general' AND capacity > 0) OR (seating = 'numbered' AND capacity IS NULL))`.
 
 **`venue_seats`**: asiento físico de una zona numerada.
 
@@ -262,10 +270,13 @@ Restricciones: `UNIQUE (venue_id, name)`; `CHECK ((seating = 'general' AND capac
 |---|---|---|
 | `id` | uuid PK | |
 | `section_id` | uuid → `venue_sections.id` | La sección debe ser `numbered` (se valida en la app). |
-| `row_label` | text | "A", "B"… |
-| `number` | integer | |
+| `row_label` | text | "A", "B"… (1–2 letras mayúsculas, como `seatRowLabelSchema`). |
+| `number` | integer | 1–999. |
+| `x`, `y` | real | Posición en el plano (`seat_view_box`). |
+| `accessible` | boolean | Default `false`. Asiento para silla de ruedas (estado `accessible` del mapa actual). |
 
 Restricción: `UNIQUE (section_id, row_label, number)`.
+Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN` de `modules/seating`); no se guarda.
 
 ### Evento e inventario
 
@@ -307,12 +318,13 @@ Restricción: `UNIQUE (section_id, row_label, number)`.
 | `id` | uuid PK | |
 | `event_id` | uuid → `events.id` | |
 | `section_id` | uuid → `venue_sections.id` | Debe pertenecer al recinto del evento (se valida en la app). |
+| `slug` | text | kebab-case; clave en la URL de compra (`/checkout?evento=…&<slug>=<qty>`), hoy `ticketTypeId`. |
 | `name` | text | |
 | `description` | text NULL | |
 | `price_cents` | integer | CHECK `>= 0`. |
 | `max_per_order` | integer | Default 6. |
 
-Restricción: `UNIQUE (event_id, section_id)`.
+Restricciones: `UNIQUE (event_id, section_id)`; `UNIQUE (event_id, slug)`.
 
 **`event_seats`**: unidad de inventario. Al publicar el evento se genera una fila por `venue_seat` (zona numerada) o `capacity` filas con `venue_seat_id NULL` (zona general).
 
@@ -515,6 +527,7 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 | Saldo del organizador | Órdenes pagadas − reembolsos − payouts |
 | Ingresos y entradas vendidas (dashboard) | Agregados sobre `orders` y `tickets` |
 | Documento legal vigente | Última versión `published` por `kind` |
+| Estado de un asiento en el mapa (`available`/`occupied`/`accessible`) | `event_seats.status` disponible o no + `venue_seats.accessible` |
 
 ## Reglas que garantiza la BD
 
