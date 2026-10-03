@@ -15,13 +15,15 @@ import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useZodForm } from "@/hooks/useZodForm";
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES } from "@/lib/formFields";
+import { INLINE_LINK, TEXT_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
-import { useZodForm } from "../hooks/useZodForm";
-import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES, registerSchema } from "../schemas/auth.schema";
+import { registerSchema } from "../schemas/auth.schema";
 import { AuthError, register } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
 import type { RegisterInput } from "../types/auth.types";
-import { GENERIC_ERROR, INLINE_LINK, TEXT_LINK } from "./formShared";
+import { GENERIC_ERROR } from "./formShared";
 import { PasswordInput } from "./PasswordInput";
 
 const PASSWORD_HINT_ID = "register-password-description";

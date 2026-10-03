@@ -11,12 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { useZodForm } from "@/hooks/useZodForm";
+import { TEXT_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
-import { useZodForm } from "../hooks/useZodForm";
 import { loginSchema } from "../schemas/auth.schema";
 import { AuthError, login } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
-import { GENERIC_ERROR, TEXT_LINK } from "./formShared";
+import { GENERIC_ERROR } from "./formShared";
 import { PasswordInput } from "./PasswordInput";
 
 export function LoginForm() {
