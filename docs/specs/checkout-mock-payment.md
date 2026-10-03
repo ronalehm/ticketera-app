@@ -533,6 +533,58 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 - `modules/checkout/components/OrderConfirmation.test.tsx` (F4; `vi.mock("@/lib/calendar")` conservando `buildIcsEvent` real y `downloadIcs` como `vi.fn`; `window.print` espiado): con una orden guardada muestra h1, "Pedido N.º", datos de la tarjeta (Zona, Entradas, Total pagado), QR con `aria-label` de la entrada `-01`, "Entrada 1 de N", el `stepper` recibido y el enlace "Ver mis entradas" → `/mis-entradas`; "Agregar al calendario" llama a `downloadIcs("<slug>.ics", …)` con un contenido que incluye `SUMMARY:<título>`; "Descargar PDF" llama a `window.print`; la lista de impresión tiene una fila por entrada con su `seatLabel`; código inexistente → "No encontramos tu compra" sin stepper.
 - Sin tests: páginas de `app/`, entradas que solo reexportan (`session.ts`, `format.ts`, `orders.ts`, `index.ts`), `OrderSummary`, `ConfirmationTicketCard`, `CheckoutStatusMessage`, `CheckoutSummaryPanel` y `PaymentMethodFields` (cubiertos por `CheckoutForm.test`), `ReservationTimer` (lógica en `useCountdown`), tipos, `components/ui/`.
 
+**Ampliación (Fases 5 y 6):**
+- `modules/events/utils/formatEvent.test.ts` (F5, **se añaden casos**, los existentes no cambian):
+  - `formatShortDayMonth("2026-10-05T14:00:00-05:00")` → `"lun 5 oct"`;
+  - `formatShortDayMonth("2026-11-15T03:00:00Z")` → `"sáb 14 nov"` (día de Lima);
+  - `formatLongDayMonth` → `"lunes 5 de octubre"` y `"sábado 14 de noviembre"`;
+  - ninguno contiene `.`, `,`, dígitos de año ni hora.
+- `modules/checkout/utils/seatSummary.test.ts` (F5, nuevo):
+  - `parseSeatPosition`: `"tribuna-oriente-L-9"` → `{ row: "L", number: 9 }`, zona con guiones y fila de 2 letras (`"platea-baja-AA-101"`); `"general"`, `"norte-f-12"`, `"norte-F-0"`, `"norte-F-1000"` → `null`.
+  - `formatSeatPosition("L", 9)` → `"Fila L, asiento 9"`.
+  - `formatCompactSeats`:
+    - `[L-9, M-8]` → `"Fila L · 9 · Fila M · 8"`;
+    - `[M-8, L-10, L-9]` → `"Fila L · 9, 10 · Fila M · 8"` (orden de filas y números);
+    - `[Z-1, AA-1]` → `"Fila Z · 1 · Fila AA · 1"`;
+    - un id ilegible añade su `label` al final;
+    - `[]` → `""`.
+- `modules/checkout/components/CheckoutForm.test.tsx` (F5, **cambian** los existentes):
+  - `renderForm()` deja de pasar `summary`. El `OrderSummary` real se renderiza dentro: el test del botón del resumen (`aria-expanded`) sigue igual.
+  - El helper `input(label)` pasa de `getByLabelText(label)` a `getByRole("textbox", { name: label })`, y el `queryByLabelText("Número de tarjeta")` del test de Yape a `queryByRole("textbox", { name: "Número de tarjeta" })`. Con el `*` dentro del `<label>`, el texto de la etiqueta es "Nombres*", y la búsqueda exacta por texto falla. El nombre accesible excluye el `aria-hidden` y sigue siendo "Nombres". Que esto funcione verifica la decisión 17. "Número de documento" se busca igual, por su etiqueta `sr-only`.
+  - Los demás casos (errores, formato, Yape, pago aprobado/rechazado, precarga, expiración) no cambian de expectativas.
+- `modules/checkout/components/CheckoutForm.test.tsx` (F5, **casos nuevos**):
+  - Los campos Nombres, Apellidos, Correo electrónico, Celular, Número de documento y los 4 de tarjeta tienen `required`. El checkbox de Términos tiene `aria-required="true"` o `required`. Ningún nombre accesible contiene "*". Hay `*` con `aria-hidden="true"` en el DOM.
+  - Existe un `group` con nombre "Documento de identidad" que contiene el combobox "Tipo de documento" y el textbox "Número de documento". El combobox muestra "DNI".
+  - Se lee "Demo: no se realiza ningún cobro real." y, con Tarjeta, "4242 4242 4242 4242". Tras elegir Yape sigue la nota de demo pero no las tarjetas de prueba. Ya no existe el texto "Pago simulado:".
+  - Dentro del `complementary` "Resumen de la compra":
+    - un botón "Pagar S/ 910.00" en el mismo contenedor que "Total" (el de la tarjeta);
+    - las líneas "2 × General" y "1 × VIP";
+    - "sáb 14 nov · Estadio, Lima".
+    - Con un `ORDER` con asientos `[{ id: "tribuna-oriente-L-9", … }, { id: "tribuna-oriente-M-8", … }]` se lee "Fila L · 9 · Fila M · 8".
+- `modules/checkout/utils/printableTickets.test.ts` (F6, nuevo; fixture con 2 items, uno con asientos y otro sin ellos):
+  - una entrada por ticket, en orden, con `ticketNumber` 1..N y `ticketCount` N;
+  - `categoryLabel` de la categoría, `dateLabel` `"sábado 14 de noviembre"` para `2026-11-14T21:00:00-05:00`, `timeLabel` `"21:00 h"` y `placeLabel` `"Estadio, Lima"`;
+  - `zoneLabel` = `ticketTypeName`, `holderName`, `ticketCode` = código de la entrada y `orderCode` = código del pedido;
+  - `seatLabel`:
+    - `"Fila A, asiento 1"`/`"Fila A, asiento 2"` en las entradas con asiento (emparejadas por orden);
+    - `undefined` en las de la zona sin asientos;
+    - con un id de asiento ilegible → `ticket.seatLabel`.
+- `modules/checkout/components/OrderConfirmation.test.tsx` (F6, **cambian** los existentes):
+  - La tarjeta-entrada se busca con `getByRole("article", { name: "Noche de Sintetizadores" })` (antes `getByRole("article")`): las entradas imprimibles también son `article`, y en jsdom la clase `hidden` no oculta nada.
+  - El caso "con una orden guardada…" sigue comprobando h1 único, stepper, "Pedido N.º", categoría, título, Zona "General, VIP", Entradas 3, Total pagado S/ 910.00, el QR `-01`, "Entrada 1 de 3" dentro de la tarjeta, "Ver mis entradas" y el h2 "Qué sigue" (ahora `sr-only`, se encuentra igual por rol).
+  - Además comprueba:
+    - el texto "Enviamos tus entradas a luis@correo.pe…" con el correo en un `<strong>`;
+    - en la tarjeta, "sábado 14 de noviembre · Estadio, Lima" y las líneas "General: Fila A · 1, 2" y "VIP: Fila B · 5";
+    - que no existe el término "Asientos".
+  - "la lista de impresión tiene una fila por entrada…" **se sustituye** por: la región "Tus entradas" contiene 3 `article` ("Entrada 1 de 3"…"Entrada 3 de 3"). Cada uno tiene:
+    - el QR de su código;
+    - Zona = tipo, Ubicación ("Fila A, asiento 1", "Fila A, asiento 2", "Fila B, asiento 5"), Titular "Luis Pérez", Código = código de la entrada y Pedido `MT-AB12CD`;
+    - Fecha "sábado 14 de noviembre", Hora "21:00 h" y Lugar "Estadio, Lima";
+    - el pie "Presenta este QR en el ingreso. Cada entrada es válida para una persona.".
+  - Nuevo: con una orden sin asientos, ni las entradas imprimibles muestran "Ubicación" ni la tarjeta-entrada líneas de asientos.
+  - Los casos de carga, calendario, `window.print` y "No encontramos tu compra" no cambian.
+- Sin tests propios: `PrintableTicket` (presentacional, cubierto por `OrderConfirmation.test`), `RequiredMark`, `OrderSummary`, `CheckoutSummaryPanel`, `ConfirmationTicketCard`, páginas.
+
 ## Plan de tareas
 Coordinación:
 - **Orden global:** seating → checkout → tickets → organizer → events-ui-refresh. La Fase 1 no depende de seating; las Fases 2–4 requieren seating implementada (contrato A `PurchaseStepper`, B `hasVenueMap`, C `seats` en `CheckoutOrderItem`, validación de `asientos=` y su presentación en `OrderSummary`). Seating modifica antes que esta spec `checkout.types.ts`, `checkoutOrder.ts`(+test), `checkout.schema.ts`, `checkout.service.ts`(+test) y `OrderSummary.tsx`; aquí se edita sobre su versión.
