@@ -156,7 +156,8 @@ describe("ComplaintForm", () => {
       expect(within(group).getByText(message)).toBeTruthy();
     }
     expect(textbox("Nombres", group).getAttribute("aria-invalid")).toBe("true");
-    expect(document.activeElement).toBe(textbox("Nombres"));
+    // El foco va al primer campo inválido del formulario: los nombres del consumidor.
+    expect(document.activeElement?.id).toBe("complaint-firstName");
     expect(submitComplaint).not.toHaveBeenCalled();
   });
 

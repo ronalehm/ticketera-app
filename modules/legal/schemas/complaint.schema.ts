@@ -51,7 +51,7 @@ const requiredChoice = <const T extends readonly [string, ...string[]]>(options:
 const whenFieldsValid =
   (...fields: readonly string[]) =>
   (payload: z.core.ParsePayload) =>
-    !payload.issues.some((issue) => fields.includes(String(issue.path[0])));
+    !payload.issues.some((issue) => fields.includes(String(issue.path?.[0])));
 
 const GUARDIAN_FIELDS = [
   "guardianFirstName",
