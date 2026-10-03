@@ -171,6 +171,35 @@ describe("OrganizerEventForm", () => {
     expect(screen.getByText("100 entradas")).toBeTruthy();
   });
 
+  it("la portada elegida se ve en el campo y en la vista previa, pero el evento se guarda con imageUrl: null", async () => {
+    const createObjectURL = vi.fn(() => "blob:http://localhost/cover");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
+    const { container } = render(<OrganizerEventForm />);
+
+    const cover = new File(["png"], "portada.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [cover] } });
+
+    expect(createObjectURL).toHaveBeenCalledWith(cover);
+    expect(screen.getByAltText("Vista previa de la imagen de portada").getAttribute("src")).toBe(
+      "blob:http://localhost/cover",
+    );
+    const preview = within(screen.getByRole("complementary", { name: "Vista previa" }));
+    expect(preview.getByRole("presentation", { hidden: true }).getAttribute("src")).toBe("blob:http://localhost/cover");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cambiar imagen" }));
+
+    type(input("Nombre del evento"), "Con portada");
+    fireEvent.click(draftButton());
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=borrador"));
+    expect(useOrganizerStore.getState().events[0]).toMatchObject({ title: "Con portada", imageUrl: null });
+    expect(localStorage.getItem("mentec-organizer-events")).not.toContain("blob:");
+
+    cleanup();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/cover");
+    vi.unstubAllGlobals();
+  });
+
   it("'Fecha' solo tiene min (hoy en Lima) en cliente: el HTML del servidor no lo incluye", () => {
     const serverHtml = renderToString(<OrganizerEventForm />);
     expect(serverHtml).toMatch(/<input[^>]*type="date"/);
