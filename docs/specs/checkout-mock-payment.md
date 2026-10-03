@@ -362,7 +362,8 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 - [ ] Dado 1440 px, entonces el resumen (columna derecha, sticky) es compacto:
   - miniatura, título y "sáb 14 nov · <Lugar>, <Ciudad>" (en minúsculas, sin hora);
   - líneas "2 × General … S/ 500.00" y "1 × VIP … S/ 410.00", sin precio unitario;
-  - "Cambiar entradas", "Total S/ 910.00" y el botón primario azul "Pagar S/ 910.00" con candado **dentro** de la misma tarjeta.
+  - "Cambiar entradas", la fila "Total (3 entradas)" con "S/ 910.00" a la derecha (con 1 entrada: "Total (1 entrada)") y el botón primario azul "Pagar S/ 910.00" con candado **dentro** de la misma tarjeta.
+- [ ] Dado 375 px, entonces el encabezado plegable del resumen muestra "3 entradas · S/ 910.00" ("1 entrada" en singular) y, al desplegarlo, la fila "Total (3 entradas)".
 - [ ] Dado 375 px, entonces al desplegar el resumen no se ve un segundo botón "Pagar" dentro de la tarjeta: solo el de la barra inferior.
 - [ ] Dado un checkout con dos asientos de filas distintas (p. ej. `L-9` y `M-8` de "Tribuna Oriente" en el evento que añade seating F6, o cualquier zona numerada existente), entonces el resumen muestra "2 × Tribuna Oriente" y debajo "Fila L · 9 · Fila M · 8" (y el lector lee "Asientos: …").
 - [ ] Dado Términos, entonces sigue debajo de "Método de pago" en todos los anchos y sin marcar impide pagar con su mensaje.
@@ -471,7 +472,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   - nuevo `components/shared/PrintableTicket.tsx` (F6): entrada imprimible con props planas. Va en `shared` porque la usan checkout y, en una enmienda posterior, tickets (dos dominios). No existe en shadcn.
 - Utils:
   - `modules/events/utils/formatEvent.ts` (+ test) y `modules/events/format.ts` (F5): `formatShortDayMonth`, `formatLongDayMonth`.
-  - nuevo `modules/checkout/utils/summaryFormat.ts` (+ test) (F5): `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
+  - nuevo `modules/checkout/utils/summaryFormat.ts` (+ test) (F5): `formatTicketCount` (duplicado conocido, decisión 31), `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
   - nuevo `modules/checkout/utils/printableTickets.ts` (+ test) (F6): `buildPrintableTickets`.
 - Hooks, services, schemas, stores, tipos: sin cambios. **Contrato E sin cambios** (`Order`, `OrderTicket`, `OrderBuyer`).
 - `modules/checkout/index.ts` (F5): quita `OrderSummary`.
@@ -482,6 +483,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   export function formatLongDayMonth(iso: string): string;  // "lunes 5 de octubre"
 
   // modules/checkout/utils/summaryFormat.ts
+  export function formatTicketCount(count: number): string;                                   // 1 → "1 entrada", 3 → "3 entradas"
   export function parseSeatPosition(seatId: string): { row: string; number: number } | null; // "tribuna-oriente-L-9" → { row: "L", number: 9 }
   export function formatSeatPosition(row: string, number: number): string;                    // "Fila L, asiento 9"
   export function formatCompactSeats(seats: { id: string; label: string }[]): string;         // "Fila L · 9 · Fila M · 8"
@@ -542,6 +544,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   - `formatLongDayMonth` → `"lunes 5 de octubre"` y `"sábado 14 de noviembre"`;
   - ninguno contiene `.`, `,`, dígitos de año ni hora.
 - `modules/checkout/utils/summaryFormat.test.ts` (F5, nuevo):
+  - `formatTicketCount`: `1` → `"1 entrada"`, `3` → `"3 entradas"`, `0` → `"0 entradas"`.
   - `parseSeatPosition`: `"tribuna-oriente-L-9"` → `{ row: "L", number: 9 }`, zona con guiones y fila de 2 letras (`"platea-baja-AA-101"`); `"general"`, `"norte-f-12"`, `"norte-F-0"`, `"norte-F-1000"` → `null`.
   - `formatSeatPosition("L", 9)` → `"Fila L, asiento 9"`.
   - `formatCompactSeats`:
@@ -553,13 +556,15 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 - `modules/checkout/components/CheckoutForm.test.tsx` (F5, **cambian** los existentes):
   - `renderForm()` deja de pasar `summary`. El `OrderSummary` real se renderiza dentro: el test del botón del resumen (`aria-expanded`) sigue igual.
   - El helper `input(label)` pasa de `getByLabelText(label)` a `getByRole("textbox", { name: label })`, y el `queryByLabelText("Número de tarjeta")` del test de Yape a `queryByRole("textbox", { name: "Número de tarjeta" })`. Con el `*` dentro del `<label>`, el texto de la etiqueta es "Nombres*", y la búsqueda exacta por texto falla. El nombre accesible excluye el `aria-hidden` y sigue siendo "Nombres". Que esto funcione verifica la decisión 17. "Número de documento" se busca igual, por su etiqueta `sr-only`.
+  - El caso del botón del resumen (`aria-expanded`) añade que su texto contiene "3 entradas · S/ 910.00" (hoy solo busca por `/Resumen del pedido:/`).
   - Los demás casos (errores, formato, Yape, pago aprobado/rechazado, precarga, expiración) no cambian de expectativas.
 - `modules/checkout/components/CheckoutForm.test.tsx` (F5, **casos nuevos**):
   - Los campos Nombres, Apellidos, Correo electrónico, Celular, Número de documento y los 4 de tarjeta tienen `required`. El checkbox de Términos tiene `aria-required="true"` o `required`. Ningún nombre accesible contiene "*". Hay `*` con `aria-hidden="true"` en el DOM.
   - Existe un `group` con nombre "Documento de identidad" que contiene el combobox "Tipo de documento" y el textbox "Número de documento". El combobox muestra "DNI".
   - Se lee "Demo: no se realiza ningún cobro real." y, con Tarjeta, "4242 4242 4242 4242". Tras elegir Yape sigue la nota de demo pero no las tarjetas de prueba. Ya no existe el texto "Pago simulado:".
   - Dentro del `complementary` "Resumen de la compra":
-    - un botón "Pagar S/ 910.00" en el mismo contenedor que "Total" (el de la tarjeta);
+    - un botón "Pagar S/ 910.00" en el mismo contenedor que la fila del total (el de la tarjeta);
+    - la fila del total con el texto "Total (3 entradas)" y "S/ 910.00". Con un `ORDER` de 1 entrada se lee "Total (1 entrada)" y el botón del resumen móvil dice "1 entrada · S/ …";
     - las líneas "2 × General" y "1 × VIP";
     - "sáb 14 nov · Estadio, Lima".
     - Con un `ORDER` con asientos `[{ id: "tribuna-oriente-L-9", … }, { id: "tribuna-oriente-M-8", … }]` se lee "Fila L · 9 · Fila M · 8".
@@ -636,8 +641,8 @@ Coordinación de la ampliación (Fases 5 y 6):
 - F6 depende de F5 (formateadores y `summaryFormat`). Se ejecuta una fase por sesión.
 
 ### Fase 5 — "Datos y pago" según las capturas
-- [ ] T1 — Formateadores de fecha en events (+ casos de test) y utils de asientos compactos con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/summaryFormat.ts`, `modules/checkout/utils/summaryFormat.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
-- [ ] T2 — Resumen compacto con `footer` y panel sin `footer` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
+- [ ] T1 — Formateadores de fecha en events (+ casos de test) y formateadores del resumen (`formatTicketCount`, asientos compactos) con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/summaryFormat.ts`, `modules/checkout/utils/summaryFormat.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
+- [ ] T2 — Resumen compacto con `footer` y "Total (N entradas)"; panel sin `footer` y con `formatTicketCount` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
 - [ ] T3 — `RequiredMark` y `PaymentMethodFields` (nota de demo al pie, tarjetas de prueba solo con Tarjeta, `*` y `required` en tarjeta) · archivos: `modules/checkout/components/RequiredMark.tsx`, `modules/checkout/components/PaymentMethodFields.tsx` · depende de: T1 · paralelo con T2 y T5
 - [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial
 - [ ] T5 — Diseño de página, sección `/checkout` (layout sin h1 visible, disposición del comprador, nota de demo, resumen compacto con "Pagar" dentro, `*`) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2 y T3 (y con T4: archivos disjuntos)
@@ -670,3 +675,4 @@ Ampliación (Fases 5 y 6):
 15. **"Precio final, sin cargos ocultos"**: la captura del resumen no lo muestra, pero se mantiene bajo el total (era requisito de `checkout-purchase.md` y del MASTER, anti-patrón "cargos ocultos"). ¿Se mantiene?
 16. **Impresión:** al "Descargar PDF" solo salen las entradas, una por página, sin la cabecera "¡Compra confirmada!" ni la tarjeta-entrada (decisión 29). ¿De acuerdo?
 17. **Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket` (misma salida en ambos sitios)? Si es así, `buildPrintableTickets` se publicaría en `modules/checkout/orders.ts`.
+18. **`formatTicketCount` triplicado:** hay copias idénticas en seating (`utils/selectionSummary.ts`), tickets (`utils/myOrders.ts`) y ahora checkout (`utils/summaryFormat.ts`), porque ninguna es pública y esta fase no toca otros módulos (decisión 31). ¿Se sube a `lib/` en una enmienda conjunta de las tres specs, y se borran las copias?
