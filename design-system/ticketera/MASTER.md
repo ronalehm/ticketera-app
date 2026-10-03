@@ -123,7 +123,9 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Hero slider y rails | `Carousel` (Embla) + `embla-carousel-autoplay` (solo hero) | `components/ui` / `modules/events` |
 | Buscador | `Input` + `NativeSelect` + `Button` (barra píldora única para la landing y `/eventos`; `<select>` nativo, funciona sin JS) | `modules/events/components/EventSearchBar.tsx` |
 | Filtro por categoría | Landing (Próximos eventos, filtro local): `ToggleGroup` (chips). `/eventos`: chips-enlace que cambian `?categoria=` (ver `pages/events-list.md`) | `modules/events` |
-| Menú móvil | `Sheet` | `components/shared/SiteHeader.tsx` |
+| Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
+| Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |
+| Avatar de usuario | `Avatar` + `AvatarFallback` con iniciales (`getInitials` de `lib/userName.ts`) | `components/shared/UserAvatar.tsx` |
 | Separadores | `Separator` | footer |
 | Título de sección | nuevo, presentacional | `components/shared/SectionHeader.tsx` |
 | Logo | SVG de marca | `components/shared/BrandLogo.tsx` |
@@ -156,6 +158,42 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 - Agotado: precio atenuado y tachado; en lugar del CTA, `<button disabled>` "Agotado" (`bg-muted text-muted-foreground`, sin href, no enfocable).
 - Variante `layout="ticket"` (< sm, en `/eventos`): horizontal, imagen de 108 px con el chip, cuerpo con borde izquierdo discontinuo y muescas arriba y abajo, estado en el pie y sin CTA (el título se estira sobre la tarjeta). Desde `sm` es igual a `grid`. Detalle en `pages/events-list.md`.
 - Hover: imagen `motion-safe:scale-105` (300ms), sombra suave. Sin desplazar layout.
+
+### Avatar de usuario
+
+- `UserAvatar`: círculo con las iniciales (`getInitials`: primera letra del primer nombre y del primer apellido, en mayúsculas), `bg-accent font-semibold text-accent-foreground`. Solo iniciales, sin foto.
+- Siempre decorativo (`aria-hidden`): el nombre está al lado o en el `aria-label` del botón.
+- Tamaños: `default` 32 px (botón de la barra), `lg` 40 px (tarjeta del menú, `Sheet`, panel del organizador), `xl` 80 px (`/perfil`, fallback `text-2xl`).
+
+### Menú de usuario (anatomía)
+
+Con sesión, la barra muestra solo el botón de cuenta (`UserMenu`); "Mis entradas" y "Cerrar sesión" viven dentro del menú.
+
+```
+Disparador < sm            Disparador sm+
+┌──────┐                   ┌──────────────────────┐
+│ (AQ) │  44×44            │ (AQ)  Ana         ▾  │  h-11, rounded-full, ghost
+└──────┘                   └──────────────────────┘  nombre max-w-28 truncate
+
+Menú (w-72 = 288 px, align end, 8 px bajo el botón, p-2)
+┌────────────────────────────────┐
+│ (AQ)  Ana Quispe               │  tarjeta: UserSummary (avatar 40 px, nombre completo
+│       demo@mentectickets.pe    │  semibold + correo text-sm muted; salto de línea, sin truncar)
+│ ▢ Mis entradas                 │  items h-11 (44 px), icono + texto text-sm medium
+│ ▢ Panel de organizador         │
+├────────────────────────────────┤  DropdownMenuSeparator
+│ ⇥ Cerrar sesión                │
+└────────────────────────────────┘
+```
+
+- Disparador: `buttonVariants({ variant: "ghost" })` + `h-11 min-w-11 gap-2 rounded-full px-1.5 sm:pr-3`, con `bg-accent` mientras el menú está abierto (`data-popup-open`). Avatar de 32 px; desde `sm` añade el primer nombre (`getFirstName`, `text-sm font-semibold`) y `ChevronDown` `text-muted-foreground`.
+- Nombre accesible: `aria-label="Cuenta de <nombre completo>"` (contiene el texto visible). Base UI añade `aria-haspopup="menu"` y `aria-expanded`.
+- Menú: un `DropdownMenuGroup` cuya etiqueta (`DropdownMenuLabel`) es la tarjeta del usuario, con los enlaces de `ACCOUNT_LINKS` dentro (así el grupo queda nombrado con el nombre y el correo). Después, separador y "Cerrar sesión" (`LogOut`).
+- Items: `h-11 rounded-lg px-3 gap-3 text-sm font-medium`; foco y hover `bg-accent`. Los enlaces son `DropdownMenuItem render={<Link />}` (un `<a role="menuitem">`); la ruta actual lleva `aria-current="page"` con `bg-accent font-semibold text-accent-foreground`.
+- Teclado (Base UI, sin código propio): abre con clic, Enter, Espacio o flecha abajo y el foco entra en el primer item; flechas, Inicio/Fin y letras mueven el foco; Escape o clic fuera cierran y devuelven el foco al botón; elegir un enlace navega y cierra.
+- "Cerrar sesión" borra la sesión sin navegar (se queda en la URL actual).
+- `Sheet` (< xl): el bloque de cuenta va **arriba**, separado de las categorías por `border-b pb-6`. Con sesión: `UserSummary` sobre `rounded-2xl bg-muted p-4`, `<nav aria-label="Tu cuenta">` con los mismos `ACCOUNT_LINKS` (`h-11`, icono `size-5`, `text-base font-medium`, `aria-current` con `bg-accent`) y "Cerrar sesión" outline a todo el ancho. Sin sesión: "Crear cuenta" (primario) e "Iniciar sesión" (outline) a todo el ancho.
+- Nombres y correos largos hacen salto de línea (`wrap-break-word` / `wrap-anywhere`) en la tarjeta; solo el nombre del disparador se trunca.
 
 ### Botones
 
@@ -212,7 +250,7 @@ Si cambia un token en §2 / `app/globals.css`, se actualiza también esta tabla 
 ## 8. Layout de la landing
 
 ```
-Header sticky  [logo] [categorías xl+] [Iniciar sesión] [Crear cuenta] (sm+)  ☰ menú < xl (categorías + ambos botones)
+Header sticky  [logo] [categorías xl+] sin sesión: [Iniciar sesión] [Crear cuenta] (sm+) · con sesión: [avatar · nombre (sm+) ▾] → menú de usuario · ☰ menú < xl (cuenta arriba + categorías)
 Título         h1 "Encuentra tu próximo plan en vivo" + subtítulo (dentro de HeroCarousel)
 Hero slider    imagen full-bleed + overlay navy, título (h2), fecha, lugar, CTA "Comprar entradas"
 Buscador       barra píldora (EventSearchBar, la misma de /eventos): texto "Qué quieres ver" + fecha (mes) + precio + Buscar

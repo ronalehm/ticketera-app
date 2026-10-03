@@ -8,7 +8,7 @@ import {
   HeroCarousel,
   UpcomingEvents,
 } from "@/modules/events";
-import { OrganizerBanner, TrustHighlights } from "@/modules/marketing";
+import { HowItWorks, NewsletterSignup, OrganizerBanner, TrustHighlights } from "@/modules/marketing";
 
 export default async function HomePage() {
   const [events, featuredEvents] = await Promise.all([getEvents(), getFeaturedEvents()]);
@@ -20,8 +20,10 @@ export default async function HomePage() {
       <CategoryGrid />
       <FeaturedEventsRail events={featuredEvents} />
       <UpcomingEvents events={events} />
+      <HowItWorks />
       <OrganizerBanner />
       <TrustHighlights />
+      <NewsletterSignup />
     </>
   );
 }
