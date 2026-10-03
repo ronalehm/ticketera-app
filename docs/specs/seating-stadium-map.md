@@ -43,6 +43,10 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
     - letras de fila en los dos bordes del sector;
     - minimapa con la zona resaltada y el recuadro de la vista actual;
     - utilidad pura de "vista visible".
+  - **Fase 4. Precarga de la selección desde la URL** (enmienda; resuelve la pregunta abierta 5 de `checkout-mock-payment.md`):
+    - al volver desde "Cambiar entradas" de `/checkout` (`/eventos/<slug>/entradas?<ticketTypeId>=<qty>…&asientos=<ids>`, que construye la Fase 7 de checkout), la pantalla abre con esas cantidades y butacas ya elegidas;
+    - se ignora lo que no sea válido (butacas ocupadas o inexistentes, zonas agotadas, valores mal formados);
+    - función pura de lectura, estado inicial en el hook, envoltorio cliente con `useSearchParams` y `Suspense` en la página.
 - No incluye:
   - Cambios en `PurchaseStepper` (contrato A). La compra sigue teniendo 3 pasos.
   - Sub-pasos en la URL ni en el historial del navegador. "Atrás" del navegador sale de `/entradas`, como hoy.
@@ -53,6 +57,8 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
   - Un quinto tono por precio (ver Preguntas abiertas).
   - Cambios en el detalle `/eventos/[slug]`, en `ZonePricesCard`/`MobileBuyBar`, en `/checkout` o en otros módulos, salvo `modules/events/data/events.mock.ts` y `modules/events/services/events.service.test.ts` (F1).
   - Reserva real de butacas, backend y persistencia (igual que la spec base).
+  - (F4) Reflejar en la URL los cambios hechos en la pantalla, recordar la selección en el navegador o abrir directamente el sub-paso 2 de una zona: la precarga solo inicializa el estado y la pantalla abre en el sub-paso 1.
+  - (F4) Cambios en `modules/checkout/**` o en el enlace "Cambiar entradas": son de `checkout-mock-payment.md` (Fase 7).
 
 ## Decisiones
 1. **La compra sigue en 3 pasos** (aclaración del usuario).
@@ -123,6 +129,17 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
     - F5 añade `lib/hash.ts` (`hashString`, `mixHash`), `modules/seating/seats.ts`, la ocupación mezclada en `generateSeatRows` y el test de `labelPos` en el centro de los rectángulos.
     - Esta spec reutiliza `mixHash` para la ocupación del arco y adapta ese test.
     - No se fusiona ninguna tarea de F5: F5 es un ajuste cerrado y aprobado, y esta spec toca después los mismos archivos (`seatRows.ts`, `venueMaps.mock.ts`, `seating.service.test.ts`).
+15. **Precarga desde la URL sin perder el prerenderizado (Fase 4).**
+    - `/eventos/[slug]/entradas` se prerenderiza (`generateStaticParams`). Leer `searchParams` en la página la volvería dinámica. `useSearchParams` fuera de un `Suspense` rompe el build (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/use-search-params.md` § Prerendering). Por eso:
+      - `TicketSelection` gana `initialSelection?` y no lee la URL;
+      - el envoltorio cliente nuevo `PreselectedTicketSelection` lee `useSearchParams()`, lo convierte con `parseSeatingPreselection` y renderiza `TicketSelection`;
+      - la página lo envuelve en `<Suspense fallback={<TicketSelection map={map} />}>`. El HTML prerenderizado conserva la pantalla (sin selección) y, al hidratar, se sustituye por la precargada. Sin parámetros, el resultado es idéntico al de la Fase 2.
+    - Es el mismo patrón que usa `checkout-mock-payment.md` (decisión 36) para `TicketSelector`.
+    - **Formato:** el del contrato C sin `evento`: `<ticketTypeId>=<qty>` por zona y `asientos=<id>,<id>`. `parseSeatingPreselection` es la inversa de `buildSeatingCheckoutHref` y vive en el mismo archivo (`utils/selectionSummary.ts`).
+    - **Tolerancia:** lo inválido se ignora uno a uno, sin avisos ni errores. Ejemplos: una butaca ocupada (la ocupación es determinista, pero el enlace puede venir de otro mapa o estar editado a mano), inexistente, repetida o de otra zona; una zona agotada; una cantidad mal formada o repetida. El resto se precarga.
+    - **Zonas numeradas:** su cantidad la dan las butacas válidas, no el parámetro `<ticketTypeId>`, que se ignora (como `getZoneQuantity`).
+    - **Límite:** nunca más de `MAX_TICKETS_PER_ORDER` (10). Se recorren las zonas en el orden de `map.zones` y se recorta lo que exceda.
+    - **Sub-paso inicial:** siempre el 1 (`activeZoneId = null`). Las tarjetas ya dicen "n entradas elegidas" / "n butacas elegidas" y "Tu compra" muestra las líneas y el total, así que se ve qué se trae y se puede abrir cualquier zona para cambiarlo.
 
 ## Requisitos
 
