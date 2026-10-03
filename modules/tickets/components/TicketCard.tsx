@@ -1,0 +1,149 @@
+"use client";
+
+import { type ReactNode, useState } from "react";
+import Image from "next/image";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+
+import { TicketQr } from "@/components/shared/TicketQr";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { Order } from "@/modules/checkout/orders";
+import { formatLongDate, formatTime } from "@/modules/events/format";
+import type { OrderTimeframe } from "../types/tickets.types";
+import { getDateChipParts } from "../utils/myOrders";
+
+type TicketCardProps = {
+  order: Order;
+  timeframe: OrderTimeframe;
+};
+
+const NOTCH_CLASS = "absolute -top-3 size-6 rounded-full bg-muted ring-1 ring-border";
+
+const NAV_BUTTON_CLASS =
+  "size-11 cursor-pointer duration-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-background";
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Entrada seleccionada como boleto: imagen con chip de fecha, datos del evento, talón y QR con navegación entre entradas. */
+export function TicketCard({ order, timeframe }: TicketCardProps) {
+  const [ticketIndex, setTicketIndex] = useState(0);
+  const { event, tickets } = order;
+  const ticket = tickets[ticketIndex];
+  const isFirst = ticketIndex === 0;
+  const isLast = ticketIndex === tickets.length - 1;
+  const chip = getDateChipParts(event.startsAt);
+
+  return (
+    <article className="overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border">
+      <div className="relative h-36 bg-muted md:h-48">
+        <Image
+          src={event.imageUrl}
+          alt={`${event.title} en ${event.venue}, ${event.city}`}
+          fill
+          sizes="(min-width: 1024px) 60vw, 100vw"
+          className="object-cover"
+        />
+        <span
+          aria-hidden
+          className="absolute top-3 left-3 flex w-14 flex-col items-center rounded-xl bg-background pt-1.5 pb-2"
+        >
+          <span className="text-xs font-bold tracking-wider text-primary-strong">{chip.month}</span>
+          <span className="text-2xl leading-none font-extrabold tabular-nums">{chip.day}</span>
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-3 p-5 md:px-8 md:py-6">
+        <h2 className="text-xl leading-tight font-bold tracking-tight md:text-2xl">{event.title}</h2>
+        <ul className="flex flex-col gap-1.5 text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
+          <li className="flex items-center gap-2">
+            <CalendarDays aria-hidden className="size-4 shrink-0" />
+            <time dateTime={event.startsAt}>{capitalize(formatLongDate(event.startsAt))}</time>
+          </li>
+          <li className="flex items-center gap-2">
+            <Clock aria-hidden className="size-4 shrink-0" />
+            {formatTime(event.startsAt)}
+          </li>
+          <li className="flex items-center gap-2">
+            <MapPin aria-hidden className="size-4 shrink-0" />
+            {event.venue}, {event.city}
+          </li>
+        </ul>
+      </div>
+
+      <div aria-hidden className="relative border-t-2 border-dashed border-border">
+        <span className={cn(NOTCH_CLASS, "-left-3")} />
+        <span className={cn(NOTCH_CLASS, "-right-3")} />
+      </div>
+
+      <div className="flex flex-col items-center gap-6 p-5 sm:flex-row sm:items-center sm:gap-8 md:p-8">
+        <div className="size-52 shrink-0 rounded-2xl bg-background p-3 ring-1 ring-border">
+          <TicketQr value={ticket.code} className="size-full" />
+        </div>
+
+        <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <p aria-live="polite" className="text-lg font-bold">
+              Entrada {ticketIndex + 1} de {tickets.length}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Entrada anterior"
+                disabled={isFirst}
+                focusableWhenDisabled
+                onClick={() => setTicketIndex((index) => index - 1)}
+                className={NAV_BUTTON_CLASS}
+              >
+                <ChevronLeft aria-hidden className="size-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Entrada siguiente"
+                disabled={isLast}
+                focusableWhenDisabled
+                onClick={() => setTicketIndex((index) => index + 1)}
+                className={NAV_BUTTON_CLASS}
+              >
+                <ChevronRight aria-hidden className="size-5" />
+              </Button>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <TicketDetail label="Zona">{ticket.ticketTypeName}</TicketDetail>
+            <TicketDetail label="Titular">{ticket.holderName}</TicketDetail>
+            {ticket.seatLabel && (
+              <TicketDetail label="Asiento" className="col-span-2">
+                {ticket.seatLabel}
+              </TicketDetail>
+            )}
+            <TicketDetail label="Código" className="tabular-nums">
+              {ticket.code}
+            </TicketDetail>
+            <TicketDetail label="Estado">
+              {timeframe === "upcoming" ? (
+                <Badge className="h-6 bg-accent px-2.5 font-semibold text-accent-foreground">Válida</Badge>
+              ) : (
+                <Badge variant="secondary" className="h-6 px-2.5 font-semibold">
+                  Usada
+                </Badge>
+              )}
+            </TicketDetail>
+          </dl>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function TicketDetail({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-0.5", className)}>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-base font-semibold break-words">{children}</dd>
+    </div>
+  );
+}
