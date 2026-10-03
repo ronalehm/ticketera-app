@@ -12,7 +12,8 @@
 - Enums nativos de Postgres.
 - Todas las tablas tienen `created_at timestamptz NOT NULL DEFAULT now()`; las editables, `updated_at`.
 - Nombres en inglés, `snake_case`, tablas en plural.
-- 21 tablas.
+- 25 tablas.
+- Extensiones: `pgcrypto` (si la versión de Postgres no trae `gen_random_uuid()` nativo), `pg_trgm`, `unaccent`.
 
 ## Diagrama
 
@@ -53,6 +54,12 @@ erDiagram
   orders ||--o{ consents : "acepta"
   users ||--o{ complaints : "registra"
   orders ||--o{ complaints : "sobre"
+  users ||--o{ organizer_applications : "solicita"
+  organizers ||--o{ organizer_requests : "pide"
+  events ||--o{ organizer_requests : "sobre"
+  orders ||--o{ refund_requests : "pide reembolso"
+  refund_requests |o--o| refunds : "genera"
+  users ||--o{ privacy_requests : "ejerce ARCO"
 
   users {
     uuid id PK
@@ -157,6 +164,32 @@ erDiagram
     complaint_status status
     timestamptz due_at
   }
+  organizer_applications {
+    uuid id PK
+    uuid user_id FK
+    text tax_id
+    request_status status
+  }
+  organizer_requests {
+    uuid id PK
+    uuid organizer_id FK
+    uuid event_id FK
+    organizer_request_type type
+    request_status status
+  }
+  refund_requests {
+    uuid id PK
+    uuid order_id FK
+    uuid refund_id FK
+    request_status status
+  }
+  privacy_requests {
+    uuid id PK
+    uuid user_id FK
+    privacy_request_type type
+    request_status status
+    timestamptz due_at
+  }
 ```
 
 Tablas sin relaciones en el diagrama: `stripe_events`, `complaint_counters`.
@@ -169,7 +202,7 @@ Tablas sin relaciones en el diagrama: `stripe_events`, `complaint_counters`.
 | `document_type` | `dni`, `ce`, `passport` |
 | `tax_id_type` | `ruc`, `dni` |
 | `seating_type` | `general`, `numbered` |
-| `event_status` | `draft`, `published`, `cancelled`, `finished` |
+| `event_status` | `draft`, `pending_review`, `published`, `cancelled`, `finished` |
 | `seat_status` | `available`, `held`, `sold` |
 | `order_status` | `pending`, `paid`, `expired`, `refunded`, `partially_refunded` |
 | `ticket_status` | `valid`, `used`, `void`, `refunded` |
@@ -183,6 +216,9 @@ Tablas sin relaciones en el diagrama: `stripe_events`, `complaint_counters`.
 | `complaint_type` | `claim` (reclamo), `grievance` (queja) |
 | `complaint_item_type` | `product`, `service` |
 | `complaint_status` | `open`, `answered` |
+| `request_status` | `pending`, `approved`, `rejected` |
+| `organizer_request_type` | `cancel`, `reschedule` |
+| `privacy_request_type` | `access`, `rectification`, `cancellation`, `opposition` |
 
 ## Diccionario de tablas
 
@@ -195,7 +231,7 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | uuid PK | |
-| `clerk_id` | text UNIQUE | Id de Clerk. |
+| `clerk_id` | text UNIQUE NULL | Id de Clerk. `NULL` solo para el `super_admin` creado por seed hasta su primer login con correo verificado. |
 | `email` | text UNIQUE | Minúsculas. Al anonimizar: `deleted+<id>@invalid`. |
 | `first_name`, `last_name` | text | |
 | `phone` | text NULL | `9XXXXXXXX`. |
@@ -306,10 +342,14 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `featured` | boolean | Default `false`. |
 | `currency` | char(3) | Default `PEN`. |
 | `status` | `event_status` | Default `draft`. |
+| `review_note` | text NULL | Motivo del rechazo en moderación. |
+| `reviewed_by` | uuid NULL → `users.id` | |
+| `reviewed_at` | timestamptz NULL | |
+| `search_text` | text | Título + recinto + ciudad en minúsculas y sin tildes; lo mantiene la app al guardar. |
 | `cancelled_at` | timestamptz NULL | |
 | `cancel_reason` | text NULL | |
 
-Índice: `(status, starts_at)`.
+Índices: `(status, starts_at)`; GIN `(search_text gin_trgm_ops)`.
 
 **`ticket_types`**: zona en venta para un evento (precio por sección).
 
@@ -343,14 +383,18 @@ Restricciones: `UNIQUE (event_id, venue_seat_id)`; `CHECK ((status = 'available'
 
 Disponibles de una zona: `status = 'available' OR (status = 'held' AND held_until < now())`.
 
-**`event_staff`**: staff de puerta por evento.
+**`event_staff`**: staff de puerta por evento, invitado por correo.
 
 | Columna | Tipo | Notas |
 |---|---|---|
+| `id` | uuid PK | |
 | `event_id` | uuid → `events.id` | |
-| `user_id` | uuid → `users.id` | |
+| `email` | text | Correo invitado (minúsculas). |
+| `user_id` | uuid NULL → `users.id` | Se completa cuando la persona entra con ese correo verificado. |
+| `invited_by` | uuid → `users.id` | |
+| `accepted_at` | timestamptz NULL | |
 
-PK: `(event_id, user_id)`.
+Restricción: `UNIQUE (event_id, email)`.
 
 ### Venta
 
@@ -376,6 +420,7 @@ PK: `(event_id, user_id)`.
 | `stripe_payment_intent_id` | text UNIQUE NULL | |
 | `paid_at` | timestamptz NULL | |
 | `tickets_emailed_at` | timestamptz NULL | `NULL` = correo pendiente (reintento por job). |
+| `pii_masked_at` | timestamptz NULL | Job de retención: 1 año después del evento, `buyer_phone` y `buyer_document_number` se enmascaran (`*****678`). |
 
 Índices: `(user_id)`, `(event_id, status)`, `(buyer_email)`.
 
@@ -514,6 +559,77 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 | `year` | integer PK | |
 | `last_number` | integer | |
 
+### Solicitudes
+
+**`organizer_applications`**: "Vende con nosotros".
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → `users.id` | Solicitante (`customer`). |
+| `legal_name` | text | |
+| `tax_id_type` | `tax_id_type` | |
+| `tax_id` | text | |
+| `contact_phone` | text | |
+| `message` | text NULL | Qué eventos organiza. |
+| `status` | `request_status` | Default `pending`. |
+| `review_note` | text NULL | Motivo del rechazo. |
+| `reviewed_by` | uuid NULL → `users.id` | |
+| `reviewed_at` | timestamptz NULL | |
+
+Índice único parcial: `(user_id) WHERE status = 'pending'` (una solicitud abierta por usuario).
+
+**`organizer_requests`**: cancelación o reprogramación pedida por el organizador.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `organizer_id` | uuid → `organizers.user_id` | |
+| `event_id` | uuid → `events.id` | |
+| `type` | `organizer_request_type` | |
+| `reason` | text | |
+| `proposed_starts_at` | timestamptz NULL | Solo `reschedule`. |
+| `status` | `request_status` | Default `pending`. |
+| `resolution_note` | text NULL | |
+| `resolved_by` | uuid NULL → `users.id` | |
+| `resolved_at` | timestamptz NULL | |
+
+Índice único parcial: `(event_id) WHERE status = 'pending'`.
+
+**`refund_requests`**: reembolso pedido por el cliente desde "Mis entradas".
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `order_id` | uuid → `orders.id` | |
+| `user_id` | uuid → `users.id` | |
+| `ticket_ids` | uuid[] | Entradas a reembolsar (de esa orden; se valida en la app). |
+| `reason` | text | |
+| `status` | `request_status` | Default `pending`. |
+| `resolution_note` | text NULL | |
+| `resolved_by` | uuid NULL → `users.id` | |
+| `resolved_at` | timestamptz NULL | |
+| `refund_id` | uuid NULL → `refunds.id` | Reembolso creado al aprobar. |
+
+Índice único parcial: `(order_id) WHERE status = 'pending'`.
+
+**`privacy_requests`**: derechos ARCO que no resuelve el autoservicio del perfil.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid NULL → `users.id` | |
+| `email` | text | Para responder (también sin cuenta). |
+| `type` | `privacy_request_type` | |
+| `details` | text | |
+| `status` | `request_status` | Default `pending`. |
+| `due_at` | timestamptz | +20 días hábiles (validar con legal). |
+| `response` | text NULL | |
+| `resolved_by` | uuid NULL → `users.id` | |
+| `resolved_at` | timestamptz NULL | |
+
+Índice: `(status, due_at)`.
+
 ## Secuencias
 
 - `order_code_seq`: número de `orders.code` (huecos aceptables).
@@ -536,6 +652,8 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Un webhook no se procesa dos veces: PK de `stripe_events`.
 - Un evento cancelado no genera reembolsos duplicados: índice único parcial en `refunds`.
 - Un payout por evento: `UNIQUE payouts.event_id`.
+- Una solicitud abierta a la vez: índices únicos parciales en `organizer_applications`, `organizer_requests` y `refund_requests`.
+- Un correo invitado una vez por evento: `UNIQUE event_staff (event_id, email)`.
 - Zonas consistentes: CHECK `seating`/`capacity` en `venue_sections`.
 
 ## Reglas que garantiza la app (no la BD)
@@ -543,3 +661,6 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - `ticket_types.section_id` pertenece al recinto del evento.
 - `venue_seats` solo en secciones `numbered`; una sección `numbered` tiene asientos antes de publicar.
 - Permisos (`can()`), límites anti-abuso y cálculo de importes.
+- Siempre queda al menos un `super_admin`; nadie cambia su propio rol.
+- Quitar `organizer` se bloquea con eventos `pending_review`/`published` o payouts `pending`.
+- Edición limitada de eventos con ventas (§7.11 de `system-design.md`).

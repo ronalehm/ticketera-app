@@ -52,6 +52,16 @@ El objetivo es una ticketera con:
 | Documentos legales | En la BD (markdown, versionados e inmutables al publicar), editables por `super_admin`. |
 | Moneda / documentos | PEN. DNI, CE, pasaporte. |
 | Región GCP | `southamerica-west1` (Santiago), la más cercana a Lima. |
+| Dominio | `mentec-tickets.dev` (`.dev` está en la lista HSTS preload: HTTPS obligatorio). |
+| Borde | External HTTPS Load Balancer + Cloud Armor (WAF, límite por IP) + Cloud CDN para imágenes, delante de Cloud Run. |
+| Moderación | Los eventos pasan por revisión de un admin antes de publicarse. |
+| MFA | Obligatorio para `admin` y `super_admin` (Clerk). |
+| Búsqueda | Postgres `pg_trgm` + `unaccent` (tolera errores y tildes). |
+| Caché | Catálogo (home, listado, detalle) con caché invalidada por evento; disponibilidad y checkout siempre en vivo. |
+| CI/CD | GitHub Actions: lint, tests y build en cada PR; al mergear a `main`, imagen → migración → deploy. |
+| Observabilidad | Cloud Logging (logs estructurados) + Sentry + alertas por correo. |
+| Backups | Cloud SQL con backup diario y PITR de 7 días. |
+| Carga objetivo (año 1) | Eventos de hasta ~10 000 entradas y unos cientos de compradores simultáneos. Sin sala de espera. |
 
 ## 3. Arquitectura
 
@@ -113,7 +123,7 @@ Solo se crean los módulos cuando su fase los necesita (SETUP §1 regla 6).
 
 | | Local | Producción |
 |---|---|---|
-| App | `npm run dev` en `http://localhost:3000` | Cloud Run, `southamerica-west1`, imagen `output: "standalone"` |
+| App | `npm run dev` en `http://localhost:3000` | `https://mentec-tickets.dev` → Load Balancer + Cloud Armor → Cloud Run, `southamerica-west1`, imagen `output: "standalone"` |
 | BD | Neon, rama `dev`, conexión TCP con `pg` | Cloud SQL Postgres, misma región, socket `/cloudsql/<instancia>` (`--add-cloudsql-instances`, sin librería de conector) |
 | BD de tests | Neon, rama `test` (`DATABASE_URL_TEST`) | — |
 | Auth | Instancia de desarrollo de Clerk | Instancia de producción de Clerk |
@@ -139,17 +149,63 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `CRON_SECRET` | Autenticación de `/api/jobs/*`. |
 | `GCS_BUCKET` | Imágenes de portada. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional) | Mapa del recinto; sin clave no se muestra el mapa. |
-| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). |
+| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://mentec-tickets.dev`. |
+| `SUPER_ADMIN_EMAIL` | Correo del primer `super_admin` que crea el seed (`ronalehm@gmail.com`). |
+| `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Errores de servidor y cliente. |
 
 ### Pool de conexiones
 
 Cada instancia de Cloud Run abre un `Pool` de `pg`. Regla: `max_instances × pool.max + margen (migraciones, consola) ≤ max_connections` de Cloud SQL. Valores iniciales: `pool.max = 5`, `max_instances = 10` (50 conexiones). Ajustar al tamaño real de la instancia.
 
+### Producción y operación
+
+**Borde.** `mentec-tickets.dev` → External HTTPS Load Balancer (certificado gestionado) → Cloud Run (serverless NEG). Cloud Armor: reglas WAF preconfiguradas y límite por IP en rutas de compra y formularios públicos. Cloud CDN para imágenes de Cloud Storage. Costo base aproximado del balanceador: USD 18/mes.
+
+**CI/CD (GitHub Actions).**
+- En cada PR: `npm run lint`, `npx vitest run`, `npm run build`. Bloquea el merge si falla.
+- Al mergear a `main`: build de la imagen → Artifact Registry → Cloud Run Job de migraciones (`migrator`) → deploy de la nueva revisión de Cloud Run.
+- Autenticación a GCP con Workload Identity Federation (sin claves JSON en GitHub).
+
+**Observabilidad.**
+- Logs estructurados (JSON) en Cloud Logging, con `orderId`/`eventId` cuando aplique. Nunca datos de tarjeta, documento ni tokens.
+- Sentry en servidor y cliente.
+- Alertas por correo: webhook con respuesta 5xx; job fallido; orden `paid` sin entradas más de 10 min; payout `failed`; reclamo o solicitud ARCO a 2 días de vencer.
+
+**Backups.** Cloud SQL con backup automático diario y PITR de 7 días (pérdida máxima de minutos). Prueba de restauración trimestral en una instancia aparte. Neon (local) no requiere backups.
+
+**Capacidad (año 1).** Eventos de hasta ~10 000 entradas y unos cientos de compradores simultáneos. Cloud SQL de 2 vCPU, Cloud Run con máximo 10 instancias y `pool.max = 5`. Sala de espera y pruebas de carga quedan para cuando se vendan eventos masivos.
+
+**Caché y render.**
+
+| Página | Estrategia |
+|---|---|
+| Home, listado `/eventos`, detalle `/eventos/[slug]` | Datos de catálogo en caché, etiquetados por evento (`events`, `event:<slug>`); se invalidan con `revalidateTag` al aprobar, editar, cancelar o despublicar. El "Agotado" del listado puede tardar hasta 60 s. |
+| Mapa de asientos, checkout, confirmación, "Mis entradas", paneles | Siempre dinámicos: consultan la BD en cada carga. |
+| Documentos legales | En caché, invalidados al publicar una versión (etiqueta `legal`). |
+
+Antes de implementar, consultar `node_modules/next/dist/docs/` para la API de caché de Next 16.
+
+**Búsqueda.** Extensiones `pg_trgm` y `unaccent`. `events.search_text` (título + recinto + ciudad, en minúsculas y sin tildes; lo mantiene la app al guardar) con índice GIN `gin_trgm_ops`. Búsqueda por similitud: "bad buny" encuentra "Bad Bunny"; "concierto arequipa" coincide por ciudad. Solo eventos `published`.
+
+**Jobs (Cloud Scheduler → `/api/jobs/*`).**
+
+| Job | Frecuencia | Qué hace |
+|---|---|---|
+| `expire-orders` | Cada 15 min | Órdenes `pending` vencidas → `expired`; sus `held` → `available` (limpieza cosmética). |
+| `refund-cancelled` | Cada 10 min | Reembolsos de eventos cancelados, por lotes. |
+| `finish-events` | Diario 03:00 | Eventos con `starts_at` hace más de 24 h → `finished`; crea los payouts elegibles. |
+| `retry-emails` | Cada 30 min | Reenvía entradas y copias de reclamo con `*_emailed_at NULL`. |
+| `retention` | Mensual | Enmascara o borra datos personales vencidos (§7.13). |
+
+Todos idempotentes y con `Authorization: Bearer <CRON_SECRET>`.
+
 ## 5. Integraciones
 
 ### Clerk
 - Login con correo/contraseña y Google. `LoginForm`/`RegisterForm` se recablean con `useSignIn`/`useSignUp`; celular y documento se guardan en `users` (Clerk no los guarda).
-- `ensureUser()` hace upsert por `clerk_id` en el primer acceso autenticado (no hace falta túnel en local).
+- `ensureUser()` hace upsert por `clerk_id` en el primer acceso autenticado (no hace falta túnel en local). Si no existe fila con ese `clerk_id` pero sí una con el mismo correo y `clerk_id NULL` (usuario creado por seed), la vincula **solo si Clerk marca el correo como verificado**; si no, cualquiera podría registrarse con ese correo y heredar el rol.
+- MFA obligatorio para `admin` y `super_admin`: `proxy.ts` niega el acceso a `/admin` si la sesión no tiene segundo factor; las Server Actions de admin lo vuelven a comprobar.
+- Producción: dominio de Clerk con los CNAME que indica Clerk bajo `mentec-tickets.dev`.
 - Webhook (verificado con svix): `user.updated` sincroniza nombre y correo; `user.deleted` anonimiza el usuario y conserva sus órdenes.
 - Cambio de rol: BD → `clerkClient.users.updateUserMetadata(..., { publicMetadata: { role } })` → `audit_logs`.
 - Clerk guarda datos en EE. UU.: requiere el consentimiento `international_transfer` (Ley 29733).
@@ -173,6 +229,8 @@ Correos de esta etapa:
 - Se envía **después del commit**. Si falla, se registra y la operación no se revierte.
 - Reintento sin outbox: columnas `orders.tickets_emailed_at` y `complaints.receipt_emailed_at`; un job reenvía las que siguen en `NULL`.
 - Plantillas como componentes React pasados al SDK (`react:`).
+- Remitente `entradas@mentec-tickets.dev`; SPF y DKIM en el DNS del dominio.
+- Correos adicionales: invitación de staff de puerta, resultado de solicitud de organizador, resultado de solicitud de reembolso, resultado de revisión de evento.
 
 ### Cloud Storage
 Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y tamaño.
@@ -185,26 +243,40 @@ Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y
 | Acción | Invitado | customer | organizer | admin | super_admin |
 |---|:-:|:-:|:-:|:-:|:-:|
 | Ver eventos y comprar | ✓ | ✓ | ✓ | ✓ | ✓ |
-| "Mis entradas" y perfil | | ✓ | ✓ | ✓ | ✓ |
+| "Mis entradas", perfil, descargar mis datos, eliminar mi cuenta | | ✓ | ✓ | ✓ | ✓ |
+| Solicitar reembolso de una orden propia | | ✓ | ✓ | ✓ | ✓ |
+| Solicitar ser organizador | | ✓ | | | |
 | Registrar reclamo | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Crear, editar y publicar **sus** eventos | | | ✓ | | |
-| Ver **sus** ventas y liquidaciones | | | ✓ | | |
-| Asignar `event_staff` en **sus** eventos | | | ✓ | ✓ | ✓ |
+| Crear y editar **sus** eventos; enviarlos a revisión | | | ✓ | | |
+| Solicitar cancelación o reprogramación de **sus** eventos | | | ✓ | | |
+| Ver **sus** ventas (agregados) y liquidaciones | | | ✓ | | |
+| Invitar `event_staff` en **sus** eventos | | | ✓ | ✓ | ✓ |
 | Check-in en **sus** eventos | | | ✓ | ✓ | ✓ |
+| Aprobar o rechazar eventos (moderación) | | | | ✓ | ✓ |
 | Ver y editar **todos** los eventos, despublicar | | | | ✓ | ✓ |
-| Cancelar evento | | | | ✓ | ✓ |
-| Reembolsar entradas | | | | ✓ | ✓ |
-| Responder reclamos | | | | ✓ | ✓ |
+| Cancelar evento; resolver solicitudes de organizadores | | | | ✓ | ✓ |
+| Reembolsar entradas; resolver solicitudes de reembolso | | | | ✓ | ✓ |
+| Responder reclamos y solicitudes ARCO | | | | ✓ | ✓ |
 | Gestionar catálogo de recintos | | | | ✓ | ✓ |
-| Dar/quitar `organizer`, gestionar usuarios | | | | ✓ | ✓ |
+| Aprobar solicitudes de organizador; dar/quitar `organizer`; gestionar usuarios | | | | ✓ | ✓ |
+| Ver órdenes y reembolsos (operación) | | | | ✓ | ✓ |
 | Crear/quitar `admin` | | | | | ✓ |
 | Comisiones, categorías, documentos legales | | | | | ✓ |
+| Reportes financieros (ingresos, comisiones, payouts); reintentar payout | | | | | ✓ |
 | Ver `audit_logs` | | | | | ✓ |
 
 - **Invitado:** compra sin cuenta (`orders.user_id NULL`, datos en `buyer_*`).
-- **Staff de puerta:** cualquier usuario asignado en `event_staff`; solo hace check-in en ese evento.
-- El registro público siempre crea `customer`. El primer `super_admin` se crea por seed/CLI.
-- Nadie se asigna un rol a sí mismo ni asigna un rol igual o superior al propio.
+- **Staff de puerta:** invitado por correo en `event_staff`; al crear su cuenta queda vinculado. Solo hace check-in en ese evento. No es un rol.
+- **Datos de compradores que ve el organizador:** solo agregados (vendidas e ingresos por zona) y, en el check-in, el nombre del titular. **Nunca** correo, celular ni documento, ni exportación. La plataforma es la única responsable del tratamiento (Ley 29733).
+
+### Reglas de roles
+
+- El registro público siempre crea `customer`.
+- Primer `super_admin`: el seed lo crea con `SUPER_ADMIN_EMAIL` (`clerk_id NULL`); se vincula en su primer login con correo verificado (§5 Clerk). Mismo mecanismo en local y producción.
+- Nadie cambia su propio rol ni asigna un rol igual o superior al propio.
+- Siempre queda al menos un `super_admin`: el sistema rechaza quitar o degradar al último.
+- Quitar el rol `organizer` se **bloquea** mientras tenga eventos `pending_review`/`published` o payouts `pending` (mensaje: "Tiene 1 evento publicado y 1 payout pendiente"). Primero se cancelan o transfieren los eventos y se resuelven los payouts.
+- MFA obligatorio para `admin` y `super_admin`.
 - El organizador solo accede a eventos con `events.organizer_id` propio.
 - Defensa en profundidad: `proxy.ts` filtra rutas por `publicMetadata.role`; **cada Server Action vuelve a validar** con `can(user, action, resource)` contra la BD.
 
@@ -259,7 +331,8 @@ sequenceDiagram
    - Tras el commit: correo con entradas.
 4. **Abandono:** nada que hacer (expiración perezosa). Un job diario marca órdenes vencidas como `expired` y sus `held` como `available` (limpieza cosmética).
 
-### 7.2 Reembolso (admin)
+### 7.2 Reembolso (admin o a pedido del cliente)
+- El cliente pulsa "Solicitar reembolso" en una orden de "Mis entradas" (dentro del plazo que fije la política de devoluciones), elige entradas y motivo → `refund_requests` `pending`. Un admin la aprueba (crea el `refund`) o la rechaza con motivo; el cliente recibe un correo. Sin aprobación automática.
 - El admin elige entradas → `refund` `pending` + `audit_logs` → `stripe.refunds.create` (`idempotencyKey = refund.id`).
 - Webhook `refund.updated` `succeeded` → entradas `refunded`, asientos `available`, orden `refunded` o `partially_refunded`.
 - No se reembolsan entradas `used` ni eventos con payout `paid`.
@@ -270,6 +343,7 @@ sequenceDiagram
 - Entradas → `void`; correo de cancelación.
 
 ### 7.4 Check-in en puerta
+- El organizador invita staff por correo: fila en `event_staff` con `email` y `user_id NULL`, más un correo con enlace. Cuando esa persona entra con ese correo verificado, `ensureUser()` completa `user_id` y `accepted_at`.
 - `/checkin/[eventId]`, accesible para `event_staff`, el organizador del evento y admins.
 - `checkIn(qrToken, eventId)`:
   ```sql
@@ -313,6 +387,42 @@ Base legal: D.S. 016-2024-JUS (reglamento de la Ley 29733, vigente desde el 31/0
 - Visitante: cookie `cookie_consent` (versión + categorías, 12 meses). Usuario con sesión: además filas en `consents` (`scope` = categoría).
 - "Configurar cookies" en el footer reabre el panel (retirar tan fácil como aceptar). Nueva versión de la política → el banner vuelve a aparecer.
 - El componente lee la cookie en el cliente (no se usa `cookies()` en el layout, para no volver dinámicas todas las páginas). La versión vigente se lee de la BD con caché invalidada al publicar (`revalidateTag`).
+
+### 7.10 Alta de organizador
+1. Un `customer` llena "Vende con nosotros" (`/organizadores`): razón social, RUC o DNI y contacto → `organizer_applications` `pending`.
+2. Un admin revisa (RUC en SUNAT) y aprueba o rechaza con motivo; correo al solicitante.
+3. Al aprobar: fila en `organizers`, rol → `organizer`, `audit_logs`. Ya puede crear eventos en borrador.
+4. Antes del primer payout completa su alta como destinatario de Global Payouts (`payouts_enabled`).
+
+### 7.11 Moderación y edición de eventos
+Estados: `draft` → `pending_review` → `published` → `finished`; `published` → `cancelled`.
+
+- El organizador crea y edita en `draft` y pulsa "Enviar a revisión" → `pending_review`.
+- Un admin aprueba (→ `published`, se generan los `event_seats`, `revalidateTag`) o rechaza (→ `draft` con `review_note`). Correo al organizador.
+- Con al menos una venta, el organizador solo puede editar descripción, imagen, edad mínima y precio de zonas **para ventas futuras** (lo vendido conserva su `unit_price_cents`). No puede cambiar fecha, hora o recinto ni quitar zonas con ventas: para eso usa una solicitud (§7.12).
+- Editar fecha, recinto o zonas de un evento publicado **sin ventas** lo devuelve a `pending_review`.
+
+### 7.12 Solicitudes del organizador
+- "Solicitar cancelación" o "Solicitar reprogramación" desde su panel, con motivo → `organizer_requests` `pending`.
+- Un admin la resuelve: aprobar una cancelación dispara §7.3; una reprogramación aprobada la ejecuta un admin a mano (el flujo completo de reprogramación queda fuera de esta etapa). Rechazo con motivo. Correo al organizador.
+
+### 7.13 Derechos ARCO y retención
+- **En el perfil:** "Descargar mis datos" (JSON con perfil, órdenes, entradas y consentimientos) y "Eliminar mi cuenta". Eliminar anonimiza nombre, correo, celular y documento (`anonymized_at`), elimina el usuario en Clerk y conserva las órdenes con datos enmascarados (obligación contable).
+- **Otros pedidos** (rectificación, oposición, acceso detallado): formulario → `privacy_requests` con `due_at` = 20 días hábiles (validar con legal); los atiende un admin, con alerta a 2 días de vencer.
+- **Retención** (job mensual; plazos a validar con contador y abogado):
+
+| Dato | Plazo | Acción |
+|---|---|---|
+| Órdenes, montos, reembolsos, payouts | 5 años | Se conservan. |
+| Documento y celular del comprador | 1 año después del evento | Se enmascaran (`orders.pii_masked_at`). |
+| `check_in_scans` | 1 año | Se borran. |
+| `complaints` | Mínimo 2 años | Se conservan. |
+| `consents`, `audit_logs` | Mientras exista la relación + 5 años | Se conservan. |
+
+### 7.14 Entradas con QR real
+- "Mis entradas" dibuja el QR desde `qr_token` con la librería `qrcode` (una dependencia) y reemplaza el `TicketQr` decorativo.
+- El correo de compra incluye un enlace a la entrada y el QR como imagen.
+- "Descargar PDF" usa la impresión del navegador ("Guardar como PDF"), como hoy.
 
 ## 8. Páginas legales
 
@@ -374,13 +484,13 @@ Cada fase es una spec en `docs/specs/` con su aprobación.
 | # | Fase | Contenido |
 |---|---|---|
 | F1 | Fundación de datos | Drizzle + `pg`, `lib/env.ts`, esquema completo y migraciones, seed desde los mocks (`events.mock.ts`, `venueMaps.mock.ts` con su geometría, `organizerEvents.mock.ts`); `events` y `seating` leen de la BD. |
-| F2 | Identidad y legal | Clerk, `users`, roles, `ensureUser`, webhook, `proxy.ts`, documentos legales con editor, páginas legales y footer, consentimientos, reaceptación, banner de cookies. |
-| F3 | Compra | Reserva, PaymentIntent, webhook, entradas con QR, correos (Resend), "Mis entradas" desde la BD. Reemplaza el pago simulado y el store del navegador de `checkout-mock-payment.md`. |
-| F4 | Libro de Reclamaciones y admin | Formulario público, respuestas, reembolsos, cancelación de evento, gestión de roles, `audit_logs`. |
-| F5 | Organizadores | Dashboard, crear evento, catálogo de recintos, `event_staff`. |
+| F2 | Identidad y legal | Clerk (MFA para admin), `users`, roles y sus reglas, seed del `super_admin`, `ensureUser`, webhook, `proxy.ts`, documentos legales con editor, páginas legales y footer, consentimientos, reaceptación, banner de cookies, ARCO (descargar datos y eliminar cuenta). |
+| F3 | Compra | Reserva, PaymentIntent, webhook, entradas con QR real, correos (Resend), "Mis entradas" desde la BD, búsqueda `pg_trgm`, caché del catálogo. Reemplaza el pago simulado y el store del navegador de `checkout-mock-payment.md`. |
+| F4 | Libro de Reclamaciones y admin | Formulario público, respuestas, reembolsos y solicitudes de reembolso, cancelación de evento, moderación de eventos, gestión de roles, solicitudes ARCO, `audit_logs`. |
+| F5 | Organizadores | Alta de organizador, dashboard, crear evento y enviar a revisión, edición limitada, solicitudes, catálogo de recintos, invitación de `event_staff`. |
 | F6 | Check-in | Escáner en puerta. |
 | F7 | Liquidación | Global Payouts (requiere habilitación de Stripe). |
-| F8 | Producción GCP | Cloud Run, Cloud SQL, Secret Manager, Cloud Scheduler, Cloud Storage, CI/CD, migraciones como Cloud Run Job. |
+| F8 | Producción GCP | Dominio `mentec-tickets.dev`, Load Balancer + Cloud Armor + CDN, Cloud Run, Cloud SQL con PITR, Secret Manager, Cloud Scheduler, Cloud Storage, GitHub Actions, Sentry y alertas, job de retención. |
 
 F1 se implementa primero; el resto se especifica cuando le toque.
 
@@ -396,12 +506,13 @@ F1 se implementa primero; el resto se especifica cuando le toque.
 - Transferencia de entradas entre personas.
 - Editor visual de mapas de recinto (la geometría se carga por seed o datos; el mapa ya se muestra en `/eventos/[slug]/entradas`).
 - Check-in sin conexión.
-- Cupones, newsletter, staging, cola o sala de espera para picos de demanda.
+- Cupones, newsletter, staging, previews por PR, cola o sala de espera para picos de demanda.
+- PDF generado en servidor y pases de Apple/Google Wallet.
 - Organizaciones con varios miembros.
 
 ## 15. Riesgos y preguntas abiertas
 
-1. **Global Payouts** debe estar habilitado en la cuenta Stripe de EE. UU. Confirmar antes de F7.
+1. **Global Payouts** debe estar habilitado en la cuenta Stripe de EE. UU. Lo está revisando el usuario (Dashboard → Settings → Global Payouts). Si no está disponible, plan B: payout por transferencia bancaria manual que el `super_admin` marca como pagado con el número de operación. Bloquea solo F7.
 2. **Revisión legal** de los textos, del plazo del Libro de Reclamaciones y de la política de devoluciones.
 3. **SUNAT e impuestos:** quién emite la boleta de la entrada (plataforma como agente u organizador) e IGV sobre la comisión. Requiere contador antes de producción.
 4. **Feriados** no considerados en `due_at`.
