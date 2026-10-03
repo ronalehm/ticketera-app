@@ -399,7 +399,10 @@ describe("OrganizerEventForm", () => {
 
       const options = await screen.findAllByRole("option");
       expect(options.map((option) => option.textContent)).toEqual(["Todo público", "+12", "+14", "+16", "+18"]);
-      fireEvent.click(screen.getByRole("option", { name: "+18" }));
+      // Base UI solo acepta el clic de ratón que empezó sobre la opción.
+      const adults = screen.getByRole("option", { name: "+18" });
+      fireEvent.pointerDown(adults, { pointerType: "mouse" });
+      fireEvent.click(adults);
       await waitFor(() => expect(ageSelect().querySelector("[data-slot=select-value]")?.textContent).toBe("+18"));
     });
 
