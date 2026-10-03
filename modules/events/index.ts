@@ -17,12 +17,6 @@ export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
 export type { EventFilters } from "./schemas/eventFilters.schema";
 export { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./services/events.service";
 export type { Event, EventCategory, EventDetail, EventStatus, TicketType } from "./types/events.types";
-export {
-  filterEvents,
-  getActiveFilterChips,
-  getEventMonths,
-  getFacetCounts,
-  parseEventFilters,
-} from "./utils/eventFilters";
+export { filterEvents, getActiveFilterChips, getEventMonths, getFacetCounts, parseEventFilters } from "./utils/eventFilters";
 export { formatEventDate, formatEventPrice } from "./utils/formatEvent";
 export { getOrderTotal, MAX_TICKETS_PER_ORDER } from "./utils/ticketOrder";
