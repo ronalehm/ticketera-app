@@ -18,6 +18,77 @@ Es una **continuación de `docs/specs/seating-ticket-selection.md`** (en adelant
 
 Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarjetas; sub-paso 2: plano de "Tribuna Oriente") y del detalle del evento. De ahí salen la forma, el layout, el flujo y los textos. La identidad visual sigue siendo Mentec (`design-system/ticketera/MASTER.md`): tokens, Creato Display, marca "Mentec Tickets" y los tonos por precio de `zoneTone`. **No** se usan el índigo, el naranja, Poppins, los hex ni el logo "Ticketera" de las capturas.
 
+**Rediseño (enmienda del 2026-10-03, Fases 2–6).** La Fase 1 ya está implementada y no cambia. Las Fases 2–4 originales no se implementaron y se reescriben aquí:
+- **Pedido del usuario (1):** "Vamos a hacer algunos ajustes visuales, en la sección de Elige tu zona / Elige tus asientos o Entradas no termino de entender el UX/UI, rediseña esa sección además mejora la librería de selección de asientos, se ve muy básico, busca referencias en caso no sepas cómo se debe hacer".
+- **Pedido del usuario (2):** "elegir entradas debe tener esta vista profesional, guiarse de Joinnus o Ticketmaster". Lo acompaña la captura de Claude Design del sub-paso 1, que es el **objetivo visual explícito** de ese sub-paso:
+  - tarjeta blanca "Elige tus entradas" con "Paso 1 de 2 · Elige una zona" a la derecha del título;
+  - debajo, el mapa del estadio curvo sobre un gris muy claro: escenario semicircular navy con "ESCENARIO" y un arco de luces; sectores anulares coloreados por precio en una escala de azules (del más oscuro, el más cercano y caro, al más claro), separados por blanco;
+  - debajo del mapa, tarjetas de zona en 2 columnas: barra vertical del color de la zona, nombre, subtítulo con icono ("General · sin butaca" o "Numerada"), "c/u" pequeño sobre el precio y un chevron.
+- El sub-paso 2 (cantidad o butacas) se lleva al mismo nivel de acabado con los patrones de Ticketmaster y Joinnus (ver "Investigación y diagnóstico").
+- La escala de azules se traduce a tokens Mentec (decisión 28), no al índigo literal.
+- **Nuevas fases:**
+  - Fase 2: escala de tonos.
+  - Fase 3: sub-paso 1 con el diseño de la captura, sub-paso 2 funcional y resumen móvil.
+  - Fase 4: plano de butacas renovado.
+  - Fase 5: plano curvo con contexto y minimapa (la antigua Fase 3).
+  - Fase 6: precarga desde la URL (la antigua Fase 4, con el mismo alcance).
+
+## Investigación y diagnóstico
+
+### Referencias consultadas
+**Sin red al redactar.** El proxy bloquea ticketmaster.com, help.ticketmaster.com, seatgeek.com, seats.io, docs.seats.io, joinnus.com y teleticket.com.pe. Solo respondieron el registro de npm y `raw.githubusercontent.com` (README de `@seatsio/seatsio-react`). Por eso, los patrones de abajo salen del conocimiento de esos productos (versiones web y móvil de 2025–2026), **no de una verificación en vivo**. Ver Preguntas abiertas 19.
+
+| Patrón | Quién lo usa | ¿Se adopta? | Por qué |
+|---|---|---|---|
+| Mapa del recinto como protagonista, con las zonas coloreadas por precio y la lista de zonas como leyenda | Ticketmaster (ISM), SeatGeek, Seats.io (categorías), Eventbrite | Sí (F2–F3) | El color dice "cuánto cuesta" sin leer. Es además la captura del usuario |
+| Lista o tarjetas de zona sincronizadas con el mapa: el hover o el foco en una resalta la otra y atenúa el resto | Ticketmaster, SeatGeek | Sí (F3) | Une las dos vistas; hoy son dos bloques independientes |
+| Tarjetas de zona con precio, tipo y chevron, y el paso siguiente en la misma pantalla | Joinnus, captura de Claude Design | Sí (F3) | Es el objetivo visual del usuario |
+| Panel de cantidad con stepper y subtotal por zona general | Joinnus, Teleticket | Sí (F3) | Para zonas de pie no hay nada que elegir en un plano |
+| "Desde S/ X" por sección | Ticketmaster, SeatGeek (secciones con varios precios) | No | Aquí una zona = un precio. "Desde" queda para el evento (MASTER §10) |
+| Filtro o slider de precio y orden por precio | Ticketmaster, SeatGeek (cientos de ofertas) | No | Cada evento tiene de 2 a 5 zonas (YAGNI) |
+| "Mejores asientos" con cantidad, además de la elección manual | Ticketmaster ("Best available"), AXS, Seats.io | Sí (F4) | El botón actual no deja elegir cuántos |
+| Transición animada de la zona a sus butacas | Ticketmaster, Seats.io (zoom a sección) | Sí (F3–F4) | El usuario no pierde el contexto |
+| Número de butaca visible al acercar (nivel de detalle) | Seats.io, Ticketmaster | Sí (F4) | Sin número, el plano parece un patrón de puntos |
+| Tooltip con fila, butaca y precio al pasar el puntero o enfocar | Ticketmaster, SeatGeek, Seats.io, Eventbrite | Sí (F4) | Hoy no hay ninguna información al pasar el puntero |
+| Estados con forma y color: libre con contorno, elegida rellena con check, ocupada como punto gris pequeño, accesible con icono | Seats.io, Ticketmaster | Sí (F4) | Las ocupadas con "×" grande dominan el dibujo |
+| Minimapa y controles de zoom junto al plano | Ticketmaster (minimapa al acercar), Seats.io | Sí (F5) | Orientación en las tribunas en arco |
+| Bandeja "Tu selección" con chips que se pueden quitar, y total siempre visible | Eventbrite, AXS, Seats.io | Sí (F3–F4) | Ya existen los chips; se acercan al plano y el total no se pierde en móvil |
+| Hoja inferior (bottom sheet) en móvil | Ticketmaster móvil, AXS, Eventbrite | Sí, para el resumen (F3) | El mapa y el plano no se tapan mientras se elige (decisión 21) |
+| Temporizador de reserva | Ticketmaster, Teleticket, Joinnus | No | No hay reserva real (sin backend); un contador ficticio sería engañoso. Ver Preguntas abiertas 15 |
+| Vista desde el asiento, reventa, "deal score" | Ticketmaster, SeatGeek | No | Fuera de alcance |
+| Regla de no dejar una butaca suelta | Seats.io | No | Cambiaría la lógica de compra. Ver Preguntas abiertas 16 |
+
+### Diagnóstico de la pantalla actual
+Fuentes: capturas `scratchpad/shots/redesign-before-{noche-de-sintetizadores-lima,festival-vive-latino-lima}-{375,1440}[-plan].png` y capturas 1, 4 y 6 del usuario.
+1. **Tres tarjetas para un mismo paso** ("Elige tu zona", "Elige tus asientos" y "Entradas"), con tres h2 y dos entradas para la misma acción: el mapa y la lista. El stepper −/+ está al fondo, en la lista; las butacas, en medio; el total, a la derecha. Para ver qué se eligió hay que subir y bajar.
+2. **El mapa no informa:**
+   - Los textos SVG están en unidades del `viewBox` y crecen con el ancho: a 1440 px miden ~37 px y se salen de su sector ("Tribuna Occidente" pisa "ESCENARIO" y la píldora tapa el precio de Campo General). A 375 px bajan a ~12 px.
+   - No hay hover ni resaltado sincronizado con la lista, ni indicación de qué zonas ya tienen entradas.
+3. **Salto de contenido:** "Elegir asientos" de la lista abre el plano **encima** de la lista.
+4. **El plano parece básico:**
+   - todas las butacas son el mismo aro sin número;
+   - las ocupadas (35–45 %), con su "×" gruesa, dominan el dibujo;
+   - no hay tooltip ni precio al pasar el puntero;
+   - en las tribunas en arco, las letras de fila se apilan a la izquierda ("A B C D…") y la barra "ESCENARIO" de arriba contradice la orientación real (el escenario está al costado);
+   - no hay minimapa.
+5. **"Mejor asiento disponible" no deja elegir cuántos:** elige 1 o reemplaza por tantas como ya había, un comportamiento que no se descubre.
+6. **La selección queda lejos:** los chips y los avisos quedan bajo el plano, lejos del total. En móvil, la barra inferior solo muestra el total y no hay forma de revisar lo elegido.
+7. **El diseño de las capturas 1 y 6** (Fase 2 original) corrige 1–3 con los sub-pasos y las tarjetas, pero no mejora el plano (4–6) ni el resumen móvil.
+
+### Librería del plano
+Versiones consultadas en npm el 2026-10-03; el proyecto usa React 19.2.8 y Next 16.3.8.
+
+| Opción | Compatibilidad | A favor | En contra | Veredicto |
+|---|---|---|---|---|
+| **SVG propio + `react-zoom-pan-pinch` 4.2.0** (instalado) | peer `react: *`; publicada 2026-09 | DOM real por butaca (`role="checkbox"`, roving tabindex, `aria-*`); tokens Tailwind (`fill-*`); testeable en jsdom. Ya trae `zoomToElement` (varios destinos, animado y con `maxScale`), `useTransformInit`/`useTransformEffect` (nivel de detalle y minimapa), `panBy`, pellizco y límites | El dibujo de los estados y el tooltip son nuestros | **Se mantiene** (decisión 22) |
+| `@visx/zoom` 4.0.0 | React 18/19 | Ligera | Solo da la matriz y los handlers: habría que reimplementar pellizco, límites y animación. Dependencia nueva sin ganancia | No |
+| `d3-zoom` 3.0.0 | Sin cambios desde 2022 | Robusta | Imperativa, toca el DOM fuera de React y arrastra `d3-selection`/`d3-transition`. Duplica lo que ya hace la librería instalada | No |
+| `react-konva` 19.3.0 + `konva` 10.7 | **Exige `react ^19.3.0`** (el proyecto usa 19.2.8) | Rendimiento con miles de butacas | Canvas: sin nodos accesibles (teclado y lector), sin tokens CSS y sin tests en jsdom sin `canvas`. Nuestras zonas tienen ≤ 120 butacas | No |
+| Seats.io (`@seatsio/seatsio-react` 15.41) | `react >= 18` | Editor de planos, mejor asiento, accesibilidad, reservas y temporizador reales | SaaS de pago por butaca vendida. Exige `workspaceKey` y los eventos en sus servidores: no hay backend, y rompería los contratos B/C y los datos mock. Estilo propio fuera de los tokens Mentec | No por ahora; candidata cuando haya backend (Preguntas abiertas 17) |
+| `motion` 14 (animaciones) | React 18/19 | Transiciones de layout | MASTER §9: CSS + `tw-animate-css` bastan | No |
+
+Rendimiento con SVG: ~120 nodos por zona, eventos delegados en un solo `<g>` (como hoy). El nivel de detalle se aplica con un atributo en el `<svg>`, sin re-render por fotograma (requisito 22).
+
 ## Alcance
 - Incluye:
   - **Fase 1. Dominio y datos del estadio:**
