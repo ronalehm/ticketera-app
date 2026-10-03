@@ -71,7 +71,7 @@ Móvil: <ul> de tarjetas (img + h3 + fecha · ciudad + badge / vendidas + ingres
 
 ## Crear evento `/organizador/eventos/nuevo` (Fases 2 y 3)
 
-> Asientos y precio por zona: `docs/specs/organizer-event-seating.md` (Fase 1), ampliación de la spec del panel.
+> Asientos y precio por zona (Fase 1) y datos del evento público (Fase 2): `docs/specs/organizer-event-seating.md`, ampliación de la spec del panel.
 
 ### Layout
 
@@ -79,10 +79,13 @@ Móvil: <ul> de tarjetas (img + h3 + fecha · ciudad + badge / vendidas + ingres
 h1 "Crear evento"
 ┌──────────────────────────────────┬──────────────┐
 │ Información básica               │ VISTA PREVIA │  lg: grilla 1fr | 340px, gap-8
-│ Nombre · Categoría · Descripción │ [tarjeta]    │  vista previa sticky lg:top-24
-├──────────────────────────────────┤ Así verán tu │
-│ Fecha y lugar                    │ evento…      │
-│ Fecha | Hora · Lugar | Ciudad    │              │
+│ Nombre del evento                │ [tarjeta]    │  vista previa sticky lg:top-24
+│ Categoría | Edad mínima          │ Así verán tu │
+│ Descripción · Organizador        │ evento…      │
+├──────────────────────────────────┤              │
+│ Fecha y lugar                    │              │
+│ Fecha | Hora | Apertura puertas  │              │
+│ Lugar | Ciudad · Dirección       │              │
 ├──────────────────────────────────┤              │
 │ Imagen de portada  (dropzone)    │              │
 ├──────────────────────────────────┤              │
@@ -107,6 +110,42 @@ Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Guarda
 - **Vista previa** (Decisión 4): `<aside>` con overline "Vista previa" y `EventPreviewCard` (anatomía de EventCard sin enlaces ni elementos enfocables; "Ver entradas" es un falso botón `aria-hidden`). Marcadores en `text-muted-foreground`: "Nombre del evento", "Fecha por definir", "Lugar, Ciudad", "Desde S/ —"; precio 0 → "Entrada libre". Móvil: tarjeta horizontal; `lg`: vertical.
 - Categorías: las 6 del proyecto (por defecto "Conciertos").
 - Metadata: `Crear evento | Mentec Tickets`.
+
+### Datos del evento público
+
+Campos que la página de detalle del evento muestra y que el formulario no pedía: "Organizador" ("Organiza: …"), "Edad mínima" ("Información importante"), "Apertura de puertas" (junto a la hora de inicio) y "Dirección" ("Lugar" y "Cómo llegar"). No se piden slug, destacado, estado ni descripción por tipo de entrada.
+
+```
+Información básica                                   1440 (md+)              375
+Nombre del evento                                    todo el ancho           todo el ancho
+Categoría            │ Edad mínima                   md:grid-cols-2 gap-4    una debajo de la otra
+Descripción                                          sin cambios
+Organizador                                          todo el ancho           todo el ancho
+Aparece en la página del evento como «Organiza: …».
+
+Fecha y lugar
+Fecha │ Hora de inicio │ Apertura de puertas         md:grid-cols-3 gap-4    Fecha | Hora de inicio
+                                                                             Apertura | (vacío)
+Lugar │ Ciudad                                       sin cambios
+Dirección                                            todo el ancho           todo el ancho
+```
+
+- **"Edad mínima"** (junto a "Categoría"): `Select` de shadcn con `items={MIN_AGE_LABELS}` (el trigger muestra la etiqueta, no el valor). Opciones "Todo público" (por defecto), "+12", "+14", "+16" y "+18"; valores en código `"0"`, `"12"`, `"14"`, `"16"`, `"18"`. Mismo formato que el detalle del evento (`0` → "Todo público", `n` → "+n"). Se opera con teclado; desde la UI nunca da error.
+- **"Organizador"** (después de "Descripción"): `Input` con placeholder "Ej. Pulso Producciones" y `maxLength={100}`, con `FieldDescription` "Aparece en la página del evento como «Organiza: …»." (no hay perfil de organizador del que tomarlo).
+- **"Apertura de puertas"** (tercera columna de la grilla de fecha): `Input type="time"`, del mismo día que el evento y a la hora de inicio o antes. En móvil, la grilla es `grid-cols-2`: Fecha y Hora de inicio comparten la primera línea y Apertura queda en la segunda, en la primera columna.
+- **"Dirección"** (debajo de "Lugar" y "Ciudad", a todo el ancho): `Input` con placeholder "Ej. Av. José Díaz s/n, Cercado de Lima" y `maxLength={150}`.
+- **Patrón de campo** igual que el resto del formulario: `Field` con `data-invalid`, `aria-invalid`, `aria-describedby` hacia `FieldError` con id, validación al salir del campo tras el primer intento y clases `scroll-mb-*` para no quedar bajo la barra sticky.
+- **Validación al publicar** (el borrador sigue exigiendo solo el nombre). Mensajes, uno por campo:
+
+  | Campo | Regla | Mensaje |
+  |---|---|---|
+  | Organizador | Vacío (con trim) | "Indica el nombre del organizador" |
+  | Apertura de puertas | Vacía o sin formato `HH:MM` | "Indica la hora de apertura de puertas" |
+  | Apertura de puertas | Posterior a una hora de inicio válida (la misma hora es válida) | "La apertura de puertas debe ser a la hora de inicio o antes" |
+  | Dirección | Vacía (con trim) | "Indica la dirección del lugar" |
+
+  Al publicar con errores, el foco va al primer campo inválido en el orden del formulario ("Nombre del evento" si el formulario está vacío).
+- **No se guardan**: estos cuatro valores no pasan al evento guardado (`OrganizerEvent`, `localStorage` `mentec-organizer-events`) ni cambian la tarjeta de "Vista previa". Solo se piden y se validan.
 
 ### Bloque por tipo de entrada
 
