@@ -5,10 +5,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/formFields";
 import { cn } from "@/lib/utils";
 import { formatEventPrice } from "@/modules/events/format";
-import { LEGAL_PROVIDER } from "../data/legalProvider";
 import { COMPLAINT_ITEM_TYPE_LABELS, COMPLAINT_TYPE_LABELS } from "../schemas/complaint.schema";
 import type { ComplaintFormData, ComplaintReceipt } from "../types/legal.types";
 import { formatLegalDate } from "../utils/formatLegalDate";
+import { LEGAL_PROVIDER_ROWS } from "./ComplaintsBookInfo";
 
 /** Id del h2 de la confirmación: `ComplaintForm` le mueve el foco tras el envío. */
 export const COMPLAINT_CONFIRMATION_TITLE_ID = "complaint-confirmation-title";
@@ -23,11 +23,7 @@ function getSummaryGroups(data: ComplaintFormData): SummaryGroup[] {
   const groups: SummaryGroup[] = [
     {
       title: "Proveedor",
-      rows: [
-        { label: "Razón social", value: LEGAL_PROVIDER.businessName },
-        { label: "RUC", value: LEGAL_PROVIDER.ruc },
-        { label: "Dirección", value: LEGAL_PROVIDER.address },
-      ],
+      rows: LEGAL_PROVIDER_ROWS,
     },
     {
       title: "Datos del consumidor",

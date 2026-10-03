@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LEGAL_PROVIDER } from "../data/legalProvider";
 import { COMPLAINT_TYPE_DEFINITIONS, COMPLAINT_TYPE_LABELS, COMPLAINT_TYPES } from "../schemas/complaint.schema";
 
-const PROVIDER_ROWS = [
+/** Filas "Datos del proveedor" (también las imprime la hoja de reclamación). */
+export const LEGAL_PROVIDER_ROWS = [
   { label: "Razón social", value: LEGAL_PROVIDER.businessName },
   { label: "RUC", value: LEGAL_PROVIDER.ruc },
   { label: "Dirección", value: LEGAL_PROVIDER.address },
@@ -30,7 +31,7 @@ export function ComplaintsBookInfo() {
         </CardHeader>
         <CardContent>
           <dl className="flex flex-col gap-3 text-base">
-            {PROVIDER_ROWS.map(({ label, value }) => (
+            {LEGAL_PROVIDER_ROWS.map(({ label, value }) => (
               <div key={label} className={ROW_CLASS}>
                 <dt className="text-sm text-muted-foreground">{label}</dt>
                 <dd className="font-medium break-words">{value}</dd>
