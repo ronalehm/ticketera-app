@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Lock } from "lucide-react";
@@ -27,6 +27,7 @@ import type { MockPaymentInput } from "../services/payment.service";
 import { persistOrder } from "../stores/orders.store";
 import type { CheckoutFormValues, CheckoutOrder } from "../types/checkout.types";
 import { CheckoutSummaryPanel } from "./CheckoutSummaryPanel";
+import { OrderSummary } from "./OrderSummary";
 import { PaymentMethodFields } from "./PaymentMethodFields";
 import { ReservationTimer } from "./ReservationTimer";
 
@@ -84,10 +85,9 @@ function PayButton({ totalLabel, isProcessing, disabled, className }: PayButtonP
 type CheckoutFormProps = {
   order: CheckoutOrder;
   changeHref: string;
-  summary: ReactNode;
 };
 
-export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) {
+export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const [isExpired, setIsExpired] = useState(false);
@@ -312,10 +312,13 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
           imageUrl={order.event.imageUrl}
           ticketCount={order.ticketCount}
           totalLabel={totalLabel}
-          footer={<PayButton {...payButtonProps} className="hidden lg:flex" />}
           className="order-first lg:order-none lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:sticky lg:top-24 lg:self-start"
         >
-          {summary}
+          <OrderSummary
+            order={order}
+            changeHref={changeHref}
+            footer={<PayButton {...payButtonProps} className="hidden lg:flex" />}
+          />
         </CheckoutSummaryPanel>
 
         <p role="status" className="sr-only">
