@@ -52,8 +52,16 @@ export function useSeatSelection(map: VenueMap) {
   const atLimit = ticketCount >= MAX_TICKETS_PER_ORDER;
   const lines = getSelectionLines(map, selection);
 
+  /** Abre la zona; no hace nada si no existe o está agotada. */
   function selectZone(zoneId: string) {
+    const zone = map.zones.find((candidate) => candidate.id === zoneId);
+    if (!zone || zone.status === "sold-out") return;
     setActiveZoneId(zoneId);
+  }
+
+  /** Vuelve a la lista de zonas sin tocar la selección. */
+  function closeZone() {
+    setActiveZoneId(null);
   }
 
   /** Solo zonas de pie no agotadas; "+" no hace nada en el límite y "−" no baja de 0. */
@@ -127,6 +135,7 @@ export function useSeatSelection(map: VenueMap) {
     checkoutHref: buildSeatingCheckoutHref(map.eventSlug, map, selection),
     notice,
     selectZone,
+    closeZone,
     changeQuantity,
     toggleSeat,
     removeSeat,

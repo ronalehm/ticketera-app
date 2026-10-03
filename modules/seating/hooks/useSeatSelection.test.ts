@@ -98,12 +98,35 @@ describe("useSeatSelection", () => {
     });
   });
 
-  it("selectZone activa cualquier zona, incluidas las numeradas y las agotadas", () => {
+  it("selectZone activa las zonas numeradas y las de pie", () => {
     const { result } = renderSelection();
     act(() => result.current.selectZone("norte"));
     expect(result.current.activeZoneId).toBe("norte");
-    act(() => result.current.selectZone("palco"));
-    expect(result.current.activeZoneId).toBe("palco");
+    act(() => result.current.selectZone("campo"));
+    expect(result.current.activeZoneId).toBe("campo");
+  });
+
+  it.each(["palco", "mesa", "inexistente"])("selectZone ignora la zona %s (agotada o inexistente)", (zoneId) => {
+    const { result } = renderSelection();
+    act(() => result.current.selectZone(zoneId));
+    expect(result.current.activeZoneId).toBeNull();
+
+    act(() => result.current.selectZone("norte"));
+    act(() => result.current.selectZone(zoneId));
+    expect(result.current.activeZoneId).toBe("norte");
+  });
+
+  it("closeZone vuelve a no tener zona activa y conserva la selección", () => {
+    const { result } = renderSelection();
+    act(() => result.current.changeQuantity("campo", 1));
+    act(() => result.current.toggleSeat("norte-B-1"));
+    act(() => result.current.selectZone("norte"));
+
+    act(() => result.current.closeZone());
+    expect(result.current.activeZoneId).toBeNull();
+    expect(result.current.quantities).toEqual({ campo: 1 });
+    expect(result.current.seatIds).toEqual(["norte-B-1"]);
+    expect(result.current.ticketCount).toBe(2);
   });
 
   it("changeQuantity activa la zona, sube y baja sin pasar de 0", () => {
