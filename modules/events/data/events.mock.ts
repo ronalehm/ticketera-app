@@ -16,7 +16,7 @@ export const EVENTS_MOCK = [
     status: "available",
     featured: true,
     description:
-      "La Gira Neón 2026 llega a Lima con una noche dedicada al synth-pop y la electrónica en vivo. Tres horas de sintetizadores analógicos, visuales sincronizados y un escenario de 360° diseñado para esta gira.\n\nEl show recorre los temas más coreados del último disco y clásicos reversionados para la ocasión, con invitados sorpresa de la escena local.\n\nRecomendamos llegar con anticipación: el ingreso se hará por las puertas de la Av. José Díaz y no se permitirá el reingreso.",
+      "La Gira Neón 2026 llega a Lima con una noche dedicada al synth-pop y la electrónica en vivo. Tres horas de sintetizadores analógicos, visuales sincronizados y un escenario diseñado para esta gira.\n\nEl show recorre los temas más coreados del último disco y clásicos reversionados para la ocasión, con invitados sorpresa de la escena local.\n\nRecomendamos llegar con anticipación: el ingreso se hará por las puertas de la Av. José Díaz y no se permitirá el reingreso.",
     address: "Av. José Díaz s/n, Cercado de Lima",
     doorsOpenAt: "2026-11-14T18:00:00-05:00",
     minAge: 0,
@@ -25,6 +25,7 @@ export const EVENTS_MOCK = [
       { id: "general", name: "General", description: "Campo de pie, sin ubicación asignada.", price: 180, status: "available" },
       { id: "preferencial", name: "Preferencial", description: "Zona delantera de campo con barra exclusiva.", price: 320, status: "available" },
       { id: "vip", name: "VIP", description: "Primera fila de campo, ingreso preferente y merch oficial.", price: 550, status: "low-stock" },
+      { id: "norte", name: "Tribuna Norte", price: 220, status: "available" },
     ],
   },
   {
@@ -69,9 +70,8 @@ export const EVENTS_MOCK = [
     minAge: 0,
     organizer: "Compañía Teatral Espejo",
     ticketTypes: [
-      { id: "platea-alta", name: "Platea alta", price: 120, status: "available" },
-      { id: "platea-baja", name: "Platea baja", description: "Filas cercanas al escenario.", price: 180, status: "available" },
-      { id: "palco", name: "Palco", description: "Palco lateral para 4 personas, precio por persona.", price: 260, status: "available" },
+      { id: "platea", name: "Platea", description: "Butacas numeradas frente al escenario.", price: 180, status: "available" },
+      { id: "mezanine", name: "Mezanine", description: "Nivel superior con vista completa del escenario.", price: 120, status: "low-stock" },
     ],
   },
   {
