@@ -1,7 +1,7 @@
 # Checkout con pago simulado y confirmación de compra
 
 - Módulo: checkout
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Completar los pasos 2 ("Datos y pago") y 3 ("Confirmación") del flujo de compra con un **pago simulado** (sin pasarela, sin backend), para que quien compra pueda introducir sus datos, elegir un método de pago (Tarjeta, Yape o PagoEfectivo), "pagar" y ver la confirmación con su entrada y su QR. La orden se guarda en el navegador (`useOrdersStore`) para que "Mis entradas" (spec tickets) la muestre después. Esta spec también crea la base compartida que usan otras specs: `useZodForm` en `hooks/`, validadores de persona en `lib/`, la entrada pública de sesión, `TicketQr` y `lib/calendar.ts`.
