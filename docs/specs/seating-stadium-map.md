@@ -362,6 +362,15 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
     - **Fuera de esa enmienda:** reservas temporales (`holdToken`) y temporizador, que exigen backend y ampliar el contrato C.
     - **Verificación:** solo en la máquina del usuario, porque el sandbox bloquea los dominios del servicio. Los tests cubrirían solo el adaptador.
 
+### Enmiendas tras la revisión de la Fase 4 (2026-10-03)
+30. **Letras de fila a 13 unidades** (acordado con el usuario tras revisar la F4; enmienda el requisito 25 y se implementa en la F5, tarea T0).
+    - **Motivo:** a 24 unidades la letra mide lo mismo que la butaca (24 de diámetro; ~33 px a 1440) y compite con ella. En la referencia del usuario (`images/15.png`) la letra mide alrededor de la mitad del diámetro de la butaca.
+    - **Tamaño:** 13 unidades (≈ 0.54 del diámetro), en cuadrícula y en arco. A 1440 mide ~18 px.
+    - **Posición sin cambios**, comprobada contra la referencia:
+      - **En arco:** `getRowEdgeLabelPoints` sigue a 0.8 pitch (25.6 unidades) del centro de la butaca del extremo. En `images/15.png` el centro de la letra está a ~0.76–0.8 pitch del centro de la butaca. Con 13 unidades, el hueco entre el borde de la butaca y el de la letra pasa de ~5 a ~9 unidades (en la referencia, ~9.6). No cambian `arcSeatRows.ts`, `arcSeatRows.test.ts` ni la invariante del requisito 8 (letras con ≥ 12 de margen dentro del `seatViewBox`), que con una letra más pequeña se cumple con más holgura.
+      - **En cuadrícula:** siguen en el centro de los márgenes, `x = SEAT_PLAN_MARGIN.x / 2` (20) y `x = ancho − 20`, en columna alineada. Quedan a 36 unidades del centro de la butaca exterior de la fila más ancha (hueco de ~19 unidades). No cambia el test de `TicketSelection.test.tsx` que comprueba esas `x`.
+    - **Excepción a MASTER §3** ("nada por debajo de 12 px"): a 375 px, con el plano entero a la vista (≥ ~0.78 px/unidad), la letra mide ~10 px. Se acepta porque es decorativa (`aria-hidden`): la fila está en el `aria-label` de cada butaca y en el tooltip, y al acercar crece. Ver Preguntas abiertas 21.
+
 ## Requisitos
 
 ### Datos del evento (Fase 1)
@@ -720,7 +729,8 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
       - sin barra "ESCENARIO", que contradecía la orientación (diagnóstico 4);
       - letra en `getRowEdgeLabelPoints(row).start` y `.end`;
       - la invariante de la Fase 1 garantiza que quedan dentro del `seatViewBox` con ≥ 12 de margen.
-    - **Estilo:** `fill-muted-foreground font-bold`, 24 unidades, `text-anchor="middle"`, `dominant-baseline="central"`, `aria-hidden`.
+    - **Estilo:** `fill-muted-foreground font-bold`, **13 unidades** (`ROW_LABEL_FONT_SIZE = 13` en `SeatPlan.tsx`; ≈ la mitad del diámetro de la butaca, como `images/15.png`), `text-anchor="middle"`, `dominant-baseline="central"`, `aria-hidden`.
+      - *Enmienda F5 (decisión 30):* antes, 24 unidades (la F4 se implementó así). Las posiciones de arriba no cambian: 0.8 pitch en arco (`getRowEdgeLabelPoints`) y `x = 20` / `ancho − 20` en cuadrícula.
 26. **"Mejores butacas" con cantidad** (decisión 25):
     - **Hook `pickBestSeats(zoneId: string, count: number): string[] | null`** (cambia la firma):
       - calcula con la selección actual (el cierre del render, porque es un manejador de clic), aplica el estado y devuelve los ids elegidos o `null`;
@@ -938,7 +948,7 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
 
 ### Fase 4. Plano de butacas renovado
 - [ ] Dado el sub-paso 2 de "Tribuna Oriente" a 1440 px, entonces se ve la captura del paso 2 con tokens Mentec:
-  - butacas disponibles en azul claro con borde azul, ocupadas grises con "×" y `oriente-J-1`/`oriente-J-10` como cuadrados cian con el icono de silla de ruedas;
+  - butacas disponibles en azul claro con borde azul, ocupadas grises con "×" y al menos una butaca accesible (cuadrado cian con el icono de silla de ruedas) en la fila J de Oriente, coherente con la invariante del requisito 8 (la ocupación tiene prioridad sobre `accessibleSeats`: con la semilla actual `oriente-J-10` sale ocupada);
   - con el plano entero a la vista, sin números;
   - las letras A–J en los dos extremos de cada fila, siguiendo la curva, y sin barra "ESCENARIO";
   - los controles +, − y "Ver todo el plano" en una pastilla abajo a la derecha, dentro del lienzo, sin tapar ninguna butaca;
