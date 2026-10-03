@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_TICKETS_PER_ORDER } from "@/modules/events";
+import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 
 export const checkoutSlugSchema = z.string().trim().min(1);
 

@@ -1,4 +1,4 @@
-import { getEventBySlug } from "@/modules/events";
+import { getEventBySlug } from "@/modules/events/catalog";
 import { getVenueMapForEvent, parseSeatIds } from "@/modules/seating/seats";
 import { checkoutSlugSchema } from "../schemas/checkout.schema";
 import type { CheckoutOrderResult } from "../types/checkout.types";

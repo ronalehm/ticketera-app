@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getEventBySlug } from "@/modules/events";
+import { getEventBySlug } from "@/modules/events/catalog";
 import { getVenueMapBySlug, type Seat } from "@/modules/seating/seats";
 import { getCheckoutOrder, resolveCheckoutOrder } from "./checkout.service";
 
 // `getEventBySlug` real, envuelto en un `vi.fn` para contar las cargas del evento.
-vi.mock("@/modules/events", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/modules/events")>();
+vi.mock("@/modules/events/catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/events/catalog")>();
   return { ...actual, getEventBySlug: vi.fn(actual.getEventBySlug) };
 });
 

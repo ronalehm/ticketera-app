@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { TEXT_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
-import { formatEventDate, formatEventPrice } from "@/modules/events";
+import { formatEventDate, formatEventPrice } from "@/modules/events/format";
 import type { CheckoutOrder } from "../types/checkout.types";
 
 type OrderSummaryProps = {

@@ -1,4 +1,5 @@
-import { type EventDetail, getOrderTotal, MAX_TICKETS_PER_ORDER } from "@/modules/events";
+import type { EventDetail } from "@/modules/events";
+import { getOrderTotal, MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { resolveSeats, type VenueMap } from "@/modules/seating/seats";
 import { ticketQuantitySchema } from "../schemas/checkout.schema";
 import type { CheckoutOrderItem, CheckoutOrderResult } from "../types/checkout.types";

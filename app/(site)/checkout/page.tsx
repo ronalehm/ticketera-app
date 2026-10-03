@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { PurchaseStepper } from "@/components/shared/PurchaseStepper";
 import { CheckoutForm, CheckoutStatusMessage, getCheckoutOrder, OrderSummary } from "@/modules/checkout";
-import { hasVenueMap } from "@/modules/seating";
+import { hasVenueMap } from "@/modules/seating/seats";
 
 export const metadata: Metadata = { title: "Finalizar compra | Mentec Tickets" };
 
