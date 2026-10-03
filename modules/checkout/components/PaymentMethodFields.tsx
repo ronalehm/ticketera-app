@@ -18,7 +18,7 @@ type PaymentFieldValues = Pick<CheckoutFormValues, PaymentFieldName>;
 type PaymentMethodFieldsProps = {
   values: PaymentFieldValues;
   errors: Partial<Record<PaymentFieldName, string>>;
-  onChange: <K extends PaymentFieldName>(name: K, value: PaymentFieldValues[K]) => void;
+  onChange: <K extends PaymentFieldName>(name: K, value: CheckoutFormValues[K]) => void;
   onBlur: (name: PaymentFieldName) => void;
   /** Id del título de la sección, que nombra al grupo de radios. */
   labelledBy: string;
