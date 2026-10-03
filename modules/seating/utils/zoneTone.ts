@@ -1,10 +1,10 @@
 import type { VenueZone, ZoneTone } from "../types/seating.types";
 
-const PRICE_TIERS = ["tier-1", "tier-2", "tier-3", "tier-4"] as const satisfies readonly ZoneTone[];
+const PRICE_TIERS = ["tier-1", "tier-2", "tier-3", "tier-4", "tier-5"] as const satisfies readonly ZoneTone[];
 
 /**
  * Tono de cada zona según su rango de precio entre las zonas no agotadas (de mayor a menor).
- * Precios iguales comparten tono; desde el 4.º precio distinto todos usan `tier-4`.
+ * Precios iguales comparten tono; desde el 5.º precio distinto todos usan `tier-5`.
  */
 export function getZoneTones(zones: Pick<VenueZone, "id" | "price" | "status">[]): Record<string, ZoneTone> {
   const prices = [
@@ -20,15 +20,23 @@ export function getZoneTones(zones: Pick<VenueZone, "id" | "price" | "status">[]
   );
 }
 
-/** Clases por tono (decisión 9): forma SVG, texto sobre el mapa y muestra en listas. */
+/**
+ * Clases por tono (escala de azules Mentec, decisión 28): forma SVG, texto sobre la forma y muestra en listas.
+ * `label` lleva la clase SVG (`fill-`) y la HTML (`text-`), para el texto SVG y las etiquetas HTML del mapa.
+ */
 export const ZONE_TONE_CLASSES: Record<ZoneTone, { shape: string; label: string; swatch: string }> = {
-  "tier-1": { shape: "fill-brand-navy", label: "fill-background", swatch: "bg-brand-navy" },
-  "tier-2": { shape: "fill-primary-strong", label: "fill-primary-foreground", swatch: "bg-primary-strong" },
-  "tier-3": { shape: "fill-highlight", label: "fill-highlight-foreground", swatch: "bg-highlight" },
-  "tier-4": {
-    shape: "fill-accent stroke-primary/40",
-    label: "fill-foreground",
-    swatch: "bg-accent ring-1 ring-primary/40",
+  "tier-1": { shape: "fill-brand-navy", label: "fill-background text-background", swatch: "bg-brand-navy" },
+  "tier-2": {
+    shape: "fill-primary-strong",
+    label: "fill-primary-foreground text-primary-foreground",
+    swatch: "bg-primary-strong",
   },
-  "sold-out": { shape: "fill-secondary", label: "fill-muted-foreground", swatch: "bg-secondary ring-1 ring-input" },
+  "tier-3": { shape: "fill-primary/65", label: "fill-foreground text-foreground", swatch: "bg-primary/65" },
+  "tier-4": { shape: "fill-primary/40", label: "fill-foreground text-foreground", swatch: "bg-primary/40" },
+  "tier-5": { shape: "fill-primary/20", label: "fill-foreground text-foreground", swatch: "bg-primary/20" },
+  "sold-out": {
+    shape: "fill-secondary",
+    label: "fill-muted-foreground text-muted-foreground",
+    swatch: "bg-secondary ring-1 ring-input",
+  },
 };

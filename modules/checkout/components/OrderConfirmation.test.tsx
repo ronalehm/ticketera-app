@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadIcs } from "@/lib/calendar";
+import { downloadTicketsPdf } from "@/lib/ticketPdf";
 import { useOrdersStore } from "../stores/orders.store";
 import type { Order } from "../types/checkout.types";
 import { OrderConfirmation } from "./OrderConfirmation";
@@ -10,6 +11,8 @@ vi.mock("@/lib/calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/calendar")>()),
   downloadIcs: vi.fn(),
 }));
+
+vi.mock("@/lib/ticketPdf", () => ({ downloadTicketsPdf: vi.fn().mockResolvedValue(undefined) }));
 
 const CODE = "MT-AB12CD";
 
@@ -84,6 +87,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.mocked(downloadIcs).mockReset();
+  vi.mocked(downloadTicketsPdf).mockClear();
 });
 
 describe("OrderConfirmation", () => {
@@ -105,7 +109,7 @@ describe("OrderConfirmation", () => {
     expect(screen.getByText("Stepper de prueba")).toBeTruthy();
     expect(screen.getByText(/Pedido N\.º/).textContent).toBe(`Pedido N.º${CODE}`);
 
-    const card = screen.getByRole("article");
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).getByText("Conciertos")).toBeTruthy();
     expect(within(card).getByRole("heading", { name: "Noche de Sintetizadores" })).toBeTruthy();
     expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
@@ -115,7 +119,51 @@ describe("OrderConfirmation", () => {
     expect(within(card).getByText("Entrada 1 de 3")).toBeTruthy();
 
     expect(screen.getByRole("link", { name: "Ver mis entradas" }).getAttribute("href")).toBe("/mis-entradas");
-    expect(screen.getByRole("heading", { level: 2, name: "Qué sigue" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Qué sigue" }).className).toContain("sr-only");
+  });
+
+  it("muestra el correo del comprador en negrita en la cabecera", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const email = screen.getByText("luis@correo.pe");
+    expect(email.tagName).toBe("STRONG");
+    expect(email.className).toContain("break-all");
+    expect(email.parentElement?.textContent).toBe(
+      "Enviamos tus entradas a luis@correo.pe. También las tienes siempre en Mis entradas.",
+    );
+  });
+
+  it("la tarjeta-entrada muestra la fecha sin año ni hora y los asientos compactos por zona, sin Asientos", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    const date = within(card).getByText("sábado 14 de noviembre");
+    expect(date.tagName).toBe("TIME");
+    expect(date.getAttribute("datetime")).toBe(ORDER.event.startsAt);
+    expect(date.parentElement?.textContent).toBe("sábado 14 de noviembre · Estadio, Lima");
+    expect(within(card).getByText("General: Fila A · 1, 2")).toBeTruthy();
+    expect(within(card).getByText("VIP: Fila B · 5")).toBeTruthy();
+    expect(within(card).queryByText("Asientos")).toBeNull();
+    expect(within(card).queryByText(/2026|21:00|9:00/)).toBeNull();
+  });
+
+  it("con una orden sin asientos la tarjeta-entrada no muestra líneas de asientos", async () => {
+    saveOrder({
+      ...ORDER,
+      items: ORDER.items.map((item) => ({ ...item, seats: undefined })),
+      tickets: ORDER.tickets.map((ticket) => ({ ...ticket, seatLabel: undefined })),
+    });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).queryByText(/Fila/)).toBeNull();
+    expect(within(card).queryByText(/^(General|VIP):/)).toBeNull();
+    expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
   });
 
   it("Agregar al calendario descarga <slug>.ics con el título del evento", async () => {
@@ -133,7 +181,7 @@ describe("OrderConfirmation", () => {
     expect(content).toContain(`DESCRIPTION:Pedido ${CODE} · 3 entradas · Mentec Tickets`);
   });
 
-  it("Descargar PDF abre el diálogo de impresión", async () => {
+  it("Descargar PDF descarga el PDF del pedido sin abrir el diálogo de impresión", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
     saveOrder(ORDER);
     renderConfirmation();
@@ -141,26 +189,92 @@ describe("OrderConfirmation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
 
-    expect(print).toHaveBeenCalledTimes(1);
+    expect(downloadTicketsPdf).toHaveBeenCalledTimes(1);
+    const [input] = vi.mocked(downloadTicketsPdf).mock.calls[0];
+    expect(input.orderCode).toBe(CODE);
+    expect(input.tickets.map(({ code, locationLabel }) => ({ code, locationLabel }))).toEqual(
+      ORDER.tickets.map(({ code, seatLabel }) => ({ code, locationLabel: seatLabel })),
+    );
+    expect(print).not.toHaveBeenCalled();
+    // Deja que el botón vuelva a reposo dentro del test.
+    expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
   });
 
-  it("la lista de impresión tiene una fila por entrada con su QR, código, tipo, asiento y titular", async () => {
+  it("el talón muestra código y titular de la entrada actual y recorre todas las entradas del pedido", async () => {
     saveOrder(ORDER);
     renderConfirmation();
     await findConfirmed();
 
-    const printable = screen.getByRole("region", { name: "Tus entradas" });
-    const rows = within(printable).getAllByRole("listitem");
-    expect(rows).toHaveLength(ORDER.tickets.length);
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    const pager = within(card).getByRole("group", { name: "Entradas del pedido" });
+    const previous = within(pager).getByRole("button", { name: "Entrada anterior" });
+    const next = within(pager).getByRole("button", { name: "Entrada siguiente" });
 
-    ORDER.tickets.forEach((ticket, index) => {
-      const row = within(rows[index]);
-      expect(row.getByRole("img", { name: `Código QR de la entrada ${ticket.code}` })).toBeTruthy();
-      expect(row.getByText(ticket.code)).toBeTruthy();
-      expect(row.getByText(ticket.ticketTypeName)).toBeTruthy();
-      expect(row.getByText(ticket.seatLabel!)).toBeTruthy();
-      expect(row.getByText(`Titular: ${ticket.holderName}`)).toBeTruthy();
-    });
+    expect(pager.className).toContain("print:hidden");
+    expect(within(card).getByText(`${CODE}-01`).textContent).toBe(`Código de entrada: ${CODE}-01`);
+    expect(within(card).getByText("Titular: Luis Pérez")).toBeTruthy();
+    expect(previous.getAttribute("aria-disabled")).toBe("true");
+
+    next.focus();
+    fireEvent.click(next);
+    expect(within(card).getByRole("img", { name: `Código QR de la entrada ${CODE}-02` })).toBeTruthy();
+    expect(within(card).getByText(`${CODE}-02`).textContent).toBe(`Código de entrada: ${CODE}-02`);
+    expect(within(card).getByText("Entrada 2 de 3")).toBeTruthy();
+
+    fireEvent.click(next);
+    expect(within(card).getByRole("img", { name: `Código QR de la entrada ${CODE}-03` })).toBeTruthy();
+    expect(within(card).getByText(`${CODE}-03`).textContent).toBe(`Código de entrada: ${CODE}-03`);
+    expect(within(card).getByText("Entrada 3 de 3")).toBeTruthy();
+    expect(next.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(next);
+
+    // El cuerpo de la tarjeta no cambia al navegar.
+    expect(within(card).getByText("Entradas").nextElementSibling?.textContent).toBe("3");
+  });
+
+  it("el talón no muestra la línea Titular si el titular está vacío", async () => {
+    saveOrder({ ...ORDER, tickets: ORDER.tickets.map((ticket) => ({ ...ticket, holderName: " " })) });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).getByText(`${CODE}-01`).textContent).toBe(`Código de entrada: ${CODE}-01`);
+    expect(within(card).queryByText(/Titular/)).toBeNull();
+  });
+
+  it("con una sola entrada muestra Entrada 1 de 1 con ambas flechas deshabilitadas", async () => {
+    saveOrder({ ...ORDER, ticketCount: 1, tickets: ORDER.tickets.slice(0, 1) });
+    renderConfirmation();
+    await findConfirmed();
+
+    const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
+    expect(within(card).getByText("Entrada 1 de 1")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Entrada anterior" }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(card).getByRole("button", { name: "Entrada siguiente" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("Descargar PDF incluye todas las entradas del pedido aunque se vea otra entrada", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    fireEvent.click(screen.getByRole("button", { name: "Entrada siguiente" }));
+    expect(screen.getByText("Entrada 2 de 3")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
+
+    expect(downloadTicketsPdf).toHaveBeenCalledTimes(1);
+    const [input] = vi.mocked(downloadTicketsPdf).mock.calls[0];
+    expect(input.tickets.map(({ code }) => code)).toEqual(ORDER.tickets.map(({ code }) => code));
+    expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
+  });
+
+  it("no renderiza la región solo-impresión Tus entradas", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    expect(screen.queryByRole("region", { name: "Tus entradas" })).toBeNull();
+    expect(screen.queryByText("Tus entradas")).toBeNull();
   });
 
   it("con un código que no está en el navegador muestra No encontramos tu compra sin stepper", async () => {

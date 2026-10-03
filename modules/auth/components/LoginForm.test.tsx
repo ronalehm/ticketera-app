@@ -99,12 +99,22 @@ describe("LoginForm", () => {
     expect(screen.getByRole("button", { name: "Mostrar contraseña" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("muestra los enlaces de recuperar contraseña y crear cuenta", () => {
+  it("muestra el título, el subtítulo y los enlaces de recuperar contraseña y crear cuenta", () => {
     render(<LoginForm />);
     expect(screen.getByRole("link", { name: "¿Olvidaste tu contraseña?" }).getAttribute("href")).toBe(
       "/recuperar-contrasena",
     );
-    expect(screen.getByRole("link", { name: "Crear cuenta" }).getAttribute("href")).toBe("/registro");
-    expect(screen.getByRole("heading", { level: 1, name: "Iniciar sesión" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Crea una gratis" }).getAttribute("href")).toBe("/registro");
+    expect(screen.getByRole("heading", { level: 1, name: "Hola de nuevo" })).toBeTruthy();
+    expect(screen.getByText("Ingresa para ver tus entradas y comprar más rápido.")).toBeTruthy();
+  });
+
+  it("muestra el acceso con Google y el separador 'o' antes del correo, con su placeholder", () => {
+    render(<LoginForm />);
+    const google = screen.getByRole("button", { name: "Continuar con Google" });
+
+    expect(google.compareDocumentPosition(emailInput()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("o", { selector: '[data-slot="field-separator-content"]' })).toBeTruthy();
+    expect(emailInput().placeholder).toBe("tu@email.com");
   });
 });

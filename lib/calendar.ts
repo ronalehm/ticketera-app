@@ -1,5 +1,8 @@
 // Generación de eventos iCalendar (RFC 5545) y su descarga como archivo .ics, sin librerías.
 
+import { downloadBlob } from "@/lib/download";
+import { hashString } from "@/lib/hash";
+
 type IcsEventInput = {
   title: string;
   /** Fecha ISO 8601 con zona horaria (p. ej. "2026-11-14T21:00:00-05:00"). */
@@ -57,12 +60,7 @@ function foldLine(line: string): string {
 
 /** FNV-1a de 32 bits en hexadecimal (8 caracteres). */
 function hashHex(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return hashString(value).toString(16).padStart(8, "0");
 }
 
 /** Contenido `.ics` con un único `VEVENT`. Sin `DTEND`: los eventos no tienen hora de fin. */
@@ -89,15 +87,5 @@ export function buildIcsEvent({ title, startsAt, location, description }: IcsEve
 
 /** Descarga `content` como archivo `.ics` mediante un enlace temporal. */
 export function downloadIcs(fileName: string, content: string): void {
-  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-
-  URL.revokeObjectURL(url);
+  downloadBlob(fileName, new Blob([content], { type: "text/calendar;charset=utf-8" }));
 }

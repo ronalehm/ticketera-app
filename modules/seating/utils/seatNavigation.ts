@@ -1,10 +1,17 @@
-import type { NumberedVenueZone, Seat } from "../types/seating.types";
+import type { NumberedVenueZone, Point, Seat } from "../types/seating.types";
 
 export type SeatNavigationKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End";
 
-/** Asiento de `seats` con la `x` más cercana; en empate, el de número menor (el primero). */
-function closestByX(seats: Seat[], x: number): Seat {
-  return seats.reduce((closest, seat) => (Math.abs(seat.x - x) < Math.abs(closest.x - x) ? seat : closest));
+/** Cuadrado de la distancia euclídea entre un asiento y `point` (basta para comparar). */
+function squaredDistance(seat: Seat, point: Point): number {
+  return (seat.x - point.x) ** 2 + (seat.y - point.y) ** 2;
+}
+
+/** Asiento de `seats` más cercano a `point`; en empate, el de número menor (el primero). */
+function closestTo(seats: Seat[], point: Point): Seat {
+  return seats.reduce((closest, seat) =>
+    squaredDistance(seat, point) < squaredDistance(closest, point) ? seat : closest,
+  );
 }
 
 /**
@@ -12,7 +19,8 @@ function closestByX(seats: Seat[], x: number): Seat {
  * (se pueden enfocar, no elegir). En los bordes de la fila o del plano devuelve el mismo asiento,
  * igual que si `seatId` no pertenece a la zona.
  * - Izquierda/derecha: asiento anterior o siguiente de la fila.
- * - Arriba/abajo: asiento de la fila anterior o siguiente con la `x` más cercana.
+ * - Arriba/abajo: asiento de la fila anterior o siguiente más cercano en distancia euclídea (vale
+ *   también para filas en arco, aunque sean casi verticales).
  * - Home/End: primer o último asiento de la fila.
  */
 export function getAdjacentSeatId(zone: NumberedVenueZone, seatId: string, key: SeatNavigationKey): string {
@@ -34,7 +42,7 @@ export function getAdjacentSeatId(zone: NumberedVenueZone, seatId: string, key: 
     case "ArrowUp":
     case "ArrowDown": {
       const targetRow = zone.rows[rowIndex + (key === "ArrowUp" ? -1 : 1)];
-      return targetRow ? closestByX(targetRow.seats, seats[seatIndex].x).id : seatId;
+      return targetRow ? closestTo(targetRow.seats, seats[seatIndex]).id : seatId;
     }
   }
 }

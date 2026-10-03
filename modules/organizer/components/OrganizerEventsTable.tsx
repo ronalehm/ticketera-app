@@ -22,6 +22,9 @@ const ORGANIZER_STATUS_BADGE: Record<OrganizerEventStatus, { label: string; clas
   draft: { label: "Borrador", className: "bg-secondary text-secondary-foreground" },
 };
 
+// Cabecera en mayúsculas pequeñas, sin fondo; px-6 alinea las columnas con la barra de cabecera de la sección.
+const HEADER_CELL = "h-11 px-6 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+
 function StatusBadge({ status }: { status: OrganizerEventStatus }) {
   const badge = ORGANIZER_STATUS_BADGE[status];
   return <Badge className={cn("h-6 px-2.5 font-semibold", badge.className)}>{badge.label}</Badge>;
@@ -84,21 +87,22 @@ function Revenue({ event }: { event: OrganizerEvent }) {
 export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTableProps) {
   return (
     <>
-      <div className="hidden overflow-hidden rounded-2xl ring-1 ring-border lg:block">
+      {/* Tabla a sangre dentro de la tarjeta de la sección: sin anillo ni radio propios. */}
+      <div className="hidden lg:block">
         <Table aria-labelledby={labelledBy}>
-          <TableHeader className="bg-muted">
+          <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-11 px-4 text-muted-foreground">Evento</TableHead>
-              <TableHead className="h-11 px-4 text-muted-foreground">Estado</TableHead>
-              <TableHead className="h-11 px-4 text-muted-foreground">Vendidas</TableHead>
-              <TableHead className="h-11 px-4 text-right text-muted-foreground">Ingresos</TableHead>
+              <TableHead className={HEADER_CELL}>Evento</TableHead>
+              <TableHead className={HEADER_CELL}>Estado</TableHead>
+              <TableHead className={HEADER_CELL}>Vendidas</TableHead>
+              <TableHead className={cn(HEADER_CELL, "text-right")}>Ingresos</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.map((event) => (
               <TableRow key={event.id}>
                 {/* w-full + max-w-0: la columna ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla. */}
-                <TableHead scope="row" className="h-auto w-full max-w-0 px-4 py-3 font-normal">
+                <TableHead scope="row" className="h-auto w-full max-w-0 px-6 py-3.5 font-normal">
                   <div className="flex min-w-0 items-center gap-3">
                     <EventThumbnail imageUrl={event.imageUrl} />
                     <div className="min-w-0">
@@ -107,16 +111,16 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
                     </div>
                   </div>
                 </TableHead>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-6 py-3.5">
                   <StatusBadge status={event.status} />
                 </TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-6 py-3.5">
                   <div className="w-48 space-y-2">
                     <SoldCount sold={event.sold} capacity={event.capacity} />
                     <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
                   </div>
                 </TableCell>
-                <TableCell className="px-4 py-3 text-right font-semibold tabular-nums">
+                <TableCell className="px-6 py-3.5 text-right font-semibold tabular-nums">
                   <Revenue event={event} />
                 </TableCell>
               </TableRow>
@@ -127,7 +131,7 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
 
       <ul aria-labelledby={labelledBy} className="space-y-3 lg:hidden">
         {events.map((event) => (
-          <li key={event.id} className="space-y-3 rounded-2xl p-4 ring-1 ring-border">
+          <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
             <div className="flex items-start gap-3">
               <EventThumbnail imageUrl={event.imageUrl} />
               <div className="min-w-0 flex-1">

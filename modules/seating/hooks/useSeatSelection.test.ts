@@ -98,12 +98,35 @@ describe("useSeatSelection", () => {
     });
   });
 
-  it("selectZone activa cualquier zona, incluidas las numeradas y las agotadas", () => {
+  it("selectZone activa las zonas numeradas y las de pie", () => {
     const { result } = renderSelection();
     act(() => result.current.selectZone("norte"));
     expect(result.current.activeZoneId).toBe("norte");
-    act(() => result.current.selectZone("palco"));
-    expect(result.current.activeZoneId).toBe("palco");
+    act(() => result.current.selectZone("campo"));
+    expect(result.current.activeZoneId).toBe("campo");
+  });
+
+  it.each(["palco", "mesa", "inexistente"])("selectZone ignora la zona %s (agotada o inexistente)", (zoneId) => {
+    const { result } = renderSelection();
+    act(() => result.current.selectZone(zoneId));
+    expect(result.current.activeZoneId).toBeNull();
+
+    act(() => result.current.selectZone("norte"));
+    act(() => result.current.selectZone(zoneId));
+    expect(result.current.activeZoneId).toBe("norte");
+  });
+
+  it("closeZone vuelve a no tener zona activa y conserva la selección", () => {
+    const { result } = renderSelection();
+    act(() => result.current.changeQuantity("campo", 1));
+    act(() => result.current.toggleSeat("norte-B-1"));
+    act(() => result.current.selectZone("norte"));
+
+    act(() => result.current.closeZone());
+    expect(result.current.activeZoneId).toBeNull();
+    expect(result.current.quantities).toEqual({ campo: 1 });
+    expect(result.current.seatIds).toEqual(["norte-B-1"]);
+    expect(result.current.ticketCount).toBe(2);
   });
 
   it("changeQuantity activa la zona, sube y baja sin pasar de 0", () => {
@@ -221,67 +244,133 @@ describe("useSeatSelection", () => {
       expect(result.current.notice).toBeNull();
     });
 
-    it("pickBestSeats sin asientos de la zona elige 1, el más cercano y centrado", () => {
+    it.each([
+      [1, ["norte-A-2"], "Elegimos Fila A · Asiento 2."],
+      [2, ["norte-A-2", "norte-A-3"], "Elegimos 2 asientos juntos en la fila A."],
+      [3, ["norte-B-1", "norte-B-2", "norte-B-3"], "Elegimos 3 asientos juntos en la fila B."],
+    ])("pickBestSeats con count %i elige y devuelve el mejor bloque, con su aviso", (count, expected, notice) => {
       const { result } = renderSelection();
-      act(() => result.current.pickBestSeats("norte"));
-      expect(result.current.seatIds).toEqual(["norte-A-2"]);
-      expect(result.current.notice).toBe("Elegimos Fila A · Asiento 2.");
+      let picked: string[] | null = null;
+      act(() => {
+        picked = result.current.pickBestSeats("norte", count);
+      });
+
+      expect(picked).toEqual(expected);
+      expect(result.current.seatIds).toEqual(expected);
+      expect(result.current.notice).toBe(notice);
+      expect(result.current.ticketCount).toBe(count);
     });
 
-    it("pickBestSeats reemplaza los k asientos de la zona por el mejor bloque y conserva los de otras zonas", () => {
+    it("pickBestSeats sustituye las butacas de la zona por el bloque y conserva las de otras zonas", () => {
       const { result } = renderSelection();
       act(() => result.current.toggleSeat("norte-B-1"));
       act(() => result.current.toggleSeat("sur-A-1"));
       act(() => result.current.toggleSeat("norte-B-4"));
 
-      act(() => result.current.pickBestSeats("norte"));
-      expect(result.current.seatIds).toEqual(["sur-A-1", "norte-A-2", "norte-A-3"]);
-      expect(result.current.notice).toBe("Elegimos 2 asientos juntos en la fila A.");
-      expect(result.current.ticketCount).toBe(3);
+      let picked: string[] | null = null;
+      act(() => {
+        picked = result.current.pickBestSeats("norte", 3);
+      });
+      expect(picked).toEqual(["norte-B-1", "norte-B-2", "norte-B-3"]);
+      expect(result.current.seatIds).toEqual(["sur-A-1", "norte-B-1", "norte-B-2", "norte-B-3"]);
+      expect(result.current.ticketCount).toBe(4);
+
+      act(() => {
+        picked = result.current.pickBestSeats("norte", 1);
+      });
+      expect(picked).toEqual(["norte-A-2"]);
+      expect(result.current.seatIds).toEqual(["sur-A-1", "norte-A-2"]);
     });
 
-    it("pickBestSeats en el límite reemplaza si ya hay asientos de la zona, y si no hay, avisa", () => {
+    it("pickBestSeats sin bloque libre de count devuelve null, no cambia la selección y avisa", () => {
       const { result } = renderSelection();
-      for (let i = 0; i < 9; i++) act(() => result.current.changeQuantity("campo", 1));
-      act(() => result.current.toggleSeat("norte-B-4"));
+      act(() => result.current.toggleSeat("norte-B-2"));
 
-      act(() => result.current.pickBestSeats("norte"));
-      expect(result.current.seatIds).toEqual(["norte-A-2"]);
-      expect(result.current.ticketCount).toBe(10);
-
-      act(() => result.current.pickBestSeats("sur"));
-      expect(result.current.seatIds).toEqual(["norte-A-2"]);
-      expect(result.current.notice).toBe("Máximo 10 entradas por compra");
-    });
-
-    it("pickBestSeats sin bloque posible no cambia la selección y avisa con k asientos", () => {
-      const { result } = renderSelection();
-      for (const seatId of ["norte-A-2", "norte-A-3", "norte-A-4", "norte-B-1", "norte-B-2"]) {
-        act(() => result.current.toggleSeat(seatId));
-      }
-
-      act(() => result.current.pickBestSeats("norte"));
-      expect(result.current.seatIds).toEqual(["norte-A-2", "norte-A-3", "norte-A-4", "norte-B-1", "norte-B-2"]);
+      let picked: string[] | null = [];
+      act(() => {
+        picked = result.current.pickBestSeats("norte", 5);
+      });
+      expect(picked).toBeNull();
+      expect(result.current.seatIds).toEqual(["norte-B-2"]);
       expect(result.current.notice).toBe("No hay 5 asientos juntos disponibles en esta zona.");
     });
 
-    it.each(["sur", "mesa"])("pickBestSeats sin asientos disponibles en %s avisa que no quedan", (zoneId) => {
+    it.each([
+      ["sur", 1, "No quedan asientos disponibles en esta zona."],
+      ["sur", 2, "No hay 2 asientos juntos disponibles en esta zona."],
+      ["mesa", 1, "No quedan asientos disponibles en esta zona."],
+      ["mesa", 2, "No hay 2 asientos juntos disponibles en esta zona."],
+    ])("pickBestSeats en %s (sin disponibles o agotada) con count %i devuelve null y avisa", (zoneId, count, notice) => {
       const { result } = renderSelection();
-      act(() => result.current.pickBestSeats(zoneId));
+      let picked: string[] | null = [];
+      act(() => {
+        picked = result.current.pickBestSeats(zoneId, count);
+      });
+      expect(picked).toBeNull();
       expect(result.current.seatIds).toEqual([]);
-      expect(result.current.notice).toBe("No quedan asientos disponibles en esta zona.");
+      expect(result.current.notice).toBe(notice);
     });
 
-    it.each(["campo", "inexistente"])("pickBestSeats no hace nada en la zona %s", (zoneId) => {
+    it("pickBestSeats nunca elige accesibles", () => {
       const { result } = renderSelection();
-      act(() => result.current.pickBestSeats(zoneId));
-      expect(result.current.seatIds).toEqual([]);
+      // Sur solo tiene un accesible y un ocupado; en Norte, A-4 (accesible) completaría el bloque A-2…A-4.
+      act(() => {
+        expect(result.current.pickBestSeats("sur", 1)).toBeNull();
+      });
+      act(() => {
+        expect(result.current.pickBestSeats("norte", 3)).toEqual(["norte-B-1", "norte-B-2", "norte-B-3"]);
+      });
+      expect(result.current.seatIds).not.toContain("norte-A-4");
+      expect(result.current.seatIds).not.toContain("sur-A-1");
+    });
+
+    it("pickBestSeats por encima del límite de 10 devuelve null y avisa; descuenta las butacas de la zona", () => {
+      const { result } = renderSelection();
+      for (let i = 0; i < 8; i++) act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.toggleSeat("norte-B-4"));
+
+      // 9 − 1 (de la zona) + 3 = 11 > 10.
+      let picked: string[] | null = [];
+      act(() => {
+        picked = result.current.pickBestSeats("norte", 3);
+      });
+      expect(picked).toBeNull();
+      expect(result.current.seatIds).toEqual(["norte-B-4"]);
+      expect(result.current.notice).toBe("Máximo 10 entradas por compra");
+
+      // 9 − 1 + 2 = 10: cabe.
+      act(() => {
+        picked = result.current.pickBestSeats("norte", 2);
+      });
+      expect(picked).toEqual(["norte-A-2", "norte-A-3"]);
+      expect(result.current.ticketCount).toBe(10);
+    });
+
+    it.each([
+      ["norte", 0],
+      ["norte", -1],
+      ["norte", 1.5],
+      ["norte", Number.NaN],
+      ["campo", 1],
+      ["inexistente", 1],
+    ])("pickBestSeats en %s con count %d devuelve null sin cambios", (zoneId, count) => {
+      const { result } = renderSelection();
+      act(() => result.current.toggleSeat("norte-B-1"));
+
+      let picked: string[] | null = [];
+      act(() => {
+        picked = result.current.pickBestSeats(zoneId, count);
+      });
+      expect(picked).toBeNull();
+      expect(result.current.seatIds).toEqual(["norte-B-1"]);
       expect(result.current.notice).toBeNull();
     });
 
     it("el aviso se limpia con la siguiente acción que cambia la selección", () => {
       const { result } = renderSelection();
-      act(() => result.current.pickBestSeats("sur"));
+      act(() => {
+        result.current.pickBestSeats("sur", 1);
+      });
       expect(result.current.notice).not.toBeNull();
 
       act(() => result.current.removeSeat("norte-B-1"));
@@ -290,7 +379,9 @@ describe("useSeatSelection", () => {
       act(() => result.current.changeQuantity("campo", 1));
       expect(result.current.notice).toBeNull();
 
-      act(() => result.current.pickBestSeats("norte"));
+      act(() => {
+        result.current.pickBestSeats("norte", 1);
+      });
       expect(result.current.notice).toBe("Elegimos Fila A · Asiento 2.");
       act(() => result.current.removeSeat("norte-A-2"));
       expect(result.current.notice).toBeNull();

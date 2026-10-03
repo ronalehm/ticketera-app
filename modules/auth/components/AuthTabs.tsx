@@ -15,7 +15,7 @@ const AUTH_TABS = [
 export function AuthTabs({ current }: AuthTabsProps) {
   return (
     <nav aria-label="Acceso a tu cuenta">
-      <ul className="grid grid-cols-2 gap-1 rounded-xl bg-background p-1 ring-1 ring-border">
+      <ul className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
         {AUTH_TABS.map((tab) => {
           const isCurrent = tab.key === current;
           return (
@@ -25,7 +25,9 @@ export function AuthTabs({ current }: AuthTabsProps) {
                 aria-current={isCurrent ? "page" : undefined}
                 className={cn(
                   "flex h-11 cursor-pointer items-center justify-center rounded-lg text-sm font-medium transition-colors duration-200 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  isCurrent ? "bg-primary font-semibold text-primary-foreground" : "hover:bg-accent hover:text-accent-foreground",
+                  isCurrent
+                    ? "bg-background font-semibold text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
                 )}
               >
                 {tab.label}

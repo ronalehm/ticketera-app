@@ -37,7 +37,7 @@ export function RelatedEvents({ events, category }: { events: Event[]; category:
         <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:py-0 md:gap-6 lg:grid-cols-3 xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {events.map((event) => (
             <li key={event.id} className="relative w-64 shrink-0 snap-start sm:w-auto">
-              <EventCard event={event} />
+              <EventCard event={event} surface="muted" />
             </li>
           ))}
         </ul>

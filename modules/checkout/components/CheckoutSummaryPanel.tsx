@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatTicketCount } from "../utils/summaryFormat";
 
 type CheckoutSummaryPanelProps = {
   title: string;
@@ -12,7 +13,6 @@ type CheckoutSummaryPanelProps = {
   ticketCount: number;
   totalLabel: string;
   children: ReactNode;
-  footer: ReactNode;
   className?: string;
 };
 
@@ -23,7 +23,6 @@ export function CheckoutSummaryPanel({
   ticketCount,
   totalLabel,
   children,
-  footer,
   className,
 }: CheckoutSummaryPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -43,7 +42,7 @@ export function CheckoutSummaryPanel({
           <span className="sr-only">Resumen del pedido:</span>
           <span className="line-clamp-1 text-base font-semibold">{title}</span>
           <span className="text-sm text-muted-foreground tabular-nums">
-            {ticketCount} {ticketCount === 1 ? "entrada" : "entradas"} · {totalLabel}
+            {formatTicketCount(ticketCount)} · {totalLabel}
           </span>
         </span>
         <ChevronDown
@@ -55,8 +54,6 @@ export function CheckoutSummaryPanel({
       <div id={contentId} className={cn(!isOpen && "hidden", "lg:block")}>
         {children}
       </div>
-
-      {footer}
     </aside>
   );
 }
