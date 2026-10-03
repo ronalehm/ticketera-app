@@ -24,8 +24,18 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
   - tarjeta blanca "Elige tus entradas" con "Paso 1 de 2 · Elige una zona" a la derecha del título;
   - debajo, el mapa del estadio curvo sobre un gris muy claro: escenario semicircular navy con "ESCENARIO" y un arco de luces; sectores anulares coloreados por precio en una escala de azules (del más oscuro, el más cercano y caro, al más claro), separados por blanco;
   - debajo del mapa, tarjetas de zona en 2 columnas: barra vertical del color de la zona, nombre, subtítulo con icono ("General · sin butaca" o "Numerada"), "c/u" pequeño sobre el precio y un chevron.
-- El sub-paso 2 (cantidad o butacas) se lleva al mismo nivel de acabado con los patrones de Ticketmaster y Joinnus (ver "Investigación y diagnóstico").
-- La escala de azules se traduce a tokens Mentec (decisión 28), no al índigo literal.
+- **Pedido del usuario (3), "paso 2 de elegir entradas"**, con la captura `images/15.png`. Es el **objetivo visual explícito del sub-paso 2 de una zona numerada**:
+  - título "Elige tus entradas" con "Paso 2 de 2 · Elige tus butacas" a la derecha;
+  - migas "‹ Todas las zonas › Tribuna Oriente";
+  - fila "**Tribuna Oriente** · S/ 155 c/u" con "2 de 6 butacas" a la derecha;
+  - lienzo con el sector delineado en azul sobre un fondo lila claro, los demás sectores en gris claro y el escenario navy con luces, parcialmente visible al costado;
+  - filas con su letra en los dos extremos, siguiendo la curva;
+  - butacas circulares grandes: lavanda (disponibles), grises con "×" (ocupadas) y oscuras con check blanco (elegidas);
+  - minimapa arriba a la izquierda, con el estadio y la zona actual resaltada; controles +, − y pantalla completa abajo a la derecha, ambos superpuestos al lienzo;
+  - debajo, la leyenda "● Disponible · S/ 155 ✓ Elegida ● Ocupada" y "2 elegidas" a la derecha.
+- El sub-paso 2 de una zona de pie (sin captura) y lo que las capturas no muestran (tooltip, mejores asientos, móvil) siguen los patrones de Ticketmaster y Joinnus con el mismo acabado (ver "Investigación y diagnóstico").
+- **Pedido del usuario (4):** "buscar una librería completa para la vista de elegir entradas". Se evalúan las librerías y servicios completos de mapas de butacas en "Librería del plano". La recomendación (decisión 22) es seguir con el SVG propio, mejorado para cumplir las dos capturas, y dejar preparada una integración SaaS opcional, que el usuario decide (Preguntas abiertas 17).
+- La escala de azules se traduce a tokens Mentec (decisión 28), no al índigo ni al lavanda literales.
 - **Nuevas fases:**
   - Fase 2: escala de tonos.
   - Fase 3: sub-paso 1 con el diseño de la captura, sub-paso 2 funcional y resumen móvil.
@@ -76,18 +86,40 @@ Fuentes: capturas `scratchpad/shots/redesign-before-{noche-de-sintetizadores-lim
 7. **El diseño de las capturas 1 y 6** (Fase 2 original) corrige 1–3 con los sub-pasos y las tarjetas, pero no mejora el plano (4–6) ni el resumen móvil.
 
 ### Librería del plano
-Versiones consultadas en npm el 2026-10-03; el proyecto usa React 19.2.8 y Next 16.3.8.
+**Fuentes (2026-10-03).** Se usaron `npm view <paquete> version peerDependencies license time.modified dependencies` (el registro de npm responde) y los README de GitHub servidos por `raw.githubusercontent.com`. Las webs, documentaciones y páginas de precios de los servicios están bloqueadas por el proxy del sandbox, así que precios y accesibilidad de los SaaS se citan del README cuando lo dice, y si no, se marcan "no verificado". El proyecto usa React 19.2.8 y Next 16.3.8.
 
-| Opción | Compatibilidad | A favor | En contra | Veredicto |
-|---|---|---|---|---|
-| **SVG propio + `react-zoom-pan-pinch` 4.2.0** (instalado) | peer `react: *`; publicada 2026-09 | DOM real por butaca (`role="checkbox"`, roving tabindex, `aria-*`); tokens Tailwind (`fill-*`); testeable en jsdom. Ya trae `zoomToElement` (varios destinos, animado y con `maxScale`), `useTransformInit`/`useTransformEffect` (nivel de detalle y minimapa), `panBy`, pellizco y límites | El dibujo de los estados y el tooltip son nuestros | **Se mantiene** (decisión 22) |
-| `@visx/zoom` 4.0.0 | React 18/19 | Ligera | Solo da la matriz y los handlers: habría que reimplementar pellizco, límites y animación. Dependencia nueva sin ganancia | No |
-| `d3-zoom` 3.0.0 | Sin cambios desde 2022 | Robusta | Imperativa, toca el DOM fuera de React y arrastra `d3-selection`/`d3-transition`. Duplica lo que ya hace la librería instalada | No |
-| `react-konva` 19.3.0 + `konva` 10.7 | **Exige `react ^19.3.0`** (el proyecto usa 19.2.8) | Rendimiento con miles de butacas | Canvas: sin nodos accesibles (teclado y lector), sin tokens CSS y sin tests en jsdom sin `canvas`. Nuestras zonas tienen ≤ 120 butacas | No |
-| Seats.io (`@seatsio/seatsio-react` 15.41) | `react >= 18` | Editor de planos, mejor asiento, accesibilidad, reservas y temporizador reales | SaaS de pago por butaca vendida. Exige `workspaceKey` y los eventos en sus servidores: no hay backend, y rompería los contratos B/C y los datos mock. Estilo propio fuera de los tokens Mentec | No por ahora; candidata cuando haya backend (Preguntas abiertas 17) |
-| `motion` 14 (animaciones) | React 18/19 | Transiciones de layout | MASTER §9: CSS + `tw-animate-css` bastan | No |
+**Criterios:**
+- licencia y coste;
+- mantenimiento;
+- compatibilidad con React 19.2 / Next 16;
+- accesibilidad (teclado y lector);
+- modelo mixto (zonas de pie + butacas numeradas);
+- **funcionar sin backend** (el alcance es UI con datos mock);
+- estilo con tokens Mentec;
+- esfuerzo de migración desde lo implementado: F1 con sectores anulares y `generateArcSeatRows`, ids `<zona>-<FILA>-<n>` y el contrato C (`asientos=`).
 
-Rendimiento con SVG: ~120 nodos por zona, eventos delegados en un solo `<g>` (como hoy). El nivel de detalle se aplica con un atributo en el `<svg>`, sin re-render por fotograma (requisito 22).
+| Opción | Licencia / coste | Mantenimiento | React 19 / Next 16 | Accesibilidad | Pie + numeradas | Sin backend | Tokens Mentec | Migración | Veredicto |
+|---|---|---|---|---|---|---|---|---|---|
+| **SVG propio + `react-zoom-pan-pinch` 4.2.0** (instalado) | MIT, gratis | 4.2.0, publicada 2026-09-03 | peer `react: *`; ya funciona en el proyecto | DOM real por butaca: `role="checkbox"`, roving tabindex y `aria-*` ya implementados y testeados | Sí (ya) | Sí | Sí (`fill-*`, `stroke-*`) | Ninguna. Trae lo necesario para las capturas: `zoomToElement` (varios destinos, animado, `maxScale`), `useTransformInit`/`useTransformEffect` (nivel de detalle, minimapa), `fitToView`, pellizco y límites | **Se mantiene y se mejora** (decisión 22) |
+| **Seats.io** (`@seatsio/seatsio-react` 15.41.0 + `@seatsio/seatsio-types` 6.28.0) | Wrapper MIT de ~21 kB. El renderer se descarga del CDN regional de Seats.io. SaaS de pago por butaca reservada, con plan gratuito limitado (no verificado: web bloqueada) | Muy activo (2026-10-02) | `react >= 18`; en Next hace falta `"use client"` (README) | Renderer propio; dicen tener modo accesible (no verificado) | Sí (`GeneralAdmissionArea` + butacas, `pricing` por categoría) | **No**: chart, evento y disponibilidad viven en sus servidores (`workspaceKey`, `event`, `region`). No se puede verificar en el sandbox, solo en la máquina del usuario | Parcial: colores por categoría y opciones de estilo propias, no clases CSS | Alta: rehacer los planos en su designer (se descartan los sectores de F1 y `generateArcSeatRows`), mapear categorías ↔ `ticketTypeId` y sus etiquetas ("A-12") ↔ `<zona>-<FILA>-<n>`. Las reservas reales exigen backend | **Candidata para producción con backend**, no para este alcance (Preguntas abiertas 17) |
+| **SeatLayer** (`@seatlayer/react` 0.106.0; motor `@seatlayer/core` con `konva` + WebGL `ogl`) | SDK MIT. Servicio: "$0 entry, 100 free confirmed-sold-seat credits per organization each month, then $0.10 down to $0.05 a credit" (README, 2026) | Activo (2026-10-02) pero versión 0.x | `react >= 17` | Canvas/WebGL. El README menciona `setColorblindSafe()`; teclado y lector no documentados | Sí (zonas, `bestAvailable(qty, categoryKey)`) | **No**: "Chart geometry, availability, and holds all come from the SeatLayer API at runtime" (README); `publicKey` + origen registrado | Parcial (`setMapTheme()`) | Alta, igual que Seats.io | Alternativa más barata y joven a Seats.io; misma conclusión |
+| seatmap.pro (`@seatmap.pro/renderer` 1.73.7) | Propietaria ("SEE LICENSE IN https://seatmap.pro/terms-of-service"), comercial | Activo (2026-09-21) | Agnóstico, sin peer | Canvas; no documentada | Sí (no verificado) | No: planos desde su plataforma o licencia on-premise (no verificado); incluye `@sentry/browser` | No | Alta | No |
+| `@alisaitteke/seatmap-canvas` 2.7.6 (seatmap.io v1) | MIT | **"Canvas v1 is no longer developed"** (README); el producto mantenido es comercial (seatmap.io, WebGL2) | peer **`react ^18`** (no 19) | SVG/D3 sin teclado documentado | Bloques (sí) | Sí (JSON) | Colores por configuración (strings) | Media | No: abandonada y peer incompatible |
+| `@mezh-hq/react-seat-toolkit` | — | **404 en npm y en `raw.githubusercontent.com`** (retirada o movida al 2026-10-03) | — | — | — | — | — | — | No disponible |
+| `seat-picker` 0.0.13 | MIT | 2025-05, pre-1.0; `fabric` 5 + `zustand` | `react >= 18.2` | Canvas (fabric), sin accesibilidad | Zonas planas | Sí | No | Alta (editor de cuadrículas, sin arcos) | No |
+| `seatchart` 0.1.0 · `react-seatmap` 0.1.2 · `react-seat-picker` 2.0.0 | MIT | 2022 / 2022 / peer `react ≤ 16` | No o sin mantenimiento | Básica | Solo cuadrícula | Sí | No | — | No |
+| Motores genéricos: `react-konva` 19.3.0, `@pixi/react` 8.0.5 + `pixi.js` 8.22, `deck.gl` 9.4, `fabric` 7.4 | MIT | Activos | `react-konva` **exige `react ^19.3.0`** (incompatible con 19.2.8); pixi `react >= 19` | Canvas/WebGL: sin nodos accesibles; habría que duplicar un árbol accesible aparte | Hay que construirlo | Sí | No (no leen CSS) | Reescribir el selector entero; solo compensa con más de ~10 000 butacas (aquí ≤ 120 por zona) | No |
+| `@visx/zoom` 4.0.0 · `d3-zoom` 3.0.0 (solo zoom) | MIT | 2026-06 / 2022 | Sí / sin peer | — | — | Sí | — | Sustituir lo que ya hace `react-zoom-pan-pinch` sin ganancia | No |
+| `motion` 14 (animaciones) | MIT | Activo | `react 18/19` | — | — | — | — | MASTER §9: CSS + `tw-animate-css` bastan | No |
+
+**Conclusión:**
+- Las únicas librerías "completas" mantenidas y compatibles son **Seats.io** y **SeatLayer**, y las dos son servicios: el plano, la disponibilidad y las reservas viven en sus servidores.
+- No encajan en el alcance actual: UI con datos mock, sin backend y sin poder verificarlas en el sandbox. Además, obligarían a rehacer la Fase 1 y a romper el contrato C.
+- Las open-source están abandonadas, son incompatibles con React 19.2, son solo de cuadrícula o son canvas sin accesibilidad.
+- Por eso se mejora el SVG propio hasta el nivel de las capturas (Fases 3–5).
+- La integración SaaS queda como **fase opcional no planificada**, con su diseño en la decisión 29, a la espera de que el usuario acepte un servicio de pago con datos en terceros (Preguntas abiertas 17).
+
+Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `<g>` (como hoy). El nivel de detalle se aplica con un atributo en el `<svg>`, sin re-render por fotograma (requisito 23).
 
 ## Alcance
 - Incluye:
@@ -100,21 +132,35 @@ Rendimiento con SVG: ~120 nodos por zona, eventos delegados en un solo `<g>` (co
     - navegación ↑/↓ y "mejor asiento" válidos con filas curvas;
     - layout mock del estadio;
     - tests e invariantes nuevos.
-  - **Fase 2. Pantalla en dos sub-pasos para todos los eventos con mapa:**
-    - tarjeta "Elige tus entradas" con el indicador "Paso n de 2 · …";
-    - mapa sin tarjeta propia, con luces y etiquetas en 2 líneas;
-    - tarjetas de zona en 2 columnas;
-    - panel de cantidad para zonas de pie;
-    - plano de butacas integrado como sub-paso 2, con migas "Todas las zonas", contador "n de m butacas" y leyenda con precio;
+  - **Fase 2. Escala de tonos por precio** (decisión 28):
+    - 5 tonos en una escala de azules Mentec, del navy al azul muy claro, como en la captura del paso 1;
+    - clases de texto por tono para las etiquetas HTML del mapa;
+    - se ajustan los tests de tonos (también el de la Fase 1 para el festival: Norte pasa a `tier-5`).
+    - Se ve también en el aside de precios del detalle (`ZonePricesCard`), que usa las mismas clases. No cambia su código ni su contrato H.
+  - **Fase 3. Sub-paso 1 con el diseño de la captura, sub-paso 2 funcional y resumen móvil (todos los eventos con mapa):**
+    - una tarjeta "Elige tus entradas" con el indicador "Paso n de 2 · …";
+    - sub-paso 1: el mapa (etiquetas HTML de tamaño fijo, luces, nombres en 2 líneas, separación blanca, insignia de entradas elegidas) y debajo las tarjetas de zona en 2 columnas, **sincronizados** por hover y foco;
+    - sub-paso 2: migas, cabecera de zona (nombre, precio y contador "n de m butacas") y el panel de cantidad con subtotal (zona de pie) o el plano actual adaptado (zona numerada);
+    - transición desde la zona;
+    - barra móvil con "Ver resumen" en una hoja inferior (`Sheet`);
     - texto nuevo del resumen vacío;
     - se elimina `ZoneList`;
-    - hook con `closeZone`.
-  - **Fase 3. Plano curvo con minimapa:**
-    - fondo del estadio atenuado y contorno del sector en el plano de las zonas en arco;
-    - letras de fila en los dos bordes del sector;
-    - minimapa con la zona resaltada y el recuadro de la vista actual;
-    - utilidad pura de "vista visible".
-  - **Fase 4. Precarga de la selección desde la URL** (enmienda; resuelve la pregunta abierta 5 de `checkout-mock-payment.md`):
+    - hook con `closeZone` y `selectZone` que ignora las agotadas;
+    - utilidad `parseViewBox`.
+  - **Fase 4. Plano de butacas renovado (objetivo: captura del paso 2):**
+    - butacas disponibles lavanda (azul Mentec claro), elegidas navy con check, ocupadas grises con "×" y accesibles con icono;
+    - números visibles al acercar;
+    - tooltip con fila, butaca y precio;
+    - letras de fila en los dos extremos, también en arco y sin la barra "ESCENARIO" falsa;
+    - controles de zoom superpuestos abajo a la derecha (desde `sm`);
+    - leyenda "Disponible · S/ X / Elegida / Ocupada" con "n elegidas";
+    - "Mejores butacas" con cantidad y zoom animado a las elegidas.
+  - **Fase 5. Plano curvo con contexto y minimapa** (la antigua Fase 3, adaptada a la captura del paso 2):
+    - sector delineado en azul sobre un fondo lila claro, el resto del estadio en gris, el escenario navy y las luces;
+    - lienzo apaisado desde `sm`, con el estadio visible alrededor;
+    - minimapa superpuesto arriba a la izquierda (desde `sm`) o en la barra superior (móvil);
+    - utilidad de "vista visible".
+  - **Fase 6. Precarga de la selección desde la URL** (la antigua Fase 4, mismo alcance; resuelve la pregunta abierta 5 de `checkout-mock-payment.md`):
     - al volver desde "Cambiar entradas" de `/checkout` (`/eventos/<slug>/entradas?<ticketTypeId>=<qty>…&asientos=<ids>`, que construye la Fase 7 de checkout), la pantalla abre con esas cantidades y butacas ya elegidas;
     - se ignora lo que no sea válido (butacas ocupadas o inexistentes, zonas agotadas, valores mal formados);
     - función pura de lectura, estado inicial en el hook, envoltorio cliente con `useSearchParams` y `Suspense` en la página.
@@ -123,13 +169,18 @@ Rendimiento con SVG: ~120 nodos por zona, eventos delegados en un solo `<g>` (co
   - Sub-pasos en la URL ni en el historial del navegador. "Atrás" del navegador sale de `/entradas`, como hoy.
   - Mapas curvos para los otros 3 eventos con mapa. Conservan sus formas rectangulares (decisión 3).
   - Rotar el plano para que el escenario quede arriba. El sector se dibuja con la orientación que tiene en el estadio, como en el diseño.
-  - Cambiar `SeatShape`, los `aria-label` de los asientos, las etiquetas "Fila F · Asiento 12" del resumen, los chips, los avisos ni el contrato C.
+  - Cambiar los `aria-label` de los asientos, las etiquetas "Fila F · Asiento 12" del resumen y de los chips, los textos de los avisos existentes ni el contrato C. `SeatShape` sí cambia de aspecto en la Fase 4 (decisión 10).
   - El formato compacto "Fila L · 9 · Fila M · 8" en "Tu compra" (ver Preguntas abiertas).
-  - Un quinto tono por precio (ver Preguntas abiertas).
+  - El "6 por zona" de la captura del paso 2 ("2 de 6 butacas"): se mantiene el límite de 10 por compra (decisión 11, Preguntas abiertas 3).
+  - Filas A–M en las tribunas laterales, como en la captura del paso 2: siguen siendo A–J (decisión 6, Preguntas abiertas 2).
+  - Precios sin decimales ("S/ 330") y el precio en naranja de las capturas: se mantiene `S/ 330.00` en `text-foreground` (MASTER §2 y §10; Preguntas abiertas 12).
+  - El arco punteado decorativo exterior de la captura del paso 1: necesitaría un dato nuevo en el layout (Preguntas abiertas 14).
+  - Filtros o slider de precio, temporizador de reserva, vista desde el asiento y la regla de no dejar butacas sueltas (ver "Investigación y diagnóstico" y Preguntas abiertas).
+  - Dependencias nuevas o librerías/servicios de mapas de butacas (decisión 22). La integración SaaS de la decisión 29 queda **fuera de las Fases 2–6**.
   - Cambios en el detalle `/eventos/[slug]`, en `ZonePricesCard`/`MobileBuyBar`, en `/checkout` o en otros módulos, salvo `modules/events/data/events.mock.ts` y `modules/events/services/events.service.test.ts` (F1).
   - Reserva real de butacas, backend y persistencia (igual que la spec base).
-  - (F4) Reflejar en la URL los cambios hechos en la pantalla, recordar la selección en el navegador o abrir directamente el sub-paso 2 de una zona: la precarga solo inicializa el estado y la pantalla abre en el sub-paso 1.
-  - (F4) Cambios en `modules/checkout/**` o en el enlace "Cambiar entradas": son de `checkout-mock-payment.md` (Fase 7).
+  - (F6) Reflejar en la URL los cambios hechos en la pantalla, recordar la selección en el navegador o abrir directamente el sub-paso 2 de una zona: la precarga solo inicializa el estado y la pantalla abre en el sub-paso 1.
+  - (F6) Cambios en `modules/checkout/**` o en el enlace "Cambiar entradas": son de `checkout-mock-payment.md` (Fase 7).
 
 ## Decisiones
 1. **La compra sigue en 3 pasos** (aclaración del usuario).
