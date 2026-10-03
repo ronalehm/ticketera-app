@@ -7,7 +7,6 @@ import {
   buildSeatingCheckoutHref,
   getSelectionLines,
   getSelectionTicketCount,
-  getSelectionTotal,
 } from "../utils/selectionSummary";
 
 const EMPTY_SELECTION: SeatSelection = { quantities: {}, seatIds: [] };
@@ -19,6 +18,7 @@ export function useSeatSelection(map: VenueMap) {
 
   const ticketCount = getSelectionTicketCount(selection);
   const atLimit = ticketCount >= MAX_TICKETS_PER_ORDER;
+  const lines = getSelectionLines(map, selection);
 
   function selectZone(zoneId: string) {
     setActiveZoneId(zoneId);
@@ -43,8 +43,8 @@ export function useSeatSelection(map: VenueMap) {
     seatIds: selection.seatIds,
     ticketCount,
     atLimit,
-    lines: getSelectionLines(map, selection),
-    total: getSelectionTotal(map, selection),
+    lines,
+    total: lines.reduce((total, line) => total + line.amount, 0),
     checkoutHref: buildSeatingCheckoutHref(map.eventSlug, map, selection),
     selectZone,
     changeQuantity,

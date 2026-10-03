@@ -12,7 +12,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: PageProps<"/eventos/[slug]/entradas">): Promise<Metadata> {
-  const event = await getEventBySlug((await params).slug);
+  const { slug } = await params;
+  if (!hasVenueMap(slug)) return {};
+  const event = await getEventBySlug(slug);
   if (!event) return {};
 
   return {

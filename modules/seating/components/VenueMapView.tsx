@@ -14,10 +14,12 @@ type VenueMapViewProps = Pick<VenueMap, "viewBox" | "stage" | "venue"> & {
   onSelectZone: (zoneId: string) => void;
 };
 
-// Geometría de las etiquetas en unidades del viewBox (≥ 24 → ≥ 12 px a 375 px, decisión 10).
-const LABEL_FONT_SIZE = 24;
-const LABEL_LINE_HEIGHT = 28;
-const PILL_WIDTH = 240;
+// Geometría de las etiquetas en unidades del viewBox (decisión 10). A 375 px el SVG de 600 unidades se pinta a
+// ~287 px (0.48 px/unidad), así que 26 → ~12.4 px (≥ 12 px). El bloque de 3 líneas mide 2·30 + 2 + 32 = 94
+// unidades y cabe en las zonas "Últimas entradas" más bajas de los mocks (104).
+const LABEL_FONT_SIZE = 26;
+const LABEL_LINE_HEIGHT = 30;
+const PILL_WIDTH = 264;
 const PILL_HEIGHT = 32;
 
 function getZoneAriaLabel(zone: VenueZone): string {
