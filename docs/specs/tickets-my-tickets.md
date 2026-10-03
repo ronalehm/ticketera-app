@@ -186,7 +186,7 @@ Coordinación:
 - La confirmación de checkout enlaza a `/mis-entradas` sin parámetros; al llegar se selecciona el primer pedido por fecha (ver pregunta abierta 4).
 
 ### Fase 1 — Página Mis entradas (datos, pestañas, lista y entrada)
-- [ ] T1 — Base compartida: instalar `tabs`, `skeleton` y `empty` de shadcn · archivos: `components/ui/tabs.tsx`, `components/ui/skeleton.tsx`, `components/ui/empty.tsx` · depende de: checkout Fases 1 y 2 · secuencial (base)
+- [x] T1 — Base compartida: instalar `tabs`, `skeleton` y `empty` de shadcn · archivos: `components/ui/tabs.tsx`, `components/ui/skeleton.tsx`, `components/ui/empty.tsx` · depende de: checkout Fases 1 y 2 · secuencial (base)
 - [ ] T2 — Pedidos demo y utilidades puras con tests · archivos: `modules/tickets/data/demoOrders.ts`, `modules/tickets/data/demoOrders.test.ts`, `modules/tickets/utils/myOrders.ts`, `modules/tickets/utils/myOrders.test.ts` · depende de: T1 · secuencial
 - [ ] T3 — Tipos y hook `useMyOrders` con test · archivos: `modules/tickets/types/tickets.types.ts`, `modules/tickets/hooks/useMyOrders.ts`, `modules/tickets/hooks/useMyOrders.test.ts` · depende de: T2 · secuencial
 - [ ] T4 — UI, ruta y página de design system · archivos: `modules/tickets/components/MyTickets.tsx`, `modules/tickets/components/OrderList.tsx`, `modules/tickets/components/TicketCard.tsx`, `modules/tickets/index.ts`, `app/mis-entradas/page.tsx`, `design-system/ticketera/pages/my-tickets.md` (override del MASTER: fondo `bg-muted`, layout lista/tarjeta por breakpoint, talón con muescas, chip de fecha, estados vacíos, reglas de impresión, textos) · depende de: T1, T3 · secuencial
