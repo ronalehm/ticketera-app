@@ -1,5 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { getTodayInLima } from "../schemas/organizer.schema";
 
 import { useOrganizerStore } from "../stores/organizer.store";
 import { OrganizerEventForm } from "./OrganizerEventForm";
@@ -166,5 +169,12 @@ describe("OrganizerEventForm", () => {
     expect(screen.queryByRole("group", { name: "Tipo 2" })).toBeNull();
     expect(document.activeElement).toBe(addButton());
     expect(screen.getByText("100 entradas")).toBeTruthy();
+  });
+
+  it("'Fecha' solo tiene min (hoy en Lima) en cliente: el HTML del servidor no lo incluye", () => {
+    expect(renderToString(<OrganizerEventForm />)).not.toMatch(/type="date"[^>]*min=/);
+
+    render(<OrganizerEventForm />);
+    expect(input("Fecha").getAttribute("min")).toBe(getTodayInLima());
   });
 });

@@ -117,7 +117,10 @@ export function TicketTypesField({ rows, errors, onChange, onBlur }: TicketTypes
                 disabled={rows.length === 1}
                 onClick={() => removeRow(row.id)}
                 // En móvil se alinea con los inputs (bajo su etiqueta visible); en lg las etiquetas son sr-only.
-                className="mt-7 size-11 cursor-pointer text-muted-foreground hover:text-destructive lg:mt-0"
+                className={cn(
+                  "mt-7 size-11 cursor-pointer text-muted-foreground hover:text-destructive lg:mt-0",
+                  FORM_CONTROL_SCROLL,
+                )}
               >
                 <Trash2 aria-hidden className="size-5" />
               </Button>
@@ -131,7 +134,10 @@ export function TicketTypesField({ rows, errors, onChange, onBlur }: TicketTypes
         type="button"
         variant="outline"
         onClick={addRow}
-        className="h-11 w-full cursor-pointer border-dashed border-primary/40 font-semibold text-primary-strong duration-200 sm:w-fit"
+        className={cn(
+          "h-11 w-full cursor-pointer border-dashed border-primary/40 font-semibold text-primary-strong duration-200 sm:w-fit",
+          FORM_CONTROL_SCROLL,
+        )}
       >
         <Plus aria-hidden className="size-5" />
         Agregar tipo de entrada

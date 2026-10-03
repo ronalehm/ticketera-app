@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useSyncExternalStore } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -35,9 +35,13 @@ const INITIAL_VALUES: Omit<OrganizerEventFormValues, "ticketTypes"> = {
   city: "",
 };
 
+// La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
+const subscribeToToday = () => () => {};
+
 function FormSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <Card className="rounded-2xl md:[--card-spacing:--spacing(6)]">
+    // overflow-clip (no overflow-hidden): recorta igual sin crear un contenedor de scroll que anule scroll-mb-28.
+    <Card className="rounded-2xl overflow-clip md:[--card-spacing:--spacing(6)]">
       <CardHeader>
         <h2 className="text-lg font-bold">{title}</h2>
         {description && <CardDescription>{description}</CardDescription>}
@@ -52,6 +56,8 @@ export function OrganizerEventForm() {
   const addEvent = useOrganizerStore((state) => state.addEvent);
   // La primera fila usa useId: su id va en los `id` de los inputs y debe coincidir entre SSR e hidratación.
   const firstRowId = useId();
+  // `min` de la fecha solo en cliente: la página se prerenderiza y "hoy" del build quedaría congelado (y no hidrataría).
+  const today = useSyncExternalStore(subscribeToToday, getTodayInLima, () => undefined);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(organizerEventFormSchema, {
     ...INITIAL_VALUES,
     ticketTypes: [{ ...createTicketTypeRow(), id: firstRowId }],
@@ -140,7 +146,7 @@ export function OrganizerEventForm() {
           <div className="grid grid-cols-2 gap-4">
             <Field data-invalid={!!errors.date}>
               <FieldLabel htmlFor="organizer-event-date">Fecha</FieldLabel>
-              <Input {...textProps("date")} type="date" min={getTodayInLima()} className={INPUT_CLASS} />
+              <Input {...textProps("date")} type="date" min={today} className={INPUT_CLASS} />
               {fieldError("date")}
             </Field>
             <Field data-invalid={!!errors.time}>
