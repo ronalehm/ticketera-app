@@ -1,7 +1,7 @@
 # Descarga de entradas en PDF
 
 - Módulo: tickets (también toca checkout y código compartido de `lib/` y `components/shared/`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Hoy "Descargar PDF" llama a `window.print()` en `modules/checkout/components/OrderConfirmation.tsx` y en `modules/tickets/components/TicketCard.tsx`: abre el diálogo de impresión, pero no descarga ningún archivo. El usuario pidió "verificar que la opción de descargar PDF sí descargue un pdf". Esta spec hace que el botón genere en el navegador un archivo `.pdf` real y lo descargue (p. ej. `mentec-MT-7Q4K2P.pdf`), con una página por entrada. No hay backend. Es para quien compra (confirmación de compra) y para quien consulta sus entradas ("Mis entradas").
