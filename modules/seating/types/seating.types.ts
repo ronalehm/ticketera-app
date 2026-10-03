@@ -25,4 +25,4 @@ export type VenueMap = Omit<VenueLayout, "zones"> & { venue: string; zones: Venu
 export type ResolvedSeat = { id: string; label: string; zoneId: string; ticketTypeId: string };
 export type SeatSelection = { quantities: Record<string, number>; seatIds: string[] };
 export type SelectionLine = { zoneId: string; name: string; quantity: number; amount: number; seatLabels: string[] };
-export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "sold-out";
+export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "tier-5" | "sold-out";
