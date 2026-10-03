@@ -1385,23 +1385,23 @@ No hay API: son datos mock.
   - Secuencial.
 
 ### Fase 4. Plano de butacas renovado (5 tareas, 11 archivos)
-- [ ] T1. `pickBestSeats(zoneId, count)` que devuelve el bloque, con tests (requisito 26).
+- [x] T1. `pickBestSeats(zoneId, count)` que devuelve el bloque, con tests (requisito 26).
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 3.
   - En paralelo con T2 y T3.
-- [ ] T2. `getPlanFit` y `getSeatDetailLevel` con test; `SeatShape` v2 y `SeatLegend` nueva; `SeatTooltip` (requisitos 21, 23 y 24).
+- [x] T2. `getPlanFit` y `getSeatDetailLevel` con test; `SeatShape` v2 y `SeatLegend` nueva; `SeatTooltip` (requisitos 21, 23 y 24).
   - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`, `modules/seating/components/SeatLegend.tsx`, `modules/seating/components/SeatTooltip.tsx`.
   - Depende de: Fase 3.
   - En paralelo con T1 y T3.
-- [ ] T3. `BestSeatsPicker` (requisito 26).
+- [x] T3. `BestSeatsPicker` (requisito 26).
   - Archivos: `modules/seating/components/BestSeatsPicker.tsx`.
   - Depende de: Fase 3.
   - En paralelo con T1 y T2.
-- [ ] T4. `SeatPlan`: nivel de detalle, tooltip, letras en los dos extremos, zoom superpuesto desde `sm`, leyenda, bandeja con "Mejores butacas" y zoom a las elegidas (requisitos 22, 25, 26 y 27).
+- [x] T4. `SeatPlan`: nivel de detalle, tooltip, letras en los dos extremos, zoom superpuesto desde `sm`, leyenda, bandeja con "Mejores butacas" y zoom a las elegidas (requisitos 22, 25, 26 y 27).
   - Archivos: `modules/seating/components/SeatPlan.tsx`.
   - Depende de: T1, T2 y T3.
   - Secuencial.
-- [ ] T5. `TicketSelection` (`seatLimit`, `selectedInZone`, `onPickBestSeats`), test ampliado y diseño de página.
+- [x] T5. `TicketSelection` (`seatLimit`, `selectedInZone`, `onPickBestSeats`), test ampliado y diseño de página.
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T4.
   - Secuencial. El reviewer comprueba con capturas a 768 y 1440 que los controles superpuestos no tapan butacas.
