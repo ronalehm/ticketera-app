@@ -6,6 +6,7 @@ import {
   formatLongDayMonth,
   formatShortDayMonth,
   formatTime,
+  getDateChipParts,
 } from "./formatEvent";
 
 describe("formatTime", () => {
@@ -80,5 +81,16 @@ describe("formatShortDayMonth y formatLongDayMonth", () => {
       expect(text).not.toMatch(/\d{4}/);
       expect(text).not.toMatch(/\b(?:am|pm|h)\b/i);
     }
+  });
+});
+
+describe("getDateChipParts", () => {
+  it.each([
+    ["2026-11-14T21:00:00-05:00", { month: "NOV", day: "14" }],
+    ["2026-12-05T20:00:00-05:00", { month: "DIC", day: "05" }],
+    ["2026-11-15T03:00:00Z", { month: "NOV", day: "14" }],
+    ["2027-01-10T11:00:00-05:00", { month: "ENE", day: "10" }],
+  ])("%s → %o (America/Lima)", (iso, expected) => {
+    expect(getDateChipParts(iso)).toEqual(expected);
   });
 });

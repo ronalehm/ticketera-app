@@ -37,6 +37,12 @@ const longDayMonthFormatter = new Intl.DateTimeFormat("es-PE", {
   month: "long",
 });
 
+const dateChipFormatter = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  day: "2-digit",
+  month: "short",
+});
+
 const priceFormatter =new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
 
 /** "2026-11-15T20:00:00-05:00" → "DOM 15 NOV · 20:00" (zona America/Lima). */
@@ -70,6 +76,13 @@ export function formatShortDayMonth(iso: string): string {
 export function formatLongDayMonth(iso: string): string {
   const { weekday, day, month } = getDayMonthParts(longDayMonthFormatter, iso);
   return `${weekday} ${day} de ${month}`;
+}
+
+/** "2026-11-14T21:00:00-05:00" → { month: "NOV", day: "14" } (America/Lima; mes corto en mayúsculas sin punto; día de 2 dígitos). */
+export function getDateChipParts(iso: string): { month: string; day: string } {
+  const parts = dateChipFormatter.formatToParts(new Date(iso));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return { month: value("month").replace(/\./g, "").toUpperCase(), day: value("day") };
 }
 
 /** 120 →"S/ 120.00" (espacios no separables normalizados a espacio normal). */
