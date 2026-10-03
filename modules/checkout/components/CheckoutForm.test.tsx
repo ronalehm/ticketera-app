@@ -186,6 +186,29 @@ describe("CheckoutForm", () => {
     expect(stored).not.toContain("739");
   });
 
+  it("tras un pago aprobado 'Pagar' sigue deshabilitado mientras navega y un segundo envío no vuelve a pagar", async () => {
+    vi.mocked(processMockPayment).mockResolvedValue(PAID_ORDER);
+    const { container } = renderForm();
+
+    fillBuyer();
+    fillCard();
+    pay();
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
+    // Deja terminar el `finally` de useZodForm (isSubmitting vuelve a false).
+    await act(async () => {});
+
+    for (const button of payButtons()) {
+      expect(button.disabled).toBe(true);
+      expect(button.textContent).toBe("Procesando pago…");
+    }
+
+    fireEvent.submit(container.querySelector("form")!);
+    await act(async () => {});
+    expect(processMockPayment).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
   it("tarjeta rechazada muestra el Alert con el foco, reactiva los botones y no navega ni guarda", async () => {
     vi.mocked(processMockPayment).mockRejectedValue(new PaymentError());
     renderForm();

@@ -36,10 +36,13 @@ const countLabel = (count: number) => `${count} ${count === 1 ? "evento" : "even
 
 function FilterFieldset({ legend, children }: { legend: string; children: ReactNode }) {
   return (
-    <fieldset className="flex flex-col py-4 last:pb-0">
-      <legend className="pb-2 text-sm font-bold">{legend}</legend>
-      {children}
-    </fieldset>
+    // El <legend> no respeta el padding del fieldset; el espaciado vertical va en un contenedor propio.
+    <div className="py-4 last:pb-0">
+      <fieldset className="flex flex-col">
+        <legend className="pb-2 text-sm font-bold">{legend}</legend>
+        {children}
+      </fieldset>
+    </div>
   );
 }
 
@@ -61,11 +64,14 @@ function CheckboxOption({
   return (
     <label className={OPTION_CLASS}>
       <input type="checkbox" name={name} value={value} checked={checked} onChange={onChange} className={INPUT_CLASS} />
-      <span className="flex-1">{label}</span>
+      {/* El sr-only va dentro del mismo span: como ítem flex aparte, Chromium añade un espacio antes de la coma. */}
+      <span className="flex-1">
+        {label}
+        <span className="sr-only">, {countLabel(count)}</span>
+      </span>
       <span className="text-muted-foreground tabular-nums" aria-hidden>
         {count}
       </span>
-      <span className="sr-only">, {countLabel(count)}</span>
     </label>
   );
 }
