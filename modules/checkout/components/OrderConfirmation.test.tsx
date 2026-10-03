@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadIcs } from "@/lib/calendar";
+import { downloadTicketsPdf } from "@/lib/ticketPdf";
 import { useOrdersStore } from "../stores/orders.store";
 import type { Order } from "../types/checkout.types";
 import { OrderConfirmation } from "./OrderConfirmation";
@@ -10,6 +11,8 @@ vi.mock("@/lib/calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/calendar")>()),
   downloadIcs: vi.fn(),
 }));
+
+vi.mock("@/lib/ticketPdf", () => ({ downloadTicketsPdf: vi.fn().mockResolvedValue(undefined) }));
 
 const CODE = "MT-AB12CD";
 
@@ -84,6 +87,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.mocked(downloadIcs).mockReset();
+  vi.mocked(downloadTicketsPdf).mockClear();
 });
 
 describe("OrderConfirmation", () => {
@@ -133,7 +137,7 @@ describe("OrderConfirmation", () => {
     expect(content).toContain(`DESCRIPTION:Pedido ${CODE} · 3 entradas · Mentec Tickets`);
   });
 
-  it("Descargar PDF abre el diálogo de impresión", async () => {
+  it("Descargar PDF descarga el PDF del pedido sin abrir el diálogo de impresión", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
     saveOrder(ORDER);
     renderConfirmation();
@@ -141,26 +145,24 @@ describe("OrderConfirmation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
 
-    expect(print).toHaveBeenCalledTimes(1);
+    expect(downloadTicketsPdf).toHaveBeenCalledTimes(1);
+    const [input] = vi.mocked(downloadTicketsPdf).mock.calls[0];
+    expect(input.orderCode).toBe(CODE);
+    expect(input.tickets.map(({ code, locationLabel }) => ({ code, locationLabel }))).toEqual(
+      ORDER.tickets.map(({ code, seatLabel }) => ({ code, locationLabel: seatLabel })),
+    );
+    expect(print).not.toHaveBeenCalled();
+    // Deja que el botón vuelva a reposo dentro del test.
+    expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
   });
 
-  it("la lista de impresión tiene una fila por entrada con su QR, código, tipo, asiento y titular", async () => {
+  it("no renderiza la región solo-impresión Tus entradas", async () => {
     saveOrder(ORDER);
     renderConfirmation();
     await findConfirmed();
 
-    const printable = screen.getByRole("region", { name: "Tus entradas" });
-    const rows = within(printable).getAllByRole("listitem");
-    expect(rows).toHaveLength(ORDER.tickets.length);
-
-    ORDER.tickets.forEach((ticket, index) => {
-      const row = within(rows[index]);
-      expect(row.getByRole("img", { name: `Código QR de la entrada ${ticket.code}` })).toBeTruthy();
-      expect(row.getByText(ticket.code)).toBeTruthy();
-      expect(row.getByText(ticket.ticketTypeName)).toBeTruthy();
-      expect(row.getByText(ticket.seatLabel!)).toBeTruthy();
-      expect(row.getByText(`Titular: ${ticket.holderName}`)).toBeTruthy();
-    });
+    expect(screen.queryByRole("region", { name: "Tus entradas" })).toBeNull();
+    expect(screen.queryByText("Tus entradas")).toBeNull();
   });
 
   it("con un código que no está en el navegador muestra No encontramos tu compra sin stepper", async () => {

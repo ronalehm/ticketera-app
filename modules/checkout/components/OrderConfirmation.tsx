@@ -2,16 +2,17 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CalendarPlus, CircleCheck, Download, Mail, QrCode, Ticket } from "lucide-react";
+import { CalendarPlus, CircleCheck, Mail, QrCode, Ticket } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { TicketQr } from "@/components/shared/TicketQr";
+import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
 import { useStoredOrder } from "../hooks/useStoredOrder";
 import type { Order } from "../types/checkout.types";
+import { buildTicketPdfInput } from "../utils/ticketPdfInput";
 import { CheckoutStatusMessage } from "./CheckoutStatusMessage";
 import { ConfirmationTicketCard } from "./ConfirmationTicketCard";
 
@@ -68,7 +69,6 @@ export function OrderConfirmation({ code, stepper }: OrderConfirmationProps) {
         <ConfirmationTicketCard order={order} />
         <ConfirmationActions order={order} />
         <NextSteps />
-        <PrintableTickets order={order} />
       </div>
     </>
   );
@@ -130,10 +130,12 @@ function ConfirmationActions({ order }: { order: Order }) {
           <span className="sm:hidden">Calendario</span>
           <span className="hidden sm:inline">Agregar al calendario</span>
         </Button>
-        <Button type="button" variant="outline" onClick={() => window.print()} className={OUTLINE_ACTION_CLASS}>
-          <Download aria-hidden />
-          Descargar PDF
-        </Button>
+        <TicketsPdfButton
+          variant="outline"
+          input={buildTicketPdfInput(order)}
+          className={OUTLINE_ACTION_CLASS}
+          errorClassName="col-span-2 text-center sm:basis-full"
+        />
       </div>
     </div>
   );
@@ -165,29 +167,3 @@ function NextSteps() {
   );
 }
 
-/** Solo visible al imprimir ("Descargar PDF"): una ficha por entrada con su QR. */
-function PrintableTickets({ order }: { order: Order }) {
-  return (
-    <section aria-labelledby="order-printable-tickets" className="hidden w-full print:block">
-      <h2 id="order-printable-tickets" className="mb-4 text-xl font-bold">
-        Tus entradas
-      </h2>
-      <ul className="flex flex-col gap-4">
-        {order.tickets.map((ticket) => (
-          <li
-            key={ticket.code}
-            className="flex break-inside-avoid items-center gap-6 rounded-2xl p-4 ring-1 ring-border"
-          >
-            <TicketQr value={ticket.code} className="size-28 shrink-0" />
-            <div className="flex flex-col gap-1">
-              <p className="font-bold tabular-nums">{ticket.code}</p>
-              <p>{ticket.ticketTypeName}</p>
-              {ticket.seatLabel && <p>{ticket.seatLabel}</p>}
-              <p className="text-muted-foreground">Titular: {ticket.holderName}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}

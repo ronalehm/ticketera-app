@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
+import { downloadTicketsPdf } from "@/lib/ticketPdf";
 import type { Order } from "@/modules/checkout/orders";
 import { DEMO_ORDERS } from "../data/demoOrders";
 import type { OrderTimeframe } from "../types/tickets.types";
@@ -11,6 +12,8 @@ vi.mock("@/lib/calendar", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/calendar")>();
   return { ...actual, buildIcsEvent: vi.fn(actual.buildIcsEvent), downloadIcs: vi.fn() };
 });
+
+vi.mock("@/lib/ticketPdf", () => ({ downloadTicketsPdf: vi.fn().mockResolvedValue(undefined) }));
 
 const findDemoOrder = (code: string): Order => {
   const order = DEMO_ORDERS.find((demoOrder) => demoOrder.code === code);
@@ -35,6 +38,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.mocked(buildIcsEvent).mockClear();
   vi.mocked(downloadIcs).mockReset();
+  vi.mocked(downloadTicketsPdf).mockClear();
 });
 
 describe("TicketCard", () => {
@@ -83,13 +87,32 @@ describe("TicketCard", () => {
     expect(detail(renderCard(TWO_TICKETS, "past"), "Estado")).toBe("Usada");
   });
 
-  it("Descargar PDF abre el diálogo de impresión", () => {
+  it("Descargar PDF descarga todas las entradas del pedido aunque se muestre la 2 y no abre el diálogo de impresión", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
     const card = renderCard();
+    fireEvent.click(card.getByRole("button", { name: "Entrada siguiente" }));
+    expect(card.getByText("Entrada 2 de 2")).toBeTruthy();
 
     fireEvent.click(card.getByRole("button", { name: "Descargar PDF" }));
 
-    expect(print).toHaveBeenCalledTimes(1);
+    expect(downloadTicketsPdf).toHaveBeenCalledTimes(1);
+    const input = vi.mocked(downloadTicketsPdf).mock.calls[0][0];
+    expect(input.orderCode).toBe("MT-7Q4K2P");
+    expect(input.tickets.map(({ code }) => code)).toEqual(["MT-7Q4K2P-01", "MT-7Q4K2P-02"]);
+    expect(input.tickets.map(({ holderName }) => holderName)).toEqual(["Ana Quispe", "Carlos Quispe"]);
+    expect(print).not.toHaveBeenCalled();
+    await waitFor(() => expect(card.getByRole("button", { name: "Descargar PDF" }).getAttribute("aria-busy")).toBeNull());
+  });
+
+  it("en el PDF de un pedido con asiento, Zona / asiento es la etiqueta completa del asiento", async () => {
+    const card = renderCard(SEATED);
+
+    fireEvent.click(card.getByRole("button", { name: "Descargar PDF" }));
+
+    const input = vi.mocked(downloadTicketsPdf).mock.calls[0][0];
+    expect(input.orderCode).toBe("MT-3HX9RB");
+    expect(input.tickets.map(({ locationLabel }) => locationLabel)).toEqual(["Tribuna Occidente · Fila F · Asiento 12"]);
+    await waitFor(() => expect(card.getByRole("button", { name: "Descargar PDF" }).getAttribute("aria-busy")).toBeNull());
   });
 
   it("Agregar al calendario descarga <slug>.ics con título, fecha, lugar y descripción del pedido", () => {

@@ -143,10 +143,12 @@ describe("findBestAvailableSeats en una zona en arco", () => {
     const rowC = zone.rows[2].seats;
     expect(rowC).toHaveLength(5);
 
-    // Por x, el centro de la fila (media de los extremos) cae junto a C-4.
+    // Por x (criterio anterior), la butaca más cercana al centro de la fila sería C-4.
     const centerX = (rowC[0].x + rowC[4].x) / 2;
-    const closestByX = rowC.reduce((closest, s) => (Math.abs(s.x - centerX) < Math.abs(closest.x - centerX) ? s : closest));
-    expect(closestByX.id).not.toBe("oriente-C-3");
+    const closestByX = rowC.reduce((closest, seat) =>
+      Math.abs(seat.x - centerX) < Math.abs(closest.x - centerX) ? seat : closest,
+    );
+    expect(closestByX.id).toBe("oriente-C-4");
 
     expect(findBestAvailableSeats(zone, 1)).toEqual(["oriente-C-3"]);
     expect(findBestAvailableSeats(zone, 2)).toEqual(["oriente-C-2", "oriente-C-3"]);
@@ -154,8 +156,13 @@ describe("findBestAvailableSeats en una zona en arco", () => {
   });
 
   it("en la fila A libre de 4 elige el centro por índice con el número menor en empate", () => {
-    const { rows, ...zone } = arcZone();
-    const freeA = { ...zone, rows: [{ ...rows[0], seats: rows[0].seats.map((s) => ({ ...s, status: "available" as const })) }] };
+    const zone = arcZone();
+    const [rowA] = zone.rows;
+    const freeA: NumberedVenueZone = {
+      ...zone,
+      rows: [{ ...rowA, seats: rowA.seats.map((seat) => ({ ...seat, status: "available" as const })) }],
+    };
+    expect(rowA.seats).toHaveLength(4);
 
     expect(findBestAvailableSeats(freeA, 1)).toEqual(["oriente-A-2"]);
     expect(findBestAvailableSeats(freeA, 2)).toEqual(["oriente-A-2", "oriente-A-3"]);

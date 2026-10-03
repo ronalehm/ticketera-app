@@ -2,14 +2,15 @@
 
 import { type ReactNode, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, Download, MapPin } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 
 import { TicketQr } from "@/components/shared/TicketQr";
+import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
-import type { Order } from "@/modules/checkout/orders";
+import { buildTicketPdfInput, type Order } from "@/modules/checkout/orders";
 import { formatLongDate, formatTime } from "@/modules/events/format";
 import type { OrderTimeframe } from "../types/tickets.types";
 import { formatTicketCount, getDateChipParts } from "../utils/myOrders";
@@ -31,7 +32,7 @@ const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1
 
 /**
  * Entrada seleccionada como boleto: imagen con chip de fecha, datos del evento, talón, QR con navegación entre entradas
- * y acciones (imprimir / calendario). Al imprimir solo queda el boleto de la entrada mostrada.
+ * y acciones (PDF con todas las entradas del pedido / calendario).
  */
 export function TicketCard({ order, timeframe }: TicketCardProps) {
   const [ticketIndex, setTicketIndex] = useState(0);
@@ -154,10 +155,12 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
           </dl>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap print:hidden">
-            <Button type="button" variant="outline" onClick={() => window.print()} className={ACTION_CLASS}>
-              <Download aria-hidden />
-              Descargar PDF
-            </Button>
+            <TicketsPdfButton
+              variant="outline"
+              input={buildTicketPdfInput(order)}
+              className={ACTION_CLASS}
+              errorClassName="sm:basis-full"
+            />
             {timeframe === "upcoming" && (
               <Button type="button" variant="outline" onClick={handleAddToCalendar} className={ACTION_CLASS}>
                 <CalendarPlus aria-hidden />

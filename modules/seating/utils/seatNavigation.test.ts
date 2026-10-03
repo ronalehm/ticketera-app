@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NumberedVenueZone } from "../types/seating.types";
+import type { NumberedVenueZone, SeatRow } from "../types/seating.types";
 import { generateArcSeatRows } from "./arcSeatRows";
 import { getAdjacentSeatId } from "./seatNavigation";
 import { generateSeatRows } from "./seatRows";
@@ -120,20 +120,25 @@ function buildArcZone(): NumberedVenueZone {
 
 describe("getAdjacentSeatId en una zona en arco", () => {
   const arcZone = buildArcZone();
-  const seat = (id: string) => arcZone.rows.flatMap((row) => row.seats).find((s) => s.id === id)!;
+  const [rowA, rowB] = arcZone.rows;
+
+  /** Id de la butaca de `row` con la `x` más cercana a la de `seatId` (el criterio anterior). */
+  function closestIdByX(row: SeatRow, seatId: string): string {
+    const { x } = [...rowA.seats, ...rowB.seats].find((seat) => seat.id === seatId) ?? { x: Number.NaN };
+    return row.seats.reduce((closest, seat) => (Math.abs(seat.x - x) < Math.abs(closest.x - x) ? seat : closest)).id;
+  }
 
   it("ArrowDown desde la butaca central de la fila A va a la butaca central de la fila B", () => {
     expect(getAdjacentSeatId(arcZone, "oriente-A-2", "ArrowDown")).toBe("oriente-B-2");
     expect(getAdjacentSeatId(arcZone, "oriente-A-3", "ArrowDown")).toBe("oriente-B-3");
   });
 
-  it("ArrowUp y ArrowDown eligen por distancia euclídea, no por la x más cercana", () => {
-    // Por x, A-2 iría a B-4: la fila B se desplaza a la izquierda al bajar en el arco.
-    const closestByX = arcZone.rows[1].seats.reduce((closest, s) =>
-      Math.abs(s.x - seat("oriente-A-2").x) < Math.abs(closest.x - seat("oriente-A-2").x) ? s : closest,
-    );
-    expect(closestByX.id).not.toBe("oriente-B-2");
+  it("ArrowUp y ArrowDown eligen la butaca más cercana en distancia, no por x", () => {
+    // Con filas casi verticales, por x A-2 bajaría a B-4 y B-2 subiría a A-1.
+    expect(closestIdByX(rowB, "oriente-A-2")).toBe("oriente-B-4");
+    expect(closestIdByX(rowA, "oriente-B-2")).toBe("oriente-A-1");
 
+    expect(getAdjacentSeatId(arcZone, "oriente-A-2", "ArrowDown")).toBe("oriente-B-2");
     expect(getAdjacentSeatId(arcZone, "oriente-B-2", "ArrowUp")).toBe("oriente-A-2");
     expect(getAdjacentSeatId(arcZone, "oriente-B-2", "ArrowDown")).toBe("oriente-C-2");
   });
