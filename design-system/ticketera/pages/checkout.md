@@ -91,7 +91,10 @@ Footer            (igual que la landing)
   5. `Separator` **discontinuo**: `className="h-0 border-t border-dashed border-border bg-transparent data-horizontal:h-0"` (sigue siendo el `Separator` de shadcn, `role="separator"`).
   6. Fila del total: izquierda "Total" `font-bold` + "(3 entradas)" `font-normal text-muted-foreground` ("(1 entrada)" en singular); derecha el importe `text-xl font-bold tabular-nums`. Debajo, siempre, "Precio final, sin cargos ocultos" (`text-sm text-muted-foreground`).
   7. Botón "Pagar" (solo `lg`) **dentro de la tarjeta**, con su aviso de Términos debajo cuando aplica (ver Botón "Pagar").
-- "Cambiar entradas" y "Volver a elegir entradas" llevan al paso 1: `/eventos/<slug>/entradas` si el evento tiene mapa (`hasVenueMap`), si no `/eventos/<slug>`.
+- "Cambiar entradas" y "Volver a elegir entradas" (mismo `href`) llevan al paso 1 **conservando la selección** (`buildChangeTicketsHref`):
+  - con mapa (`hasVenueMap`): `/eventos/<slug>/entradas?general=2&vip=1&asientos=<id>%2C<id>` (`asientos` solo si el pedido tiene asientos; la precarga del mapa la define `seating-stadium-map.md`, Fase 4);
+  - sin mapa: `/eventos/<slug>?general=2&vip=1#entradas`. El `TicketSelector` del detalle muestra esas cantidades desde el primer render (contadores, total y "Continuar con la compra"), sin mover el foco ni anunciar nada; el ancla solo desplaza la vista al selector (`scroll-mt-24`).
+  - Lo inválido (valores no enteros, fuera de 1–10, repetidos, tipos agotados o desconocidos) se ignora sin avisos; el total precargado nunca supera 10 ("Máximo 10 entradas por compra"). En un evento agotado se ve "Entradas agotadas" sin precarga.
 
 ### Método de pago (`PaymentMethodFields`)
 
