@@ -485,72 +485,163 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
      - hay ≥ 1 butaca `available` y ≥ 1 `accessible`;
    - ninguna zona numerada sin `planTransform` cambia.
 
-### Pantalla en dos sub-pasos (Fase 2)
-9. **`TicketSelection`** (`"use client"`). Mantiene la grilla, el resumen sticky y la barra móvil de la spec base (requisito 11). La columna izquierda pasa a ser **una sola** `Card rounded-2xl` "Elige tus entradas":
-   - **Cabecera:** `flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1`, con:
-     - h2 "Elige tus entradas" (`text-xl font-bold tracking-tight`);
-     - a la derecha, `<p aria-live="polite" className="text-sm text-muted-foreground">` con "Paso 1 de 2 · Elige una zona", "Paso 2 de 2 · Elige tus butacas" (zona numerada) o "Paso 2 de 2 · Elige la cantidad" (zona de pie).
-   - **Sub-paso 1:** `VenueMapView` y debajo `ZoneCards`.
-   - **Sub-paso 2:** `ZoneQuantityPanel` (zona de pie) o `SeatPlan` (zona numerada). El mapa y las tarjetas no se renderizan.
-   - **Foco:**
-     - al abrir una zona (desde el mapa o desde una tarjeta), el foco pasa al h3 de la zona del sub-paso 2 (`tabIndex={-1}`, `scroll-mt-24`), con `flushSync` como hoy. Antes, activar una zona en el mapa no movía el foco; ahora el mapa desaparece y el foco se perdería;
-     - al volver con "Todas las zonas", el foco pasa a la tarjeta de esa zona (`[data-zone-id]`).
-   - Se elimina `ZoneList.tsx`. Su stepper −/+ pasa, con el mismo marcado y las mismas clases, a `ZoneQuantityPanel`.
-10. **`VenueMapView`:**
-    - Ya no lleva `Card` ni cabecera propias: renderiza el lienzo `rounded-xl bg-muted p-3` con el SVG.
-    - Se mantiene todo lo demás del requisito 12 de la spec base (aria, foco, tonos, etiquetas de 26 unidades), con estos cambios:
-      - las zonas son `role="button"` **sin** `aria-pressed`, porque en el sub-paso 1 no hay zona activa;
-      - activarlas llama a `onOpenZone(zoneId)`;
-      - las zonas **agotadas** llevan `aria-disabled="true"`, siguen siendo enfocables (para oír "agotado") y no hacen nada. Cambia el requisito 12 de la spec base: allí "solo resaltaban su fila", y la lista ya no existe;
-      - si `stage.lights` existe, se pinta un `<circle r={5} className="fill-highlight">` por luz, dentro del `<g aria-hidden>` del escenario;
-      - si la zona tiene `wrapLabel`, el nombre ocupa 2 líneas y el bloque (2 + precio [+ píldora]) se centra en `labelPos` con la misma regla de alto.
-    - El halo de "zona activa" desaparece: no hay zona activa visible en el sub-paso 1.
-11. **`ZoneCards`** (nuevo, presentacional):
+### Escala de tonos (Fase 2)
+9. **`utils/zoneTone.ts` y `types/seating.types.ts`** (decisión 28):
+   - `ZoneTone` = `"tier-1" | "tier-2" | "tier-3" | "tier-4" | "tier-5" | "sold-out"`.
+   - `getZoneTones` mantiene su firma y su regla: rango entre las zonas no agotadas, de mayor a menor precio, y precios iguales con el mismo tono. Ahora hay 5 tonos; desde el 6.º precio distinto, `tier-5`.
+   - `ZONE_TONE_CLASSES[tone]` mantiene las claves `shape` (SVG), `label` y `swatch`. **`label` pasa a llevar la clase SVG y la HTML** (`fill-… text-…`), para que sirva al texto SVG actual y a las etiquetas HTML de la Fase 3 sin una clave más:
+
+     | Tono | `shape` | `label` | `swatch` |
+     |---|---|---|---|
+     | `tier-1` | `fill-brand-navy` | `fill-background text-background` | `bg-brand-navy` |
+     | `tier-2` | `fill-primary-strong` | `fill-primary-foreground text-primary-foreground` | `bg-primary-strong` |
+     | `tier-3` | `fill-primary/65` | `fill-foreground text-foreground` | `bg-primary/65` |
+     | `tier-4` | `fill-primary/40` | `fill-foreground text-foreground` | `bg-primary/40` |
+     | `tier-5` | `fill-primary/20` | `fill-foreground text-foreground` | `bg-primary/20` |
+     | `sold-out` | `fill-secondary` | `fill-muted-foreground text-muted-foreground` | `bg-secondary ring-1 ring-input` |
+
+   - **Efecto transitorio hasta la Fase 3:** con las formas translúcidas, el halo navy de "zona activa" de la pantalla actual (dibujado detrás) se ve también por dentro de las zonas `tier-3`–`tier-5`. La Fase 3 lo sustituye por un trazo superpuesto. Se acepta porque la Fase 2 es corta y va justo antes.
+
+### Sub-paso 1 con el diseño de la captura, sub-paso 2 y resumen móvil (Fase 3)
+10. **`TicketSelection`** (`"use client"`), estructura (decisión 17):
+    - Se mantienen la grilla, el resumen y la barra:
+      - grilla `grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8`;
+      - columna izquierda `min-w-0`;
+      - `PurchaseSummary` a la derecha (`hidden self-start lg:sticky lg:top-24 lg:flex`);
+      - debajo, `MobilePurchaseBar` (`sticky bottom-0 z-30 -mx-4 md:-mx-6 lg:hidden`).
+    - La columna izquierda es **una sola** `Card rounded-2xl gap-5` (`<section aria-labelledby>`) "Elige tus entradas":
+      - **Cabecera** (`flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1`):
+        - h2 "Elige tus entradas" (`text-xl font-bold tracking-tight`);
+        - a la derecha, `<p aria-live="polite" className="text-sm text-muted-foreground">` con "Paso 1 de 2 · Elige una zona", "Paso 2 de 2 · Elige la cantidad" (zona de pie) o "Paso 2 de 2 · Elige tus butacas" (zona numerada).
+      - **Sub-paso 1:** `VenueMapView` y debajo `ZoneCards`, en `flex flex-col gap-5`.
+      - **Sub-paso 2:** `ZoneStepHeader` y debajo `ZoneQuantityPanel` (de pie) o `SeatPlan` (numerada). El mapa y las tarjetas no están en el DOM.
+    - **Estado de UI propio** (no del hook):
+      - `highlightedZoneId: string | null`;
+      - `returnZoneId: string | null` (la zona que se acaba de cerrar, para la transición de vuelta).
+    - **Derivados:**
+      - `tones`;
+      - `selectedCountByZone`: cantidades de pie + butacas por zona (amplía `countSeatsByZone`);
+      - `seatLimit` de la zona abierta: n + (`MAX_TICKETS_PER_ORDER` − entradas totales) (decisión 11);
+      - `selectedSeats` (todas las zonas, para los chips).
+    - Se elimina `ZoneList.tsx`. Su stepper −/+ pasa a `ZoneQuantityPanel` con el mismo marcado y las mismas clases.
+11. **Sub-pasos, foco, resaltado y transición** (decisiones 2, 19, 20 y 26):
+    - **Abrir una zona:** clic, Enter o Espacio sobre su forma en el mapa o sobre su tarjeta → `selectZone(id)`. Las agotadas no hacen nada.
+    - **Foco al abrir:** pasa al h3 de `ZoneStepHeader` (`flushSync` y luego `focus()`, como hoy).
+    - **Volver:** "Todas las zonas" → `closeZone()` y `returnZoneId = id`. El foco pasa a su tarjeta (`[data-zone-id="<id>"]`).
+    - La selección se conserva al cambiar de sub-paso y de zona.
+    - **Resaltado:**
+      - `highlightedZoneId` cambia con `onHighlightZone` del mapa y de las tarjetas;
+      - el mapa resalta esa zona y la tarjeta lleva `data-highlighted="true"`;
+      - al abrir o cerrar una zona vuelve a `null`;
+      - las agotadas no se resaltan.
+    - **Transición:**
+      - El contenedor del sub-paso 2 lleva `motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300 motion-safe:ease-out` y `style={{ transformOrigin: "<x %> <y %>" }}`, con el `labelPos` de la zona sobre `parseViewBox(map.viewBox)`.
+      - Tras volver (`returnZoneId` no nulo), el sub-paso 1 lleva `motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-105 motion-safe:duration-300` con el origen de esa zona.
+      - En el primer render no hay animación.
+12. **`VenueMapView`** (presentacional; sustituye al requisito 12 de la spec base). Objetivo: el mapa de la captura del paso 1.
+    - **Props:** `viewBox`, `stage`, `venue`, `zones`, `tones`, `highlightedZoneId`, `selectedCountByZone`, `onOpenZone(zoneId)` y `onHighlightZone(zoneId | null)`. Sin `Card`, sin cabecera y sin `activeZoneId`.
+    - **Marco:**
+      - `div.rounded-xl.bg-muted.p-3.md:p-4` > `div.relative.mx-auto.w-full`;
+      - `style={{ aspectRatio: "<w> / <h>", maxWidth: "calc(min(64svh, 600px) * <w> / <h>)" }}` (`parseViewBox`), para que el mapa no pase de ~600 px de alto en pantallas bajas;
+      - dentro, el `<svg viewBox className="absolute inset-0 size-full" role="group" aria-label="Mapa de zonas de <venue>">` y la capa de etiquetas.
+    - **Zonas:** `<path role="button" tabIndex={0}>`, en el orden de `zones`:
+      - `aria-label` de la spec base ("<nombre>, <precio>" o "<nombre>, agotado", más ", asientos numerados" y ", últimas entradas" si aplica) y, si hay selección, ", 2 entradas elegidas" / ", 1 butaca elegida" (mismas formas que las tarjetas);
+      - sin `aria-pressed`;
+      - **agotadas:** `aria-disabled="true"` y `cursor-not-allowed`. Siguen siendo enfocables (para oír "agotado"), no hacen nada y no se resaltan;
+      - Enter y Espacio con `preventDefault`;
+      - `onPointerEnter`/`onFocus` → `onHighlightZone(id)`; `onPointerLeave`/`onBlur` → `onHighlightZone(null)`.
+    - **Estados visuales:**
+      - **reposo:** clase `shape` del tono + `stroke-background stroke-3` (la separación blanca de la captura) + `cursor-pointer`;
+      - **resaltada:**
+        - un `<path aria-hidden className="pointer-events-none fill-none stroke-brand-navy stroke-4">` con su `d`, dibujado **después** de todas las zonas;
+        - el resto de las zonas y sus etiquetas, con `opacity-40` (`transition-opacity duration-200`);
+      - **foco:** trazo discontinuo `stroke-ring` (igual que hoy).
+    - **Escenario:** forma `fill-brand-navy` y luces (`<circle r={5} className="fill-highlight">` por cada `stage.lights`), en un `<g aria-hidden>`.
+    - **Etiquetas en HTML** (decisión 18):
+      - Una por zona y otra para el escenario, en una capa `absolute inset-0 pointer-events-none` con `aria-hidden`.
+      - Cada una: `absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center leading-[1.15]`, en `left: x/w·100 %` y `top: y/h·100 %` de su `labelPos`.
+      - **Escenario:** `stage.label`, `text-xs md:text-sm font-bold uppercase tracking-widest text-background`.
+      - **Nombre:** `text-xs md:text-sm font-bold`. Con `wrapLabel`, en 2 líneas partido en el primer espacio; sin él, `whitespace-nowrap`.
+      - **Precio** (`formatEventPrice`) o "Agotado": `text-xs md:text-sm font-medium tabular-nums`, en la misma línea que la insignia de selección.
+      - **Color:** la clase `label` del tono (su parte `text-*`).
+      - **`low-stock`:** píldora "Últimas entradas" `mt-1 hidden md:inline-flex rounded-full bg-warning px-2 py-0.5 text-xs font-bold text-warning-foreground`.
+      - **Con selección:** insignia en línea tras el precio, `ml-1 inline-flex h-5 items-center gap-0.5 rounded-full bg-background px-1.5 text-xs font-bold tabular-nums text-foreground ring-1 ring-border`, con `Check` (`size-3`) y el número.
+    - Se eliminan `ZoneLabel` (SVG) y sus constantes (`LABEL_FONT_SIZE`, `LABEL_LINE_HEIGHT`, `PILL_*`).
+13. **`ZoneCards`** (nuevo, presentacional). Objetivo: las tarjetas de la captura del paso 1.
+    - **Props:** `zones`, `tones`, `highlightedZoneId`, `selectedCountByZone`, `onOpenZone` y `onHighlightZone`.
     - **Lista:** `<ul aria-label="Zonas" className="grid gap-3 sm:grid-cols-2">`, en el orden de `zones`. Una columna por debajo de `sm`.
-    - **Cada tarjeta** es un `<li>` con un `<button type="button" data-zone-id>` a todo el ancho:
-      - estilo `flex min-h-18 w-full items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-200 hover:border-primary/40 hover:bg-accent/40`, más el foco visible `focus-visible:ring-3 focus-visible:ring-ring/50`;
-      - barra de color a la izquierda: `w-1.5 self-stretch rounded-full` con la clase `swatch` del tono (`aria-hidden`);
-      - en el centro:
-        - nombre (`text-base font-bold`) y, si es `low-stock`, `Badge` "Últimas entradas" (`bg-warning text-warning-foreground`);
-        - debajo, el tipo (`text-sm text-muted-foreground`): icono `Users` + "General · sin butaca" (de pie) o `Armchair` + "Numerada · elige tu butaca", con iconos `size-4` `aria-hidden`;
-        - si hay entradas o butacas elegidas en la zona: "2 entradas elegidas" / "2 butacas elegidas" (`text-sm font-medium text-primary-strong`);
-      - a la derecha:
-        - "c/u" (`text-xs text-muted-foreground`) encima del precio (`text-base font-bold tabular-nums`);
-        - `ChevronRight` (`size-5`, `aria-hidden`).
-    - **Agotada:** el precio se sustituye por "Agotado" (`font-bold text-muted-foreground`), sin chevron. Lleva `aria-disabled="true"` y su clic no hace nada (sigue enfocable).
+    - **Cada tarjeta** es un `<li>` con un `<button type="button" data-zone-id data-highlighted>` a todo el ancho:
+      - **estilo:** `flex min-h-18 w-full cursor-pointer items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-200 hover:border-primary/40 hover:bg-accent/40 data-[highlighted=true]:border-primary/40 data-[highlighted=true]:bg-accent/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50`;
+      - **barra de color** a la izquierda: `w-1.5 self-stretch rounded-full` con la clase `swatch` del tono (`aria-hidden`);
+      - **en el centro:**
+        - nombre (`text-base font-bold`) y, si es `low-stock`, `Badge` "Últimas entradas" (`h-6 bg-warning font-bold text-warning-foreground`);
+        - debajo, el tipo (`text-sm text-muted-foreground`): `Users` + "General · sin butaca" o `Armchair` + "Numerada · elige tu butaca" (iconos `size-4`, `aria-hidden`);
+        - si hay selección en la zona (`text-sm font-medium text-primary-strong`): "1 entrada elegida" / "n entradas elegidas" o "1 butaca elegida" / "n butacas elegidas";
+      - **a la derecha:**
+        - "c/u" (`text-xs text-muted-foreground`) encima del precio (`text-base font-bold tabular-nums text-foreground`). No va en naranja como en la captura: MASTER reserva el color para la acción (Preguntas abiertas 13);
+        - `ChevronRight` (`size-5 text-muted-foreground`, `aria-hidden`);
+      - **eventos:** `onPointerEnter`/`onFocus` → `onHighlightZone(id)`; `onPointerLeave`/`onBlur` → `onHighlightZone(null)`.
+    - **Agotada:**
+      - el precio se sustituye por "Agotado" (`font-bold text-muted-foreground`), sin chevron;
+      - `aria-disabled="true"` y `cursor-not-allowed`, sin hover ni resaltado;
+      - el clic no hace nada, pero sigue enfocable.
     - **`aria-label` del botón:** "<nombre>, <precio> c/u, general sin butaca" o "…, numerada, elige tu butaca". Además:
       - si es `low-stock`, ", últimas entradas";
       - si está agotada, "<nombre>, agotado, …";
       - si hay elegidas, ", 2 entradas elegidas" o ", 2 butacas elegidas".
-12. **Migas `ZoneStepBreadcrumb`** (nuevo, presentacional; reutiliza `components/ui/breadcrumb`):
-    - `<Breadcrumb aria-label="Ruta de selección">` con:
-      - `BreadcrumbLink render={<button type="button" />}`: icono `ChevronLeft` (`aria-hidden`) + "Todas las zonas", en `inline-flex min-h-11 items-center gap-1 font-semibold text-primary-strong hover:text-foreground`;
+    - **Pie:** `<p className="text-sm text-muted-foreground">` "Precio final por entrada, sin cargos ocultos. Máximo 10 entradas por compra."
+14. **`ZoneStepHeader`** (nuevo, presentacional; reutiliza `components/ui/breadcrumb`). Sustituye a `ZoneStepBreadcrumb`. Objetivo: la cabecera de la captura del paso 2.
+    - **Props:** `zone: Pick<VenueZone, "name" | "price" | "status" | "kind">`, `headingId`, `onBack` y `children?` (lo que va a la derecha).
+    - **Migas:** `<Breadcrumb aria-label="Ruta de selección">` con:
+      - `BreadcrumbLink render={<button type="button" />}`: `ChevronLeft` (`aria-hidden`) + "Todas las zonas", en `inline-flex min-h-11 cursor-pointer items-center gap-1 font-semibold text-primary-strong hover:text-foreground`;
       - `BreadcrumbSeparator`;
       - `BreadcrumbPage` con el nombre de la zona.
-    - Prop `onBack`.
-13. **`ZoneQuantityPanel`** (nuevo, zona de pie abierta):
-    - Migas.
-    - Línea con el h3 de la zona (`text-lg font-bold`, `tabIndex={-1}`, `outline-none scroll-mt-24`) y " · S/ X c/u" (`text-base font-medium text-muted-foreground tabular-nums`).
-    - Debajo, a la izquierda "General · sin butaca" y, si es `low-stock`, el `Badge` "Últimas entradas". A la derecha, el stepper en pastilla de la spec base (requisito 13: mismas clases, `aria-label`, `focusableWhenDisabled` y `aria-live`).
-    - Pie `<p role="status">` "Máximo 10 entradas por compra." / "Llegaste al máximo de 10 entradas por compra.".
-14. **`SeatPlan` como sub-paso 2** (zona numerada abierta). Deja de ser una `Card` propia y vive dentro de la tarjeta "Elige tus entradas":
-    - **Cabecera:**
-      - migas;
-      - línea `flex flex-wrap items-baseline justify-between`: a la izquierda el h3 de la zona (igual que el requisito 13) + " · S/ X c/u"; a la derecha `<p aria-live="polite" className="text-sm font-medium tabular-nums">` "n de m butacas" (decisión 11);
-      - ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
-      - Sustituye al h2 "Elige tus asientos". El foco al entrar va al h3.
-    - **Barra sobre el lienzo** (`flex items-end justify-between gap-2`): a la izquierda, `SeatPlanMinimap` (F3, solo con `planTransform`); a la derecha, "Acercar", "Alejar" y "Ver todo el plano" (`Button outline size-11`, mismos iconos y `aria-label`).
-    - **Lienzo:** el mismo de la spec base (zoom, gestos, roving tabindex, clic tras arrastre, `aspect-ratio` del `seatViewBox`). Debe ocupar el ancho del contenido de la tarjeta sin padding propio, para mantener butacas ≥ 24 px a 375 px.
-    - **Bajo el lienzo:**
-      - `SeatLegend` con "Disponible · S/ X" (prop nueva `price`);
-      - "Mejor asiento disponible" (`Button secondary h-11`, `w-full sm:w-auto`);
-      - el `<p role="status">` del aviso;
-      - `SelectedSeatChips`.
-15. **Hook `useSeatSelection`:**
-    - `selectZone(zoneId)` no hace nada si la zona no existe o está `sold-out`. Antes activaba cualquier zona.
-    - Nueva acción `closeZone()`: `activeZoneId = null`.
-    - El resto no cambia (incluido que `changeQuantity` activa la zona).
-16. **`PurchaseSummary` vacío:** "Todavía no elegiste entradas. Empieza eligiendo una zona." (texto del diseño). Lo demás no cambia, incluidos "Total (0 entradas)" y "S/ 0.00" con el formato de `formatEventPrice`.
+    - **Fila** `flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1`:
+      - a la izquierda:
+        - h3 con el nombre (`text-base md:text-lg font-bold`, `tabIndex={-1}`, `outline-none scroll-mt-24`, `id={headingId}`);
+        - `<span className="text-base text-muted-foreground tabular-nums"> · S/ 155.00 c/u</span>`;
+        - si es `low-stock`, el `Badge` "Últimas entradas";
+      - a la derecha, `children`.
+    - **Debajo:** `text-sm text-muted-foreground` con icono: `Users` "General · sin butaca" o `Armchair` "Numerada · elige tu butaca".
+15. **`ZoneQuantityPanel`** (nuevo, zona de pie abierta; patrón Joinnus):
+    - **Props:** `zoneName`, `price`, `quantity`, `atLimit` y `onChangeQuantity(delta: 1 | -1)`.
+    - **Contenedor:** `flex flex-col gap-4 rounded-xl border p-4`.
+    - **Fila** `flex flex-wrap items-center justify-between gap-4`:
+      - a la izquierda, "Cantidad" (`text-base font-semibold`, con `id`) sobre "S/ 330.00 c/u" (`text-sm text-muted-foreground tabular-nums`);
+      - a la derecha, el stepper en pastilla de `ZoneList`: mismas clases; `aria-label` "Quitar una entrada de <zona>" / "Agregar una entrada de <zona>"; `focusableWhenDisabled`; cantidad con `aria-live="polite"`; dentro de un `role="group"` con `aria-labelledby` al "Cantidad".
+    - **Subtotal** (`flex items-baseline justify-between border-t pt-3`): "Subtotal" (`text-sm text-muted-foreground`) e importe precio × cantidad (`text-lg font-bold tabular-nums`, `aria-live="polite"`).
+    - **Pie:** `<p role="status" className="text-sm text-muted-foreground">` "Máximo 10 entradas por compra." o "Llegaste al máximo de 10 entradas por compra."
+16. **`SeatPlan` como sub-paso 2 (F3)** (zona numerada abierta). Deja de ser una `Card` propia:
+    - Sin h2 y sin la línea "<zona> · S/ X c/u": las pone `ZoneStepHeader`.
+    - El contador va como `children` de `ZoneStepHeader`: `<p aria-live="polite" className="text-sm font-medium tabular-nums">` "n de m butacas" (decisión 11).
+    - Arriba, la ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
+    - El resto sigue como hoy hasta la Fase 4:
+      - barra sobre el lienzo con zoom y "Mejor asiento disponible";
+      - lienzo con zoom, gestos, roving tabindex y clic tras arrastre;
+      - ayuda `sr-only`, leyenda, aviso `role="status"` y `SelectedSeatChips`.
+    - `headingId` pasa a ser el `id` del h3 de `ZoneStepHeader`: al quitar el último chip, el foco va a él. Se elimina el `headingRef` interno.
+    - El `viewBox` se lee con `parseViewBox`.
+17. **`PurchaseSummary`:**
+    - Texto vacío: "Todavía no elegiste entradas. Empieza eligiendo una zona." (texto del diseño). No cambian "Total (0 entradas)" ni "S/ 0.00".
+    - El contenido se separa en `PurchaseSummaryContent`, exportado desde el mismo archivo: líneas o vacío, total, "Precio final, sin cargos ocultos" y CTA.
+    - `PurchaseSummary` = `aside aria-label="Resumen de la compra"` + `Card` + h2 "Tu compra" + `PurchaseSummaryContent`. Mismas props.
+18. **`MobilePurchaseBar` con hoja inferior** (decisión 21):
+    - Nueva prop `lines: SelectionLine[]`.
+    - **Fila:**
+      - bloque del total (`aria-live`, como hoy);
+      - `SheetTrigger render={<Button variant="outline" size="icon" className="size-11 cursor-pointer" aria-label="Ver resumen de la compra" />}` con `ChevronUp`;
+      - "Continuar" (`px-5`).
+      - A 375 px cabe sin scroll horizontal.
+    - **Hoja:** `SheetContent side="bottom" className="max-h-[85svh] gap-0 rounded-t-2xl"`:
+      - `SheetHeader` con `SheetTitle` "Tu compra" (`text-lg font-bold`);
+      - cuerpo `overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]` con `PurchaseSummaryContent`.
+      - Base UI lleva el foco a la hoja, Escape la cierra y el foco vuelve al botón.
+19. **Hook y utilidades (F3):**
+    - `useSeatSelection`:
+      - `selectZone(zoneId)` no hace nada si la zona no existe o está `sold-out` (antes activaba cualquiera);
+      - nueva acción `closeZone()`: `activeZoneId = null`;
+      - el resto no cambia (incluido que `changeQuantity` activa la zona).
+    - `utils/viewBox.ts` (nuevo): `parseViewBox(viewBox: string): { width: number; height: number }`, para el formato `"0 0 W H"` de `viewBoxSchema`. Con otro formato lanza `Error`. Lo usan `VenueMapView`, `TicketSelection` y `SeatPlan`.
 
 ### Plano curvo (Fase 3)
 17. **Fondo del estadio en el plano** (solo zonas con `planTransform`):
