@@ -60,7 +60,7 @@ Paleta oficial Mentec (manual, pág. 19):
 | `--brand-gradient` | `linear-gradient(135deg, #0072F6 0%, #03D2F4 100%)` | Banner organizadores, acentos. Texto encima: blanco bold ≥ 24px o navy |
 
 Reglas:
-- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`).
+- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`). Única excepción: las constantes RGB del PDF de entradas (§7 "PDF de entradas").
 - Color de marca reservado para acción y énfasis; el 80% de la superficie es blanco/gris claro.
 - Estado del evento no depende solo del color: el badge siempre lleva texto.
 
@@ -68,7 +68,7 @@ Reglas:
 
 ## 3. Tipografía
 
-- Familia única: **Creato Display** (manual, pág. 29) para todo el proyecto, cargada con `next/font/local` (`--font-sans`, también `--font-heading`). Fallback: `ui-sans-serif, system-ui, sans-serif`.
+- Familia única: **Creato Display** (manual, pág. 29) para todo el proyecto, cargada con `next/font/local` (`--font-sans`, también `--font-heading`). Fallback: `ui-sans-serif, system-ui, sans-serif`. Única excepción: el PDF de entradas usa Helvetica estándar (§7 "PDF de entradas").
 - Pesos cargados: 400 Regular, 500 Medium, 700 Bold, 800 ExtraBold. No cargar más.
 
 | Rol | Clase Tailwind | Peso | Uso |
@@ -153,6 +153,51 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 - Primario: `bg-primary text-primary-foreground hover:bg-primary-strong font-semibold`.
 - Altura mínima 44px en móvil (`h-11`), `cursor-pointer`, transición 150–200ms.
 
+### PDF de entradas
+
+"Descargar PDF" (confirmación de compra y "Mis entradas") genera en el navegador `mentec-<pedido>.pdf` con jsPDF: A4 vertical, **una página por entrada**, en el orden del pedido. Generador: `lib/ticketPdf.ts` (`buildTicketsPdf`); botón: `components/shared/TicketsPdfButton.tsx`.
+
+Anatomía de cada página (mm; A4 210 × 297, margen 20). La entrada ocupa la mitad superior en un marco de 170 mm de ancho (`border`, línea 0,3) con 8 mm de relleno (texto a 154 mm de ancho):
+
+```
+┌──────────────────────────── marco 170 mm (rect, border, 0,3) ────────────────────────────┐
+│ ███ franja primary (alto 18) ███  Mentec Tickets (16 pt bold, blanco)   Entrada 1 de 2 ███│  (11 pt bold, blanco, a la derecha)
+│                                                                                          │
+│ Noche de Sintetizadores: Gira Neón 2026          (20 pt bold, foreground; envuelve a 154) │
+│ Sábado, 14 de noviembre de 2026 · 21:00 h        (12 pt, foreground)                       │
+│ Estadio Nacional, Lima                           (12 pt, mutedForeground)                  │
+│╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ (línea discontinua, border) ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│
+│ ┌─────────────┐   ZONA / ASIENTO                (9 pt bold, mutedForeground, mayúsculas)  │
+│ │   QR 63 mm  │   Tribuna Norte · Fila B · Asiento 4   (12 pt bold, foreground; envuelve)│
+│ │ (21 × 3 mm) │   TITULAR                                                                 │
+│ │  marco rect │   Ana Quispe                           (12 pt bold, foreground; envuelve) │
+│ │   border    │   CÓDIGO DE ENTRADA                                                       │
+│ └─────────────┘   MT-7Q4K2P-01                         (14 pt bold, foreground)           │
+│                   PEDIDO                                                                  │
+│                   MT-7Q4K2P                            (12 pt, foreground)                │
+│          Presenta este código en la entrada    (10 pt, mutedForeground, centrado)         │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- Los textos largos se envuelven y desplazan hacia abajo lo que sigue; nada sale del marco a lo ancho.
+- QR: el mismo patrón decorativo de `TicketQr` (`getQrModules`), vectorial (un `rect` relleno por tramo horizontal de módulos oscuros), módulo de 3 mm (63 mm en total), en `foreground` sobre blanco, con marco `border` a 3 mm.
+- Texto real y seleccionable (códigos de entrada y pedido). Mínimo 9 pt (= 12 px, §3). El texto blanco sobre `primary` va en bold y a ≥ 11 pt (§2: blanco sobre azul solo ≥ 14 px semibold).
+- Marca como texto ("Mentec Tickets"), sin logo SVG ni imagen del evento.
+
+Colores: jsPDF no lee CSS, así que el generador usa constantes RGB derivadas de los tokens (§2). Viven **solo** en `lib/ticketPdf.ts`, cada una con su token en un comentario; es la única excepción a "sin hex en componentes":
+
+| Constante | Token (§2) | Hex | RGB |
+|---|---|---|---|
+| `primary` | `--primary` | `#0072F6` | `0, 114, 246` |
+| `primaryForeground` | `--primary-foreground` | `#FFFFFF` | `255, 255, 255` |
+| `foreground` | `--foreground` (navy) | `#010817` | `1, 8, 23` |
+| `mutedForeground` | `--muted-foreground` | `#5A6070` | `90, 96, 112` |
+| `border` | `--border` | `#E4E4E7` | `228, 228, 231` |
+
+Si cambia un token en §2 / `app/globals.css`, se actualiza también esta tabla y la constante.
+
+**Fuente: Helvetica estándar (excepción a §3 y §12, solo en el PDF).** Creato Display solo está en `.woff2` y jsPDF solo incrusta TTF; Helvetica es una de las 14 fuentes estándar de PDF (no se incrusta, el archivo pesa pocos kB). Solo cubre Latin-1, por eso todo texto pasa por `toPdfText`: conserva `á é í ó ú ñ ¡ ¿ ·`, cambia comillas y rayas tipográficas por `'`, `"` y `-`, quita diacríticos fuera de Latin-1 (`ễ` → `e`) y sustituye el resto por `?`. En pantalla la fuente sigue siendo siempre Creato Display.
+
 ---
 
 ## 8. Layout de la landing
@@ -203,7 +248,7 @@ Breakpoints verificados: 375, 768, 1024, 1440. Sin scroll horizontal de página.
 
 - Fondo oscuro predominante (solo footer/overlay).
 - Colores por defecto de Tailwind o hex sueltos en componentes.
-- Otra fuente distinta de Creato Display.
+- Otra fuente distinta de Creato Display (salvo Helvetica en el PDF de entradas, §7).
 - Emojis como iconos; texto gris `#B7B7B7`.
 - Cargos ocultos o precio sin "Desde".
 - Componentes hechos desde cero cuando shadcn ya los ofrece.
