@@ -1,12 +1,20 @@
 import Image from "next/image";
+import Link from "next/link";
 import { CalendarDays, MapPin } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { TEXT_LINK } from "@/lib/linkStyles";
+import { cn } from "@/lib/utils";
 import { formatEventDate, formatEventPrice } from "@/modules/events";
 import type { CheckoutOrder } from "../types/checkout.types";
 
-export function OrderSummary({ order }: { order: CheckoutOrder }) {
+type OrderSummaryProps = {
+  order: CheckoutOrder;
+  changeHref?: string;
+};
+
+export function OrderSummary({ order, changeHref }: OrderSummaryProps) {
   const { event, items, total } = order;
 
   return (
@@ -58,6 +66,12 @@ export function OrderSummary({ order }: { order: CheckoutOrder }) {
             </li>
           ))}
         </ul>
+
+        {changeHref && (
+          <Link href={changeHref} className={cn(TEXT_LINK, "w-fit font-semibold")}>
+            Cambiar entradas
+          </Link>
+        )}
 
         <Separator />
 

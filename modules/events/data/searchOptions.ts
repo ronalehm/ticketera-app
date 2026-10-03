@@ -9,3 +9,10 @@ export const PRICE_RANGES = [
 ] as const;
 
 export const PRICE_RANGE_VALUES = PRICE_RANGES.map((range) => range.value);
+
+export const SORT_OPTIONS = [
+  { value: "fecha", label: "Fecha" },
+  { value: "precio", label: "Precio más bajo" },
+] as const;
+
+export const SORT_VALUES = SORT_OPTIONS.map((option) => option.value);
