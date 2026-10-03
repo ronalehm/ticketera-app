@@ -1,7 +1,7 @@
 # Página: detalle de evento `/eventos/[slug]`
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
-> Spec: `docs/specs/events-ui-refresh.md` (Fases 2 y 5). Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
+> Spec: `docs/specs/events-ui-refresh.md` (Fases 2 y 5); la sección "Lugar" (mapa y "Cómo llegar") la redefine `docs/specs/events-venue-map.md`. Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
 
 ## Layout
 
@@ -131,8 +131,13 @@ Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver 
   - Celdas: "Apertura de puertas" (`Clock`, hora con " h": "18:00 h"), "Inicio del show" (`CalendarClock`, hora con " h": "21:00 h"; en la categoría deportes se llama "Inicio del partido", porque un partido no es un show), "Edad mínima" (`Users`, "Todo público" o "+N"), "Ingreso" (`QrCode`, "Entrada digital con QR").
   - Las horas (hero e información) siempre llevan el sufijo " h" separado por un espacio ("21:00 h"); en "Información importante" siguen dentro de `<time dateTime>`.
 - **Lugar:** tarjeta `rounded-2xl ring-1 ring-border overflow-hidden`.
-  - Marcador de mapa `aspect-[16/7] bg-accent` con `MapPin` (`text-primary`), decorativo y entero `aria-hidden` (no es un mapa real).
-  - Debajo: nombre del lugar (`font-bold`), "dirección, ciudad" (`text-muted-foreground`) y botón outline `h-11` "Cómo llegar" con `ExternalLink` (`aria-hidden`) a Google Maps, en pestaña nueva con `rel="noopener noreferrer"` y `sr-only` "(se abre en una pestaña nueva)".
+  - Bloque del mapa (`VenueMap`): `relative aspect-[4/3] md:aspect-[16/7] overflow-hidden bg-accent` (4:3 en móvil, unos 343 × 257 px a 375 px; 16:7 desde `md`). La fachada y el iframe ocupan la caja entera (`size-full`), así que cargar el mapa no desplaza el contenido (sin CLS). Depende de `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` (vía `publicEnv` de `@/lib/env`):
+    - **Sin clave:** marcador con `MapPin` (`size-8 text-primary`) centrado, decorativo y entero `aria-hidden` (no es un mapa real). Sin botón ni iframe.
+    - **Con clave, fachada (click-to-load):** columna centrada (`gap-3 p-4 text-center`) con `MapPin` (`aria-hidden`), botón outline `h-11 px-4 font-semibold` "Ver mapa" y debajo el aviso `max-w-xs text-sm text-muted-foreground` "Al ver el mapa se cargará contenido de Google Maps, que puede usar sus propias cookies.", que el botón referencia con `aria-describedby`. El iframe no está en el DOM: no se hace ninguna petición a Google antes de pulsar. La elección no se recuerda; cada visita empieza con la fachada.
+    - **Con clave, tras pulsar "Ver mapa"** (clic, Enter o Espacio): la fachada se sustituye por el iframe de la Maps Embed API (modo `place`, `language=es`, `region=PE`) con `title="Mapa de <lugar>"`, `loading="lazy"`, `referrerPolicy="no-referrer-when-downgrade"`, `allowFullScreen` y `border-0`. El foco pasa al iframe (el botón desaparece); foco visible con `focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ring`. Sin trampa de foco: Tab recorre los controles de Google y sale a "Cómo llegar".
+    - Sin JavaScript, "Ver mapa" no hace nada (el mapa es una mejora); "Cómo llegar" funciona siempre.
+  - Debajo: nombre del lugar (`font-bold`), "dirección, ciudad" (`text-muted-foreground`) y enlace `<a>` con estilo de botón outline `h-11` "Cómo llegar" con `ExternalLink` (`aria-hidden`), en pestaña nueva con `rel="noopener noreferrer"` y `sr-only` "(se abre en una pestaña nueva)". Abre la **ruta** hacia el lugar: URL de direcciones `https://www.google.com/maps/dir/?api=1&destination=<lugar, dirección, ciudad, Perú>` (sin `origin`: Google usa la ubicación actual; en móvil abre la app de Google Maps si está instalada). No necesita clave.
+  - El mismo texto "<lugar>, <dirección>, <ciudad>, Perú" (`buildVenueQuery`) se usa en el `q` del iframe y en el `destination`, para que ambos señalen el mismo sitio. Las URLs de Google Maps solo se construyen en `modules/events/utils/venueMap.ts`.
 
 ## Relacionados (`RelatedEvents`)
 
@@ -147,7 +152,7 @@ Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver 
 - Estado de cada tipo con texto, no solo color: "Últimas entradas" (`bg-warning`), "Agotado" (`bg-destructive`). Evento agotado: "Entradas agotadas" en lugar de controles, sin botón de compra.
 - CTA "Continuar con la compra": primario full-width `h-11`; deshabilitado con 0 entradas.
 - **Anti-patrón: cargos ocultos.** Bajo el total siempre "Precio final, sin cargos ocultos"; el total mostrado es el que se paga.
-- Targets táctiles ≥ 44px en la barra móvil, Guardar, Compartir, "Cómo llegar" y "Ver más en…".
+- Targets táctiles ≥ 44px en la barra móvil, Guardar, Compartir, "Ver mapa", "Cómo llegar" y "Ver más en…".
 - Sin scroll horizontal de página a 375 px (el carrusel de relacionados tiene su propio scroll).
 - Metadata: `<Título del evento> | Mentec Tickets`, descripción = primer párrafo.
 - 404 propio: h1 "No encontramos este evento" + "Volver al inicio" (botón primario).
