@@ -782,19 +782,19 @@ Coordinación con las otras specs de la ronda (orden: seating → checkout → t
   - Secuencial.
 
 ### Fase 2. Página `/eventos/[slug]/entradas` (zonas de pie)
-- [ ] T1. `PurchaseStepper` compartido (contrato A).
+- [x] T1. `PurchaseStepper` compartido (contrato A).
   - Archivos: `components/shared/PurchaseStepper.tsx`.
   - Depende de: Fase 1.
   - Secuencial (base, `components/shared`).
-- [ ] T2. Lógica de selección: `selectionSummary` y `useSeatSelection` (acciones de F2), con tests.
+- [x] T2. Lógica de selección: `selectionSummary` y `useSeatSelection` (acciones de F2), con tests.
   - Archivos: `modules/seating/utils/selectionSummary.ts`, `modules/seating/utils/selectionSummary.test.ts`, `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: T1.
   - En paralelo con T3.
-- [ ] T3. Componentes presentacionales de la página.
+- [x] T3. Componentes presentacionales de la página.
   - Archivos: `modules/seating/components/EventPurchaseStrip.tsx`, `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneList.tsx`, `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
   - Depende de: T1 (los tipos están en F1).
   - En paralelo con T2.
-- [ ] T4. Contenedor con test, ruta, barrel y diseño de página.
+- [x] T4. Contenedor con test, ruta, barrel y diseño de página.
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `app/eventos/[slug]/entradas/page.tsx`, `modules/seating/index.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2, T3.
   - Secuencial.
