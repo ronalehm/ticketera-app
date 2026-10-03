@@ -55,7 +55,7 @@ export const venueSections = pgTable(
     unique("venue_sections_venue_id_slug_unique").on(t.venueId, t.slug),
     check(
       "venue_sections_seating_capacity_check",
-      sql`(${t.seating} = 'general' AND ${t.capacity} > 0) OR (${t.seating} = 'numbered' AND ${t.capacity} IS NULL)`,
+      sql`(${t.seating} = 'general' AND ${t.capacity} IS NOT NULL AND ${t.capacity} > 0) OR (${t.seating} = 'numbered' AND ${t.capacity} IS NULL)`,
     ),
   ],
 );

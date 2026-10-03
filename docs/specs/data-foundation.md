@@ -398,10 +398,10 @@ Ningún agente escribe ni lee esos valores.
 - [x] T4 — Migración personalizada de extensiones + migración generada del esquema; aplicar en la rama `dev` y comprobar que una segunda generación y una segunda migración no cambian nada · archivos: `drizzle/0000_extensions.sql`, `drizzle/0001_<nombre>.sql`, `drizzle/meta/*` (generados) · depende de: T2, T3 y el **prerrequisito del usuario** (Neon + `.env`) · secuencial
 
 ### Fase 2 — Seed y tests de integración (13 archivos)
-- [ ] T1 — Exportar `normalizeText`, util de disponibilidad con tests y script `db:seed` · archivos: `modules/events/utils/eventFilters.ts`, `modules/events/utils/availability.ts`, `modules/events/utils/availability.test.ts`, `package.json` · depende de: Fase 1 · secuencial (base)
-- [ ] T2 — `buildSeedData` y `seedUuid`, con unit tests (incluida la equivalencia de estados) · archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/buildSeedData.test.ts` · depende de: T1 · secuencial
-- [ ] T3 — `seed()` transaccional e idempotente y CLI `run.ts`; ejecutar `npm run db:seed` dos veces en `dev` · archivos: `lib/db/seed/seed.ts`, `lib/db/seed/run.ts` · depende de: T2 · secuencial
-- [ ] T4 — Infraestructura de integración (config de Vitest, `describeWithDb`, `globalSetup`) y tests de seed y restricciones · archivos: `vitest.config.mts`, `lib/db/testDb.ts`, `lib/db/testGlobalSetup.ts`, `lib/db/seed/seed.test.ts`, `lib/db/constraints.test.ts` · depende de: T3 · secuencial
+- [x] T1 — Exportar `normalizeText`, util de disponibilidad con tests y script `db:seed` · archivos: `modules/events/utils/eventFilters.ts`, `modules/events/utils/availability.ts`, `modules/events/utils/availability.test.ts`, `package.json` · depende de: Fase 1 · secuencial (base)
+- [x] T2 — `buildSeedData` y `seedUuid`, con unit tests (incluida la equivalencia de estados) · archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/buildSeedData.test.ts` · depende de: T1 · secuencial
+- [x] T3 — `seed()` transaccional e idempotente y CLI `run.ts`; ejecutar `npm run db:seed` dos veces en `dev` · archivos: `lib/db/seed/seed.ts`, `lib/db/seed/run.ts` · depende de: T2 · secuencial
+- [x] T4 — Infraestructura de integración (config de Vitest, `describeWithDb`, `globalSetup`) y tests de seed y restricciones · archivos: `vitest.config.mts`, `lib/db/testDb.ts`, `lib/db/testGlobalSetup.ts`, `lib/db/seed/seed.test.ts`, `lib/db/constraints.test.ts` · depende de: T3 · secuencial
 
 ### Fase 3 — `events` y `seating` leen de la BD (12 archivos)
 - [ ] T1 — Mappers de eventos con unit tests · archivos: `modules/events/utils/eventRecords.ts`, `modules/events/utils/eventRecords.test.ts` · depende de: Fase 2 · paralelo con T2

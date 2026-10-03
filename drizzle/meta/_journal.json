@@ -15,6 +15,13 @@
       "when": 1791027866460,
       "tag": "0001_freezing_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791040612990,
+      "tag": "0002_hesitant_thundra",
+      "breakpoints": true
     }
   ]
 }
