@@ -156,7 +156,7 @@ Componentes (`modules/auth/components/`):
 - Diálogo modal centrado (`Dialog` de shadcn sobre Base UI, no `Sheet`). Usa tokens Mentec y **no imita la interfaz de Google**: el texto "Modo demostración" deja claro que es una simulación.
 - **Botón de cuenta:** `<button type="button">` `flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl p-3 text-left ring-1 ring-border transition-colors duration-200 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring`. Nombre (`getFullName`, `wrap-break-word`) y correo (`wrap-anywhere`) no se truncan. Nombre accesible: "Continuar como Lucía Fernández Rojas, lucia.fernandez@gmail.com" ("Continuar como" y la coma en `sr-only`).
 - **"Cancelar":** `DialogClose` con `buttonVariants({ variant: "outline" })` + `h-11 cursor-pointer`.
-- **Sin X de cierre:** `DialogContent showCloseButton={false}`. "Cancelar" es la única salida visible (además de Escape y el clic fuera); una X duplicaría la acción con un target de 32 px (`icon-sm`) y la etiqueta "Close" en inglés del componente generado.
+- **Sin X de cierre:** `DialogContent showCloseButton={false}`. "Cancelar" es la única salida visible (además de Escape y el clic fuera); una X duplicaría la acción con un target de 28 px (`icon-sm`, por debajo de los 44 px de MASTER §11) y la etiqueta "Close" en inglés del componente generado.
 - Teclado (Base UI, sin código propio): el foco entra en el diálogo al abrirse y Tab queda atrapado dentro; Escape o clic fuera cierran.
 - Al cerrarse, el foco vuelve al botón "Continuar con Google" por el comportamiento por defecto de Base UI (devuelve el foco al elemento que lo tenía al abrir). No se usa `finalFocus` ni código propio.
 

@@ -1,7 +1,7 @@
 # Pantallas completas para acceso y panel de organizador (route groups)
 
 - Módulo: layout (route groups de `app/`) · auth · organizer
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Hoy el header y el footer del sitio se pintan en `app/layout.tsx`, así que aparecen en todas las rutas. El usuario pidió que **Iniciar sesión** y **Crear cuenta** sean pantallas completas, sin header, footer ni nada más que el acceso, como en sus capturas. También pidió que el **panel de organizador** sea una app a pantalla completa con su propia barra lateral: marca "Mentec Tickets · Organizadores", navegación, tarjeta del usuario con "Cerrar sesión" y contenido sobre `bg-muted`.

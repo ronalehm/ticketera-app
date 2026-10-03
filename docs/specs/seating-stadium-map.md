@@ -275,6 +275,93 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
     - **Sub-paso inicial:** siempre el 1 (`activeZoneId = null`). Las tarjetas ya dicen "n entradas elegidas" / "n butacas elegidas" y "Tu compra" muestra las líneas y el total, así que se ve qué se trae y se puede abrir cualquier zona para cambiarlo.
 16. **Corrección aritmética (2026-10-03, detectada en F1 T3; sin cambios de diseño).** Se mantiene la fórmula del requisito 4 (filas centradas en la banda, con `holgura/2`). Las butacas por fila de las tribunas laterales que daban el requisito 7 y el criterio de `generateArcSeatRows` (4, 4, 5, 6, **6**, 7, 8, 9, 9, 10; 68 en total) omitían `holgura/2`. Con la fórmula salen 4, 4, 5, 6, **7**, 7, 8, 9, 9, 10 (69 en total): solo cambia la fila E (ρ = 344.75 → 7 butacas). Afecta igual a Oriente y Occidente. El `seatViewBox` (`0 0 399 401`), los ids de ejemplo (`oriente-C-3`, `oriente-C-4`), las accesibles (`*-J-1`, `*-J-10`) y "0 de 8" / "2 de 8 butacas" no cambian.
 
+### Decisiones del rediseño (2026-10-03, Fases 2–6)
+17. **Una tarjeta "Elige tus entradas" con sub-pasos, más "Tu compra" aparte** (capturas de los pasos 1 y 2).
+    - Se descarta el layout "mapa + panel lateral" de Ticketmaster en escritorio, porque el usuario fijó las capturas como objetivo.
+    - De Ticketmaster se toman:
+      - la sincronización entre mapa y lista;
+      - la bandeja de selección;
+      - "Mejores butacas";
+      - el zoom y el tooltip.
+    - De Joinnus se toman las tarjetas de zona con precio y el panel de cantidad con subtotal.
+    - Resuelve los puntos 1 y 3 del diagnóstico:
+      - un solo h2;
+      - cada acción en un solo sitio (el mapa y la tarjeta de una zona hacen lo mismo y están sincronizados);
+      - sin saltos de contenido: el sub-paso 2 sustituye al 1 dentro de la tarjeta.
+18. **Etiquetas del mapa en HTML, con tamaño fijo** (diagnóstico 2).
+    - Van en una capa absoluta sobre el SVG, posicionadas en % del `viewBox`.
+    - Miden `text-xs` (12 px) por debajo de `md` y `text-sm` (14 px) desde `md`, sin escalar con el ancho.
+    - La píldora "Últimas entradas" solo aparece desde `md`: a 375 px no cabe en la banda de Campo General (~47 px de alto). En móvil, el estado sigue en la tarjeta de zona y en el `aria-label`.
+19. **Resaltado sincronizado mapa ↔ tarjetas** (hover y foco).
+    - En el mapa, la zona se delinea en navy y el resto se atenúa al 40 %. Su tarjeta toma el fondo de hover, y viceversa.
+    - Es solo visual: no se anuncia ni cambia el estado. En táctil no hay hover.
+    - Las zonas agotadas no se resaltan.
+20. **Foco**, como en la Fase 2 original: al abrir una zona, al h3 de la zona; al volver con "Todas las zonas", a su tarjeta.
+21. **Resumen móvil en una hoja inferior**: el `Sheet` ya instalado (`side="bottom"`), abierto desde un botón de la barra inferior.
+    - Es modal y solo sirve para revisar el resumen. El mapa y el plano nunca quedan tapados mientras se elige.
+    - Se descarta instalar `drawer` (Drawer de Base UI, con gesto de arrastre y snap points): añade un componente y un gesto que no hacen falta para un resumen corto (KISS).
+22. **Librería: SVG propio + `react-zoom-pan-pinch`, mejorado**, sin dependencias nuevas (ver "Librería del plano").
+    - Es la única opción que funciona sin backend, con accesibilidad real, con tokens y sin rehacer la Fase 1 ni el contrato C.
+    - Las librerías completas viables (Seats.io, SeatLayer) son SaaS: quedan para la decisión 29.
+23. **Nivel de detalle de las butacas.**
+    - El número de butaca solo se ve si el usuario acercó el plano (escala > 1) y el número mide ≥ 12 px (`unidad × escala ≥ 1`). A la vista completa, el plano se ve como la captura del paso 2, sin números.
+    - Se aplica con `data-detail` en el `<svg>`, desde `useTransformInit`/`useTransformEffect`, sin re-render.
+24. **Tooltip propio**, solo visual (`aria-hidden`): el lector ya anuncia el `aria-label` de la butaca.
+    - Hay uno por plano, posicionado sobre la butaca.
+    - Se descarta el `Tooltip` de shadcn (Base UI): exigiría un `Tooltip.Root` por butaca (≤ 120), con disparadores SVG dentro de un contenedor transformado, y en táctil se abriría al tocar.
+25. **"Mejores butacas" con cantidad** (diagnóstico 5).
+    - Stepper "¿Cuántas butacas juntas?" con rango 1…m (m del contador de la decisión 11). Valor inicial: las butacas elegidas en la zona si hay alguna; si no, 2, recortado a m.
+    - Botón "Elegir las mejores butacas": sustituye las de la zona por el mejor bloque (`findBestAvailableSeats`, que nunca elige accesibles) y acerca el plano a él.
+    - Se empieza en 2 porque es la compra más común en las ticketeras de referencia (Preguntas abiertas 18).
+26. **Transiciones** con CSS (`tw-animate-css`) y `react-zoom-pan-pinch`:
+    - el sub-paso 2 entra creciendo desde la posición de la zona en el mapa (`fade-in` + `zoom-in-95`, 300 ms, `transform-origin` en su `labelPos`);
+    - al volver, el sub-paso 1 entra "alejándose" (`fade-in` + `zoom-in-105`);
+    - "Elegir las mejores butacas" acerca el plano a las elegidas con `zoomToElement` (300 ms).
+    - Con `prefers-reduced-motion: reduce` no hay animaciones (`motion-safe:` y `animationTime` 0). Sin librería de animación (MASTER §9).
+27. **Lienzo apaisado con contexto (Fase 5)**, como la captura del paso 2.
+    - Desde `sm`, el lienzo de las zonas en arco es 16:10 y el `<svg>` del plano lleva `overflow-visible`: el fondo del estadio se ve alrededor del sector.
+    - En móvil, el lienzo mantiene la proporción del plano, para no bajar de 24 px por butaca.
+    - Las zonas en cuadrícula conservan la proporción del plano en todos los anchos.
+28. **Escala de 5 tonos por precio** (sustituye a la decisión 9 desde la Fase 2; resuelve Preguntas abiertas 4):
+
+    | Tono | Forma / muestra | Texto encima |
+    |---|---|---|
+    | `tier-1` (más caro) | `brand-navy` | `text-background` |
+    | `tier-2` | `primary-strong` | `text-primary-foreground` |
+    | `tier-3` | `primary/65` | `text-foreground` |
+    | `tier-4` | `primary/40` | `text-foreground` |
+    | `tier-5` | `primary/20` | `text-foreground` |
+    | `sold-out` | `secondary` | `text-muted-foreground` |
+
+    - **Por qué:** la captura usa una escala monocroma (más oscuro = más caro y más cerca del escenario), que comunica el orden de precio mejor que mezclar navy, azul, cian y `accent`: el cian actual no dice "más barato que el azul".
+    - **Con tokens:** se construye con tokens y opacidad, ya admitidos (MASTER usa `ring-primary/40`), sin hex ni tokens nuevos en `globals.css`.
+    - **Contraste** (texto ≥ 4.5:1):
+      - navy sobre `tier-3` (~#56A0F6 sobre `muted`): ~7:1;
+      - blanco sobre `primary-strong`: 5.6:1;
+      - blanco sobre navy: > 15:1.
+    - **Asignación:** cada precio distinto tiene su tono hasta el 5.º; desde el 6.º, `tier-5`. En el festival: `campo-vip` → `tier-1`, `campo-general` → `tier-2`, `occidente` → `tier-3`, `oriente` → `tier-4` y `norte` → `tier-5`. Los otros 3 mapas tienen ≤ 4 precios.
+    - Las formas con opacidad dejan ver el fondo. Por eso el resaltado del mapa es un trazo **superpuesto**, no un halo detrás (requisito 12).
+    - El cian (`highlight`) queda para las luces del escenario y las butacas accesibles.
+    - **Aside del detalle:** `ZonePricesCard` usa las mismas clases `swatch` y mostrará la escala, como la captura 4. No cambia su código.
+    - **Fase 1:** su criterio de tonos queda como estaba al cerrarla. La Fase 2 actualiza sus tests (`seating.service.test.ts` y `zoneTone.test.ts`).
+29. **Integración SaaS opcional (no planificada; Preguntas abiertas 17).** Si el usuario acepta un servicio de pago con datos en terceros, se especificará en una enmienda posterior, con esta forma:
+    - **Servicio y dependencia:** Seats.io (`@seatsio/seatsio-react`, el más maduro) o SeatLayer (`@seatlayer/react`, más barato, 0.x).
+    - **Configuración:**
+      - variables `NEXT_PUBLIC_SEATSIO_WORKSPACE_KEY` y `NEXT_PUBLIC_SEATSIO_REGION`, validadas con zod en `lib/env.ts`;
+      - una clave de evento por evento (`seatsioEventKey` opcional en el layout del mapa).
+    - **Chart de demostración** en el designer del servicio que replique el festival:
+      - categorías = `ticketTypeId` (`campo-vip`…);
+      - zonas de pie como áreas de admisión general;
+      - tribunas con filas A–J y etiquetas `<FILA>-<n>`.
+    - **Adaptador puro** `toSeatSelection(objects)` en `modules/seating/utils/`:
+      - áreas → `quantities[zoneId] = numSelected`;
+      - butacas → `formatSeatId(zoneId, fila, n)`.
+
+      Así no cambian `useSeatSelection`, "Tu compra", `buildSeatingCheckoutHref` ni el contrato C (`asientos=`).
+    - **Elección del renderer:** con clave y evento configurados, el del servicio; si no, el SVG mock actual (fallback).
+    - **Fuera de esa enmienda:** reservas temporales (`holdToken`) y temporizador, que exigen backend y ampliar el contrato C.
+    - **Verificación:** solo en la máquina del usuario, porque el sandbox bloquea los dominios del servicio. Los tests cubrirían solo el adaptador.
+
 ## Requisitos
 
 ### Datos del evento (Fase 1)

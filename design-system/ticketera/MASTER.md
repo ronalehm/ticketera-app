@@ -60,9 +60,23 @@ Paleta oficial Mentec (manual, pág. 19):
 | `--brand-gradient` | `linear-gradient(135deg, #0072F6 0%, #03D2F4 100%)` | Banner organizadores, acentos. Texto encima: blanco bold ≥ 24px o navy |
 
 Reglas:
-- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`). Única excepción: las constantes RGB del PDF de entradas (§7 "PDF de entradas").
+- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`). Únicas excepciones: las constantes RGB del PDF de entradas (§7 "PDF de entradas") y los colores del logo de Google (abajo).
 - Color de marca reservado para acción y énfasis; el 80% de la superficie es blanco/gris claro.
 - Estado del evento no depende solo del color: el badge siempre lleva texto.
+
+### Excepción: logo de Google
+
+El botón "Continuar con Google" (`pages/auth.md`) usa el logo "G" oficial a cuatro colores. Es un activo de marca de terceros y las guías de Google Sign-In prohíben alterarlo, así que sus colores **no se mapean a tokens**. Viven **solo** en `modules/auth/components/GoogleLogo.tsx` (SVG inline, `aria-hidden`), sin cambios de color, proporción ni fondo:
+
+| Parte del logo | Hex |
+|---|---|
+| Rojo | `#EA4335` |
+| Azul | `#4285F4` |
+| Amarillo | `#FBBC05` |
+| Verde | `#34A853` |
+
+- Ningún otro componente usa estos colores (ni el azul de Google en lugar de `--primary`).
+- El resto del botón sí usa tokens: `bg-background`, `border-muted-foreground`, `text-foreground`, `hover:bg-accent`.
 
 ---
 
@@ -126,6 +140,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
 | Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |
 | Avatar de usuario | `Avatar` + `AvatarFallback` con iniciales (`getInitials` de `lib/userName.ts`) | `components/shared/UserAvatar.tsx` |
+| Acceso con Google (maqueta) | `Button` outline (`h-11 w-full rounded-lg border-muted-foreground bg-background font-medium`) + `GoogleLogo` (18 px, colores oficiales, §2) + aviso de aceptación con enlaces en línea; selector de cuenta simulado con `Dialog` (Base UI) + `UserAvatar`; separador "o" con `FieldSeparator`. Detalle en `pages/auth.md` | `modules/auth/components/GoogleSignIn.tsx` (+ `GoogleAccountChooser`, `GoogleLogo`) |
 | Paginador de entradas | `Button` outline `size-11` (`focusableWhenDisabled` en los extremos), controlado (`index`, `count`, `onIndexChange`). "Entrada n de N" (`text-lg font-bold tabular-nums whitespace-nowrap`, `aria-live="polite"` `aria-atomic`); flechas "Entrada anterior/siguiente" siempre visibles; ArrowLeft/ArrowRight con el foco en una flecha. Layout por contenedor (`@container`): bajo 16rem (`@3xs`) texto arriba y flechas centradas debajo; desde 16rem, una fila `justify-between`. Confirmación (talón) y Mis entradas, ambos `print:hidden` | `components/shared/TicketPager.tsx` |
 | Separadores | `Separator` | footer |
 | Título de sección | nuevo, presentacional | `components/shared/SectionHeader.tsx` |
@@ -295,7 +310,7 @@ Breakpoints verificados: 375, 768, 1024, 1440. Sin scroll horizontal de página.
 ## 12. Anti-patrones
 
 - Fondo oscuro predominante (solo footer/overlay).
-- Colores por defecto de Tailwind o hex sueltos en componentes.
+- Colores por defecto de Tailwind o hex sueltos en componentes (salvo las excepciones de §2: PDF de entradas y logo de Google).
 - Otra fuente distinta de Creato Display (salvo Helvetica en el PDF de entradas, §7).
 - Emojis como iconos; texto gris `#B7B7B7`.
 - Cargos ocultos o precio sin "Desde".
