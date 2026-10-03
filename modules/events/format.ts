@@ -6,5 +6,6 @@ export {
   formatLongDayMonth,
   formatShortDayMonth,
   formatTime,
+  getDateChipParts,
 } from "./utils/formatEvent";
 export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
