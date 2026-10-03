@@ -366,6 +366,24 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
       - sin scroll horizontal a 375 / 768 / 1024 / 1440;
       - solo tokens y sin emojis.
 
+### Precarga desde la URL (Fase 4)
+21. **`parseSeatingPreselection(map, params)`** en `utils/selectionSummary.ts` (pura; decisión 15):
+    - Firma: `(map: VenueMap, params: Pick<URLSearchParams, "getAll">) => SeatSelection`. `ReadonlyURLSearchParams` encaja.
+    - `remaining = MAX_TICKETS_PER_ORDER`. Se recorren las zonas de `map.zones` en orden y se omiten las `sold-out`:
+      - **de pie:** se toma `params.getAll(zone.ticketTypeId)` solo si hay exactamente un valor `^\d+$` entre 1 y `MAX_TICKETS_PER_ORDER`. Entonces `quantities[zone.id] = min(valor, remaining)`;
+      - **numerada:** se toman los ids de `asientos` (solo si el parámetro aparece una vez; se separa por `,`) que cumplen `parseSeatId(id)?.zoneId === zone.id` y `resolveSeats(map, [id]) !== null`, sin repetidos, en el orden de la URL y hasta `remaining`. El parámetro `<ticketTypeId>` de la zona se ignora.
+      - En cada paso se descuenta de `remaining` lo tomado.
+    - Devuelve `{ quantities, seatIds }`: solo cantidades > 0, y `seatIds` en orden de zonas y, dentro de cada una, en el de la URL. Sin nada válido, `{ quantities: {}, seatIds: [] }`.
+    - Ida y vuelta: para toda selección válida `s`, `parseSeatingPreselection(map, params de buildSeatingCheckoutHref(slug, map, s))` devuelve las mismas cantidades y los mismos asientos.
+22. **`useSeatSelection(map, initialSelection?: SeatSelection)`:** el estado inicial es `{ selection: initialSelection ?? { quantities: {}, seatIds: [] }, notice: null }` (inicializador de `useState`). `activeZoneId` empieza en `null`. La selección inicial debe venir de `parseSeatingPreselection` (ya validada): el hook no la revalida. El resto de la firma y de las acciones no cambia.
+23. **`TicketSelection`** gana `initialSelection?: SeatSelection` y la pasa al hook. Sin la prop, idéntico a la Fase 2.
+24. **`components/PreselectedTicketSelection.tsx`** (nuevo, `"use client"`):
+    - Props `{ map: VenueMap }`.
+    - `const searchParams = useSearchParams()` (de `next/navigation`) y `<TicketSelection map={map} initialSelection={parseSeatingPreselection(map, searchParams)} />`.
+    - Sin más lógica. Se exporta en `index.ts`.
+25. **`app/eventos/[slug]/entradas/page.tsx`:** `<Suspense fallback={<TicketSelection map={map} />}><PreselectedTicketSelection map={map} /></Suspense>` en lugar de `<TicketSelection map={map} />`. `generateStaticParams`, `generateMetadata`, el stepper y la franja del evento no cambian.
+26. **Accesibilidad (F4):** la precarga no mueve el foco ni anuncia nada (el indicador "Paso 1 de 2 · Elige una zona" es el de siempre). Las cantidades ya están en las tarjetas, en "Tu compra" y en la barra móvil desde el primer render de la pantalla.
+
 ## Criterios de aceptación
 
 ### Fase 1. Dominio y datos del estadio
