@@ -53,20 +53,20 @@ const INITIAL_VALUES: CheckoutFormValues = {
 
 type PayButtonProps = {
   totalLabel: string;
-  isSubmitting: boolean;
+  isProcessing: boolean;
   disabled: boolean;
   className?: string;
 };
 
 // Se renderiza dos veces (panel en lg y barra inferior en móvil); en cada ancho solo una es visible.
-function PayButton({ totalLabel, isSubmitting, disabled, className }: PayButtonProps) {
+function PayButton({ totalLabel, isProcessing, disabled, className }: PayButtonProps) {
   return (
     <Button
       type="submit"
       disabled={disabled}
       className={cn("h-12 w-full cursor-pointer font-semibold duration-200 hover:bg-primary-strong", className)}
     >
-      {isSubmitting ? (
+      {isProcessing ? (
         <>
           <Spinner aria-hidden className="motion-reduce:animate-none" />
           Procesando pago…
@@ -92,6 +92,9 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
   const user = useAuthStore((state) => state.user);
   const [isExpired, setIsExpired] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  // Tras un pago aprobado, useZodForm vuelve a isSubmitting=false mientras la navegación sigue en curso:
+  // este estado mantiene "Pagar" bloqueado para que no se pueda crear una segunda orden.
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const paymentErrorRef = useRef<HTMLDivElement>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
     checkoutFormSchema,
@@ -127,6 +130,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
         payment,
       });
       await persistOrder(paidOrder);
+      setIsRedirecting(true);
       router.replace(`/checkout/confirmacion?orden=${paidOrder.code}`);
     } catch (error) {
       setPaymentError(error instanceof PaymentError ? error.message : UNEXPECTED_ERROR);
@@ -134,7 +138,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
   });
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    if (isExpired) {
+    if (isExpired || isRedirecting) {
       event.preventDefault();
       return;
     }
@@ -155,7 +159,8 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     <FieldError id={`checkout-${name}-error`}>{errors[name]}</FieldError>
   );
 
-  const payButtonProps = { totalLabel, isSubmitting, disabled: isExpired || isSubmitting };
+  const isProcessing = isSubmitting || isRedirecting;
+  const payButtonProps = { totalLabel, isProcessing, disabled: isExpired || isProcessing };
 
   return (
     <div className="flex flex-col gap-6">
@@ -308,7 +313,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
         </CheckoutSummaryPanel>
 
         <p role="status" className="sr-only">
-          {isSubmitting ? "Procesando pago…" : ""}
+          {isProcessing ? "Procesando pago…" : ""}
         </p>
 
         <div className="sticky bottom-0 z-30 -mx-4 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:-mx-6 md:px-6 lg:hidden">
