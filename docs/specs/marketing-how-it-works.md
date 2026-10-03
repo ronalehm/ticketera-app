@@ -1,7 +1,7 @@
 # Landing: "Cómo funciona" y newsletter
 
 - Módulo: marketing
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Completar la landing `/` con dos secciones del diseño de referencia que aún faltan:
