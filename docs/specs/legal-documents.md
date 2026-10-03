@@ -597,17 +597,17 @@ Coordinación:
 - [x] T4. `LegalMarkdown` con test · archivos: `modules/legal/components/LegalMarkdown.tsx`, `modules/legal/components/LegalMarkdown.test.tsx` · depende de: T1, T2 · paralelo con T3
 
 ### Fase 2. Páginas públicas y footer (4 tareas, 9 archivos)
-- [ ] T1. Footer: columna Ayuda con los 4 documentos, franja inferior con el aviso de cookies y el Libro de Reclamaciones destacado · archivos: `components/shared/SiteFooter.tsx` · depende de: Fase 1 · secuencial (`components/shared/`)
-- [ ] T2. `LegalToc`, `LegalDocumentView` y barrel · archivos: `modules/legal/components/LegalToc.tsx`, `modules/legal/components/LegalDocumentView.tsx`, `modules/legal/index.ts` · depende de: Fase 1 · secuencial (barrel)
-- [ ] T3. Rutas `/terminos`, `/privacidad` (con anexos), `/cookies` y `/devoluciones` · archivos: `app/(site)/terminos/page.tsx`, `app/(site)/privacidad/page.tsx`, `app/(site)/cookies/page.tsx`, `app/(site)/devoluciones/page.tsx` (o `app/…`, Decisión 18) · depende de: T2 · paralelo con T4
-- [ ] T4. Página de diseño legal · archivos: `design-system/ticketera/pages/legal.md` · depende de: T1, T2 · paralelo con T3
+- [x] T1. Footer: columna Ayuda con los 4 documentos, franja inferior con el aviso de cookies y el Libro de Reclamaciones destacado · archivos: `components/shared/SiteFooter.tsx` · depende de: Fase 1 · secuencial (`components/shared/`)
+- [x] T2. `LegalToc`, `LegalDocumentView` y barrel · archivos: `modules/legal/components/LegalToc.tsx`, `modules/legal/components/LegalDocumentView.tsx`, `modules/legal/index.ts` · depende de: Fase 1 · secuencial (barrel)
+- [x] T3. Rutas `/terminos`, `/privacidad` (con anexos), `/cookies` y `/devoluciones` · archivos: `app/(site)/terminos/page.tsx`, `app/(site)/privacidad/page.tsx`, `app/(site)/cookies/page.tsx`, `app/(site)/devoluciones/page.tsx` (o `app/…`, Decisión 18) · depende de: T2 · paralelo con T4
+- [x] T4. Página de diseño legal · archivos: `design-system/ticketera/pages/legal.md` · depende de: T1, T2 · paralelo con T3
 
 ### Fase 3. Libro de Reclamaciones (5 tareas, 12 archivos)
-- [ ] T1. Schema del Libro y tipos, con test · archivos: `modules/legal/schemas/complaint.schema.ts`, `modules/legal/schemas/complaint.schema.test.ts`, `modules/legal/types/legal.types.ts` · depende de: Fase 2 · secuencial (base)
-- [ ] T2. Service mock `submitComplaint` con test · archivos: `modules/legal/services/complaints.service.ts`, `modules/legal/services/complaints.service.test.ts` · depende de: T1 · paralelo con T3
-- [ ] T3. `ComplaintsBookInfo` y `ComplaintConfirmation` · archivos: `modules/legal/components/ComplaintsBookInfo.tsx`, `modules/legal/components/ComplaintConfirmation.tsx` · depende de: T1 · paralelo con T2
-- [ ] T4. `ComplaintForm` con test · archivos: `modules/legal/components/ComplaintForm.tsx`, `modules/legal/components/ComplaintForm.test.tsx` · depende de: T2, T3 · secuencial
-- [ ] T5. Ruta, barrel y página de diseño · archivos: `app/(site)/libro-de-reclamaciones/page.tsx`, `modules/legal/index.ts`, `design-system/ticketera/pages/complaints-book.md` · depende de: T4 · secuencial
+- [x] T1. Schema del Libro y tipos, con test · archivos: `modules/legal/schemas/complaint.schema.ts`, `modules/legal/schemas/complaint.schema.test.ts`, `modules/legal/types/legal.types.ts` · depende de: Fase 2 · secuencial (base)
+- [x] T2. Service mock `submitComplaint` con test · archivos: `modules/legal/services/complaints.service.ts`, `modules/legal/services/complaints.service.test.ts` · depende de: T1 · paralelo con T3
+- [x] T3. `ComplaintsBookInfo` y `ComplaintConfirmation` · archivos: `modules/legal/components/ComplaintsBookInfo.tsx`, `modules/legal/components/ComplaintConfirmation.tsx` · depende de: T1 · paralelo con T2
+- [x] T4. `ComplaintForm` con test · archivos: `modules/legal/components/ComplaintForm.tsx`, `modules/legal/components/ComplaintForm.test.tsx` · depende de: T2, T3 · secuencial
+- [x] T5. Ruta, barrel y página de diseño · archivos: `app/(site)/libro-de-reclamaciones/page.tsx`, `modules/legal/index.ts`, `design-system/ticketera/pages/complaints-book.md` · depende de: T4 · secuencial
 
 ### Fase 4. Consentimientos en el registro (5 tareas, 13 archivos)
 - [ ] T1. `requiredConsentField` y `acceptTermsField` derivado · archivos: `lib/formFields.ts` · depende de: Fase 1 · secuencial (`lib/`)

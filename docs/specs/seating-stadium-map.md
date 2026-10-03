@@ -1325,23 +1325,23 @@ No hay API: son datos mock.
 - Los developers en paralelo verifican con `npx vitest run <sus archivos>` y `npx eslint <sus archivos>`; el build lo ejecuta el reviewer al final de cada fase.
 
 ### Fase 1. Dominio y datos del estadio (5 tareas, 15 archivos)
-- [ ] T1. Evento "Festival Vive Latino Lima" en el mock (requisito 1) y ajustes de `events.service.test.ts` (requisito 2). Verificar `npx vitest run modules/events modules/organizer modules/tickets modules/checkout`.
+- [x] T1. Evento "Festival Vive Latino Lima" en el mock (requisito 1) y ajustes de `events.service.test.ts` (requisito 2). Verificar `npx vitest run modules/events modules/organizer modules/tickets modules/checkout`.
   - Archivos: `modules/events/data/events.mock.ts`, `modules/events/services/events.service.test.ts`.
   - Depende de: Fase 5 de la spec base.
   - Secuencial (base, archivos de otro módulo).
-- [ ] T2. Geometría de sectores anulares y campos opcionales del schema, con tests.
+- [x] T2. Geometría de sectores anulares y campos opcionales del schema, con tests.
   - Archivos: `modules/seating/utils/annularSector.ts`, `modules/seating/utils/annularSector.test.ts`, `modules/seating/schemas/seating.schema.ts`, `modules/seating/schemas/seating.schema.test.ts`, `modules/seating/types/seating.types.ts`.
   - Depende de: T1 (orden de la fase).
   - Secuencial (base de T3–T5).
-- [ ] T3. Generador de butacas en arco y extracción de `getGeneratedSeatStatus`, con test.
+- [x] T3. Generador de butacas en arco y extracción de `getGeneratedSeatStatus`, con test.
   - Archivos: `modules/seating/utils/arcSeatRows.ts`, `modules/seating/utils/arcSeatRows.test.ts`, `modules/seating/utils/seatRows.ts`.
   - Depende de: T2.
   - En paralelo con T4.
-- [ ] T4. Navegación ↑/↓ por distancia y "mejor asiento" por índice, con tests ampliados.
+- [x] T4. Navegación ↑/↓ por distancia y "mejor asiento" por índice, con tests ampliados.
   - Archivos: `modules/seating/utils/seatNavigation.ts`, `modules/seating/utils/seatNavigation.test.ts`, `modules/seating/utils/bestSeats.ts`, `modules/seating/utils/bestSeats.test.ts`.
   - Depende de: T2. Sus tests nuevos usan `generateArcSeatRows`, así que el caso en arco se añade cuando T3 termine. Si T4 se ejecuta en paralelo, el developer de T4 deja ese caso para el final y lo ejecuta tras T3.
   - En paralelo con T3.
-- [ ] T5. Layout mock del estadio y tests del service (invariantes, tonos, 4 mapas, adaptación del test de rectángulos).
+- [x] T5. Layout mock del estadio y tests del service (invariantes, tonos, 4 mapas, adaptación del test de rectángulos).
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`.
   - Depende de: T1, T3 y T4.
   - Secuencial.
