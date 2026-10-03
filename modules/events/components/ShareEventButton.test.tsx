@@ -57,6 +57,18 @@ describe("ShareEventButton", () => {
     expect(iconClass()).toContain("lucide-share-2");
   });
 
+  it("si navigator.share falla por otro motivo, copia el enlace", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockNavigator("share", vi.fn().mockRejectedValue(new DOMException("Not allowed", "NotAllowedError")));
+    mockNavigator("clipboard", { writeText });
+
+    render(<ShareEventButton title={TITLE} />);
+    await clickShare();
+
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
+    expect(status().textContent).toBe("Enlace copiado");
+  });
+
   it("sin Web Share copia la URL, anuncia 'Enlace copiado' y a los 2 s vuelve el icono inicial", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     mockNavigator("clipboard", { writeText });
