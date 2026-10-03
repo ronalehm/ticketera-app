@@ -1,7 +1,7 @@
 # Mapa de estadio curvo y selección de entradas en dos sub-pasos
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Llevar la pantalla `/eventos/<slug>/entradas` (paso 1 "Entradas" de la compra) al nuevo diseño "Elige tus entradas":

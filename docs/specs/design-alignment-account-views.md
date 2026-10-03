@@ -1,7 +1,7 @@
 # Alineación con Claude Design: acceso (con Google), Mis entradas, panel de organizador y Crear evento
 
 - Módulo: auth · organizer · tickets (más `components/shared` y la entrada pública `modules/events/format.ts`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Pedido del usuario: "Vamos a continuar con las siguientes 4 vistas: Login y Registro, Mis Entradas, Panel de organizador, Crear Evento" (artifact de Claude Design `NmeqG8Dta7F7zcSPmbQC8y`). Ampliación posterior: "Agreguemos que en login y registro también usemos Google Auth".
