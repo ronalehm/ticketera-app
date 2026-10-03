@@ -591,10 +591,10 @@ Coordinación:
 - **Varios:** no ejecutar `npm install` a la vez que otra instalación. Los developers en paralelo no ejecutan `npm run build`: lo hace el reviewer al cerrar cada fase. Nadie hace commits.
 
 ### Fase 1. Base del módulo (4 tareas, 15 archivos)
-- [ ] T1. Instalar `react-markdown@^10` y `remark-gfm@^4` · archivos: `package.json`, `package-lock.json` · depende de: — · secuencial (base)
-- [ ] T2. Schema de documentos, tipos y utils de secciones y fecha, con tests · archivos: `modules/legal/schemas/legal.schema.ts`, `modules/legal/schemas/legal.schema.test.ts`, `modules/legal/types/legal.types.ts`, `modules/legal/utils/legalSections.ts`, `modules/legal/utils/legalSections.test.ts`, `modules/legal/utils/formatLegalDate.ts`, `modules/legal/utils/formatLegalDate.test.ts` · depende de: T1 · secuencial
-- [ ] T3. Datos del proveedor, textos base de los 6 documentos y service mock, con test · archivos: `modules/legal/data/legalProvider.ts`, `modules/legal/data/legalDocuments.mock.ts`, `modules/legal/services/legal.service.ts`, `modules/legal/services/legal.service.test.ts` · depende de: T2 · paralelo con T4
-- [ ] T4. `LegalMarkdown` con test · archivos: `modules/legal/components/LegalMarkdown.tsx`, `modules/legal/components/LegalMarkdown.test.tsx` · depende de: T1, T2 · paralelo con T3
+- [x] T1. Instalar `react-markdown@^10` y `remark-gfm@^4` · archivos: `package.json`, `package-lock.json` · depende de: — · secuencial (base)
+- [x] T2. Schema de documentos, tipos y utils de secciones y fecha, con tests · archivos: `modules/legal/schemas/legal.schema.ts`, `modules/legal/schemas/legal.schema.test.ts`, `modules/legal/types/legal.types.ts`, `modules/legal/utils/legalSections.ts`, `modules/legal/utils/legalSections.test.ts`, `modules/legal/utils/formatLegalDate.ts`, `modules/legal/utils/formatLegalDate.test.ts` · depende de: T1 · secuencial
+- [x] T3. Datos del proveedor, textos base de los 6 documentos y service mock, con test · archivos: `modules/legal/data/legalProvider.ts`, `modules/legal/data/legalDocuments.mock.ts`, `modules/legal/services/legal.service.ts`, `modules/legal/services/legal.service.test.ts` · depende de: T2 · paralelo con T4
+- [x] T4. `LegalMarkdown` con test · archivos: `modules/legal/components/LegalMarkdown.tsx`, `modules/legal/components/LegalMarkdown.test.tsx` · depende de: T1, T2 · paralelo con T3
 
 ### Fase 2. Páginas públicas y footer (4 tareas, 9 archivos)
 - [ ] T1. Footer: columna Ayuda con los 4 documentos, franja inferior con el aviso de cookies y el Libro de Reclamaciones destacado · archivos: `components/shared/SiteFooter.tsx` · depende de: Fase 1 · secuencial (`components/shared/`)

@@ -363,8 +363,8 @@ Coordinación:
 - **Builds y commits:** los developers en paralelo no ejecutan `npm run build`; lo hace el reviewer al cerrar cada fase. Nadie hace commits.
 
 ### Fase 1 — Route groups sin cambio visual (15 archivos, 8 movidos)
-- [ ] T1 — Componentes compartidos `SiteShell` y `NotFoundMessage` · archivos: `components/shared/SiteShell.tsx`, `components/shared/NotFoundMessage.tsx` · depende de: — · secuencial (base, `components/shared/`)
-- [ ] T2 — Reestructurar `app/`:
+- [x] T1 — Componentes compartidos `SiteShell` y `NotFoundMessage` · archivos: `components/shared/SiteShell.tsx`, `components/shared/NotFoundMessage.tsx` · depende de: — · secuencial (base, `components/shared/`)
+- [x] T2 — Reestructurar `app/`:
   - Root layout sin header, footer ni `<main>`.
   - `(site)/layout.tsx`.
   - Mover las 8 rutas con `git mv`.
