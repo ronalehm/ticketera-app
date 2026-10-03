@@ -71,11 +71,11 @@ export function buildCheckoutOrder(
   const total = getOrderTotal(event.ticketTypes, quantities);
   if (total === 0) return { status: "free", eventSlug };
 
-  const { slug, title, startsAt, venue, city, imageUrl } = event;
+  const { slug, title, category, startsAt, venue, city, imageUrl } = event;
   return {
     status: "ok",
     order: {
-      event: { slug, title, startsAt, venue, city, imageUrl },
+      event: { slug, title, category, startsAt, venue, city, imageUrl },
       items: event.ticketTypes
         .filter((type) => quantities[type.id] !== undefined)
         .map((type): CheckoutOrderItem => {

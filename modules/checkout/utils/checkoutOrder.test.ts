@@ -53,6 +53,7 @@ describe("buildCheckoutOrder", () => {
         event: {
           slug: "evento-prueba",
           title: "Evento de prueba",
+          category: "conciertos",
           startsAt: "2026-11-14T21:00:00-05:00",
           venue: "Estadio",
           city: "Lima",
@@ -67,6 +68,11 @@ describe("buildCheckoutOrder", () => {
         total: 391,
       },
     });
+  });
+
+  it("el pedido ok incluye la categoría del evento", () => {
+    const result = buildCheckoutOrder(event, { general: 1 });
+    expect(result.status === "ok" && result.order.event.category).toBe("conciertos");
   });
 
   it("acepta exactamente el máximo de 10 entradas", () => {
