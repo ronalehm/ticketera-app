@@ -73,10 +73,11 @@ export function EventPreviewCard({ title, categoryLabel, dateLabel, dateChip, pl
           </p>
         </CardContent>
 
-        <div aria-hidden className="relative mt-auto border-t border-dashed border-border max-lg:hidden">
+        {/* Talón: `span` decorativo (no un `div aria-hidden`, que el formulario reserva al plano de asientos). */}
+        <span aria-hidden className="relative mt-auto block border-t border-dashed border-border max-lg:hidden">
           <Notch className="top-0 -left-2.5 -translate-y-1/2" />
           <Notch className="top-0 -right-2.5 -translate-y-1/2" />
-        </div>
+        </span>
 
         <div className="flex flex-wrap items-end justify-between gap-3 p-4 max-lg:flex-nowrap max-lg:items-center max-lg:px-3.5 max-lg:pt-0 max-lg:pb-3">
           <PreviewPrice priceFrom={priceFrom} />
