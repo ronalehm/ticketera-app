@@ -80,6 +80,20 @@ describe("AuthHeaderActions (bar)", () => {
     expect(item.getAttribute("href")).toBe("/mis-entradas");
     expect(item.getAttribute("aria-current")).toBe("page");
   });
+
+  it("Mi perfil es el primer item del menú y en /perfil tiene aria-current=page", async () => {
+    navigation.pathname = "/perfil";
+    useAuthStore.getState().signIn(user);
+    render(<AuthHeaderActions variant="bar" />);
+    fireEvent.click(await screen.findByRole("button", { name: ACCOUNT_BUTTON }));
+
+    await screen.findByRole("menu");
+    const [first] = screen.getAllByRole("menuitem");
+    expect(first.textContent).toBe("Mi perfil");
+    expect(first.getAttribute("href")).toBe("/perfil");
+    expect(first.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("menuitem", { name: "Mis entradas" }).getAttribute("aria-current")).toBeNull();
+  });
 });
 
 describe("AuthHeaderActions (sheet)", () => {
@@ -93,6 +107,11 @@ describe("AuthHeaderActions (sheet)", () => {
 
     const nav = screen.getByRole("navigation", { name: "Tu cuenta" });
     // SheetClose con nativeButton={false} renderiza un <a> con role="button" (Base UI).
+    const links = within(nav).getAllByRole("button");
+    expect(links.map((link) => link.textContent)).toEqual(["Mi perfil", "Mis entradas", "Panel de organizador"]);
+    expect(links[0].getAttribute("href")).toBe("/perfil");
+    expect(links[0].getAttribute("aria-current")).toBeNull();
+
     const myTickets = within(nav).getByRole("button", { name: "Mis entradas" });
     expect(myTickets.tagName).toBe("A");
     expect(myTickets.getAttribute("href")).toBe("/mis-entradas");
@@ -108,6 +127,20 @@ describe("AuthHeaderActions (sheet)", () => {
     });
     expect(useAuthStore.getState().user).toBeNull();
     expect(storedUser()).toBeNull();
+  });
+
+  it("en /perfil el primer enlace de Tu cuenta es Mi perfil con aria-current=page", async () => {
+    navigation.pathname = "/perfil";
+    useAuthStore.getState().signIn(user);
+    renderSheet();
+
+    const nav = await screen.findByRole("navigation", { name: "Tu cuenta" });
+    const [first] = within(nav).getAllByRole("button");
+    expect(first.tagName).toBe("A");
+    expect(first.textContent).toBe("Mi perfil");
+    expect(first.getAttribute("href")).toBe("/perfil");
+    expect(first.getAttribute("aria-current")).toBe("page");
+    expect(within(nav).getByRole("button", { name: "Mis entradas" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("sin usuario muestra Iniciar sesión y Crear cuenta, sin Tu cuenta ni Mis entradas", async () => {

@@ -46,11 +46,18 @@ describe("UserMenu", () => {
     expect(screen.getByRole("group", { name: new RegExp(EMAIL.replaceAll(".", "\\.")) })).toBe(group);
 
     const items = screen.getAllByRole("menuitem");
-    expect(items.map((item) => item.textContent)).toEqual(["Mis entradas", "Panel de organizador", "Cerrar sesión"]);
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Mi perfil",
+      "Mis entradas",
+      "Panel de organizador",
+      "Cerrar sesión",
+    ]);
     expect(items[0].tagName).toBe("A");
-    expect(items[0].getAttribute("href")).toBe("/mis-entradas");
+    expect(items[0].getAttribute("href")).toBe("/perfil");
     expect(items[1].tagName).toBe("A");
-    expect(items[1].getAttribute("href")).toBe("/organizador");
+    expect(items[1].getAttribute("href")).toBe("/mis-entradas");
+    expect(items[2].tagName).toBe("A");
+    expect(items[2].getAttribute("href")).toBe("/organizador");
   });
 
   it("marca con aria-current=page el enlace de la ruta actual", async () => {
@@ -58,20 +65,27 @@ describe("UserMenu", () => {
     await openMenu(trigger);
 
     expect(screen.getByRole("menuitem", { name: "Mis entradas" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("menuitem", { name: "Mi perfil" }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Panel de organizador" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("en /perfil marca Mi perfil con aria-current=page", async () => {
+    const { trigger } = renderMenu({ pathname: "/perfil" });
+    await openMenu(trigger);
+
+    expect(screen.getByRole("menuitem", { name: "Mi perfil" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("menuitem", { name: "Mis entradas" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("se maneja con teclado: foco en el primer item, flecha abajo avanza y Escape cierra devolviendo el foco", async () => {
     const { trigger } = renderMenu();
     const menu = await openMenu(trigger);
 
-    const first = screen.getByRole("menuitem", { name: "Mis entradas" });
+    const first = screen.getByRole("menuitem", { name: "Mi perfil" });
     await waitFor(() => expect(document.activeElement).toBe(first));
 
     fireEvent.keyDown(menu, { key: "ArrowDown" });
-    await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Panel de organizador" })),
-    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Mis entradas" })));
 
     fireEvent.keyDown(menu, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());

@@ -87,7 +87,8 @@ describe("register", () => {
       phone: "912345678",
       documentType: "dni",
       documentNumber: "12345678",
-      createdAt: "2026-10-03T12:00:00.000Z",
+      // La fecha de alta se toma al responder, tras la latencia simulada.
+      createdAt: new Date(Date.parse("2026-10-03T12:00:00.000Z") + MOCK_LATENCY_MS).toISOString(),
     });
   });
 
