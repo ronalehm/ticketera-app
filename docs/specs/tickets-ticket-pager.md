@@ -1,7 +1,7 @@
 # Paginador de entradas y descargas fiables (calendario y PDF)
 
 - Módulo: tickets (también toca checkout y código compartido de `lib/` y `components/shared/`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Pedido del usuario: "En la sección de compra confirmada cuando tengo más de 1 entrada el texto Entrada 1 de x se corta porque aparecen los arrows, y hagamos que los botones de Agregar al calendario y Descargar PDF funcionen".
