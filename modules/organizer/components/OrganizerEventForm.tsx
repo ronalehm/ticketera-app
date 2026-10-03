@@ -192,7 +192,7 @@ export function OrganizerEventForm() {
           onClick={() => setValue("intent", "publish")}
           className="h-11 cursor-pointer font-semibold duration-200 hover:bg-primary-strong md:h-12 lg:px-5"
         >
-          Publicar<span className="max-lg:sr-only"> evento</span>
+          Publicar <span className="max-lg:sr-only">evento</span>
         </Button>
       </div>
     </form>

@@ -1,3 +1,4 @@
+import { hashString, mixHash } from "@/lib/hash";
 import type { SeatRow, SeatStatus } from "../types/seating.types";
 import { formatSeatId } from "./seatIds";
 
@@ -18,19 +19,14 @@ type SeatRowsSpec = {
   accessibleSeats?: string[];
 };
 
-/** FNV-1a de 32 bits normalizado a [0, 1). */
+/** Hash mezclado del id normalizado a [0, 1): reparte la ocupación sin agruparla por filas. */
 function hashToUnit(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0) / 2 ** 32;
+  return mixHash(hashString(value)) / 2 ** 32;
 }
 
 /**
  * Genera las filas de una zona numerada con asientos numerados de 1 a n de izquierda a derecha,
- * las filas cortas centradas y una ocupación determinista (hash del id). Lanza `Error` si un id de
+ * las filas cortas centradas y una ocupación determinista (hash mezclado del id). Lanza `Error` si un id de
  * `accessibleSeats` no existe o si `seatsPerRow` no tiene un valor por fila.
  */
 export function generateSeatRows({

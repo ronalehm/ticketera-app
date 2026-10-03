@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getEventBySlug } from "@/modules/events";
 import { VENUE_LAYOUTS_MOCK } from "../data/venueMaps.mock";
-import type { VenueMap } from "../types/seating.types";
+import type { NumberedVenueZone, VenueMap } from "../types/seating.types";
+import { findBestAvailableSeats } from "../utils/bestSeats";
 import { getZoneTones } from "../utils/zoneTone";
 import { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./seating.service";
 
@@ -15,6 +16,22 @@ async function getMap(slug: string): Promise<VenueMap> {
 
 function viewBoxWidth(viewBox: string): number {
   return Number(viewBox.split(" ")[2]);
+}
+
+const RECT_PATH = /^M(\d+) (\d+) H(\d+) V(\d+) H\d+ Z$/;
+
+/** Centro de un rectángulo `M x1 y1 H x2 V y2 H x1 Z`. */
+function rectCenter(path: string): { x: number; y: number } {
+  const match = RECT_PATH.exec(path);
+  if (!match) throw new Error(`La forma no es un rectángulo: ${path}`);
+  const [x1, y1, x2, y2] = match.slice(1).map(Number);
+  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+}
+
+async function getNumberedZone(slug: string, zoneId: string): Promise<NumberedVenueZone> {
+  const zone = (await getMap(slug)).zones.find((candidate) => candidate.id === zoneId);
+  if (zone?.kind !== "numbered") throw new Error(`Sin zona numerada ${zoneId} en ${slug}`);
+  return zone;
 }
 
 describe("seating.service", () => {
@@ -164,6 +181,55 @@ describe("seating.service", () => {
         for (const row of zone.rows) expect(row.seats.length, `${zone.id}-${row.label}`).toBeLessThanOrEqual(10);
         expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(400);
       }
+    });
+
+    it("el labelPos del escenario y de cada zona es el centro de su forma", async () => {
+      const map = await getMap(slug);
+      expect(map.stage.labelPos, "stage").toEqual(rectCenter(map.stage.path));
+      for (const zone of map.zones) expect(zone.labelPos, zone.id).toEqual(rectCenter(zone.path));
+    });
+  });
+
+  describe("escenario y reparto de la ocupación", () => {
+    it.each([
+      ["noche-de-sintetizadores-lima", { x: 300, y: 38 }],
+      ["la-casa-de-los-espejos", { x: 300, y: 40 }],
+      ["risas-sin-filtro", { x: 300, y: 40 }],
+    ])("%s: el texto del escenario está centrado en su forma", async (slug, labelPos) => {
+      expect((await getMap(slug)).stage.labelPos).toEqual(labelPos);
+    });
+
+    it.each([
+      ["noche-de-sintetizadores-lima", "norte"],
+      ["la-casa-de-los-espejos", "platea"],
+    ])("%s: ninguna fila de %s supera el 70 %% de asientos ocupados", async (slug, zoneId) => {
+      const zone = await getNumberedZone(slug, zoneId);
+      for (const row of zone.rows) {
+        const occupied = row.seats.filter((seat) => seat.status === "occupied").length;
+        expect(occupied / row.seats.length, `${zoneId}-${row.label}`).toBeLessThanOrEqual(0.7);
+      }
+    });
+
+    it.each([
+      ["noche-de-sintetizadores-lima", "norte"],
+      ["la-casa-de-los-espejos", "platea"],
+      ["risas-sin-filtro", "preferencial"],
+    ])("%s: %s conserva al menos 1 asiento accesible", async (slug, zoneId) => {
+      const zone = await getNumberedZone(slug, zoneId);
+      const accessible = zone.rows.flatMap((row) => row.seats).filter((seat) => seat.status === "accessible");
+      expect(accessible.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("Tribuna Norte: el mejor asiento disponible está en la fila A y no en un extremo", async () => {
+      const zone = await getNumberedZone("noche-de-sintetizadores-lima", "norte");
+      const [seatId] = findBestAvailableSeats(zone, 1) ?? [];
+      const rowA = zone.rows[0];
+      const seat = rowA.seats.find((candidate) => candidate.id === seatId);
+
+      expect(rowA.label).toBe("A");
+      expect(seat).toBeDefined();
+      expect(seat?.number).not.toBe(1);
+      expect(seat?.number).not.toBe(rowA.seats.length);
     });
   });
 

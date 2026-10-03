@@ -7,7 +7,7 @@ export const VENUE_LAYOUTS_MOCK: z.input<typeof venueLayoutSchema>[] = [
   {
     eventSlug: "noche-de-sintetizadores-lima",
     viewBox: "0 0 600 560",
-    stage: { label: "ESCENARIO", path: "M200 16 H400 V60 H200 Z", labelPos: { x: 300, y: 46 } },
+    stage: { label: "ESCENARIO", path: "M200 16 H400 V60 H200 Z", labelPos: { x: 300, y: 38 } },
     zones: [
       {
         id: "vip",
@@ -52,7 +52,7 @@ export const VENUE_LAYOUTS_MOCK: z.input<typeof venueLayoutSchema>[] = [
   {
     eventSlug: "la-casa-de-los-espejos",
     viewBox: "0 0 600 520",
-    stage: { label: "ESCENARIO", path: "M150 16 H450 V64 H150 Z", labelPos: { x: 300, y: 50 } },
+    stage: { label: "ESCENARIO", path: "M150 16 H450 V64 H150 Z", labelPos: { x: 300, y: 40 } },
     zones: [
       {
         id: "platea",
@@ -86,7 +86,7 @@ export const VENUE_LAYOUTS_MOCK: z.input<typeof venueLayoutSchema>[] = [
   {
     eventSlug: "risas-sin-filtro",
     viewBox: "0 0 600 520",
-    stage: { label: "ESCENARIO", path: "M200 16 H400 V64 H200 Z", labelPos: { x: 300, y: 50 } },
+    stage: { label: "ESCENARIO", path: "M200 16 H400 V64 H200 Z", labelPos: { x: 300, y: 40 } },
     zones: [
       {
         id: "mesa",
