@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EVENT_CATEGORIES } from "@/modules/events";
-import { EVENT_CATEGORY_OPTIONS, organizerEventSchema } from "./organizer.schema";
+import type { OrganizerEventFormValues } from "../types/organizer.types";
+import {
+  EVENT_CATEGORY_OPTIONS,
+  organizerEventFormSchema,
+  organizerEventSchema,
+  savedStatusSchema,
+  ticketTypeFormSchema,
+} from "./organizer.schema";
 
 const draft = {
   id: "org-draft-001",
@@ -40,5 +47,189 @@ describe("organizerEventSchema", () => {
 
   it("rechaza un estado desconocido", () => {
     expect(organizerEventSchema.safeParse({ ...draft, status: "archived" }).success).toBe(false);
+  });
+});
+
+const emptyRow = { id: "row-1", name: "", price: "", quantity: "" };
+
+const emptyForm: OrganizerEventFormValues = {
+  intent: "publish",
+  name: "",
+  category: "conciertos",
+  description: "",
+  date: "",
+  time: "",
+  venue: "",
+  city: "",
+  ticketTypes: [emptyRow],
+};
+
+const completeForm: OrganizerEventFormValues = {
+  intent: "publish",
+  name: "Festival de verano 2026",
+  category: "festivales",
+  description: "Tres escenarios y comida local.",
+  date: "2026-12-05",
+  time: "20:00",
+  venue: "Estadio Nacional",
+  city: "Lima",
+  ticketTypes: [
+    { id: "row-1", name: "General", price: "50", quantity: "100" },
+    { id: "row-2", name: "VIP", price: "80", quantity: "50" },
+  ],
+};
+
+/** Mensajes agrupados por ruta ("ticketTypes.0.name"). */
+function getMessages(values: OrganizerEventFormValues): Record<string, string> {
+  const result = organizerEventFormSchema.safeParse(values);
+  if (result.success) return {};
+  return Object.fromEntries(result.error.issues.map((issue) => [issue.path.join("."), issue.message]));
+}
+
+describe("organizerEventFormSchema", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-03T12:00:00-05:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe("borrador", () => {
+    it("es válido solo con el nombre", () => {
+      expect(organizerEventFormSchema.safeParse({ ...emptyForm, intent: "draft", name: "Mi borrador" }).success).toBe(true);
+    });
+
+    it("con el nombre en blanco solo da el error de nombre", () => {
+      expect(getMessages({ ...emptyForm, intent: "draft", name: "  " })).toEqual({
+        name: "Ingresa el nombre del evento",
+      });
+    });
+
+    it("guarda campos inválidos sin errores", () => {
+      const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", date: "2020-01-01", time: "25:00" };
+      expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
+    });
+  });
+
+  describe("publicar", () => {
+    it("con todo vacío da todos los errores a la vez", () => {
+      expect(getMessages(emptyForm)).toEqual({
+        name: "Ingresa el nombre del evento",
+        description: "Agrega una descripción del evento",
+        date: "Elige la fecha del evento",
+        time: "Indica la hora de inicio",
+        venue: "Indica el lugar del evento",
+        city: "Indica la ciudad",
+        "ticketTypes.0.name": "Ingresa el nombre del tipo de entrada",
+        "ticketTypes.0.price": "Ingresa el precio",
+        "ticketTypes.0.quantity": "Ingresa la cantidad",
+      });
+    });
+
+    it("trata los textos con solo espacios como vacíos", () => {
+      const messages = getMessages({ ...completeForm, description: "  ", venue: " ", city: "\t" });
+      expect(messages).toEqual({
+        description: "Agrega una descripción del evento",
+        venue: "Indica el lugar del evento",
+        city: "Indica la ciudad",
+      });
+    });
+
+    it("un formulario completo es válido y recorta el nombre", () => {
+      const result = organizerEventFormSchema.safeParse({ ...completeForm, name: "  Festival  " });
+      expect(result.success).toBe(true);
+      expect(result.data?.name).toBe("Festival");
+    });
+
+    it("exige al menos un tipo de entrada", () => {
+      expect(getMessages({ ...completeForm, ticketTypes: [] })).toHaveProperty("ticketTypes");
+    });
+
+    it("asigna el error de una fila a su índice y campo", () => {
+      const ticketTypes = [completeForm.ticketTypes[0], { id: "row-2", name: "VIP", price: "-5", quantity: "0" }];
+      expect(getMessages({ ...completeForm, ticketTypes })).toEqual({
+        "ticketTypes.1.price": "El precio debe ser 0 o mayor",
+        "ticketTypes.1.quantity": "La cantidad debe ser un número entero mayor o igual a 1",
+      });
+    });
+  });
+
+  describe("fecha", () => {
+    it("ayer da error", () => {
+      expect(getMessages({ ...completeForm, date: "2026-10-02" }).date).toBe("La fecha no puede ser anterior a hoy");
+    });
+
+    it("hoy en Lima es válido", () => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, date: "2026-10-03" }).success).toBe(true);
+    });
+
+    it("hoy en Lima es válido aunque en UTC ya sea mañana", () => {
+      vi.setSystemTime(new Date("2026-10-03T03:00:00Z")); // 2 oct, 22:00 en Lima
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, date: "2026-10-02" }).success).toBe(true);
+    });
+
+    it.each(["2026-13-45", "2026-02-30", "05/12/2026"])("%s da fecha no válida", (date) => {
+      expect(getMessages({ ...completeForm, date }).date).toBe("Elige una fecha válida");
+    });
+  });
+
+  describe("hora", () => {
+    it.each(["25:00", "20:60", "8:00"])("%s da error", (time) => {
+      expect(getMessages({ ...completeForm, time }).time).toBe("Indica la hora de inicio");
+    });
+
+    it("acepta 00:00 y 23:59", () => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "00:00" }).success).toBe(true);
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, time: "23:59" }).success).toBe(true);
+    });
+  });
+});
+
+describe("ticketTypeFormSchema", () => {
+  const row = { id: "row-1", name: "General", price: "50", quantity: "100" };
+
+  function getRowMessages(values: Partial<typeof row>): string[] {
+    const result = ticketTypeFormSchema.safeParse({ ...row, ...values });
+    return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  }
+
+  it("acepta una fila completa y el precio 0", () => {
+    expect(getRowMessages({})).toEqual([]);
+    expect(getRowMessages({ price: "0" })).toEqual([]);
+  });
+
+  it.each([
+    ["-5", "El precio debe ser 0 o mayor"],
+    ["abc", "El precio debe ser 0 o mayor"],
+    ["", "Ingresa el precio"],
+    ["  ", "Ingresa el precio"],
+  ])("precio %j → %s", (price, message) => {
+    expect(getRowMessages({ price })).toEqual([message]);
+  });
+
+  it.each([
+    ["0", "La cantidad debe ser un número entero mayor o igual a 1"],
+    ["1.5", "La cantidad debe ser un número entero mayor o igual a 1"],
+    ["", "Ingresa la cantidad"],
+  ])("cantidad %j → %s", (quantity, message) => {
+    expect(getRowMessages({ quantity })).toEqual([message]);
+  });
+
+  it("exige el nombre", () => {
+    expect(getRowMessages({ name: " " })).toEqual(["Ingresa el nombre del tipo de entrada"]);
+  });
+});
+
+describe("savedStatusSchema", () => {
+  it.each([
+    ["publicado", "publicado"],
+    ["borrador", "borrador"],
+    ["x", undefined],
+    [undefined, undefined],
+    [["publicado", "borrador"], undefined],
+  ])("%j → %j", (input, expected) => {
+    expect(savedStatusSchema.parse(input)).toBe(expected);
   });
 });
