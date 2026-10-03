@@ -85,6 +85,11 @@ export const ticketTypeFormSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+// Edad mínima (decisión 10): mismo formato que el detalle del evento (`minAge === 0 ? "Todo público" : "+n"`).
+export const MIN_AGE_LABELS = { "0": "Todo público", "12": "+12", "14": "+14", "16": "+16", "18": "+18" } as const;
+type MinAgeOption = keyof typeof MIN_AGE_LABELS;
+export const MIN_AGE_OPTIONS = Object.keys(MIN_AGE_LABELS) as [MinAgeOption, ...MinAgeOption[]];
+
 // "en-CA" formatea como YYYY-MM-DD, comparable como string con el valor del input date.
 const limaDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" });
 
@@ -94,8 +99,10 @@ export function getTodayInLima(): string {
 
 const REQUIRED_ON_PUBLISH = {
   description: "Agrega una descripción del evento",
+  organizer: "Indica el nombre del organizador",
   venue: "Indica el lugar del evento",
   city: "Indica la ciudad",
+  address: "Indica la dirección del lugar",
 } as const;
 
 // Un solo schema para borrador y publicación (Decisión 8): el borrador solo exige el nombre.
@@ -105,11 +112,15 @@ export const organizerEventFormSchema = z
     intent: z.enum(["draft", "publish"]),
     name: z.string().trim().min(1, "Ingresa el nombre del evento"),
     category: z.enum(EVENT_CATEGORY_OPTIONS),
+    minAge: z.enum(MIN_AGE_OPTIONS), // se valida también en borrador; desde el Select nunca falla
     description: z.string(),
+    organizer: z.string(),
     date: z.string(), // "YYYY-MM-DD" o ""
     time: z.string(), // "HH:MM" o ""
+    doorsOpen: z.string(), // "HH:MM" o ""; mismo día que el evento (decisión 11)
     venue: z.string(),
     city: z.string(),
+    address: z.string(),
     // Fila "cruda" del formulario: sus reglas (ticketTypeFormSchema) solo se aplican al publicar.
     ticketTypes: z
       .array(
@@ -140,8 +151,20 @@ export const organizerEventFormSchema = z
       ctx.addIssue({ code: "custom", path: ["date"], message: "La fecha no puede ser anterior a hoy" });
     }
 
-    if (!formTimeSchema.safeParse(data.time).success) {
+    const isTimeValid = formTimeSchema.safeParse(data.time).success;
+    if (!isTimeValid) {
       ctx.addIssue({ code: "custom", path: ["time"], message: "Indica la hora de inicio" });
+    }
+
+    // "HH:MM" se compara como string. La misma hora que el inicio es válida.
+    if (!formTimeSchema.safeParse(data.doorsOpen).success) {
+      ctx.addIssue({ code: "custom", path: ["doorsOpen"], message: "Indica la hora de apertura de puertas" });
+    } else if (isTimeValid && data.doorsOpen > data.time) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["doorsOpen"],
+        message: "La apertura de puertas debe ser a la hora de inicio o antes",
+      });
     }
 
     data.ticketTypes.forEach((row, index) => {
