@@ -8,9 +8,11 @@ Completar los pasos 2 ("Datos y pago") y 3 ("Confirmación") del flujo de compra
 
 Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Creato Display, a11y §11) y `design-system/ticketera/pages/checkout.md`. Del diseño de referencia ("5 · Checkout y pago": `Checkout.dc.html` / `CheckoutMobile.dc.html`; "6 · Confirmación de compra": `Confirmation.dc.html` / `ConfirmationMobile.dc.html`) se toman estructura, textos y patrones móviles, **no** sus colores, fuente ni marca ("Ticketera" → "Mentec Tickets"). Español (Perú), PEN.
 
-**Ampliación (Fases 5 y 6):** con las Fases 1–4 ya implementadas, el usuario compartió capturas de "Datos y pago", "Confirmación" y de la entrada con QR que debe salir al "Descargar PDF". La Fase 5 alinea el paso 2 (h1 solo para lectores de pantalla, campos obligatorios con `*`, documento de identidad agrupado, nota corta de demo y resumen compacto con el botón "Pagar" dentro). La Fase 6 alinea el paso 3 (correo del comprador, fecha sin año ni hora, asientos compactos) y sustituye la lista de impresión por una **entrada imprimible por página** (`components/shared/PrintableTicket.tsx`), reutilizable por "Mis entradas". Se mantiene la marca Mentec (tokens; "Pagar" en primario azul), "Nombres" + "Apellidos" separados y el contrato E sin cambios.
+**Ampliación (Fases 5 y 6):** con las Fases 1–4 ya implementadas, el usuario compartió capturas de "Datos y pago", "Confirmación" y de la entrada con QR que debe salir al "Descargar PDF". La Fase 5 alinea el paso 2 (h1 solo para lectores de pantalla, campos obligatorios con `*`, documento de identidad agrupado, nota corta de demo y resumen compacto con el botón "Pagar" dentro). La Fase 6 alinea el paso 3 (correo del comprador, fecha sin año ni hora, asientos compactos) ~~y sustituye la lista de impresión por una **entrada imprimible por página** (`components/shared/PrintableTicket.tsx`), reutilizable por "Mis entradas"~~ (retirado: ver la enmienda "PDF real" más abajo). Se mantiene la marca Mentec (tokens; "Pagar" en primario azul), "Nombres" + "Apellidos" separados y el contrato E sin cambios.
 
 **Enmienda (Fase 5 y nueva Fase 7):** el usuario compartió la captura de la tarjeta de resumen ("5 × Tribuna Norte", asientos compactos, "Cambiar entradas", separador discontinuo, "Total", botón "Pagar" pálido y "Acepta los términos para continuar." debajo) y pidió que "Cambiar entradas" permita cambiar la selección sin perderla. La Fase 5 añade el separador discontinuo y el bloqueo visual de "Pagar" hasta aceptar los Términos (decisión 32, que sustituye a la 6). La Fase 7 hace que "Cambiar entradas" lleve la selección actual al paso 1 y que el `TicketSelector` del detalle (eventos sin mapa) la precargue. La precarga en el mapa (`/eventos/<slug>/entradas`) la hace `docs/specs/seating-stadium-map.md`, Fase 4.
+
+**Enmienda (PDF real, `docs/specs/tickets-pdf-download.md`):** "Descargar PDF" pasa a generar y descargar un archivo `.pdf` real en el navegador (`mentec-<pedido>.pdf`, una página por entrada) en la confirmación y en "Mis entradas". Lo define esa spec, que también quita `window.print()` y la lista solo-impresión "Tus entradas" de `OrderConfirmation`. Por eso, en esta spec se retiran de la Fase 6 la entrada imprimible (`PrintableTicket`, `buildPrintableTickets`) y la impresión de una entrada por página (decisiones 28–30 tachadas; requisitos 39–40 retirados), así como `formatSeatPosition` de la Fase 5, que solo la usaba la entrada imprimible. El resto de las Fases 5–7 no cambia.
 
 ## Alcance
 - Incluye:
@@ -20,7 +22,7 @@ Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Cre
   - **Fase 4 — Paso 3 `/checkout/confirmacion`:** confirmación leída del store, tarjeta-entrada con talón y `TicketQr`, "Ver mis entradas", "Agregar al calendario" (.ics), "Descargar PDF" (impresión), "Qué sigue" y estado "No encontramos tu compra".
   - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 3 y 4).
   - **Fase 5 — Alinear "Datos y pago" a las capturas:** formateadores de fecha `formatShortDayMonth` / `formatLongDayMonth` en `events` (vía `modules/events/format.ts`); formateo compacto de asientos en `modules/checkout/utils/summaryFormat.ts`; h1 `sr-only`; `*` en los campos obligatorios; "Documento de identidad" como un grupo (tipo + número) junto a "Celular"; nota "Demo: no se realiza ningún cobro real." al pie de "Método de pago"; resumen compacto con separador discontinuo antes del total y "Pagar S/ X" dentro de la tarjeta (solo `lg`); "Pagar" (resumen y barra móvil) con aspecto deshabilitado, alcanzable con Tab y el aviso "Acepta los términos para continuar." mientras Términos no esté marcado.
-  - **Fase 6 — Alinear "Confirmación" y la entrada imprimible:** correo del comprador en el texto, fecha "lunes 5 de octubre · Lugar, Ciudad", asientos compactos por zona, "Qué sigue" como h2 `sr-only`; componente compartido `PrintableTicket` (props planas) y `buildPrintableTickets(order)`; al imprimir solo salen las entradas, una por página.
+  - **Fase 6 — Alinear "Confirmación":** correo del comprador en el texto, fecha "lunes 5 de octubre · Lugar, Ciudad", asientos compactos por zona, "Qué sigue" como h2 `sr-only`. ~~Componente compartido `PrintableTicket` (props planas) y `buildPrintableTickets(order)`; al imprimir solo salen las entradas, una por página.~~ (Sustituido por el PDF real de `tickets-pdf-download.md`.)
   - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 5 y 6).
   - **Fase 7 — "Cambiar entradas" conserva la selección:** el enlace (y "Volver a elegir entradas" del temporizador) lleva al paso 1 con las cantidades y los asientos del pedido; el `TicketSelector` del detalle (eventos sin mapa) precarga las cantidades válidas de la URL. Toca `modules/events` (utilidad pura, `TicketSelector`, un envoltorio cliente nuevo, barrel) y `app/eventos/[slug]/page.tsx`.
   - **Reemplazo funcional de `docs/specs/checkout-purchase.md`:** su Fase 1 (ya implementada) se conserva; sus Fases 2–3 (Stripe) **no se implementan**: esta spec las sustituye. Ese archivo no se edita (sigue aprobado; sus casillas de Fases 2–3 quedan sin marcar).
@@ -31,16 +33,16 @@ Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Cre
   - Reserva real de inventario o de asientos: el temporizador sigue siendo solo de UI.
   - Envío de correos, comprobantes, facturación/boleta, reembolsos, cupones, cargos por servicio.
   - Un QR legible por lectores: `TicketQr` es decorativo y determinista.
-  - Generación real de PDF (se usa el diálogo de impresión del navegador: "Guardar como PDF").
+  - Generación real de PDF (se usa el diálogo de impresión del navegador: "Guardar como PDF"). Después, `tickets-pdf-download.md` la añade y sustituye la impresión.
   - La página `/mis-entradas` y el enlace del header (spec tickets). El botón "Ver mis entradas" apunta a una ruta que crea esa spec.
   - El stepper `PurchaseStepper`, el mapa de asientos y la validación de `asientos=` (spec seating, contratos A, B y C).
   - Exigir sesión para comprar: la compra como invitado sigue permitida.
   - TanStack Query, toasts, modo oscuro.
   - (F5–F6) "Nombre completo" en un solo campo: se mantienen "Nombres" y "Apellidos" (decisión del usuario); el contrato E (`Order.buyer`) no cambia.
-  - (F5–F6) Cambios en `modules/seating/**` (la spec seating amplía su Fase 6 en paralelo), en `modules/tickets/**` o en `docs/specs/tickets-my-tickets.md`: "Mis entradas" podrá adoptar `PrintableTicket` en una enmienda posterior de su spec.
+  - (F5–F6) Cambios en `modules/seating/**` (la spec seating amplía su Fase 6 en paralelo), en `modules/tickets/**` o en `docs/specs/tickets-my-tickets.md`. ~~"Mis entradas" podrá adoptar `PrintableTicket` en una enmienda posterior de su spec.~~ (El PDF de "Mis entradas" lo define `tickets-pdf-download.md`.)
   - (F5–F6) Cambiar el formato de importes: se mantiene `S/ 310.00` del MASTER (la captura muestra `S/ 310`; ver Preguntas abiertas).
   - (F5–F6) Código de pedido `TK-`: se mantiene `MT-XXXXXX`.
-  - (F6) Generar un PDF propio: "Descargar PDF" sigue siendo `window.print()`.
+  - (F6) "Descargar PDF", la impresión de entradas y el botón: los define `tickets-pdf-download.md` (PDF real con jsPDF, sin `window.print()`). La F6 no toca el botón ni añade estilos de impresión.
   - (F5) Deshabilitar "Pagar" por otros campos vacíos o inválidos: solo Términos lo bloquea visualmente; el resto se valida al enviar, como hoy.
   - (F7) Precargar la selección en el mapa `/eventos/<slug>/entradas` (`modules/seating/**`): la hace `seating-stadium-map.md`, Fase 4. Hasta entonces esa página ignora los parámetros (sin errores).
   - (F7) Reflejar en la URL los cambios que se hagan en el paso 1, recordar la selección en el navegador (store, `localStorage`) o volver con "Atrás" del navegador conservándola: la selección viaja solo en el enlace.
@@ -60,7 +62,7 @@ Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Cre
 11. **Stepper:** `/checkout` lo renderiza en la página (`currentStep={2}`); en la confirmación la página lo pasa como prop `stepper` a `OrderConfirmation`, que solo lo muestra si encuentra la orden (los estados de error nunca muestran stepper, igual que en `/checkout`).
 12. **"Cambiar entradas"** lleva al paso 1: `/eventos/<slug>/entradas` si `hasVenueMap(slug)` (contrato B/H) y `/eventos/<slug>` si no. La página lo calcula y lo pasa a `OrderSummary` y al temporizador ("Volver a elegir entradas"). **Ampliada por la decisión 35 (Fase 7):** el enlace lleva también la selección.
 13. **Variantes Stripe obsoletas:** `CheckoutStatusMessage` pierde `not-configured`, `payment-processing` y `payment-failed` (no se usan y pertenecían al flujo Stripe reemplazado); `order-not-found` se adapta a la confirmación local.
-14. **"Descargar PDF" = `window.print()`** con estilos `print:` de Tailwind: se ocultan header, footer, stepper, botones y "Qué sigue"; se muestra una lista solo-impresión con todas las entradas (QR, código, tipo, asiento, titular).
+14. ~~**"Descargar PDF" = `window.print()`** con estilos `print:` de Tailwind: se ocultan header, footer, stepper, botones y "Qué sigue"; se muestra una lista solo-impresión con todas las entradas (QR, código, tipo, asiento, titular).~~ **Sustituida por `tickets-pdf-download.md`** (PDF real, sin lista solo-impresión). Las clases `print:` existentes se conservan para Ctrl+P.
 15. **`.ics` sin `DTEND`:** los eventos no tienen hora de fin; RFC 5545 permite omitirla. Se registra en Preguntas abiertas.
 
 Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, prevalecen):
@@ -81,11 +83,11 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 23. **Resumen compacto.** Se ven: miniatura (`alt=""`, el título va al lado), título, "lun 5 oct · Lugar, Ciudad" (fecha corta en minúsculas, sin hora), separador, una línea por tipo "2 × Tribuna Oriente … S/ 310.00" con, debajo y en pequeño, los asientos compactos, "Cambiar entradas", separador, "Total S/ 310.00", "Precio final, sin cargos ocultos" y "Pagar". El h2 "Resumen del pedido" queda `sr-only`. Se quita el precio unitario ("2 × S/ 155.00"): lo da el subtotal y ya se vio en el paso 1.
 24. **Asientos compactos, agrupados por fila** ("Fila L · 9 · Fila M · 8"; varios en la misma fila: "Fila L · 9, 10"). Las filas van ordenadas por longitud y luego alfabéticamente (A…Z, AA…), y los números de menor a mayor. La función vive en `modules/checkout/utils/summaryFormat.ts` y lee fila y número del **id** del asiento, no de su `label`. El formato del id es el contrato C (`<zoneId>-<fila>-<número>`, fila `[A-Z]{1,2}`, número 1–999, leído desde la derecha). La etiqueta ("Tribuna Norte · Fila F · Asiento 12") es texto de presentación de seating y puede cambiar. Checkout no importa internals de seating. Hoy `parseSeatId` no está en ninguna entrada pública de seating (`index.ts` ni la futura `seats.ts`), así que la lectura del id se define en checkout. Si un id no se puede leer, se usa su `label` completa como fallback. Hay duplicación de conocimiento con `SEAT_ID_PATTERN`: ver Preguntas abiertas.
 25. **Fechas nuevas en `events`, no en checkout.** `formatShortDayMonth(iso)` → "lun 5 oct" y `formatLongDayMonth(iso)` → "lunes 5 de octubre" (America/Lima, minúsculas, sin puntos, sin comas, sin año ni hora) se añaden a `modules/events/utils/formatEvent.ts`, junto a `formatEventDate`/`formatLongDate`, y se reexportan en `modules/events/format.ts` (entrada creada por esta spec en la Fase 1). Así "Mis entradas" podrá usarlas sin depender de checkout. La hora del ticket ("14:00 h") reutiliza `formatTime` + `" h"`: no se crea otro formateador.
-26. **Confirmación sin "Asientos" largo.** En la tarjeta-entrada, bajo "lunes 5 de octubre · Lugar, Ciudad", va una línea pequeña por tipo con asientos: "Tribuna Oriente: Fila L · 9 · Fila M · 8". Los tipos sin asientos no tienen línea. "Zona" sigue uniendo los nombres con ", " cuando hay varias ("General, VIP"), como en el criterio de la Fase 4. Se quita la hora de esa línea (la captura no la muestra; la entrada imprimible sí la lleva).
+26. **Confirmación sin "Asientos" largo.** En la tarjeta-entrada, bajo "lunes 5 de octubre · Lugar, Ciudad", va una línea pequeña por tipo con asientos: "Tribuna Oriente: Fila L · 9 · Fila M · 8". Los tipos sin asientos no tienen línea. "Zona" sigue uniendo los nombres con ", " cuando hay varias ("General, VIP"), como en el criterio de la Fase 4. Se quita la hora de esa línea (la captura no la muestra; el PDF de `tickets-pdf-download.md` sí la lleva).
 27. **"Qué sigue" sin título visible:** se mantiene como h2 `sr-only` (la sección sigue nombrada con `aria-labelledby` y la jerarquía h1 → h2 no salta).
-28. **Entrada imprimible compartida.** `components/shared/PrintableTicket.tsx` es presentacional, sin directiva y con **props planas** (no conoce `Order` ni ningún módulo). La usará también "Mis entradas" (ver Coordinación). La función pura `buildPrintableTickets(order)`, en `modules/checkout/utils/printableTickets.ts`, convierte una `Order` en esas props. Empareja cada `tickets[i]` con su asiento recorriendo `items` y `seats` en el mismo orden con el que `buildOrder` numera las entradas (requisito 13).
-29. **Impresión = solo entradas, una por página.** Al imprimir se ocultan también la cabecera de confirmación y la tarjeta-entrada (`print:hidden`). Solo sale la lista de `PrintableTicket`, cada una con `break-inside-avoid` y salto de página después (`print:break-after-page`), salvo la última. La franja de marca y los colores se imprimen con `[print-color-adjust:exact]` en el `<article>`, porque los navegadores omiten los fondos por defecto. Las imágenes (evento y logo) llevan `loading="eager"`: la sección está en `display:none` en pantalla y con carga diferida no llegarían a cargarse antes del diálogo de impresión.
-30. **Ubicación sin asiento:** en entradas de zonas sin numerar se **omite** el dato "Ubicación" (no se inventa un texto tipo "General · sin butaca"). Ver Preguntas abiertas.
+28. ~~**Entrada imprimible compartida.**~~ **Retirada (decisiones 28–30): sustituidas por el PDF real de `tickets-pdf-download.md`; no se implementan.** ~~`components/shared/PrintableTicket.tsx` es presentacional, sin directiva y con **props planas** (no conoce `Order` ni ningún módulo). La usará también "Mis entradas" (ver Coordinación). La función pura `buildPrintableTickets(order)`, en `modules/checkout/utils/printableTickets.ts`, convierte una `Order` en esas props. Empareja cada `tickets[i]` con su asiento recorriendo `items` y `seats` en el mismo orden con el que `buildOrder` numera las entradas (requisito 13).~~
+29. ~~**Impresión = solo entradas, una por página.** Al imprimir se ocultan también la cabecera de confirmación y la tarjeta-entrada (`print:hidden`). Solo sale la lista de `PrintableTicket`, cada una con `break-inside-avoid` y salto de página después (`print:break-after-page`), salvo la última. La franja de marca y los colores se imprimen con `[print-color-adjust:exact]` en el `<article>`, porque los navegadores omiten los fondos por defecto. Las imágenes (evento y logo) llevan `loading="eager"`: la sección está en `display:none` en pantalla y con carga diferida no llegarían a cargarse antes del diálogo de impresión.~~
+30. ~~**Ubicación sin asiento:** en entradas de zonas sin numerar se **omite** el dato "Ubicación" (no se inventa un texto tipo "General · sin butaca"). Ver Preguntas abiertas.~~
 31. **Cantidad de entradas en el total.** La fila del total del resumen dice "Total (N entradas)" ("1 entrada" en singular), como `PurchaseSummary` del paso 1. Ya existen dos `formatTicketCount` idénticos, pero ambos son internals: `modules/seating/utils/selectionSummary.ts` y `modules/tickets/utils/myOrders.ts`. No están en ninguna entrada pública, y esta fase no toca seating ni tickets. Por eso checkout define el suyo en `utils/summaryFormat.ts` y lo usan `OrderSummary` y `CheckoutSummaryPanel`. **Duplicado conocido** (3 copias): ver Preguntas abiertas. `OrderConfirmation` conserva su ternario en línea, porque la F6 no lo toca por este motivo.
 
 Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sobre las anteriores):
@@ -231,7 +233,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 31. **`modules/checkout/utils/summaryFormat.ts`** (formateadores del resumen; puro, sin React ni imports de seating; decisiones 24 y 31):
     - `formatTicketCount(count: number): string` → `"1 entrada"` / `"3 entradas"`.
     - `parseSeatPosition(seatId: string): { row: string; number: number } | null`. Usa `/-([A-Z]{1,2})-(\d{1,3})$/` (contrato C, leído desde la derecha). Devuelve `null` si no encaja o si el número es 0.
-    - `formatSeatPosition(row: string, number: number): string` → `"Fila L, asiento 9"` (lo usa la entrada imprimible en la Fase 6).
+    - ~~`formatSeatPosition(row: string, number: number): string` → `"Fila L, asiento 9"`~~ Retirada (enmienda PDF real: solo la usaba la entrada imprimible de la Fase 6).
     - `formatCompactSeats(seats: { id: string; label: string }[]): string`. Agrupa por fila: `"Fila L · 9 · Fila M · 8"` y `"Fila L · 9, 10"`. Ordena las filas por longitud y luego alfabéticamente, y los números de menor a mayor. Los ids que no se pueden leer se añaden al final con su `label`, separados por " · ". Con `[]` devuelve `""`.
 32. **`app/checkout/page.tsx`:** el h1 "Finalizar compra" pasa a `className="sr-only"`; `CheckoutForm` se llama sin `summary` (decisión 22); deja de importar `OrderSummary`. Lo demás no cambia (stepper, estados de error, `changeHref`, metadata).
 33. **`OrderSummary`** (sigue sin directiva; decisiones 22–23):
@@ -272,62 +274,23 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
     - Sin scroll horizontal a 375 / 768 / 1024 / 1440. A 375 px, la fila tipo + número cabe sin desbordar (`min-w-0` en el input).
     - Targets ≥ 44 px (`h-11`). Solo tokens.
 
-### Fase 6 — "Confirmación" y entrada imprimible según las capturas
-39. **`components/shared/PrintableTicket.tsx`** (presentacional, sin directiva; decisiones 28–30):
-    - Props planas:
-      ```ts
-      type PrintableTicketProps = {
-        ticketNumber: number; ticketCount: number;           // "Entrada 1 de 2"
-        imageUrl: string; categoryLabel: string; title: string;
-        dateLabel: string; timeLabel: string; placeLabel: string; // "lunes 5 de octubre", "14:00 h", "Costa Verde, Lima"
-        zoneLabel: string; seatLabel?: string;               // "Tribuna Oriente", "Fila L, asiento 9"
-        holderName: string; ticketCode: string; orderCode: string;
-        className?: string;
-      };
-      ```
-    - Raíz: `<article aria-label="Entrada {ticketNumber} de {ticketCount}" className={cn("mx-auto w-full max-w-md overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border break-inside-avoid [print-color-adjust:exact]", className)}>`.
-    - **Franja de marca:** `flex items-center justify-between bg-primary px-5 py-3 text-primary-foreground`. A la izquierda, `BrandLogo variant="white"` (`h-6 w-auto`, `loading="eager"`; su `alt` "Mentec Tickets" es el texto de la marca). A la derecha, "Entrada {n} de {N}" (`text-sm font-semibold`: blanco sobre primario exige semibold ≥ 14 px, MASTER §2).
-    - **Imagen** `next/image` a todo el ancho: `relative aspect-[2/1]`, `fill`, `object-cover`, `alt=""`, `sizes="448px"`, `loading="eager"`.
-    - **Cuerpo** (`p-5 flex flex-col gap-3`):
-      - Overline de categoría (`text-xs font-bold uppercase tracking-wider text-primary-strong`).
-      - Título en `<h3>` (`text-2xl font-bold tracking-tight leading-tight`).
-      - `<dl className="grid grid-cols-3 gap-3">` con "Fecha", "Hora" y "Lugar".
-    - **Talón:** `relative border-t-2 border-dashed border-input` con dos muescas (`absolute size-6 rounded-full bg-background ring-1 ring-border`, `-left-3`/`-right-3` y `-top-3`, `aria-hidden`).
-    - **Bloque inferior** (`p-5 flex gap-5 items-start`):
-      - `TicketQr value={ticketCode}` (`size-36 shrink-0 rounded-xl p-2 ring-1 ring-border`).
-      - `<dl className="grid grid-cols-2 gap-x-4 gap-y-3 min-w-0">`: "Zona" (`col-span-2`), "Ubicación" (`col-span-2`, solo si hay `seatLabel`), "Titular" (`col-span-2`, `break-words`), "Código" y "Pedido" (`tabular-nums`).
-    - **Pie:** `<p className="px-5 pb-5 text-center text-xs text-muted-foreground">Presenta este QR en el ingreso. Cada entrada es válida para una persona.</p>`.
-    - Todos los `dt` llevan `text-xs font-medium uppercase tracking-wider text-muted-foreground`, con el texto en caja normal ("Fecha", no "FECHA") para que el lector no deletree. Todos los `dd` llevan `text-sm font-semibold`.
-    - Solo tokens (sin índigo ni hex).
-40. **`modules/checkout/utils/printableTickets.ts`** (puro):
-    - `buildPrintableTickets(order: Order): Omit<PrintableTicketProps, "className">[]` (`import type` de `@/components/shared/PrintableTicket`). Devuelve una entrada por `order.tickets[i]`, en orden:
-      - `ticketNumber` `i + 1` y `ticketCount` `tickets.length`;
-      - `imageUrl`, `title` y `categoryLabel` (`EVENT_CATEGORY_LABELS[event.category]`);
-      - `dateLabel` `formatLongDayMonth(startsAt)`, `timeLabel` `` `${formatTime(startsAt)} h` `` y `placeLabel` `"<venue>, <city>"`;
-      - `zoneLabel` `ticket.ticketTypeName`, `holderName`, `ticketCode` `ticket.code` y `orderCode` `order.code`;
-      - `seatLabel`:
-        - si el slot `i` (de `items.flatMap(item => quantity slots, seat = item.seats?.[q])`) tiene asiento y `parseSeatPosition(seat.id)` lo lee → `formatSeatPosition(row, number)`;
-        - si hay asiento pero no se lee → `ticket.seatLabel`;
-        - sin asiento → `undefined`.
-    - Importa de `@/modules/events/format` (nunca del barrel) y de `./summaryFormat`.
+### Fase 6 — "Confirmación" según las capturas
+39. ~~**`components/shared/PrintableTicket.tsx`**~~ **Retirado** (enmienda PDF real): la entrada para descargar o imprimir es el PDF que genera `lib/ticketPdf.ts` según `docs/specs/tickets-pdf-download.md`. No se crea `PrintableTicket`.
+40. ~~**`modules/checkout/utils/printableTickets.ts`**~~ **Retirado** (enmienda PDF real): no se crea `buildPrintableTickets`. El mapeo `Order` → datos del PDF es `buildTicketPdfInput` (`tickets-pdf-download.md`).
 41. **`ConfirmationTicketCard`** (decisión 26):
-    - `<article aria-labelledby={id del h2}>`, para distinguirla de las entradas imprimibles.
+    - `<article aria-labelledby={id del h2}>` (nombre accesible = título del evento).
     - Línea de fecha: `<time dateTime>{formatLongDayMonth(startsAt)}</time> · {venue}, {city}`.
     - Debajo, una `<p className="text-sm text-muted-foreground">` por item con `seats`: "{item.name}: {formatCompactSeats(item.seats)}".
     - `<dl>`: Zona, Entradas y Total pagado como hoy, sin el bloque "Asientos".
-    - `print:hidden` en la raíz (decisión 29). Ya no importa `formatLongDate`/`formatTime`.
+    - Ya no importa `formatLongDate`/`formatTime`. ~~`print:hidden` en la raíz (decisión 29).~~
 42. **`OrderConfirmation`:**
-    - **Cabecera** (`print:hidden`): "Enviamos tus entradas a <strong className="font-semibold text-foreground break-all">{order.buyer.email}</strong>. También las tienes siempre en Mis entradas." `ConfirmationHeader` recibe `code` y `email` (props planas).
+    - **Cabecera:** "Enviamos tus entradas a <strong className="font-semibold text-foreground break-all">{order.buyer.email}</strong>. También las tienes siempre en Mis entradas." `ConfirmationHeader` recibe `code` y `email` (props planas).
     - **"Qué sigue":** el h2 pasa a `sr-only` (decisión 27). Las tarjetas no cambian.
-    - **`PrintableTickets`:**
-      - `<section aria-labelledby="order-printable-tickets" className="hidden w-full print:block">` con h2 `sr-only` "Tus entradas".
-      - Dentro, `<ol>` con un `<li className="print:break-after-page print:last:break-after-auto">` por cada elemento de `buildPrintableTickets(order)` → `<PrintableTicket {...ticket} />`.
-      - Sustituye las filas actuales (QR + código + tipo + asiento + "Titular: …").
-    - **Contenedor** `CONTAINER_CLASS` con `print:block print:p-0`, para que el `gap` y el centrado no desplacen las páginas.
+    - ~~**`PrintableTickets`** y contenedor con `print:block print:p-0`~~ **Retirado** (enmienda PDF real): la lista solo-impresión "Tus entradas" y `window.print()` los quita `tickets-pdf-download.md`. La F6 no toca el botón "Descargar PDF" (`TicketsPdfButton`) ni añade estilos de impresión.
 43. **Accesibilidad y responsive (F6):**
-    - Un único h1. Jerarquía h1 → h2 (tarjeta-entrada, "Qué sigue" `sr-only`, "Tus entradas" `sr-only`) → h3 (título en cada entrada imprimible).
+    - Un único h1. Jerarquía h1 → h2 (tarjeta-entrada, "Qué sigue" `sr-only`).
     - El correo largo no provoca scroll horizontal a 375 px (`break-all`).
-    - A 375 y 1440 px la pantalla se ve como la captura. Al imprimir, N páginas con una entrada cada una, con la franja de marca en color.
+    - A 375 y 1440 px la pantalla se ve como la captura.
     - Solo tokens. Sin emojis.
 
 ### Fase 7 — "Cambiar entradas" conserva la selección
@@ -396,7 +359,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - [ ] Dado que se recarga la página de confirmación, entonces la orden se lee de `localStorage` y se ve igual (antes, un breve "Cargando tu compra…").
 - [ ] Dado `/checkout/confirmacion` sin `orden`, con un formato inválido o con un código que no está en el navegador, entonces se ve "No encontramos tu compra" con "Volver al inicio" y sin stepper.
 - [ ] Dado "Agregar al calendario", entonces se descarga `<slug>.ics` y se puede importar en un calendario con título, fecha y lugar del evento.
-- [ ] Dado "Descargar PDF", entonces se abre el diálogo de impresión y la vista previa no muestra header, footer, stepper, botones ni "Qué sigue", y sí la confirmación y una ficha por entrada con su QR, código, tipo, asiento (si hay) y titular.
+- [ ] ~~Dado "Descargar PDF", entonces se abre el diálogo de impresión y la vista previa no muestra header, footer, stepper, botones ni "Qué sigue", y sí la confirmación y una ficha por entrada con su QR, código, tipo, asiento (si hay) y titular.~~ Sustituido por los criterios de `tickets-pdf-download.md` (descarga de un PDF real).
 - [ ] Dado "Ver mis entradas", entonces enlaza a `/mis-entradas`.
 - [ ] Dado 375 px, entonces la tarjeta-entrada es vertical (imagen, datos, separador punteado, QR), "Ver mis entradas" ocupa todo el ancho, "Calendario" y "Descargar PDF" van en dos columnas y no hay scroll horizontal; en 1440 px la tarjeta es horizontal con el talón a la derecha.
 - [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de `/checkout` y `/checkout/confirmacion` de esta spec y ya no menciona Stripe.
@@ -444,7 +407,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - [ ] Dado el código, entonces ningún archivo de `modules/checkout` importa de `modules/seating/**` salvo sus entradas públicas, no se modifica `modules/seating/**`, y `OrderSummary` no importa el barrel `@/modules/events`.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
-### Fase 6 — "Confirmación" y entrada imprimible
+### Fase 6 — "Confirmación"
 - [ ] Dado un pago aprobado con el correo `luis@correo.pe`, entonces la confirmación dice "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." (correo en negrita) y conserva "Pedido N.º MT-XXXXXX".
 - [ ] Dada la tarjeta-entrada de una compra con asientos (ejemplo de la captura: `Tribuna Oriente`, L-9 y M-8, el 5 de octubre en Costa Verde, Lima; con otro evento, sus datos en el mismo formato), entonces muestra:
   - "lunes 5 de octubre · Costa Verde, Lima" (sin año ni hora);
@@ -455,16 +418,9 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - [ ] Dada una compra con General y VIP, entonces "Zona" muestra "General, VIP".
 - [ ] Dado 1440 px, entonces "Qué sigue" no tiene título visible y sus 3 tarjetas siguen en fila. Con lector de pantalla existe el h2 "Qué sigue", y el único h1 es "¡Compra confirmada!".
 - [ ] Dado 375 px, entonces la tarjeta-entrada es vertical, un correo largo no provoca scroll horizontal y las acciones se ven como en la Fase 4.
-- [ ] Dado "Descargar PDF" con una compra de 2 entradas, entonces la vista previa de impresión tiene 2 páginas, cada una con una entrada vertical:
-  - franja azul de marca con el logo Mentec Tickets en blanco y "Entrada n de 2", impresa en color;
-  - imagen del evento, categoría, título, Fecha "lunes 5 de octubre", Hora "14:00 h" y Lugar "Costa Verde, Lima";
-  - talón punteado con muescas;
-  - QR de esa entrada, Zona "Tribuna Oriente", Ubicación "Fila L, asiento 9" (y "Fila M, asiento 8" en la segunda), Titular, Código `MT-XXXXXX-01`/`-02` y Pedido `MT-XXXXXX`;
-  - pie "Presenta este QR en el ingreso. Cada entrada es válida para una persona.";
-  - no salen header, footer, stepper, cabecera de confirmación, tarjeta-entrada, acciones ni "Qué sigue".
-- [ ] Dada una entrada de zona general (sin asiento), entonces la entrada imprimible omite "Ubicación".
-- [ ] Dado `PrintableTicket`, entonces no importa nada de `modules/` ni el tipo `Order`, solo usa tokens y acepta `className`.
-- [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de las Fases 5 y 6 (incluida la anatomía de la entrada imprimible).
+- [ ] ~~Dado "Descargar PDF" con una compra de 2 entradas, entonces la vista previa de impresión tiene 2 páginas… (entrada imprimible); entrada sin asiento sin "Ubicación"; `PrintableTicket` con props planas.~~ Retirados (enmienda PDF real): los sustituyen los criterios de `tickets-pdf-download.md`.
+- [ ] Dada la confirmación, entonces "Descargar PDF" sigue siendo el `TicketsPdfButton` de `tickets-pdf-download.md` (la F6 no lo cambia) y no vuelve a aparecer ninguna lista solo-impresión.
+- [ ] Dado `design-system/ticketera/pages/checkout.md`, entonces describe los layouts de las Fases 5 y 6.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
 ### Fase 7 — "Cambiar entradas" conserva la selección
@@ -553,15 +509,13 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - Rutas: `app/checkout/page.tsx` (modificada, F5: h1 `sr-only`, sin `summary`). `app/checkout/confirmacion/page.tsx` no cambia.
 - Componentes:
   - shadcn (instalados): `card`, `field` (incluye `FieldSet`, `FieldLegend`), `select` (`SelectValue` con `children` función), `input`, `input-group`, `checkbox`, `separator`, `button`, `radio-group`. No hay que instalar nada. Se revisó shadcn para la marca de obligatorio y para el ticket imprimible: no existe un "required indicator" ni un componente de ticket/boleto. No pude ejecutar `npx shadcn@latest search` (el registro no responde desde este entorno; ver la nota de la Fase 1).
-  - existente (`components/shared/BrandLogo.tsx`): `variant="white"` en la franja de la entrada imprimible.
-  - existente (`components/shared/TicketQr.tsx`): QR de cada entrada imprimible.
   - existente, modificados: `modules/checkout/components/OrderSummary.tsx` (F5), `CheckoutSummaryPanel.tsx` (F5), `CheckoutForm.tsx` (F5), `PaymentMethodFields.tsx` (F5), `ConfirmationTicketCard.tsx` (F6), `OrderConfirmation.tsx` (F6).
   - nuevo `modules/checkout/components/RequiredMark.tsx` (F5): marca `*` `aria-hidden`. La usan dos componentes del módulo (`CheckoutForm`, `PaymentMethodFields`) en 10 etiquetas. No existe en shadcn. Si otro dominio la necesita (p. ej. el registro), sube a `components/shared`.
-  - nuevo `components/shared/PrintableTicket.tsx` (F6): entrada imprimible con props planas. Va en `shared` porque la usan checkout y, en una enmienda posterior, tickets (dos dominios). No existe en shadcn.
+  - ~~nuevo `components/shared/PrintableTicket.tsx` (F6)~~: retirado (enmienda PDF real, `tickets-pdf-download.md`).
 - Utils:
   - `modules/events/utils/formatEvent.ts` (+ test) y `modules/events/format.ts` (F5): `formatShortDayMonth`, `formatLongDayMonth`.
-  - nuevo `modules/checkout/utils/summaryFormat.ts` (+ test) (F5): `formatTicketCount` (duplicado conocido, decisión 31), `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
-  - nuevo `modules/checkout/utils/printableTickets.ts` (+ test) (F6): `buildPrintableTickets`.
+  - nuevo `modules/checkout/utils/summaryFormat.ts` (+ test) (F5): `formatTicketCount` (duplicado conocido, decisión 31), `parseSeatPosition`, `formatCompactSeats` (~~`formatSeatPosition`~~, retirada).
+  - ~~nuevo `modules/checkout/utils/printableTickets.ts` (+ test) (F6)~~: retirado (enmienda PDF real).
 - Hooks, services, schemas, stores, tipos: sin cambios. **Contrato E sin cambios** (`Order`, `OrderTicket`, `OrderBuyer`).
 - `modules/checkout/index.ts` (F5): quita `OrderSummary`.
 - Contratos nuevos (entre capas):
@@ -573,22 +527,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
   // modules/checkout/utils/summaryFormat.ts
   export function formatTicketCount(count: number): string;                                   // 1 → "1 entrada", 3 → "3 entradas"
   export function parseSeatPosition(seatId: string): { row: string; number: number } | null; // "tribuna-oriente-L-9" → { row: "L", number: 9 }
-  export function formatSeatPosition(row: string, number: number): string;                    // "Fila L, asiento 9"
   export function formatCompactSeats(seats: { id: string; label: string }[]): string;         // "Fila L · 9 · Fila M · 8"
-
-  // components/shared/PrintableTicket.tsx
-  export type PrintableTicketProps = {
-    ticketNumber: number; ticketCount: number;
-    imageUrl: string; categoryLabel: string; title: string;
-    dateLabel: string; timeLabel: string; placeLabel: string;
-    zoneLabel: string; seatLabel?: string;
-    holderName: string; ticketCode: string; orderCode: string;
-    className?: string;
-  };
-  export function PrintableTicket(props: PrintableTicketProps): JSX.Element;
-
-  // modules/checkout/utils/printableTickets.ts
-  export function buildPrintableTickets(order: Order): Omit<PrintableTicketProps, "className">[];
 
   // modules/checkout/components/OrderSummary.tsx
   type OrderSummaryProps = { order: CheckoutOrder; changeHref?: string; footer?: ReactNode };
@@ -646,7 +585,7 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - shadcn ya instalados (lista en Diseño técnico) + `radio-group`.
 - Nativos: `Intl`, `Blob`, `URL.createObjectURL`, `window.print`, `Math.random`, `localStorage` (vía zustand `persist`), Tailwind `print:`.
 - Sin dependencias nuevas.
-- (F5–F6) `formatTime`, `formatEventPrice`, `EVENT_CATEGORY_LABELS` (vía `@/modules/events/format`); `BrandLogo` (`variant="white"`); `TicketQr`; `FieldSet`/`FieldLegend`; `SelectValue` con `children` función; patrón de muescas del talón de `ConfirmationTicketCard`; `DOCUMENT_TYPE_LABELS`; utilidades `print:` y `break-after-page` de Tailwind v4. Sin dependencias nuevas ni componentes shadcn nuevos.
+- (F5–F6) `formatTime`, `formatEventPrice`, `EVENT_CATEGORY_LABELS` (vía `@/modules/events/format`); `FieldSet`/`FieldLegend`; `SelectValue` con `children` función; `DOCUMENT_TYPE_LABELS`. (~~`BrandLogo`, `TicketQr`, `print:`/`break-after-page` para la entrada imprimible~~: retirado por la enmienda PDF real.) Sin dependencias nuevas ni componentes shadcn nuevos.
 - (Enmienda F5/F7):
   - patrón de neutralizado `aria-disabled:*` de `STEPPER_CLASS` (`TicketSelector`);
   - `useId` para el aviso;
@@ -679,7 +618,6 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
 - `modules/checkout/utils/summaryFormat.test.ts` (F5, nuevo):
   - `formatTicketCount`: `1` → `"1 entrada"`, `3` → `"3 entradas"`, `0` → `"0 entradas"`.
   - `parseSeatPosition`: `"tribuna-oriente-L-9"` → `{ row: "L", number: 9 }`, zona con guiones y fila de 2 letras (`"platea-baja-AA-101"`); `"general"`, `"norte-f-12"`, `"norte-F-0"`, `"norte-F-1000"` → `null`.
-  - `formatSeatPosition("L", 9)` → `"Fila L, asiento 9"`.
   - `formatCompactSeats`:
     - `[L-9, M-8]` → `"Fila L · 9 · Fila M · 8"`;
     - `[M-8, L-10, L-9]` → `"Fila L · 9, 10 · Fila M · 8"` (orden de filas y números);
@@ -709,29 +647,18 @@ Decisiones de la enmienda (Fase 5, captura del resumen, y Fase 7; prevalecen sob
     - al marcar los Términos desaparecen los dos avisos (`queryAllByText("Acepta los términos para continuar.")` vacío) y los botones pierden `aria-disabled` y `aria-describedby`; al desmarcarlos, vuelven;
     - con Términos marcados y datos válidos, el pago sigue el flujo de siempre (cubierto por el caso existente);
     - con la reserva expirada y Términos sin marcar, los botones tienen `disabled` y no hay aviso de términos.
-- `modules/checkout/utils/printableTickets.test.ts` (F6, nuevo; fixture con 2 items, uno con asientos y otro sin ellos):
-  - una entrada por ticket, en orden, con `ticketNumber` 1..N y `ticketCount` N;
-  - `categoryLabel` de la categoría, `dateLabel` `"sábado 14 de noviembre"` para `2026-11-14T21:00:00-05:00`, `timeLabel` `"21:00 h"` y `placeLabel` `"Estadio, Lima"`;
-  - `zoneLabel` = `ticketTypeName`, `holderName`, `ticketCode` = código de la entrada y `orderCode` = código del pedido;
-  - `seatLabel`:
-    - `"Fila A, asiento 1"`/`"Fila A, asiento 2"` en las entradas con asiento (emparejadas por orden);
-    - `undefined` en las de la zona sin asientos;
-    - con un id de asiento ilegible → `ticket.seatLabel`.
+- ~~`modules/checkout/utils/printableTickets.test.ts` (F6)~~: retirado (enmienda PDF real).
 - `modules/checkout/components/OrderConfirmation.test.tsx` (F6, **cambian** los existentes):
-  - La tarjeta-entrada se busca con `getByRole("article", { name: "Noche de Sintetizadores" })` (antes `getByRole("article")`): las entradas imprimibles también son `article`, y en jsdom la clase `hidden` no oculta nada.
+  - La tarjeta-entrada se busca con `getByRole("article", { name: "Noche de Sintetizadores" })` (antes `getByRole("article")`), por su `aria-labelledby`.
   - El caso "con una orden guardada…" sigue comprobando h1 único, stepper, "Pedido N.º", categoría, título, Zona "General, VIP", Entradas 3, Total pagado S/ 910.00, el QR `-01`, "Entrada 1 de 3" dentro de la tarjeta, "Ver mis entradas" y el h2 "Qué sigue" (ahora `sr-only`, se encuentra igual por rol).
   - Además comprueba:
     - el texto "Enviamos tus entradas a luis@correo.pe…" con el correo en un `<strong>`;
     - en la tarjeta, "sábado 14 de noviembre · Estadio, Lima" y las líneas "General: Fila A · 1, 2" y "VIP: Fila B · 5";
     - que no existe el término "Asientos".
-  - "la lista de impresión tiene una fila por entrada…" **se sustituye** por: la región "Tus entradas" contiene 3 `article` ("Entrada 1 de 3"…"Entrada 3 de 3"). Cada uno tiene:
-    - el QR de su código;
-    - Zona = tipo, Ubicación ("Fila A, asiento 1", "Fila A, asiento 2", "Fila B, asiento 5"), Titular "Luis Pérez", Código = código de la entrada y Pedido `MT-AB12CD`;
-    - Fecha "sábado 14 de noviembre", Hora "21:00 h" y Lugar "Estadio, Lima";
-    - el pie "Presenta este QR en el ingreso. Cada entrada es válida para una persona.".
-  - Nuevo: con una orden sin asientos, ni las entradas imprimibles muestran "Ubicación" ni la tarjeta-entrada líneas de asientos.
-  - Los casos de carga, calendario, `window.print` y "No encontramos tu compra" no cambian.
-- Sin tests propios: `PrintableTicket` (presentacional, cubierto por `OrderConfirmation.test`), `RequiredMark`, `OrderSummary`, `CheckoutSummaryPanel`, `ConfirmationTicketCard`, páginas.
+  - ~~La región "Tus entradas" con 3 entradas imprimibles~~: retirado (enmienda PDF real; esa región la elimina `tickets-pdf-download.md`).
+  - Nuevo: con una orden sin asientos, la tarjeta-entrada no muestra líneas de asientos.
+  - Los casos de carga, calendario, "Descargar PDF" (los de `tickets-pdf-download.md`) y "No encontramos tu compra" no cambian.
+- Sin tests propios: `RequiredMark`, `OrderSummary`, `CheckoutSummaryPanel`, `ConfirmationTicketCard`, páginas.
 
 **Fase 7:**
 - `modules/checkout/utils/checkoutOrder.test.ts` (**se añaden casos**; los existentes no cambian). `buildChangeTicketsHref`:
@@ -795,9 +722,11 @@ Coordinación de la ampliación (Fases 5 y 6):
   - No cambia las existentes ni sus tests.
   - `events-ui-refresh` debe conservarlas si edita esos archivos.
 - **Tickets (Mis entradas):**
-  - `PrintableTicket` y los formateadores de F5 quedan disponibles.
-  - Adoptarlos en el "Descargar PDF" de `/mis-entradas` (Fase 2 de `tickets-my-tickets.md`) requiere una enmienda de esa spec. Esta spec no la edita.
-  - Si tickets necesita `buildPrintableTickets`, se expondrá en `modules/checkout/orders.ts` en esa enmienda (hoy YAGNI).
+  - Los formateadores de F5 quedan disponibles.
+  - El "Descargar PDF" de `/mis-entradas` y de la confirmación lo define `docs/specs/tickets-pdf-download.md` (PDF real). Esa spec publica `buildTicketPdfInput` en `modules/checkout/orders.ts`.
+- **PDF real (`tickets-pdf-download.md`):**
+  - esa spec y la F6 modifican `OrderConfirmation.tsx` y su test: se ejecutan en sesiones distintas, y se recomienda la de PDF primero;
+  - la F6 edita sobre su versión: conserva `TicketsPdfButton` en las acciones y no reintroduce `window.print()` ni la lista "Tus entradas".
 - F6 depende de F5 (formateadores y `summaryFormat`). Se ejecuta una fase por sesión.
 
 ### Fase 5 — "Datos y pago" según las capturas
@@ -807,12 +736,12 @@ Coordinación de la ampliación (Fases 5 y 6):
 - [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`; `PayButton` con `termsPending`, `aria-disabled` y aviso "Acepta los términos para continuar."; `termsRef` y foco a Términos en `onSubmit`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial
 - [ ] T5 — Diseño de página, sección `/checkout` (layout sin h1 visible, disposición del comprador, nota de demo, resumen compacto con separador discontinuo y "Pagar" dentro, `*`, estados de "Pagar": procesando / expirado / Términos pendientes con aviso / activo) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2 y T3 (y con T4: archivos disjuntos)
 
-### Fase 6 — "Confirmación" y entrada imprimible
-- [ ] T1 — `PrintableTicket` (props planas, franja de marca, talón, `[print-color-adjust:exact]`, imágenes `eager`) · archivos: `components/shared/PrintableTicket.tsx` · depende de: Fase 5 · secuencial (`components/shared/`)
-- [ ] T2 — `buildPrintableTickets` con test · archivos: `modules/checkout/utils/printableTickets.ts`, `modules/checkout/utils/printableTickets.test.ts` · depende de: T1 · paralelo con T3 y T5
-- [ ] T3 — `ConfirmationTicketCard` (fecha "lunes 5 de octubre" sin año ni hora, asientos compactos por zona, sin "Asientos", `aria-labelledby`, `print:hidden`) · archivos: `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: T1 · paralelo con T2 y T5
-- [ ] T4 — `OrderConfirmation` (correo en negrita, "Qué sigue" `sr-only`, cabecera `print:hidden`, lista de `PrintableTicket` con salto de página) con tests actualizados y nuevos · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T2, T3 · secuencial
-- [ ] T5 — Diseño de página, sección confirmación e impresión (anatomía de la entrada imprimible) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: T1 · paralelo con T2, T3 y T4
+### Fase 6 — "Confirmación"
+- ~~T1 — `PrintableTicket`~~ · retirada (enmienda PDF real, `tickets-pdf-download.md`)
+- ~~T2 — `buildPrintableTickets` con test~~ · retirada (enmienda PDF real)
+- [ ] T3 — `ConfirmationTicketCard` (fecha "lunes 5 de octubre" sin año ni hora, asientos compactos por zona, sin "Asientos", `aria-labelledby`) · archivos: `modules/checkout/components/ConfirmationTicketCard.tsx` · depende de: Fase 5 · paralelo con T5
+- [ ] T4 — `OrderConfirmation` (correo en negrita, "Qué sigue" `sr-only`; conserva `TicketsPdfButton` si `tickets-pdf-download.md` ya se implementó) con tests actualizados y nuevos · archivos: `modules/checkout/components/OrderConfirmation.tsx`, `modules/checkout/components/OrderConfirmation.test.tsx` · depende de: T3 · secuencial
+- [ ] T5 — Diseño de página, sección confirmación (sin anatomía de entrada imprimible; el PDF lo documenta `tickets-pdf-download.md`) · archivos: `design-system/ticketera/pages/checkout.md` · depende de: Fase 5 · paralelo con T3 y T4
 
 Coordinación de la Fase 7:
 - **Depende de la Fase 5** (modifica de nuevo `app/checkout/page.tsx` y `modules/checkout/index.ts`, que toca la F5 T4). **No depende de la Fase 6**: se puede ejecutar antes o después, pero no en la misma sesión que otra fase de esta spec.
@@ -843,13 +772,13 @@ Coordinación de la Fase 7:
 Ampliación (Fases 5 y 6):
 
 10. **Importes sin decimales:** las capturas muestran "S/ 310" y la app usa "S/ 310.00" (formato del MASTER §10). Se mantiene el MASTER. ¿Quieres "S/ 310" en todo el sitio? Eso cambiaría `formatEventPrice`, el MASTER y los tests de varios módulos, fuera de esta spec.
-11. **Ubicación en entradas sin asiento:** la entrada imprimible omite "Ubicación" en zonas de pie (decisión 30). ¿Prefieres un texto, p. ej. "Entrada general · sin asiento asignado"?
+11. ~~**Ubicación en entradas sin asiento:** la entrada imprimible omite "Ubicación" en zonas de pie (decisión 30).~~ **Obsoleta** (enmienda PDF real): el PDF muestra la etiqueta del asiento o, sin asiento, el nombre de la zona.
 12. **Tarjetas de prueba:** se muestran en la nota de demo solo con el método Tarjeta (decisión 20). ¿Las quieres en otro sitio o fuera de la UI (p. ej. solo en la documentación)?
 13. **Lectura del id de asiento en checkout:** `parseSeatPosition` repite el conocimiento de `SEAT_ID_PATTERN` (seating), porque `parseSeatId` no está en ninguna entrada pública de seating y esta fase no toca `modules/seating/**`. ¿Se pide a la spec seating que exponga `parseSeatId` (p. ej. en `seats.ts`) en su próxima enmienda, para que checkout lo use y borre su regex?
 14. **Precio unitario en el resumen:** la captura no lo muestra y se quita (decisión 23). ¿De acuerdo, o se conserva "2 × S/ 155.00" en pequeño?
 15. **"Precio final, sin cargos ocultos"**: la captura del resumen no lo muestra, pero se mantiene bajo el total (era requisito de `checkout-purchase.md` y del MASTER, anti-patrón "cargos ocultos"). ¿Se mantiene?
-16. **Impresión:** al "Descargar PDF" solo salen las entradas, una por página, sin la cabecera "¡Compra confirmada!" ni la tarjeta-entrada (decisión 29). ¿De acuerdo?
-17. **Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket` (misma salida en ambos sitios)? Si es así, `buildPrintableTickets` se publicaría en `modules/checkout/orders.ts`.
+16. ~~**Impresión:** al "Descargar PDF" solo salen las entradas, una por página (decisión 29).~~ **Obsoleta:** "Descargar PDF" descarga un PDF real (`tickets-pdf-download.md`).
+17. ~~**Mis entradas:** ¿se enmienda `tickets-my-tickets.md` para que su "Descargar PDF" use `PrintableTicket`?~~ **Resuelta:** `tickets-pdf-download.md` da la misma salida (PDF) en ambos sitios y publica `buildTicketPdfInput` en `modules/checkout/orders.ts`.
 18. **`formatTicketCount` triplicado:** hay copias idénticas en seating (`utils/selectionSummary.ts`), tickets (`utils/myOrders.ts`) y ahora checkout (`utils/summaryFormat.ts`), porque ninguna es pública y esta fase no toca otros módulos (decisión 31). ¿Se sube a `lib/` en una enmienda conjunta de las tres specs, y se borran las copias?
 
 Enmienda (Fase 5, captura del resumen, y Fase 7):
