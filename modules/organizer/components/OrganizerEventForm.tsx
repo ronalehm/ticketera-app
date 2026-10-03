@@ -208,7 +208,10 @@ export function OrganizerEventForm() {
           <CoverImageField previewUrl={coverUrl} error={coverError} onSelect={selectCover} onRemove={removeCover} />
         </FormSection>
 
-        <FormSection title="Tipos de entrada" description="Cada tipo tiene su precio y su cantidad disponible.">
+        <FormSection
+          title="Tipos de entrada"
+          description="Cada tipo es una zona con su precio: general (de pie) o numerada (con filas y asientos)."
+        >
           <TicketTypesField
             rows={values.ticketTypes}
             errors={ticketTypeErrors}

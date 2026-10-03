@@ -3,11 +3,14 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Ticket } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "../stores/auth.store";
+import { ACCOUNT_LINKS } from "./accountLinks";
+import { UserMenu } from "./UserMenu";
+import { UserSummary } from "./UserSummary";
 
 const PRIMARY_BUTTON = cn(
   buttonVariants(),
@@ -18,13 +21,10 @@ const OUTLINE_BUTTON = cn(buttonVariants({ variant: "outline" }), "h-11 cursor-p
 
 const BAR_ITEM = "hidden sm:inline-flex md:h-10";
 
-const MY_TICKETS_HREF = "/mis-entradas";
+const SHEET_BLOCK = "flex flex-col gap-3 border-b pb-6";
 
-const MY_TICKETS_BAR_LINK = cn(
-  buttonVariants({ variant: "ghost" }),
-  "hidden h-10 cursor-pointer gap-2 px-3 font-semibold duration-200 md:inline-flex",
-  "aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground",
-);
+const SHEET_ACCOUNT_LINK =
+  "flex h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-base font-medium transition-colors duration-200 outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground";
 
 type AuthHeaderActionsProps = {
   variant: "bar" | "sheet";
@@ -34,7 +34,6 @@ export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const pathname = usePathname();
-  const myTicketsCurrent = pathname === MY_TICKETS_HREF ? "page" : undefined;
 
   useEffect(() => {
     useAuthStore.persist.rehydrate();
@@ -43,16 +42,13 @@ export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
   if (variant === "bar") {
     if (user) {
       return (
-        <>
-          <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">Hola, {user.firstName}</span>
-          <Link href={MY_TICKETS_HREF} aria-current={myTicketsCurrent} className={MY_TICKETS_BAR_LINK}>
-            <Ticket aria-hidden />
-            Mis entradas
-          </Link>
-          <button type="button" onClick={signOut} className={cn(OUTLINE_BUTTON, BAR_ITEM)}>
-            Cerrar sesión
-          </button>
-        </>
+        <UserMenu
+          firstName={user.firstName}
+          lastName={user.lastName}
+          email={user.email}
+          pathname={pathname}
+          onSignOut={signOut}
+        />
       );
     }
     return (
@@ -67,33 +63,44 @@ export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
     );
   }
 
+  if (user) {
+    return (
+      <div className={SHEET_BLOCK}>
+        <UserSummary
+          firstName={user.firstName}
+          lastName={user.lastName}
+          email={user.email}
+          className="rounded-2xl bg-muted p-4"
+        />
+        <nav aria-label="Tu cuenta" className="flex flex-col">
+          {ACCOUNT_LINKS.map(({ href, label, icon: Icon }) => (
+            <SheetClose
+              key={href}
+              nativeButton={false}
+              render={<Link href={href} aria-current={pathname === href ? "page" : undefined} />}
+              className={SHEET_ACCOUNT_LINK}
+            >
+              <Icon aria-hidden className="size-5" />
+              {label}
+            </SheetClose>
+          ))}
+        </nav>
+        <SheetClose onClick={signOut} className={cn(OUTLINE_BUTTON, "w-full")}>
+          <LogOut aria-hidden />
+          Cerrar sesión
+        </SheetClose>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      {user ? (
-        <>
-          <p className="truncate text-base font-medium">Hola, {user.firstName}</p>
-          <SheetClose
-            nativeButton={false}
-            render={<Link href={MY_TICKETS_HREF} aria-current={myTicketsCurrent} />}
-            className={cn(PRIMARY_BUTTON, "w-full")}
-          >
-            <Ticket aria-hidden />
-            Mis entradas
-          </SheetClose>
-          <SheetClose onClick={signOut} className={cn(OUTLINE_BUTTON, "w-full")}>
-            Cerrar sesión
-          </SheetClose>
-        </>
-      ) : (
-        <>
-          <SheetClose nativeButton={false} render={<Link href="/registro" />} className={cn(PRIMARY_BUTTON, "w-full")}>
-            Crear cuenta
-          </SheetClose>
-          <SheetClose nativeButton={false} render={<Link href="/login" />} className={cn(OUTLINE_BUTTON, "w-full")}>
-            Iniciar sesión
-          </SheetClose>
-        </>
-      )}
+    <div className={SHEET_BLOCK}>
+      <SheetClose nativeButton={false} render={<Link href="/registro" />} className={cn(PRIMARY_BUTTON, "w-full")}>
+        Crear cuenta
+      </SheetClose>
+      <SheetClose nativeButton={false} render={<Link href="/login" />} className={cn(OUTLINE_BUTTON, "w-full")}>
+        Iniciar sesión
+      </SheetClose>
     </div>
   );
 }

@@ -1,39 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ComponentProps } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 import type { TicketTypeRow, TicketTypeRowErrors } from "../types/organizer.types";
 import { createTicketTypeRow, formatTicketCount, getTicketCapacity } from "../utils/organizerEventForm";
+import {
+  FORM_CONTROL_SCROLL,
+  TicketTypeCapacityFields,
+  TicketTypeInputField,
+  ticketTypeInputId,
+} from "./TicketTypeCapacityFields";
 
-/** Margen de scroll de los controles: en móvil, la barra de acciones `sticky` no tapa el campo enfocado. */
-export const FORM_CONTROL_SCROLL = "scroll-mt-24 scroll-mb-28 lg:scroll-mb-0";
-
-const ROW_GRID = "lg:grid-cols-[minmax(0,1fr)_150px_150px_44px]";
-
-type RowField = keyof TicketTypeRowErrors;
-
-const ROW_FIELDS: { field: RowField; label: string; inputProps: ComponentProps<"input"> }[] = [
-  { field: "name", label: "Nombre", inputProps: { placeholder: "Ej. General", maxLength: 100 } },
-  {
-    field: "price",
-    label: "Precio (S/)",
-    inputProps: { type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0" },
-  },
-  {
-    field: "quantity",
-    label: "Cantidad",
-    inputProps: { type: "number", inputMode: "numeric", min: 1, step: 1, placeholder: "0" },
-  },
-];
-
-const inputId = (rowId: string, field: RowField) => `ticket-type-${rowId}-${field}`;
+// Se define junto a los campos de la fila (sin import circular) y se reexporta para el resto del formulario.
+export { FORM_CONTROL_SCROLL };
 
 type TicketTypesFieldProps = {
   rows: TicketTypeRow[];
@@ -50,12 +34,12 @@ export function TicketTypesField({ rows, errors, onChange, onBlur }: TicketTypes
 
   useEffect(() => {
     if (!rowToFocusRef.current) return;
-    document.getElementById(inputId(rowToFocusRef.current, "name"))?.focus();
+    document.getElementById(ticketTypeInputId(rowToFocusRef.current, "name"))?.focus();
     rowToFocusRef.current = null;
   }, [rows]);
 
-  function updateRow(id: string, field: RowField, value: string) {
-    onChange(rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+  function updateRow(id: string, patch: Partial<TicketTypeRow>) {
+    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
   function addRow() {
@@ -71,60 +55,59 @@ export function TicketTypesField({ rows, errors, onChange, onBlur }: TicketTypes
 
   return (
     <div className="flex flex-col gap-4">
-      <div aria-hidden className={cn("hidden gap-3 text-sm font-medium text-muted-foreground lg:grid", ROW_GRID)}>
-        <span>Nombre</span>
-        <span>Precio (S/)</span>
-        <span>Cantidad</span>
-        <span />
-      </div>
-
       {rows.map((row, index) => {
         const number = index + 1;
         const rowErrors = errors?.[index] ?? {};
         return (
-          <FieldSet key={row.id} className="gap-2 border-b pb-4 last-of-type:border-b-0 lg:gap-0 lg:border-b-0 lg:pb-0">
-            <FieldLegend variant="label" className="mb-0 font-semibold lg:sr-only">
+          <FieldSet key={row.id} className="relative gap-4 rounded-xl p-4 ring-1 ring-border">
+            {/* Absoluto: un <legend> en flujo se dibuja sobre el borde del fieldset e ignora su padding. */}
+            <FieldLegend variant="label" className="absolute top-4 left-4 mb-0 flex h-11 items-center font-semibold">
               Tipo {number}
             </FieldLegend>
-            <div className={cn("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-3", ROW_GRID)}>
-              {ROW_FIELDS.map(({ field, label, inputProps }) => {
-                const id = inputId(row.id, field);
-                const error = rowErrors[field];
-                return (
-                  <Field key={field} data-invalid={!!error} className={cn(field === "name" && "col-span-3 lg:col-span-1")}>
-                    <FieldLabel htmlFor={id} className="lg:sr-only">
-                      {label}
-                    </FieldLabel>
-                    <Input
-                      {...inputProps}
-                      id={id}
-                      value={row[field]}
-                      onChange={(event) => updateRow(row.id, field, event.target.value)}
-                      onBlur={onBlur}
-                      aria-invalid={!!error}
-                      aria-describedby={error ? `${id}-error` : undefined}
-                      className={cn("h-11", FORM_CONTROL_SCROLL)}
-                    />
-                    <FieldError id={`${id}-error`}>{error}</FieldError>
-                  </Field>
-                );
-              })}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Quitar tipo de entrada ${number}`}
-                disabled={rows.length === 1}
-                onClick={() => removeRow(row.id)}
-                // En móvil se alinea con los inputs (bajo su etiqueta visible); en lg las etiquetas son sr-only.
-                className={cn(
-                  "mt-7 size-11 cursor-pointer text-muted-foreground hover:text-destructive lg:mt-0",
-                  FORM_CONTROL_SCROLL,
-                )}
-              >
-                <Trash2 aria-hidden className="size-5" />
-              </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Quitar tipo de entrada ${number}`}
+              disabled={rows.length === 1}
+              onClick={() => removeRow(row.id)}
+              className={cn(
+                "size-11 cursor-pointer self-end text-muted-foreground hover:text-destructive",
+                FORM_CONTROL_SCROLL,
+              )}
+            >
+              <Trash2 aria-hidden className="size-5" />
+            </Button>
+
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]">
+              <TicketTypeInputField
+                rowId={row.id}
+                field="name"
+                label="Nombre"
+                value={row.name}
+                error={rowErrors.name}
+                onValueChange={(name) => updateRow(row.id, { name })}
+                onBlur={onBlur}
+                inputProps={{ placeholder: "Ej. General", maxLength: 100 }}
+              />
+              <TicketTypeInputField
+                rowId={row.id}
+                field="price"
+                label="Precio (S/)"
+                value={row.price}
+                error={rowErrors.price}
+                onValueChange={(price) => updateRow(row.id, { price })}
+                onBlur={onBlur}
+                inputProps={{ type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0" }}
+              />
             </div>
+
+            <TicketTypeCapacityFields
+              row={row}
+              errors={rowErrors}
+              onChange={(patch) => updateRow(row.id, patch)}
+              onBlur={onBlur}
+            />
           </FieldSet>
         );
       })}

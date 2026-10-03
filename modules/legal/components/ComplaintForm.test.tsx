@@ -84,7 +84,9 @@ describe("ComplaintForm", () => {
     expect(textbox("Correo electrónico").getAttribute("aria-describedby")).toBe(
       "complaint-email-description complaint-email-error",
     );
-    expect(screen.getByRole("radiogroup", { name: "Tipo", description: "Elige si es un reclamo o una queja" })).toBeTruthy();
+    expect(
+      screen.getByRole("radiogroup", { name: "Tipo", description: "Elige si es un reclamo o una queja" }),
+    ).toBeTruthy();
     expect(document.activeElement).toBe(textbox("Nombres"));
     expect(submitComplaint).not.toHaveBeenCalled();
   });
@@ -94,7 +96,10 @@ describe("ComplaintForm", () => {
     fillConsumer();
     fireEvent.click(submitButton());
 
-    const itemTypeGroup = screen.getByRole("radiogroup", { name: "Tipo", description: "Indica si es un producto o un servicio" });
+    const itemTypeGroup = screen.getByRole("radiogroup", {
+      name: "Tipo",
+      description: "Indica si es un producto o un servicio",
+    });
     expect(itemTypeGroup.getAttribute("aria-invalid")).toBe("true");
     expect(document.activeElement).toBe(itemTypeGroup);
   });
@@ -102,13 +107,16 @@ describe("ComplaintForm", () => {
   it("muestra cada tipo de reclamación con su definición", () => {
     render(<ComplaintForm />);
     expect(
-      screen.getByRole("radio", { name: "Reclamo", description: "Disconformidad relacionada a los productos o servicios." }),
+      screen.getByRole("radio", {
+        name: "Reclamo",
+        description: "Disconformidad relacionada a los productos o servicios.",
+      }),
     ).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Queja", description: /malestar o descontento/ })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Producto" })).toBeTruthy();
   });
 
-  it("'Soy menor de edad' muestra los campos del apoderado (obligatorios) y al desmarcarlo no bloquean el envío", async () => {
+  it("'Soy menor de edad' muestra los campos obligatorios del apoderado; desmarcado no bloquean el envío", async () => {
     vi.mocked(submitComplaint).mockResolvedValue(RECEIPT);
     render(<ComplaintForm />);
     expect(guardianGroup()).toBeNull();
@@ -178,7 +186,7 @@ describe("ComplaintForm", () => {
     expect(vi.mocked(submitComplaint).mock.calls[0][0].amount).toBeNull();
   });
 
-  it("envío válido muestra 'Enviando…', envía los datos transformados y muestra la confirmación con el foco en el título", async () => {
+  it("envío válido: 'Enviando…', datos transformados y confirmación con el foco en el título", async () => {
     let resolveSubmit!: (receipt: ComplaintReceipt) => void;
     vi.mocked(submitComplaint).mockReturnValue(new Promise((resolve) => (resolveSubmit = resolve)));
     render(<ComplaintForm />);
