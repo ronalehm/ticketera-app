@@ -1,7 +1,7 @@
 # Fundación de datos (F1): Drizzle + Postgres, esquema completo, seed y lectura de eventos desde la BD
 
 - Módulo: data (transversal: `lib/db`, `events`, `seating`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Hoy la app lee todo de mocks en memoria. F1 (`docs/architecture/system-design.md` §13) deja lista la base de datos para las fases siguientes: conexión a PostgreSQL (Neon en local) con Drizzle y `pg`, variables de entorno validadas, el **esquema completo de las 25 tablas** de `docs/architecture/erd.md` con sus migraciones versionadas, un seed idempotente que vuelca los mocks actuales (eventos, recintos con geometría, organizadores y el `super_admin`) y los services de `events` y `seating` leyendo de la BD **sin cambiar sus firmas ni la UI**. Para quien desarrolla: a partir de F1 los datos viven en Postgres y F2–F8 solo añaden lógica sobre ese esquema.
@@ -392,10 +392,10 @@ Ningún agente escribe ni lee esos valores.
 ## Plan de tareas
 
 ### Fase 1 — Conexión y esquema (16 archivos, incluido `package-lock.json`, + migraciones generadas)
-- [ ] T1 — Dependencias y scripts `db:generate`/`db:migrate`; verificar que `.env.example` (ya versionado) contiene las variables de F1 · archivos: `package.json`, `package-lock.json` · depende de: — · secuencial (base)
-- [ ] T2 — Entorno, cliente y config de drizzle-kit, con test del entorno · archivos: `lib/env.ts`, `lib/env.test.ts`, `lib/db/client.ts`, `drizzle.config.ts` · depende de: T1 · secuencial (`lib/`)
-- [ ] T3 — Esquema completo de las 25 tablas, con enums, CHECKs, índices, sequence y `ticket_types.sort_order`; actualizar el ERD · archivos: `lib/db/schema/enums.ts`, `lib/db/schema/identity.ts`, `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `lib/db/schema/sales.ts`, `lib/db/schema/legal.ts`, `lib/db/schema/requests.ts`, `docs/architecture/erd.md` · depende de: T1 · paralelo con T2 (archivos disjuntos; ninguno importa al otro)
-- [ ] T4 — Migración personalizada de extensiones + migración generada del esquema; aplicar en la rama `dev` y comprobar que una segunda generación y una segunda migración no cambian nada · archivos: `drizzle/0000_extensions.sql`, `drizzle/0001_<nombre>.sql`, `drizzle/meta/*` (generados) · depende de: T2, T3 y el **prerrequisito del usuario** (Neon + `.env`) · secuencial
+- [x] T1 — Dependencias y scripts `db:generate`/`db:migrate`; verificar que `.env.example` (ya versionado) contiene las variables de F1 · archivos: `package.json`, `package-lock.json` · depende de: — · secuencial (base)
+- [x] T2 — Entorno, cliente y config de drizzle-kit, con test del entorno · archivos: `lib/env.ts`, `lib/env.test.ts`, `lib/db/client.ts`, `drizzle.config.ts` · depende de: T1 · secuencial (`lib/`)
+- [x] T3 — Esquema completo de las 25 tablas, con enums, CHECKs, índices, sequence y `ticket_types.sort_order`; actualizar el ERD · archivos: `lib/db/schema/enums.ts`, `lib/db/schema/identity.ts`, `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `lib/db/schema/sales.ts`, `lib/db/schema/legal.ts`, `lib/db/schema/requests.ts`, `docs/architecture/erd.md` · depende de: T1 · paralelo con T2 (archivos disjuntos; ninguno importa al otro)
+- [x] T4 — Migración personalizada de extensiones + migración generada del esquema; aplicar en la rama `dev` y comprobar que una segunda generación y una segunda migración no cambian nada · archivos: `drizzle/0000_extensions.sql`, `drizzle/0001_<nombre>.sql`, `drizzle/meta/*` (generados) · depende de: T2, T3 y el **prerrequisito del usuario** (Neon + `.env`) · secuencial
 
 ### Fase 2 — Seed y tests de integración (13 archivos)
 - [ ] T1 — Exportar `normalizeText`, util de disponibilidad con tests y script `db:seed` · archivos: `modules/events/utils/eventFilters.ts`, `modules/events/utils/availability.ts`, `modules/events/utils/availability.test.ts`, `package.json` · depende de: Fase 1 · secuencial (base)

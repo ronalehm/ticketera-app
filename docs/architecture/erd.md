@@ -103,6 +103,7 @@ erDiagram
     uuid event_id FK
     uuid section_id FK
     int price_cents
+    int sort_order
   }
   event_seats {
     uuid id PK
@@ -363,6 +364,7 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `description` | text NULL | |
 | `price_cents` | integer | CHECK `>= 0`. |
 | `max_per_order` | integer | Default 6. |
+| `sort_order` | integer | Default 0. Orden de los tipos de entrada en el evento (independiente de `venue_sections.sort_order`, que ordena las zonas del mapa). |
 
 Restricciones: `UNIQUE (event_id, section_id)`; `UNIQUE (event_id, slug)`.
 
