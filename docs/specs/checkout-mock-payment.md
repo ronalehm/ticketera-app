@@ -194,6 +194,100 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 28. **Impresión:** `SiteHeader` (`<header>`) y `SiteFooter` (`<footer>`) añaden `print:hidden`.
 29. **Accesibilidad y responsive (Fases 3–4):** un `<h1>` por página; labels visibles; errores junto al campo; foco al primer inválido; foco visible; targets ≥ 44 px; iconos `aria-hidden`; sin scroll horizontal a 375 / 768 / 1024 / 1440; solo tokens; Creato Display; sin emojis; `prefers-reduced-motion` respetado.
 
+### Fase 5 — "Datos y pago" según las capturas
+30. **Formateadores de fecha** en `modules/events/utils/formatEvent.ts`, con el mismo `timeZone: "America/Lima"` y `es-PE` que los existentes. Usan `formatToParts`: se toman `weekday`, `day` y `month`, se quitan los puntos y se pasan a minúsculas.
+    - `formatShortDayMonth(iso)`: `"2026-10-05T14:00:00-05:00"` → `"lun 5 oct"`; `"2026-11-15T03:00:00Z"` → `"sáb 14 nov"`.
+    - `formatLongDayMonth(iso)`: → `"lunes 5 de octubre"`; `"2026-11-15T03:00:00Z"` → `"sábado 14 de noviembre"`.
+    - `modules/events/format.ts` las reexporta (sigue sin lógica propia).
+31. **`modules/checkout/utils/seatSummary.ts`** (puro, sin React ni imports de seating; decisión 24):
+    - `parseSeatPosition(seatId: string): { row: string; number: number } | null`. Usa `/-([A-Z]{1,2})-(\d{1,3})$/` (contrato C, leído desde la derecha). Devuelve `null` si no encaja o si el número es 0.
+    - `formatSeatPosition(row: string, number: number): string` → `"Fila L, asiento 9"` (lo usa la entrada imprimible en la Fase 6).
+    - `formatCompactSeats(seats: { id: string; label: string }[]): string`. Agrupa por fila: `"Fila L · 9 · Fila M · 8"` y `"Fila L · 9, 10"`. Ordena las filas por longitud y luego alfabéticamente, y los números de menor a mayor. Los ids que no se pueden leer se añaden al final con su `label`, separados por " · ". Con `[]` devuelve `""`.
+32. **`app/checkout/page.tsx`:** el h1 "Finalizar compra" pasa a `className="sr-only"`; `CheckoutForm` se llama sin `summary` (decisión 22); deja de importar `OrderSummary`. Lo demás no cambia (stepper, estados de error, `changeHref`, metadata).
+33. **`OrderSummary`** (sigue sin directiva; decisiones 22–23):
+    - Props: `order`, `changeHref?`, `footer?: ReactNode`. Importa `formatEventPrice` y `formatShortDayMonth` de `@/modules/events/format`.
+    - `Card` `rounded-2xl` con h2 `sr-only` "Resumen del pedido".
+    - Cabecera `flex gap-3 items-center`: miniatura `next/image` `size-16 rounded-xl object-cover` (`alt=""`, `sizes="64px"`); título `font-bold leading-snug line-clamp-2`; `<p className="text-sm text-muted-foreground">` con `<time dateTime={startsAt}>lun 5 oct</time> · Lugar, Ciudad`.
+    - `Separator`. `<ul>` con una línea por item: izquierda "`<quantity>` × `<name>`" (`font-medium`), derecha el subtotal (`font-semibold tabular-nums`, `formatEventPrice(unitPrice × quantity)`). Si el item tiene `seats`, debajo va `<p className="text-sm text-muted-foreground">` con `<span className="sr-only">Asientos: </span>` + `formatCompactSeats(seats)`. Se quita la `<ul aria-label="Asientos de …">` con etiquetas completas.
+    - "Cambiar entradas" (si hay `changeHref`), `Separator`, fila "Total" (`font-bold`) + importe (`text-xl font-bold tabular-nums`), "Precio final, sin cargos ocultos" (`text-sm text-muted-foreground`) y `footer`.
+34. **`CheckoutSummaryPanel`:** se elimina la prop `footer` y su render (el botón ahora va dentro de `children`). Lo demás no cambia (botón plegable móvil, `aria-expanded`/`aria-controls`, `lg:block`).
+35. **`CheckoutForm`** (decisiones 17–19, 21–22):
+    - Props: `order`, `changeHref` (sin `summary`). Renderiza `<OrderSummary order={order} changeHref={changeHref} footer={<PayButton {...payButtonProps} className="hidden lg:flex" />} />` dentro de `CheckoutSummaryPanel`. La barra inferior móvil no cambia.
+    - "Datos del comprador": `CardDescription` "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios.". Grilla `sm:grid-cols-2` según la decisión 18: Nombres | Apellidos; Correo (`sm:col-span-2`); Celular | Documento de identidad (decisión 19).
+    - Cada etiqueta obligatoria lleva `<RequiredMark />` y cada `input` obligatorio, `required`. El `Checkbox` de Términos lleva `required` y su etiqueta termina con `<RequiredMark />`.
+    - `RequiredMark` (`modules/checkout/components/RequiredMark.tsx`, sin directiva): `<span aria-hidden="true" className="ml-0.5 text-destructive">*</span>`. Solo lo usan `CheckoutForm` y `PaymentMethodFields`.
+36. **`PaymentMethodFields`** (decisión 20):
+    - Se elimina el aviso "Pago simulado: …" de arriba.
+    - "Número de tarjeta", "Vencimiento", "CVV" y "Nombre en la tarjeta" llevan `<RequiredMark />` en la etiqueta y `required` en el input.
+    - Al final (tras los campos de tarjeta o el bloque informativo de Yape/PagoEfectivo) va `<p className="flex gap-2 text-sm text-muted-foreground">` con `Info` (`aria-hidden`, `size-4 shrink-0 mt-0.5`): "Demo: no se realiza ningún cobro real." y, solo con `paymentMethod === "card"`, " Tarjetas de prueba: 4242 4242 4242 4242 (aprobada) y 4000 0000 0000 0002 (rechazada).".
+    - Radio cards, formatos, `autoComplete="off"` y el resto no cambian.
+37. **`modules/checkout/index.ts`:** deja de exportar `OrderSummary` (solo lo importaba la página).
+38. **Accesibilidad y responsive (F5):**
+    - Un único h1 (`sr-only`), que el lector de pantalla anuncia primero.
+    - Ningún nombre accesible incluye "*".
+    - El grupo de documento se anuncia como "Documento de identidad", con "Tipo de documento" y "Número de documento" dentro.
+    - Orden de tabulación: Nombres → Apellidos → Correo → Celular → Tipo → Número → método → tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar.
+    - Sin scroll horizontal a 375 / 768 / 1024 / 1440. A 375 px, la fila tipo + número cabe sin desbordar (`min-w-0` en el input).
+    - Targets ≥ 44 px (`h-11`). Solo tokens.
+
+### Fase 6 — "Confirmación" y entrada imprimible según las capturas
+39. **`components/shared/PrintableTicket.tsx`** (presentacional, sin directiva; decisiones 28–30):
+    - Props planas:
+      ```ts
+      type PrintableTicketProps = {
+        ticketNumber: number; ticketCount: number;           // "Entrada 1 de 2"
+        imageUrl: string; categoryLabel: string; title: string;
+        dateLabel: string; timeLabel: string; placeLabel: string; // "lunes 5 de octubre", "14:00 h", "Costa Verde, Lima"
+        zoneLabel: string; seatLabel?: string;               // "Tribuna Oriente", "Fila L, asiento 9"
+        holderName: string; ticketCode: string; orderCode: string;
+        className?: string;
+      };
+      ```
+    - Raíz: `<article aria-label="Entrada {ticketNumber} de {ticketCount}" className={cn("mx-auto w-full max-w-md overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border break-inside-avoid [print-color-adjust:exact]", className)}>`.
+    - **Franja de marca:** `flex items-center justify-between bg-primary px-5 py-3 text-primary-foreground`. A la izquierda, `BrandLogo variant="white"` (`h-6 w-auto`, `loading="eager"`; su `alt` "Mentec Tickets" es el texto de la marca). A la derecha, "Entrada {n} de {N}" (`text-sm font-semibold`: blanco sobre primario exige semibold ≥ 14 px, MASTER §2).
+    - **Imagen** `next/image` a todo el ancho: `relative aspect-[2/1]`, `fill`, `object-cover`, `alt=""`, `sizes="448px"`, `loading="eager"`.
+    - **Cuerpo** (`p-5 flex flex-col gap-3`):
+      - Overline de categoría (`text-xs font-bold uppercase tracking-wider text-primary-strong`).
+      - Título en `<h3>` (`text-2xl font-bold tracking-tight leading-tight`).
+      - `<dl className="grid grid-cols-3 gap-3">` con "Fecha", "Hora" y "Lugar".
+    - **Talón:** `relative border-t-2 border-dashed border-input` con dos muescas (`absolute size-6 rounded-full bg-background ring-1 ring-border`, `-left-3`/`-right-3` y `-top-3`, `aria-hidden`).
+    - **Bloque inferior** (`p-5 flex gap-5 items-start`):
+      - `TicketQr value={ticketCode}` (`size-36 shrink-0 rounded-xl p-2 ring-1 ring-border`).
+      - `<dl className="grid grid-cols-2 gap-x-4 gap-y-3 min-w-0">`: "Zona" (`col-span-2`), "Ubicación" (`col-span-2`, solo si hay `seatLabel`), "Titular" (`col-span-2`, `break-words`), "Código" y "Pedido" (`tabular-nums`).
+    - **Pie:** `<p className="px-5 pb-5 text-center text-xs text-muted-foreground">Presenta este QR en el ingreso. Cada entrada es válida para una persona.</p>`.
+    - Todos los `dt` llevan `text-xs font-medium uppercase tracking-wider text-muted-foreground`, con el texto en caja normal ("Fecha", no "FECHA") para que el lector no deletree. Todos los `dd` llevan `text-sm font-semibold`.
+    - Solo tokens (sin índigo ni hex).
+40. **`modules/checkout/utils/printableTickets.ts`** (puro):
+    - `buildPrintableTickets(order: Order): Omit<PrintableTicketProps, "className">[]` (`import type` de `@/components/shared/PrintableTicket`). Devuelve una entrada por `order.tickets[i]`, en orden:
+      - `ticketNumber` `i + 1` y `ticketCount` `tickets.length`;
+      - `imageUrl`, `title` y `categoryLabel` (`EVENT_CATEGORY_LABELS[event.category]`);
+      - `dateLabel` `formatLongDayMonth(startsAt)`, `timeLabel` `` `${formatTime(startsAt)} h` `` y `placeLabel` `"<venue>, <city>"`;
+      - `zoneLabel` `ticket.ticketTypeName`, `holderName`, `ticketCode` `ticket.code` y `orderCode` `order.code`;
+      - `seatLabel`:
+        - si el slot `i` (de `items.flatMap(item => quantity slots, seat = item.seats?.[q])`) tiene asiento y `parseSeatPosition(seat.id)` lo lee → `formatSeatPosition(row, number)`;
+        - si hay asiento pero no se lee → `ticket.seatLabel`;
+        - sin asiento → `undefined`.
+    - Importa de `@/modules/events/format` (nunca del barrel) y de `./seatSummary`.
+41. **`ConfirmationTicketCard`** (decisión 26):
+    - `<article aria-labelledby={id del h2}>`, para distinguirla de las entradas imprimibles.
+    - Línea de fecha: `<time dateTime>{formatLongDayMonth(startsAt)}</time> · {venue}, {city}`.
+    - Debajo, una `<p className="text-sm text-muted-foreground">` por item con `seats`: "{item.name}: {formatCompactSeats(item.seats)}".
+    - `<dl>`: Zona, Entradas y Total pagado como hoy, sin el bloque "Asientos".
+    - `print:hidden` en la raíz (decisión 29). Ya no importa `formatLongDate`/`formatTime`.
+42. **`OrderConfirmation`:**
+    - **Cabecera** (`print:hidden`): "Enviamos tus entradas a <strong className="font-semibold text-foreground break-all">{order.buyer.email}</strong>. También las tienes siempre en Mis entradas." `ConfirmationHeader` recibe `code` y `email` (props planas).
+    - **"Qué sigue":** el h2 pasa a `sr-only` (decisión 27). Las tarjetas no cambian.
+    - **`PrintableTickets`:**
+      - `<section aria-labelledby="order-printable-tickets" className="hidden w-full print:block">` con h2 `sr-only` "Tus entradas".
+      - Dentro, `<ol>` con un `<li className="print:break-after-page print:last:break-after-auto">` por cada elemento de `buildPrintableTickets(order)` → `<PrintableTicket {...ticket} />`.
+      - Sustituye las filas actuales (QR + código + tipo + asiento + "Titular: …").
+    - **Contenedor** `CONTAINER_CLASS` con `print:block print:p-0`, para que el `gap` y el centrado no desplacen las páginas.
+43. **Accesibilidad y responsive (F6):**
+    - Un único h1. Jerarquía h1 → h2 (tarjeta-entrada, "Qué sigue" `sr-only`, "Tus entradas" `sr-only`) → h3 (título en cada entrada imprimible).
+    - El correo largo no provoca scroll horizontal a 375 px (`break-all`).
+    - A 375 y 1440 px la pantalla se ve como la captura. Al imprimir, N páginas con una entrada cada una, con la franja de marca en color.
+    - Solo tokens. Sin emojis.
+
 ## Criterios de aceptación
 
 ### Fase 1 — Base compartida
