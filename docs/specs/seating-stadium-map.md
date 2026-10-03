@@ -231,27 +231,38 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
    - Oriente y Norte → `tier-4`.
 
    Oriente y Norte comparten color, pero sus sectores no se tocan (entre ellos hay 18 unidades de radio) y el texto (nombre y precio) los distingue. Ver Preguntas abiertas.
-10. **Butacas disponibles con la forma actual** (`fill-background stroke-primary`), no "rellenas con el tono de la zona" como en la captura.
-    - Con `tier-1`/`tier-2` (navy y azul), una butaca libre se confundiría con "Elegida" (`fill-primary` con check).
-    - La leyenda muestra el precio: "Disponible · S/ 155.00".
+10. **Estados de butaca de la captura del paso 2, con tokens Mentec** (rediseño; sustituye a la versión anterior, que mantenía el aro blanco, a partir de la Fase 4):
+    - **Disponible:** círculo relleno azul claro `fill-primary/30` con borde `stroke-primary`, el "lavanda" de la captura.
+      - No se rellena con el tono de la zona: en zonas `tier-1`/`tier-2` una libre se confundiría con una elegida.
+      - El color es el mismo en todas las zonas.
+    - **Elegida:** `fill-brand-navy` con check blanco (en la captura, casi negra). Se distingue de la libre por luminosidad y por el check.
+    - **Ocupada:** gris `fill-secondary stroke-input` con "×", como hoy y como la captura.
+    - **Accesible:** cuadrado redondeado `fill-highlight` con el icono `Accessibility`.
+    - Detalle en el requisito 21. La leyenda muestra el precio: "Disponible · S/ 155.00".
 11. **Contador "n de m butacas":**
     - n = butacas elegidas en la zona;
     - m = n + (`MAX_TICKETS_PER_ORDER` − entradas totales), es decir, cuántas puede tener esta zona dado el resto de la compra;
     - sin nada elegido: "0 de 10 butacas".
     - Se mantiene el límite de **10 en total** de la spec base (decisión 5). El "de 6" de la captura corresponde a un límite "6 por zona" que no aplica (ver Preguntas abiertas).
-12. **Minimapa y zoom fuera del lienzo:** el diseño los pone superpuestos (minimapa arriba a la izquierda, zoom abajo a la derecha). Aquí van en una barra justo encima del lienzo: el minimapa a la izquierda y "+", "−" y "encajar" a la derecha.
-    - Superpuestos tapan butacas. Por ejemplo, en Occidente la esquina superior izquierda es el extremo de la fila exterior. Tampoco se podrían tocar con el plano entero a la vista.
+12. **Minimapa y zoom superpuestos desde `sm`; en una barra en móvil** (rediseño; sustituye a la versión anterior, que los sacaba siempre del lienzo):
+    - **Desde `sm` (≥ 640 px)** van superpuestos al lienzo, como en la captura del paso 2: los controles de zoom abajo a la derecha (F4) y el minimapa arriba a la izquierda (F5).
+      - Con el plano entero a la vista no deben tapar butacas: el contenido transformado reserva su espacio con padding y, en F5, el lienzo apaisado deja margen lateral.
+      - Con zoom, el paneo permite sacar las butacas de debajo.
+    - **Por debajo de `sm`** el lienzo mide lo mismo que el plano, para mantener ≥ 24 px por butaca. Superpuestos taparían butacas (p. ej. `oriente-J-10`, en la esquina inferior derecha), así que van en una barra justo encima del lienzo: minimapa a la izquierda y zoom a la derecha.
     - Se descarta el `MiniMap` de `react-zoom-pan-pinch`:
       - reproduce el contenido transformado (el plano del sector), no el estadio entero;
       - su marco se estiliza con colores en string, no con tokens.
 13. **"Butaca" y "asiento":**
-    - los textos nuevos del diseño usan "butaca": "Elige tus butacas", "n de m butacas", "Numerada · elige tu butaca", "General · sin butaca";
-    - los textos y contratos existentes no cambian ("Fila F · Asiento 12", `aria-label` de asientos, chips y avisos), porque las etiquetas forman parte del contrato C y de los pedidos guardados.
+    - los textos nuevos del diseño usan "butaca", en femenino como en las capturas:
+      - indicador y tarjetas: "Elige tus butacas", "n de m butacas", "Numerada · elige tu butaca", "General · sin butaca";
+      - "Mejores butacas": "¿Cuántas butacas juntas?", "Elegir las mejores butacas" / "Elegir la mejor butaca";
+      - leyenda: "Elegida", "Ocupada" y "n elegidas" (sustituyen a "Tu selección" y "Ocupado");
+    - los textos y contratos existentes no cambian, porque las etiquetas forman parte del contrato C y de los pedidos guardados: "Fila F · Asiento 12", los `aria-label` de los asientos, los chips con su h3 "Tus asientos" y los avisos ("Elegimos Fila C · Asiento 6.").
 14. **Orden de implementación:** esta spec va **después de la Fase 5 de la spec base**.
     - F5 añade `lib/hash.ts` (`hashString`, `mixHash`), `modules/seating/seats.ts`, la ocupación mezclada en `generateSeatRows` y el test de `labelPos` en el centro de los rectángulos.
     - Esta spec reutiliza `mixHash` para la ocupación del arco y adapta ese test.
     - No se fusiona ninguna tarea de F5: F5 es un ajuste cerrado y aprobado, y esta spec toca después los mismos archivos (`seatRows.ts`, `venueMaps.mock.ts`, `seating.service.test.ts`).
-15. **Precarga desde la URL sin perder el prerenderizado (Fase 4).**
+15. **Precarga desde la URL sin perder el prerenderizado (Fase 6; antes Fase 4).** Donde abajo dice "Fase 2", léase la pantalla de la Fase 3 del rediseño. La página vive hoy en `app/(site)/eventos/[slug]/entradas/page.tsx`.
     - `/eventos/[slug]/entradas` se prerenderiza (`generateStaticParams`). Leer `searchParams` en la página la volvería dinámica. `useSearchParams` fuera de un `Suspense` rompe el build (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/use-search-params.md` § Prerendering). Por eso:
       - `TicketSelection` gana `initialSelection?` y no lee la URL;
       - el envoltorio cliente nuevo `PreselectedTicketSelection` lee `useSearchParams()`, lo convierte con `parseSeatingPreselection` y renderiza `TicketSelection`;

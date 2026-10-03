@@ -7,7 +7,7 @@ import { CircleAlert } from "lucide-react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useZodForm } from "@/hooks/useZodForm";
@@ -17,6 +17,7 @@ import { loginSchema } from "../schemas/auth.schema";
 import { AuthError, login } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
 import { GENERIC_ERROR } from "./formShared";
+import { GoogleSignIn } from "./GoogleSignIn";
 import { PasswordInput } from "./PasswordInput";
 
 export function LoginForm() {
@@ -45,6 +46,9 @@ export function LoginForm() {
         <p className="text-base text-muted-foreground">Ingresa para ver tus entradas y comprar más rápido.</p>
       </div>
 
+      <GoogleSignIn />
+      <FieldSeparator>o</FieldSeparator>
+
       <form noValidate onSubmit={onSubmit}>
         <FieldGroup>
           {serverError && (
@@ -60,6 +64,7 @@ export function LoginForm() {
               id="login-email"
               type="email"
               autoComplete="email"
+              placeholder="tu@email.com"
               className="h-11"
               value={values.email}
               onChange={(event) => setValue("email", event.target.value)}

@@ -108,4 +108,13 @@ describe("LoginForm", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Hola de nuevo" })).toBeTruthy();
     expect(screen.getByText("Ingresa para ver tus entradas y comprar más rápido.")).toBeTruthy();
   });
+
+  it("muestra el acceso con Google y el separador 'o' antes del correo, con su placeholder", () => {
+    render(<LoginForm />);
+    const google = screen.getByRole("button", { name: "Continuar con Google" });
+
+    expect(google.compareDocumentPosition(emailInput()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("o", { selector: '[data-slot="field-separator-content"]' })).toBeTruthy();
+    expect(emailInput().placeholder).toBe("tu@email.com");
+  });
 });

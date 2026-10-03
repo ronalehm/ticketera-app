@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AuthError, register } from "../services/auth.service";
@@ -119,8 +119,19 @@ describe("RegisterForm", () => {
     expect(screen.getByText("Guarda tus entradas y recibe novedades de tus eventos.")).toBeTruthy();
     expect(screen.getByLabelText("Tipo de documento").textContent).toContain("DNI");
     expect(input("Número de documento").maxLength).toBe(8);
-    expect(screen.getByRole("link", { name: "Términos y condiciones" }).getAttribute("href")).toBe("/terminos");
-    expect(screen.getByRole("link", { name: "Política de privacidad" }).getAttribute("target")).toBe("_blank");
+    // El aviso de Google repite estos enlaces: se comprueban los de la casilla de Términos.
+    const termsLabel = within(screen.getByText(/^Acepto los/));
+    expect(termsLabel.getByRole("link", { name: "Términos y condiciones" }).getAttribute("href")).toBe("/terminos");
+    expect(termsLabel.getByRole("link", { name: "Política de privacidad" }).getAttribute("target")).toBe("_blank");
     expect(screen.getByRole("link", { name: "Inicia sesión" }).getAttribute("href")).toBe("/login");
+  });
+
+  it("muestra el acceso con Google y el separador 'o' antes del correo, con su placeholder", () => {
+    render(<RegisterForm />);
+    const google = screen.getByRole("button", { name: "Continuar con Google" });
+
+    expect(google.compareDocumentPosition(input("Correo electrónico")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("o", { selector: '[data-slot="field-separator-content"]' })).toBeTruthy();
+    expect(input("Correo electrónico").placeholder).toBe("tu@email.com");
   });
 });

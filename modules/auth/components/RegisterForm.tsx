@@ -9,7 +9,15 @@ import { CircleAlert } from "lucide-react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,6 +31,7 @@ import { AuthError, register } from "../services/auth.service";
 import { useAuthStore } from "../stores/auth.store";
 import type { RegisterInput } from "../types/auth.types";
 import { GENERIC_ERROR } from "./formShared";
+import { GoogleSignIn } from "./GoogleSignIn";
 import { PasswordInput } from "./PasswordInput";
 
 const PASSWORD_HINT_ID = "register-password-description";
@@ -83,6 +92,9 @@ export function RegisterForm() {
         <p className="text-base text-muted-foreground">Guarda tus entradas y recibe novedades de tus eventos.</p>
       </div>
 
+      <GoogleSignIn />
+      <FieldSeparator>o</FieldSeparator>
+
       <form noValidate onSubmit={onSubmit}>
         <FieldGroup>
           {serverError && (
@@ -107,7 +119,13 @@ export function RegisterForm() {
 
           <Field data-invalid={!!errors.email}>
             <FieldLabel htmlFor="register-email">Correo electrónico</FieldLabel>
-            <Input {...textProps("email")} type="email" autoComplete="email" className="h-11" />
+            <Input
+              {...textProps("email")}
+              type="email"
+              autoComplete="email"
+              placeholder="tu@email.com"
+              className="h-11"
+            />
             {fieldError("email")}
           </Field>
 
