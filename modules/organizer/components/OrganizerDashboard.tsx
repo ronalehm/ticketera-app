@@ -63,9 +63,13 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
 
       <OrganizerKpis {...kpis} />
 
-      <section aria-labelledby={headingId} className="rounded-2xl bg-card p-4 ring-1 ring-border md:p-6">
-        <div className="mb-4 flex flex-col gap-3 md:mb-6 md:flex-row md:items-center md:justify-between">
-          <h2 id={headingId} className="text-2xl font-bold tracking-tight md:text-3xl">
+      {/* Tarjeta con barra de cabecera solo en lg; por debajo, h2, filtro y tarjetas van directamente sobre el bg-muted del panel. */}
+      <section
+        aria-labelledby={headingId}
+        className="flex flex-col gap-3 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:bg-card lg:ring-1 lg:ring-border"
+      >
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between lg:border-b lg:px-6 lg:py-4">
+          <h2 id={headingId} className="text-lg font-bold">
             Mis eventos
           </h2>
           <ToggleGroup
@@ -74,7 +78,8 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
             // Selección única: Base UI devuelve [] al deseleccionar; en ese caso vuelve a "Todos".
             onValueChange={(value) => setFilter((value[0] as OrganizerEventFilter | undefined) ?? "all")}
             spacing={1}
-            className="grid w-full grid-cols-3 rounded-lg bg-muted p-1 md:flex md:w-fit"
+            // La pista es bg-secondary sobre el bg-muted del panel y bg-muted dentro de la tarjeta blanca (lg).
+            className="grid w-full grid-cols-3 rounded-lg bg-secondary p-1 md:flex md:w-fit lg:bg-muted"
           >
             {FILTERS.map(({ value, label }) => (
               <ToggleGroupItem
@@ -91,7 +96,9 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
         {visible.length > 0 ? (
           <OrganizerEventsTable events={visible} labelledBy={headingId} />
         ) : (
-          <p className="rounded-2xl bg-muted p-8 text-center text-muted-foreground">No tienes eventos con este estado.</p>
+          <p className="rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0">
+            No tienes eventos con este estado.
+          </p>
         )}
       </section>
     </div>
