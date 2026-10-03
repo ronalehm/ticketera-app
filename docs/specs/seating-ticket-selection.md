@@ -558,13 +558,13 @@ Consultar `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/gene
 - nuevo `components/shared/PurchaseStepper.tsx` (F2, servidor, presentacional; contrato A). Va a `shared` porque lo usan `seating` (paso 1) y `checkout` (pasos 2 y 3).
 - Nuevos en `modules/seating/components/` (los usa solo `seating`):
   - `EventPurchaseStrip.tsx` (F2, servidor): props `slug`, `title`, `imageUrl`, `startsAt`, `venue`, `city`.
-  - `TicketSelection.tsx` (F2, `"use client"`): props `eventSlug: string` y `map: VenueMap`. Usa `useSeatSelection` y compone el resto. En F4 añade `SeatPlan` y el foco al h2 del plano.
+  - `TicketSelection.tsx` (F2, `"use client"`): props `{ map: VenueMap }`, sin `eventSlug`, porque el slug del href sale de `map.eventSlug`. Usa `useSeatSelection` y compone el resto. En F4 añade `SeatPlan` y el foco al h2 del plano.
   - `VenueMapView.tsx` (F2; cliente por estar bajo `TicketSelection`): props `viewBox`, `stage`, `venue`, `zones`, `tones`, `activeZoneId` y `onSelectZone`.
   - `ZoneList.tsx` (F2; F4 añade `seatCountByZone` y `onChooseSeats`): props `zones`, `tones`, `activeZoneId`, `quantities`, `atLimit` y `onChangeQuantity`.
   - `PurchaseSummary.tsx` (F2): props `lines`, `ticketCount`, `total`, `checkoutHref` y `className`.
   - `MobilePurchaseBar.tsx` (F2): props `ticketCount`, `total`, `checkoutHref` y `className`.
   - `SeatPlan.tsx` (F4, `"use client"`): props `zone: NumberedVenueZone`, `stageLabel`, `selectedSeatIds`, `selectedSeats: { id; label }[]`, `notice`, `canPickBest`, `onToggleSeat`, `onRemoveSeat`, `onPickBestSeats` y `headingId`. Contiene `TransformWrapper` y la barra de herramientas (con `useControls` dentro del wrapper).
-  - `SeatLegend.tsx` (F4, presentacional).
+  - `SeatLegend.tsx` (F4, presentacional): exporta `SeatLegend` y también `SeatShape` (`{ status, selected }`), la forma de cada estado de asiento. `SeatPlan` reutiliza `SeatShape` para dibujar los asientos, así que la forma del plano y la de la leyenda son la misma.
   - `SelectedSeatChips.tsx` (F4): props `seats: { id; label }[]` y `onRemove(id)`.
   - `ZonePricesCard.tsx` (F4, servidor): props `slug`, `status`, `priceFrom` y `zones`.
   - `MobileBuyBar.tsx` (F4, servidor): props `slug` y `priceFrom`.
@@ -574,6 +574,10 @@ Consultar `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/gene
 
 `schemas/seating.schema.ts` (F1):
 ```ts
+// SEAT_ID_PATTERN y formatSeatId viven aquí y utils/seatIds.ts los reexporta: el superRefine usa formatSeatId,
+// y si el schema importara utils/seatIds (que importa el schema) habría un ciclo de imports.
+export const SEAT_ID_PATTERN = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([A-Z]{1,2})-(\d{1,3})$/;
+export function formatSeatId(zoneId: string, row: string, number: number): string; // `${zoneId}-${row}-${number}`
 export const seatRowLabelSchema = z.string().regex(/^[A-Z]{1,2}$/);
 export const seatStatusSchema = z.enum(["available", "occupied", "accessible"]);
 export const seatSchema = z.object({
@@ -597,7 +601,7 @@ export const venueLayoutSchema = z.object({
   stage: z.object({ label: z.string().min(1), path: z.string().min(1), labelPos: pointSchema }),
   zones: venueZoneLayoutSchema.array().min(1),
 }).superRefine(/* requisito 3 */);
-export const seatIdSchema = z.string().regex(SEAT_ID_PATTERN); // /^([a-z0-9]+(?:-[a-z0-9]+)*)-([A-Z]{1,2})-(\d{1,3})$/
+export const seatIdSchema = z.string().regex(SEAT_ID_PATTERN);
 export const seatIdsParamSchema = z.string().transform((value) => value.split(","))
   .pipe(seatIdSchema.array().min(1).max(MAX_TICKETS_PER_ORDER)) // MAX desde "@/modules/events/purchase"
   .refine((ids) => new Set(ids).size === ids.length);
@@ -622,13 +626,14 @@ export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "sold-out";
 
 Utils (puros, sin React):
 - `utils/seatIds.ts` (F1):
-  - `SEAT_ID_PATTERN`;
-  - `formatSeatId(zoneId, row, number)` y `parseSeatId(id): { zoneId; row; number } | null`;
+  - reexporta `SEAT_ID_PATTERN` y `formatSeatId(zoneId, row, number)` de `schemas/seating.schema.ts`, donde se definen para evitar el ciclo de imports;
+  - `parseSeatId(id): { zoneId; row; number } | null`;
   - `formatSeatShortLabel(row, number)` → "Fila F · Asiento 12";
   - `formatSeatLabel(zoneName, row, number)` → "Tribuna Norte · Fila F · Asiento 12";
   - `getSeatAriaLabel(seat, priceLabel)` (requisito 23);
   - `parseSeatIds` y `resolveSeats` (requisito 6).
 - `utils/seatRows.ts` (F1): `SEAT_PITCH`, `SEAT_PLAN_MARGIN` y `generateSeatRows(spec: { zoneId: string; rowLabels: string[]; seatsPerRow: number | number[]; occupiedRatio: number; accessibleSeats?: string[] }): { seatViewBox: string; rows: SeatRow[] }`.
+  - F5: borra su `hashToUnit` privado (FNV-1a) y calcula `mixHash(hashString(id)) / 2 ** 32` con `@/lib/hash`. La firma no cambia.
 - `utils/zoneTone.ts` (F1): `getZoneTones(zones: Pick<VenueZone, "id" | "price" | "status">[]): Record<string, ZoneTone>` y `ZONE_TONE_CLASSES: Record<ZoneTone, { shape: string; label: string; swatch: string }>` (decisión 9).
 - `utils/selectionSummary.ts` (F2): requisito 17.
 - `utils/bestSeats.ts` (F3): `findBestAvailableSeats(zone: NumberedVenueZone, count: number): string[] | null`.
@@ -658,34 +663,58 @@ export function useSeatSelection(map: VenueMap): {
 Datos `data/venueMaps.mock.ts` (F1): `VENUE_LAYOUTS_MOCK: z.input<typeof venueLayoutSchema>[]`, con las zonas numeradas generadas con `generateSeatRows` (no se escriben asientos a mano).
 - Las coordenadas son de referencia: el developer puede redondear esquinas o curvar formas, siempre que se mantengan los requisitos 7 y 10 y que las etiquetas queden dentro de su zona sin solaparse.
 - Las zonas `low-stock` miden ≥ 96 unidades de alto, para que quepa la píldora.
+- Cada `labelPos`, del escenario y de las zonas, es el centro de su forma (requisito 7). Hasta F4, el escenario tenía `y` 46/50, por debajo del centro; F5 lo corrige a 38/40.
 
 | Evento | `viewBox` | Escenario | Zonas (`id` · tipo · forma de referencia · `labelPos`) |
 |---|---|---|---|
-| `noche-de-sintetizadores-lima` | `0 0 600 560` | "ESCENARIO" `M200 16 H400 V60 H200 Z` (300, 46) | `vip` · general (1500) · `M150 76 H450 V180 H150 Z` (300, 128) · `preferencial` · general (4000) · `M90 196 H510 V296 H90 Z` (300, 246) · `general` · general (12000) · `M20 312 H580 V444 H20 Z` (300, 378) · `norte` · numbered · `M20 460 H580 V544 H20 Z` (300, 502): filas A–H, 10 por fila, `occupiedRatio` 0.3, accesibles `norte-H-1`, `norte-H-10` |
-| `la-casa-de-los-espejos` | `0 0 600 520` | "ESCENARIO" `M150 16 H450 V64 H150 Z` (300, 50) | `platea` · numbered · `M60 90 H540 V300 H60 Z` (300, 195): filas A–J, `[8,8,9,9,10,10,10,10,10,10]`, 0.4, accesibles `platea-J-1`, `platea-J-10` · `mezanine` · numbered · `M40 330 H560 V490 H40 Z` (300, 410): filas A–F, 10, 0.85 |
-| `risas-sin-filtro` | `0 0 600 520` | "ESCENARIO" `M200 16 H400 V64 H200 Z` (300, 50) | `mesa` · numbered · `M120 84 H480 V170 H120 Z` (300, 127): filas A–C, 8, 1 (agotada) · `preferencial` · numbered · `M60 186 H540 V326 H60 Z` (300, 256): filas A–F, 10, 0.8, accesibles `preferencial-F-1`, `preferencial-F-10` · `general` · general (600) · `M20 342 H580 V500 H20 Z` (300, 421) |
+| `noche-de-sintetizadores-lima` | `0 0 600 560` | "ESCENARIO" `M200 16 H400 V60 H200 Z` (300, 38) | `vip` · general (1500) · `M150 76 H450 V180 H150 Z` (300, 128) · `preferencial` · general (4000) · `M90 196 H510 V296 H90 Z` (300, 246) · `general` · general (12000) · `M20 312 H580 V444 H20 Z` (300, 378) · `norte` · numbered · `M20 460 H580 V544 H20 Z` (300, 502): filas A–H, 10 por fila, `occupiedRatio` 0.3, accesibles `norte-H-1`, `norte-H-10` |
+| `la-casa-de-los-espejos` | `0 0 600 520` | "ESCENARIO" `M150 16 H450 V64 H150 Z` (300, 40) | `platea` · numbered · `M60 90 H540 V300 H60 Z` (300, 195): filas A–J, `[8,8,9,9,10,10,10,10,10,10]`, 0.4, accesibles `platea-J-1`, `platea-J-10` · `mezanine` · numbered · `M40 330 H560 V490 H40 Z` (300, 410): filas A–F, 10, 0.85 |
+| `risas-sin-filtro` | `0 0 600 520` | "ESCENARIO" `M200 16 H400 V64 H200 Z` (300, 40) | `mesa` · numbered · `M120 84 H480 V170 H120 Z` (300, 127): filas A–C, 8, 1 (agotada) · `preferencial` · numbered · `M60 186 H540 V326 H60 Z` (300, 256): filas A–F, 10, 0.8, accesibles `preferencial-F-1`, `preferencial-F-10` · `general` · general (600) · `M20 342 H580 V500 H20 Z` (300, 421) |
 
 Service `services/seating.service.ts` (F1), servidor y mock por ahora, con la misma firma que tendrá la API:
 - `getVenueMapBySlug(slug: string): Promise<VenueMap | null>` (requisito 5);
-- `hasVenueMap(slug: string): boolean`.
+- `hasVenueMap(slug: string): boolean`;
+- `getVenueMapForEvent(event: Pick<EventDetail, "slug" | "venue" | "ticketTypes">): Promise<VenueMap | null>` (F5, requisito 5). `getVenueMapBySlug` queda así: si no hay layout, `null`; carga el evento; si no existe, `null`; si existe, `getVenueMapForEvent(event)`.
 
 `index.ts`:
 - F1: `getVenueMapBySlug`, `hasVenueMap`, `parseSeatIds`, `resolveSeats`, `formatSeatLabel` y los tipos `VenueMap`, `VenueZone`, `NumberedVenueZone`, `Seat`, `SeatStatus`, `ResolvedSeat`.
 - F2 añade `TicketSelection` y `EventPurchaseStrip`.
 - F4 añade `ZonePricesCard` y `MobileBuyBar`.
+- F5: sin cambios. Lo siguen usando las páginas de `app/`.
+
+`seats.ts` (F5, entrada pública de servidor, decisión 13; solo reexporta):
+```ts
+// modules/seating/seats.ts — para servidor de otros módulos: no arrastra componentes cliente
+export { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./services/seating.service";
+export { formatSeatLabel, parseSeatIds, resolveSeats } from "./utils/seatIds";
+export type { NumberedVenueZone, ResolvedSeat, Seat, SeatStatus, VenueMap, VenueZone } from "./types/seating.types";
+```
+
+### Utilidades globales (`lib/`, F5)
+`lib/hash.ts` (decisión 14), puro, sin dependencias:
+```ts
+/** FNV-1a de 32 bits; entero sin signo en [0, 2³²). No criptográfico. */
+export function hashString(value: string): number;
+/** Finalizador fmix32 de MurmurHash3: reparte los bits de un hash de 32 bits; entero sin signo en [0, 2³²). */
+export function mixHash(hash: number): number;
+```
+- `components/shared/TicketQr.tsx`: borra su `hashString` privado e importa el de `@/lib/hash` (`mulberry32(hashString(value))`). La salida no cambia.
+- `lib/calendar.ts`: `hashHex` sigue siendo privado, pero usa `hashString(value).toString(16).padStart(8, "0")`. La salida no cambia.
 
 ### Otros módulos
 - `modules/events/purchase.ts` (F1, entrada pública que solo reexporta): `formatEventPrice` (`./utils/formatEvent`) y `MAX_TICKETS_PER_ORDER` y `buildCheckoutHref` (`./utils/ticketOrder`).
 - `modules/events/data/events.mock.ts` (F1): decisión 4.
 - `modules/checkout` (F3):
   - `types/checkout.types.ts`: `seats?` en `CheckoutOrderItem`.
-  - `utils/checkoutOrder.ts`: `buildCheckoutOrder(event, quantities, seating: { map: VenueMap | null; seatIds: string[] | null } = { map: null, seatIds: [] })`, con las reglas del requisito 21; usa `resolveSeats` de `@/modules/seating`.
-  - `services/checkout.service.ts`: separa `asientos`, usa `parseSeatIds` y `getVenueMapBySlug`, y amplía la firma de `resolveCheckoutOrder` (requisito 21).
+  - `utils/checkoutOrder.ts`: `buildCheckoutOrder(event, quantities, seating: { map: VenueMap | null; seatIds: string[] | null } = { map: null, seatIds: [] })`, con las reglas del requisito 21. Usa `resolveSeats` y el tipo `VenueMap`, importados de `@/modules/seating/seats` desde F5 (antes, del barrel).
+  - `services/checkout.service.ts`: separa `asientos`, usa `parseSeatIds` y amplía la firma de `resolveCheckoutOrder` (requisito 21). Desde F5 importa de `@/modules/seating/seats` y usa `getVenueMapForEvent` en lugar de `getVenueMapBySlug`, con una sola carga del evento.
   - `components/OrderSummary.tsx`: requisito 22.
   - `schemas/checkout.schema.ts`: sin cambios (`asientos` lo valida `seatIdsParamSchema` de `seating`).
 
 ### Dependencias entre módulos
 `checkout` → `seating` → `events` (solo barrel o entrada pública). `events` no importa `seating`: la integración en el detalle la compone `app/`.
+- Desde F5, `checkout` entra en `seating` solo por `@/modules/seating/seats`, no por el barrel, para no arrastrar `TicketSelection` al cliente de `/checkout`.
+- `seatRows.ts`, `TicketQr.tsx` y `lib/calendar.ts` dependen de `lib/hash.ts`, y `lib/` no depende de ningún módulo.
 
 ### Contrato de API
 No hay API: son datos mock.
@@ -694,7 +723,9 @@ No hay API: son datos mock.
   - `getVenueMapBySlug(slug): Promise<VenueMap | null>`;
   - `hasVenueMap(slug): boolean`;
   - `parseSeatIds(raw: string | string[] | undefined): string[] | null`;
-  - `resolveSeats(map: VenueMap, seatIds: string[]): ResolvedSeat[] | null`.
+  - `resolveSeats(map: VenueMap, seatIds: string[]): ResolvedSeat[] | null`;
+  - (F5, ampliación) `getVenueMapForEvent(event: Pick<EventDetail, "slug" | "venue" | "ticketTypes">): Promise<VenueMap | null>`.
+  - Para el servidor de otros módulos se exponen en `@/modules/seating/seats`; en `app/`, también por el barrel.
 - **Paso a checkout** (contrato C):
   ```
   GET /checkout?evento=<slug>&<ticketTypeId>=<entero ≥ 1>…[&asientos=<seatId>(%2C<seatId>)*]
@@ -719,6 +750,10 @@ No hay API: son datos mock.
 - Iconos `lucide-react`: `ArrowLeft`, `ArrowRight`, `Lock`, `Check`, `Minus`, `Plus`, `X`, `ZoomIn`, `ZoomOut`, `Maximize`, `Sparkles`.
 - Nativos: SVG, `URLSearchParams`, `Intl` (vía `formatEventPrice`), `matchMedia("(prefers-reduced-motion: reduce)")`.
 - Dependencia nueva (F4): `react-zoom-pan-pinch@^4.2.0` (decisión 2).
+- F5:
+  - El FNV-1a que ya existía en 3 archivos se unifica en `lib/hash.ts`; no se añaden librerías de hash.
+  - El patrón de entrada pública adicional ya existe en `modules/events/purchase.ts`, `modules/auth/session.ts` y `modules/checkout/orders.ts`; `seats.ts` lo sigue.
+  - La lógica de unir layout y evento se mueve, sin duplicarla, de `getVenueMapBySlug` a `getVenueMapForEvent`.
 
 ## Tests
 - `modules/seating/schemas/seating.schema.test.ts` (F1):
@@ -818,12 +853,32 @@ No hay API: son datos mock.
     - `norte=2` sin `asientos` → `invalid-tickets`;
     - `asientos` como array o vacío → `invalid-tickets`;
     - `resolveCheckoutOrder` con `seatIds` por defecto sigue igual.
+- **F5:**
+  - `lib/hash.test.ts` (nuevo):
+    - vectores de `hashString` del criterio F5;
+    - `mixHash(0)` y `mixHash(1)`;
+    - resultados enteros en [0, 2³²) para varias entradas;
+    - determinismo;
+    - `mixHash` cambia el orden relativo de hashes de ids consecutivos (p. ej. `norte-A-1`…`norte-A-10` no quedan todos en la misma mitad del rango tras mezclar).
+  - `components/shared/TicketQr.test.tsx` (se amplía): `getQrModules("MT-AB12CD-01")` es igual a la matriz fijada (21 strings de `0`/`1`). Se escribe y se pasa **antes** de cambiar el import, y sigue pasando después. Los tests existentes no cambian.
+  - `lib/calendar.test.ts` (se amplía): el `UID` del `baseInput` es exactamente `UID:b9c9de17@mentectickets.pe`. Igual que el anterior: se fija antes del cambio. Los tests existentes no cambian.
+  - `modules/seating/utils/seatRows.test.ts` (se amplía):
+    - cada asiento generado (`norte`, A–H × 10, 0.3) está `occupied` si y solo si `mixHash(hashString(seat.id)) / 2 ** 32 < 0.3`, recorriendo los ids generados;
+    - los tests de F1 no cambian.
+  - `modules/seating/services/seating.service.test.ts` (se amplía; los ids de asiento salen siempre del mapa real):
+    - T2: `getVenueMapForEvent` da lo mismo (`toEqual`) que `getVenueMapBySlug` para los 3 eventos; devuelve `null` con `clasico-del-pacifico`; lanza error con una zona sin tipo (mismo patrón de mutar y restaurar `VENUE_LAYOUTS_MOCK` que ya usa el archivo).
+    - T3: en `norte` y `platea`, ninguna fila supera el 70 % de ocupados; `norte`, `platea` y `preferencial` de `risas-sin-filtro` tienen ≥ 1 `accessible`.
+    - T3: `labelPos` del escenario y de cada zona en el centro de su `path` rectangular. Se parsea con `/^M(\d+) (\d+) H(\d+) V(\d+) H\d+ Z$/`; si una forma deja de ser rectángulo, hay que adaptar el test.
+  - `modules/checkout/services/checkout.service.test.ts` (se amplía):
+    - el import pasa a `@/modules/seating/seats`;
+    - `vi.mock("@/modules/events", …)` reemplaza `getEventBySlug` por un `vi.fn` que llama a la implementación real (el resto del módulo, real), así que los tests existentes no cambian;
+    - nuevo caso: `resolveCheckoutOrder` con un asiento disponible de `norte` (sacado del mapa real) llama 1 vez a `getEventBySlug` y devuelve `ok`.
 - Sin tests:
   - páginas de `app/`;
   - `PurchaseStepper`: presentacional sin estado ni eventos;
   - `EventPurchaseStrip`, `VenueMapView`, `ZoneList`, `PurchaseSummary`, `MobilePurchaseBar`, `SeatLegend`, `ZonePricesCard`, `MobileBuyBar` y `OrderSummary`: presentacionales, cubiertos por `TicketSelection.test` donde tienen comportamiento;
   - `SeatPlan` y `SelectedSeatChips`: cubiertos en `TicketSelection.test` (F4);
-  - mocks, tipos, `index.ts` y `purchase.ts`.
+  - mocks, tipos, `index.ts`, `purchase.ts` y `seats.ts` (solo reexportan).
 
 ## Plan de tareas
 Coordinación con las otras specs de la ronda (orden: seating → checkout → tickets → organizer → events-ui-refresh):
@@ -909,6 +964,33 @@ Coordinación con las otras specs de la ronda (orden: seating → checkout → t
   - `event-detail.md`: añadir el aside con mapa y la barra móvil.
   - Archivos: `app/eventos/[slug]/page.tsx`, `modules/seating/index.ts`, `design-system/ticketera/pages/ticket-selection.md`, `design-system/ticketera/pages/event-detail.md`.
   - Depende de: T3, T4.
+  - Secuencial.
+
+### Fase 5. Ajustes post-revisión
+Coordinación:
+- **Empieza cuando termine la Fase 2 de `checkout-mock-payment.md`**, que ahora edita `modules/checkout/types/checkout.types.ts` y `modules/checkout/utils/checkoutOrder.ts`. T2 toca `checkoutOrder.ts` y `checkout.service.ts`, sobre la versión que deje esa fase.
+- Las Fases 3 y 4 de `checkout-mock-payment.md` no tocan archivos de esta fase. Si se ejecutan a la vez, `npm run build` lo corre solo el reviewer, al final de cada fase.
+- `components/shared/TicketQr.tsx` y `lib/calendar.ts` (con sus tests) son de `checkout-mock-payment.md` (Fase 1). Aquí solo cambia su import interno y se añaden tests que fijan su salida actual. `tickets-my-tickets.md` usa `TicketQr`: su salida no cambia.
+- Todas las tareas van en secuencia: T1 toca `lib/` y `components/shared/` (base); T2 crea una entrada pública del módulo (base); T3 depende de `lib/hash.ts` (T1) y comparte `seating.service.test.ts` con T2. Ninguna va en paralelo.
+- Total: 3 tareas y 16 archivos (1 de documentación de diseño).
+
+- [ ] T1. Hash compartido `lib/hash.ts` con test, y `TicketQr` y `lib/calendar.ts` usándolo sin cambiar su salida.
+  - Orden dentro de la tarea:
+    1. Añadir a `TicketQr.test.tsx` y `calendar.test.ts` los tests que fijan la salida actual (criterios F5), y comprobar que pasan con el código actual.
+    2. Crear `lib/hash.ts` con su test.
+    3. Cambiar los imports.
+    4. Comprobar que los tests fijados siguen pasando.
+  - Archivos: `lib/hash.ts`, `lib/hash.test.ts`, `components/shared/TicketQr.tsx`, `components/shared/TicketQr.test.tsx`, `lib/calendar.ts`, `lib/calendar.test.ts`.
+  - Depende de: Fase 4 y Fase 2 de `checkout-mock-payment.md`.
+  - Secuencial (base: `lib/` y `components/shared/`).
+- [ ] T2. Entrada de servidor `seats.ts`, `getVenueMapForEvent` y una sola carga del evento en `resolveCheckoutOrder`; `checkout` importa de `@/modules/seating/seats`. Con tests.
+  - Archivos: `modules/seating/seats.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`, `modules/checkout/services/checkout.service.ts`, `modules/checkout/services/checkout.service.test.ts`, `modules/checkout/utils/checkoutOrder.ts`.
+  - Depende de: T1 (orden de la fase) y Fase 2 de `checkout-mock-payment.md`.
+  - Secuencial (entrada pública del módulo y archivos de `checkout`).
+  - La verificación del manifiesto de `/checkout` necesita `npm run build`: la hace el reviewer.
+- [ ] T3. Ocupación mezclada en `generateSeatRows`, escenario centrado en los mocks e invariantes nuevas, con tests; corregir la cuenta de tamaños en el diseño de página.
+  - Archivos: `modules/seating/utils/seatRows.ts`, `modules/seating/utils/seatRows.test.ts`, `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T1 (`lib/hash.ts`) y T2 (`seating.service.test.ts`).
   - Secuencial.
 
 ## Preguntas abiertas
