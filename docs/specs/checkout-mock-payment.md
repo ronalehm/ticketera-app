@@ -17,7 +17,7 @@ Visual según `design-system/ticketera/MASTER.md` (identidad Mentec: tokens, Cre
   - **Fase 3 — Paso 2 `/checkout`:** stepper, banner del temporizador, "Datos del comprador", "Método de pago" (radio cards + campos de tarjeta propios de la simulación + textos de Yape/PagoEfectivo), Términos, resumen sticky en `lg` con "Cambiar entradas" y "Pagar S/ X", resumen plegable y barra inferior con "Pagar" en móvil.
   - **Fase 4 — Paso 3 `/checkout/confirmacion`:** confirmación leída del store, tarjeta-entrada con talón y `TicketQr`, "Ver mis entradas", "Agregar al calendario" (.ics), "Descargar PDF" (impresión), "Qué sigue" y estado "No encontramos tu compra".
   - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 3 y 4).
-  - **Fase 5 — Alinear "Datos y pago" a las capturas:** formateadores de fecha `formatShortDayMonth` / `formatLongDayMonth` en `events` (vía `modules/events/format.ts`); formateo compacto de asientos en `modules/checkout/utils/seatSummary.ts`; h1 `sr-only`; `*` en los campos obligatorios; "Documento de identidad" como un grupo (tipo + número) junto a "Celular"; nota "Demo: no se realiza ningún cobro real." al pie de "Método de pago"; resumen compacto con "Pagar S/ X" dentro de la tarjeta (solo `lg`).
+  - **Fase 5 — Alinear "Datos y pago" a las capturas:** formateadores de fecha `formatShortDayMonth` / `formatLongDayMonth` en `events` (vía `modules/events/format.ts`); formateo compacto de asientos en `modules/checkout/utils/summaryFormat.ts`; h1 `sr-only`; `*` en los campos obligatorios; "Documento de identidad" como un grupo (tipo + número) junto a "Celular"; nota "Demo: no se realiza ningún cobro real." al pie de "Método de pago"; resumen compacto con "Pagar S/ X" dentro de la tarjeta (solo `lg`).
   - **Fase 6 — Alinear "Confirmación" y la entrada imprimible:** correo del comprador en el texto, fecha "lunes 5 de octubre · Lugar, Ciudad", asientos compactos por zona, "Qué sigue" como h2 `sr-only`; componente compartido `PrintableTicket` (props planas) y `buildPrintableTickets(order)`; al imprimir solo salen las entradas, una por página.
   - Actualización de `design-system/ticketera/pages/checkout.md` (Fases 5 y 6).
   - **Reemplazo funcional de `docs/specs/checkout-purchase.md`:** su Fase 1 (ya implementada) se conserva; sus Fases 2–3 (Stripe) **no se implementan**: esta spec las sustituye. Ese archivo no se edita (sigue aprobado; sus casillas de Fases 2–3 quedan sin marcar).
@@ -72,13 +72,14 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
 21. **Términos debajo de "Método de pago"** (columna izquierda, como hoy), no dentro del resumen. En móvil el contenido del resumen va plegado (`hidden`), así que un checkbox obligatorio dentro quedaría oculto. Además, el orden de tabulación "campos → Términos → Pagar" se mantiene en todos los anchos.
 22. **"Pagar" dentro de la tarjeta del resumen.** `OrderSummary` gana `footer?: ReactNode` y lo pinta al final de su `CardContent`, después del total. `CheckoutForm` renderiza el propio `OrderSummary` con `footer={<PayButton className="hidden lg:flex" />}`: desaparecen la prop `summary` de `CheckoutForm` y la prop `footer` de `CheckoutSummaryPanel`, y la página deja de importar `OrderSummary`. Como ahora corre en el cliente, `OrderSummary` importa de `@/modules/events/format`, no del barrel (decisión 10). En móvil, la barra `sticky` inferior y el resumen plegable no cambian. El botón de la tarjeta tiene `display:none` bajo `lg`, así que en cada ancho solo un "Pagar" es visible y accesible (igual que en la decisión 7).
 23. **Resumen compacto.** Se ven: miniatura (`alt=""`, el título va al lado), título, "lun 5 oct · Lugar, Ciudad" (fecha corta en minúsculas, sin hora), separador, una línea por tipo "2 × Tribuna Oriente … S/ 310.00" con, debajo y en pequeño, los asientos compactos, "Cambiar entradas", separador, "Total S/ 310.00", "Precio final, sin cargos ocultos" y "Pagar". El h2 "Resumen del pedido" queda `sr-only`. Se quita el precio unitario ("2 × S/ 155.00"): lo da el subtotal y ya se vio en el paso 1.
-24. **Asientos compactos, agrupados por fila** ("Fila L · 9 · Fila M · 8"; varios en la misma fila: "Fila L · 9, 10"). Las filas van ordenadas por longitud y luego alfabéticamente (A…Z, AA…), y los números de menor a mayor. La función vive en `modules/checkout/utils/seatSummary.ts` y lee fila y número del **id** del asiento, no de su `label`. El formato del id es el contrato C (`<zoneId>-<fila>-<número>`, fila `[A-Z]{1,2}`, número 1–999, leído desde la derecha). La etiqueta ("Tribuna Norte · Fila F · Asiento 12") es texto de presentación de seating y puede cambiar. Checkout no importa internals de seating. Hoy `parseSeatId` no está en ninguna entrada pública de seating (`index.ts` ni la futura `seats.ts`), así que la lectura del id se define en checkout. Si un id no se puede leer, se usa su `label` completa como fallback. Hay duplicación de conocimiento con `SEAT_ID_PATTERN`: ver Preguntas abiertas.
+24. **Asientos compactos, agrupados por fila** ("Fila L · 9 · Fila M · 8"; varios en la misma fila: "Fila L · 9, 10"). Las filas van ordenadas por longitud y luego alfabéticamente (A…Z, AA…), y los números de menor a mayor. La función vive en `modules/checkout/utils/summaryFormat.ts` y lee fila y número del **id** del asiento, no de su `label`. El formato del id es el contrato C (`<zoneId>-<fila>-<número>`, fila `[A-Z]{1,2}`, número 1–999, leído desde la derecha). La etiqueta ("Tribuna Norte · Fila F · Asiento 12") es texto de presentación de seating y puede cambiar. Checkout no importa internals de seating. Hoy `parseSeatId` no está en ninguna entrada pública de seating (`index.ts` ni la futura `seats.ts`), así que la lectura del id se define en checkout. Si un id no se puede leer, se usa su `label` completa como fallback. Hay duplicación de conocimiento con `SEAT_ID_PATTERN`: ver Preguntas abiertas.
 25. **Fechas nuevas en `events`, no en checkout.** `formatShortDayMonth(iso)` → "lun 5 oct" y `formatLongDayMonth(iso)` → "lunes 5 de octubre" (America/Lima, minúsculas, sin puntos, sin comas, sin año ni hora) se añaden a `modules/events/utils/formatEvent.ts`, junto a `formatEventDate`/`formatLongDate`, y se reexportan en `modules/events/format.ts` (entrada creada por esta spec en la Fase 1). Así "Mis entradas" podrá usarlas sin depender de checkout. La hora del ticket ("14:00 h") reutiliza `formatTime` + `" h"`: no se crea otro formateador.
 26. **Confirmación sin "Asientos" largo.** En la tarjeta-entrada, bajo "lunes 5 de octubre · Lugar, Ciudad", va una línea pequeña por tipo con asientos: "Tribuna Oriente: Fila L · 9 · Fila M · 8". Los tipos sin asientos no tienen línea. "Zona" sigue uniendo los nombres con ", " cuando hay varias ("General, VIP"), como en el criterio de la Fase 4. Se quita la hora de esa línea (la captura no la muestra; la entrada imprimible sí la lleva).
 27. **"Qué sigue" sin título visible:** se mantiene como h2 `sr-only` (la sección sigue nombrada con `aria-labelledby` y la jerarquía h1 → h2 no salta).
 28. **Entrada imprimible compartida.** `components/shared/PrintableTicket.tsx` es presentacional, sin directiva y con **props planas** (no conoce `Order` ni ningún módulo). La usará también "Mis entradas" (ver Coordinación). La función pura `buildPrintableTickets(order)`, en `modules/checkout/utils/printableTickets.ts`, convierte una `Order` en esas props. Empareja cada `tickets[i]` con su asiento recorriendo `items` y `seats` en el mismo orden con el que `buildOrder` numera las entradas (requisito 13).
 29. **Impresión = solo entradas, una por página.** Al imprimir se ocultan también la cabecera de confirmación y la tarjeta-entrada (`print:hidden`). Solo sale la lista de `PrintableTicket`, cada una con `break-inside-avoid` y salto de página después (`print:break-after-page`), salvo la última. La franja de marca y los colores se imprimen con `[print-color-adjust:exact]` en el `<article>`, porque los navegadores omiten los fondos por defecto. Las imágenes (evento y logo) llevan `loading="eager"`: la sección está en `display:none` en pantalla y con carga diferida no llegarían a cargarse antes del diálogo de impresión.
 30. **Ubicación sin asiento:** en entradas de zonas sin numerar se **omite** el dato "Ubicación" (no se inventa un texto tipo "General · sin butaca"). Ver Preguntas abiertas.
+31. **Cantidad de entradas en el total.** La fila del total del resumen dice "Total (N entradas)" ("1 entrada" en singular), como `PurchaseSummary` del paso 1. Ya existen dos `formatTicketCount` idénticos, pero ambos son internals: `modules/seating/utils/selectionSummary.ts` y `modules/tickets/utils/myOrders.ts`. No están en ninguna entrada pública, y esta fase no toca seating ni tickets. Por eso checkout define el suyo en `utils/summaryFormat.ts` y lo usan `OrderSummary` y `CheckoutSummaryPanel`. **Duplicado conocido** (3 copias): ver Preguntas abiertas. `OrderConfirmation` conserva su ternario en línea, porque la F6 no lo toca por este motivo.
 
 ## Requisitos
 
@@ -199,7 +200,8 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
     - `formatShortDayMonth(iso)`: `"2026-10-05T14:00:00-05:00"` → `"lun 5 oct"`; `"2026-11-15T03:00:00Z"` → `"sáb 14 nov"`.
     - `formatLongDayMonth(iso)`: → `"lunes 5 de octubre"`; `"2026-11-15T03:00:00Z"` → `"sábado 14 de noviembre"`.
     - `modules/events/format.ts` las reexporta (sigue sin lógica propia).
-31. **`modules/checkout/utils/seatSummary.ts`** (puro, sin React ni imports de seating; decisión 24):
+31. **`modules/checkout/utils/summaryFormat.ts`** (formateadores del resumen; puro, sin React ni imports de seating; decisiones 24 y 31):
+    - `formatTicketCount(count: number): string` → `"1 entrada"` / `"3 entradas"`.
     - `parseSeatPosition(seatId: string): { row: string; number: number } | null`. Usa `/-([A-Z]{1,2})-(\d{1,3})$/` (contrato C, leído desde la derecha). Devuelve `null` si no encaja o si el número es 0.
     - `formatSeatPosition(row: string, number: number): string` → `"Fila L, asiento 9"` (lo usa la entrada imprimible en la Fase 6).
     - `formatCompactSeats(seats: { id: string; label: string }[]): string`. Agrupa por fila: `"Fila L · 9 · Fila M · 8"` y `"Fila L · 9, 10"`. Ordena las filas por longitud y luego alfabéticamente, y los números de menor a mayor. Los ids que no se pueden leer se añaden al final con su `label`, separados por " · ". Con `[]` devuelve `""`.
@@ -209,8 +211,8 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
     - `Card` `rounded-2xl` con h2 `sr-only` "Resumen del pedido".
     - Cabecera `flex gap-3 items-center`: miniatura `next/image` `size-16 rounded-xl object-cover` (`alt=""`, `sizes="64px"`); título `font-bold leading-snug line-clamp-2`; `<p className="text-sm text-muted-foreground">` con `<time dateTime={startsAt}>lun 5 oct</time> · Lugar, Ciudad`.
     - `Separator`. `<ul>` con una línea por item: izquierda "`<quantity>` × `<name>`" (`font-medium`), derecha el subtotal (`font-semibold tabular-nums`, `formatEventPrice(unitPrice × quantity)`). Si el item tiene `seats`, debajo va `<p className="text-sm text-muted-foreground">` con `<span className="sr-only">Asientos: </span>` + `formatCompactSeats(seats)`. Se quita la `<ul aria-label="Asientos de …">` con etiquetas completas.
-    - "Cambiar entradas" (si hay `changeHref`), `Separator`, fila "Total" (`font-bold`) + importe (`text-xl font-bold tabular-nums`), "Precio final, sin cargos ocultos" (`text-sm text-muted-foreground`) y `footer`.
-34. **`CheckoutSummaryPanel`:** se elimina la prop `footer` y su render (el botón ahora va dentro de `children`). Lo demás no cambia (botón plegable móvil, `aria-expanded`/`aria-controls`, `lg:block`).
+    - "Cambiar entradas" (si hay `changeHref`), `Separator`, fila del total como en el paso 1: a la izquierda `Total <span className="font-normal text-muted-foreground">({formatTicketCount(ticketCount)})</span>` (`font-bold`; p. ej. "Total (3 entradas)", "Total (1 entrada)"), a la derecha el importe (`text-xl font-bold tabular-nums`), "Precio final, sin cargos ocultos" (`text-sm text-muted-foreground`) y `footer`.
+34. **`CheckoutSummaryPanel`:** se elimina la prop `footer` y su render (el botón ahora va dentro de `children`). El encabezado plegable móvil ya muestra "3 entradas · S/ 910.00" ("1 entrada" en singular, requisito 22); solo sustituye su ternario en línea por `formatTicketCount(ticketCount)` (mismo texto). Lo demás no cambia (botón plegable móvil, `aria-expanded`/`aria-controls`, `lg:block`).
 35. **`CheckoutForm`** (decisiones 17–19, 21–22):
     - Props: `order`, `changeHref` (sin `summary`). Renderiza `<OrderSummary order={order} changeHref={changeHref} footer={<PayButton {...payButtonProps} className="hidden lg:flex" />} />` dentro de `CheckoutSummaryPanel`. La barra inferior móvil no cambia.
     - "Datos del comprador": `CardDescription` "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios.". Grilla `sm:grid-cols-2` según la decisión 18: Nombres | Apellidos; Correo (`sm:col-span-2`); Celular | Documento de identidad (decisión 19).
@@ -267,7 +269,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
         - si el slot `i` (de `items.flatMap(item => quantity slots, seat = item.seats?.[q])`) tiene asiento y `parseSeatPosition(seat.id)` lo lee → `formatSeatPosition(row, number)`;
         - si hay asiento pero no se lee → `ticket.seatLabel`;
         - sin asiento → `undefined`.
-    - Importa de `@/modules/events/format` (nunca del barrel) y de `./seatSummary`.
+    - Importa de `@/modules/events/format` (nunca del barrel) y de `./summaryFormat`.
 41. **`ConfirmationTicketCard`** (decisión 26):
     - `<article aria-labelledby={id del h2}>`, para distinguirla de las entradas imprimibles.
     - Línea de fecha: `<time dateTime>{formatLongDayMonth(startsAt)}</time> · {venue}, {city}`.
@@ -469,7 +471,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   - nuevo `components/shared/PrintableTicket.tsx` (F6): entrada imprimible con props planas. Va en `shared` porque la usan checkout y, en una enmienda posterior, tickets (dos dominios). No existe en shadcn.
 - Utils:
   - `modules/events/utils/formatEvent.ts` (+ test) y `modules/events/format.ts` (F5): `formatShortDayMonth`, `formatLongDayMonth`.
-  - nuevo `modules/checkout/utils/seatSummary.ts` (+ test) (F5): `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
+  - nuevo `modules/checkout/utils/summaryFormat.ts` (+ test) (F5): `parseSeatPosition`, `formatSeatPosition`, `formatCompactSeats`.
   - nuevo `modules/checkout/utils/printableTickets.ts` (+ test) (F6): `buildPrintableTickets`.
 - Hooks, services, schemas, stores, tipos: sin cambios. **Contrato E sin cambios** (`Order`, `OrderTicket`, `OrderBuyer`).
 - `modules/checkout/index.ts` (F5): quita `OrderSummary`.
@@ -479,7 +481,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   export function formatShortDayMonth(iso: string): string; // "lun 5 oct"
   export function formatLongDayMonth(iso: string): string;  // "lunes 5 de octubre"
 
-  // modules/checkout/utils/seatSummary.ts
+  // modules/checkout/utils/summaryFormat.ts
   export function parseSeatPosition(seatId: string): { row: string; number: number } | null; // "tribuna-oriente-L-9" → { row: "L", number: 9 }
   export function formatSeatPosition(row: string, number: number): string;                    // "Fila L, asiento 9"
   export function formatCompactSeats(seats: { id: string; label: string }[]): string;         // "Fila L · 9 · Fila M · 8"
@@ -539,7 +541,7 @@ Decisiones de la ampliación (Fases 5 y 6; donde contradicen a una anterior, pre
   - `formatShortDayMonth("2026-11-15T03:00:00Z")` → `"sáb 14 nov"` (día de Lima);
   - `formatLongDayMonth` → `"lunes 5 de octubre"` y `"sábado 14 de noviembre"`;
   - ninguno contiene `.`, `,`, dígitos de año ni hora.
-- `modules/checkout/utils/seatSummary.test.ts` (F5, nuevo):
+- `modules/checkout/utils/summaryFormat.test.ts` (F5, nuevo):
   - `parseSeatPosition`: `"tribuna-oriente-L-9"` → `{ row: "L", number: 9 }`, zona con guiones y fila de 2 letras (`"platea-baja-AA-101"`); `"general"`, `"norte-f-12"`, `"norte-F-0"`, `"norte-F-1000"` → `null`.
   - `formatSeatPosition("L", 9)` → `"Fila L, asiento 9"`.
   - `formatCompactSeats`:
@@ -631,10 +633,10 @@ Coordinación de la ampliación (Fases 5 y 6):
   - `PrintableTicket` y los formateadores de F5 quedan disponibles.
   - Adoptarlos en el "Descargar PDF" de `/mis-entradas` (Fase 2 de `tickets-my-tickets.md`) requiere una enmienda de esa spec. Esta spec no la edita.
   - Si tickets necesita `buildPrintableTickets`, se expondrá en `modules/checkout/orders.ts` en esa enmienda (hoy YAGNI).
-- F6 depende de F5 (formateadores y `seatSummary`). Se ejecuta una fase por sesión.
+- F6 depende de F5 (formateadores y `summaryFormat`). Se ejecuta una fase por sesión.
 
 ### Fase 5 — "Datos y pago" según las capturas
-- [ ] T1 — Formateadores de fecha en events (+ casos de test) y utils de asientos compactos con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/seatSummary.ts`, `modules/checkout/utils/seatSummary.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
+- [ ] T1 — Formateadores de fecha en events (+ casos de test) y utils de asientos compactos con test · archivos: `modules/events/utils/formatEvent.ts`, `modules/events/utils/formatEvent.test.ts`, `modules/events/format.ts`, `modules/checkout/utils/summaryFormat.ts`, `modules/checkout/utils/summaryFormat.test.ts` · depende de: Fase 4 · secuencial (base: entrada pública `events/format.ts`)
 - [ ] T2 — Resumen compacto con `footer` y panel sin `footer` · archivos: `modules/checkout/components/OrderSummary.tsx`, `modules/checkout/components/CheckoutSummaryPanel.tsx` · depende de: T1 · paralelo con T3 y T5
 - [ ] T3 — `RequiredMark` y `PaymentMethodFields` (nota de demo al pie, tarjetas de prueba solo con Tarjeta, `*` y `required` en tarjeta) · archivos: `modules/checkout/components/RequiredMark.tsx`, `modules/checkout/components/PaymentMethodFields.tsx` · depende de: T1 · paralelo con T2 y T5
 - [ ] T4 — `CheckoutForm` (disposición del comprador, grupo de documento, `*`/`required`, Términos con `*`, `OrderSummary` con "Pagar" dentro, sin `summary`) con tests actualizados y nuevos; página con h1 `sr-only`; barrel sin `OrderSummary` · archivos: `modules/checkout/components/CheckoutForm.tsx`, `modules/checkout/components/CheckoutForm.test.tsx`, `app/checkout/page.tsx`, `modules/checkout/index.ts` · depende de: T2, T3 · secuencial

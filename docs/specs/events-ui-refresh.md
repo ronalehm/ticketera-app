@@ -482,6 +482,47 @@ Alinear tres pantallas que ya existen con el diseño de referencia (pantallas "2
 - **Sin tests**, por ser presentacionales o por estar cubiertos por los tests de utils o de `EventFiltersForm`: `EventCard`, `EventSearchBar`, `CategoryFilter`, `EventsResults`, `EventsSort`, `EventFiltersSidebar`, `EventFiltersSheet` (composición de shadcn `Sheet`), `EventDetailHeader`, `EventDetailInfo`, `RelatedEvents`, `AuthBrandPanel`, `AuthTabs`, las páginas y el layout de `app/`, y los `index.ts`.
 - **Los tests existentes no cambian** (salvo los casos de `eventFilters.test.ts` indicados): `TicketSelector.test.tsx`, `events.service.test.ts`, `formatEvent.test.ts`, `ticketOrder.test.ts` y todos los de `modules/auth`.
 
+### Tests de las Fases 4–5
+- **Tests existentes que cambian: ninguno.** Lo comprobé con `grep` sobre `*.test.ts(x)`:
+  - Ningún test fija el h1 o el `<title>` de `/eventos`: la página no tiene test, porque es un Server Component async. Los que lo fijaban eran criterios de F1, que ahora sustituyen los de F4.
+  - Ningún test renderiza `EventCard` ni `EventSearchBar`.
+  - `formatEvent.test.ts` solo se amplía, con los casos de checkout F5 · T1 más los de aquí.
+  - Los textos "Ver entradas"/"Agotado"/"Desde" de `TicketSelector.test.tsx` y `TicketSelection.test.tsx` son de otros componentes y no cambian.
+- **`modules/events/utils/formatEvent.test.ts` (F4, ampliar).** `getDateChipParts`:
+  - `"2026-11-14T21:00:00-05:00"` → `{ month: "NOV", day: "14" }`;
+  - `"2026-12-05T20:00:00-05:00"` → `{ month: "DIC", day: "05" }` (día con cero);
+  - `"2026-11-15T03:00:00Z"` → `{ month: "NOV", day: "14" }` (día de Lima);
+  - `"2027-01-10T11:00:00-05:00"` → `"ENE"`.
+- **`modules/events/components/EventCard.test.tsx` (F4, nuevo).** `EventCard` es la tarjeta de compra que se reutiliza en 4 sitios, y su contrato de accesibilidad y de estados cambia; por eso se prueba aunque sea presentacional. Fixtures: eventos de `EVENTS_MOCK` o con la forma de `Event`. Sin mocks de `next/image`: su loader omite la validación de hosts con `NODE_ENV=test`.
+  - Disponible (`noche-de-sintetizadores-lima`):
+    - Sin texto "Disponible".
+    - Overline "Conciertos", lugar "Estadio Nacional · Lima" y `<time dateTime="2026-11-14T21:00:00-05:00">` con "sáb 14 nov".
+    - El chip `aria-hidden` contiene "NOV" y "14".
+    - "Desde" y "S/ 180.00".
+    - Enlace con nombre "Ver entradas de Noche de Sintetizadores: Gira Neón 2026" → `/eventos/noche-de-sintetizadores-lima`.
+    - Exactamente 2 enlaces accesibles: título y CTA. La imagen está oculta.
+  - `low-stock` (`risas-sin-filtro`): se ve "Últimas entradas".
+  - `sold-out` (`los-ecos-del-sur-arequipa`):
+    - Un badge "Agotado".
+    - Un `button` deshabilitado con nombre "Agotado: Los Ecos del Sur en vivo".
+    - No hay enlace "Ver entradas…".
+  - Gratis (`aventura-en-el-bosque-magico`): "Entrada libre" y sin "Desde".
+- **`modules/events/components/EventSearchBar.test.tsx` (F4, nuevo).** Componente síncrono, se renderiza directamente.
+  - Hay un `form` con `role="search"`, `action="/eventos"` y `method="get"`.
+  - Campo de texto "Qué quieres ver" (`name="q"`, placeholder "Artista, evento o ciudad").
+  - Combobox "Fecha" (`name="mes"`): "Cualquier fecha" más los `months` recibidos.
+  - Combobox "Precio" (`name="precio"`): 6 opciones.
+  - Botón "Buscar" de tipo submit.
+  - Valores iniciales: con `defaultValues` `{ q: "estadio", mes: "2027-01", precio: "0-50" }`, los tres campos los muestran.
+  - Inputs ocultos:
+    - Con `{ q, categoria: ["teatro", "conciertos"], ciudad: ["Lima"], mes, fecha: "2027-01-01", precio, orden: "precio" }`, hay ocultos `categoria` ×2, `ciudad`, `fecha` y `orden`, y ninguno `q`, `mes` ni `precio`.
+    - Sin `defaultValues` (landing), no hay ninguno.
+- **Sin tests nuevos:**
+  - `RelatedEvents` (solo pasa `surface`).
+  - Las páginas `app/eventos/page.tsx` y `app/page.tsx`.
+  - `components/ui/native-select.tsx`, generado por shadcn.
+  - En F5, `EventDetailHeader` y `EventDetailInfo`: presentacionales, y sus formateadores ya los prueba checkout F5 · T1. La etiqueta "Inicio del show"/"Inicio del partido" la verifica el reviewer con los criterios.
+
 ## Plan de tareas
 **Coordinación entre specs** (orden global: seating → checkout → tickets → organizer → events-ui-refresh):
 - Esta spec se implementa al final.
