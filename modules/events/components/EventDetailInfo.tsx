@@ -1,20 +1,29 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Building2, CalendarDays, Clock, DoorOpen, ExternalLink, MapPin, Users } from "lucide-react";
+import { CalendarClock, Clock, ExternalLink, MapPin, QrCode, Users } from "lucide-react";
 
 import { SectionHeader } from "@/components/shared/SectionHeader";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import type { EventDetail } from "../types/events.types";
-import { formatLongDate, formatTime } from "../utils/formatEvent";
+import { formatTime } from "../utils/formatEvent";
 
-function DetailItem({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+// El icono va dentro del `dt` para que el `dl` sea válido (un `div` de `dl` solo admite `dt`/`dd`).
+// En móvil queda encima del texto; desde `md` se posiciona a la izquierda de la tarjeta.
+function InfoItem({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <Icon className="size-4 shrink-0" aria-hidden />
+    <div className="relative flex flex-col gap-0.5 rounded-2xl p-4 ring-1 ring-border md:min-h-19 md:justify-center md:pl-19">
+      <dt className="text-sm text-muted-foreground">
+        <span
+          aria-hidden
+          className="mb-3 flex size-11 items-center justify-center rounded-xl bg-accent text-primary-strong md:absolute md:top-1/2 md:left-4 md:mb-0 md:-translate-y-1/2"
+        >
+          <Icon className="size-5" />
+        </span>
         {label}
       </dt>
-      <dd className="pl-6 text-base">{children}</dd>
+      <dd className="font-bold">{children}</dd>
     </div>
   );
 }
@@ -32,56 +41,56 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
           {event.description.split("\n\n").map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
+          <p className="text-muted-foreground">Organiza: {event.organizer}</p>
         </div>
       </section>
 
       <section>
-        <SectionHeader title="Detalles" />
-        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <DetailItem icon={CalendarDays} label="Fecha">
-            <time dateTime={event.startsAt} className="inline-block first-letter:uppercase">
-              {formatLongDate(event.startsAt)}
-            </time>
-          </DetailItem>
-          <DetailItem icon={Clock} label="Hora">
-            <time dateTime={event.startsAt}>{formatTime(event.startsAt)}</time>
-          </DetailItem>
-          <DetailItem icon={DoorOpen} label="Apertura de puertas">
+        <SectionHeader title="Información importante" />
+        <dl className="grid grid-cols-2 gap-3 md:gap-4">
+          <InfoItem icon={Clock} label="Apertura de puertas">
             <time dateTime={event.doorsOpenAt}>{formatTime(event.doorsOpenAt)}</time>
-          </DetailItem>
-          <DetailItem icon={MapPin} label="Lugar">
-            <span className="block font-medium">{event.venue}</span>
-            <span className="block text-muted-foreground">
-              {event.address}, {event.city}
-            </span>
-          </DetailItem>
-          <DetailItem icon={Users} label="Edad mínima">
+          </InfoItem>
+          <InfoItem icon={CalendarClock} label="Inicio">
+            <time dateTime={event.startsAt}>{formatTime(event.startsAt)}</time>
+          </InfoItem>
+          <InfoItem icon={Users} label="Edad mínima">
             {event.minAge === 0 ? "Todo público" : `+${event.minAge}`}
-          </DetailItem>
-          <DetailItem icon={Building2} label="Organizador">
-            {event.organizer}
-          </DetailItem>
+          </InfoItem>
+          <InfoItem icon={QrCode} label="Ingreso">
+            Entrada digital con QR
+          </InfoItem>
         </dl>
       </section>
 
       <section>
-        <SectionHeader title="Ubicación" />
-        <address className="flex flex-col gap-1 text-base not-italic">
-          <span className="font-medium">{event.venue}</span>
-          <span className="text-muted-foreground">
-            {event.address}, {event.city}
-          </span>
-        </address>
-        <a
-          href={mapsHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-sm font-semibold text-primary-strong underline-offset-4 transition-colors duration-200 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          Ver en Google Maps
-          <ExternalLink className="size-4" aria-hidden />
-          <span className="sr-only">(se abre en una pestaña nueva)</span>
-        </a>
+        <SectionHeader title="Lugar" />
+        <div className="overflow-hidden rounded-2xl ring-1 ring-border">
+          <div aria-hidden className="flex aspect-[16/7] items-center justify-center bg-accent">
+            <MapPin className="size-8 text-primary" />
+          </div>
+          <div className="flex items-center justify-between gap-4 p-4 md:px-6 md:py-5">
+            <address className="flex min-w-0 flex-col gap-0.5 not-italic">
+              <span className="font-bold">{event.venue}</span>
+              <span className="text-muted-foreground">
+                {event.address}, {event.city}
+              </span>
+            </address>
+            <a
+              href={mapsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "h-11 cursor-pointer gap-1.5 px-4 font-semibold duration-200",
+              )}
+            >
+              Cómo llegar
+              <ExternalLink aria-hidden />
+              <span className="sr-only">(se abre en una pestaña nueva)</span>
+            </a>
+          </div>
+        </div>
       </section>
     </div>
   );
