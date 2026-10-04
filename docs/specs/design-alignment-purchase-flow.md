@@ -1,7 +1,7 @@
 # Alineación con Claude Design: pantalla de compra propia, textos del checkout y búsqueda en /eventos
 
 - Módulo: checkout · events (más `components/shared` y el route group `app/(purchase)`)
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Pedido del usuario: alinear con el diseño de Claude Design (artifact `NmeqG8Dta7F7zcSPmbQC8y`) las vistas **Búsqueda y listado**, **Checkout y pago** y **Confirmación de compra**. Tras el análisis de diferencias, el usuario eligió cuatro bloques:
@@ -81,8 +81,8 @@ Lo demás que el análisis marcó como "decidido en spec" **no se toca**. Se man
    - En una fila, el logo (~136 px), los tres pasos (~480 px) y "Compra segura" (~130 px) suman ~750 px. A 768 px solo hay 720 px útiles.
    - Por debajo de `lg` (también a 768 px) se usa la cabecera móvil del diseño.
 4. **Cabecera sticky** (`sticky top-0 z-40`), como el header del sitio al que sustituye.
-   - Mide 76 px en `lg` (`h-19`, como el diseño) y 64 px por debajo (60 px de fila + 4 px de barra).
-   - Los `lg:sticky lg:top-24` del resumen del checkout y de "Tu compra" del paso 1 siguen siendo válidos: quedan 20 px por debajo de la cabecera. No se tocan.
+   - Mide 77 px en `lg` (fila `h-19` de 76 px, como el diseño, + 1 px del `border-b` del Requisito 6) y 65 px por debajo (60 px de fila + 4 px de barra + 1 px de borde).
+   - Los `lg:sticky lg:top-24` del resumen del checkout y de "Tu compra" del paso 1 siguen siendo válidos: quedan 19 px por debajo de la cabecera. No se tocan.
 5. **Colores del stepper:** se conserva el de hoy (paso actual y completados en `bg-primary`, pendientes con borde `border-input`), no el negro del diseño (identidad Mentec, MASTER §2).
 6. **"Tarjeta de crédito o débito" solo por debajo de `sm`.** Así lo hace el diseño: en escritorio dice "Tarjeta" y en móvil, la etiqueta larga.
    - Por debajo de `sm` los métodos van apilados a todo el ancho y la etiqueta larga cabe.
@@ -110,6 +110,14 @@ Lo demás que el análisis marcó como "decidido en spec" **no se toca**. Se man
     - Es el patrón del botón "Pagar" del checkout: `display: none` deja solo uno visible y accesible en cada ancho.
     - Para no repetir el id de la etiqueta, el grupo pasa a nombrarse con `aria-label="Ordenar por"`, y el texto visible es `aria-hidden`.
     - El orden del DOM en `lg` coincide con el visual: contador, chips y orden.
+14. **Los contenedores de los tres pasos llevan `w-full`** (corrección tras la revisión de F1–F2, Fase 3).
+    - El `<main>` de `PurchaseShell` sigue siendo `flex flex-1 flex-col`: lo necesita el `flex-1` que estira la página hasta abajo (barra móvil "Continuar", fondo gris hasta el final).
+    - Dentro de un flex en columna, un hijo `mx-auto max-w-7xl` sin `w-full` toma el ancho de su contenido: a 1440 px el paso 1 medía 1211 px y saltaba a 1176 px al elegir una zona, desalineado del logo.
+    - Por eso cada contenedor de página lleva `w-full`: `app/(purchase)/checkout/page.tsx` (ya lo tiene), `app/(purchase)/eventos/[slug]/entradas/page.tsx` y `CONTAINER_CLASS` de `OrderConfirmation`.
+
+### Desviaciones aceptadas en la revisión de F1–F2
+- **`w-full` en el contenedor de `/checkout`** (`app/(purchase)/checkout/page.tsx`): queda formalizado por la Decisión 14 y se extiende a los otros dos pasos en la Fase 3.
+- **`<span>` envolvente en `PaymentMethodFields`:** la etiqueta y el sufijo móvil van dentro de un único `<span>` en `FieldTitle`, porque `FieldTitle` es flex con `gap` y separaría el sufijo de "Tarjeta" (Requisito 11).
 
 ### Lo que esta spec cambia de otras specs (no se editan)
 Al implementar y revisar, prevalece esta spec en estos puntos:
@@ -150,7 +158,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
      children: ReactNode;
    };
    ```
-   - **Raíz:** `<div className="flex flex-1 flex-col bg-muted">` con `<header>` y `<main className="flex flex-1 flex-col">{children}</main>`.
+   - **Raíz:** `<div className="flex flex-1 flex-col bg-muted">` con `<header>` y `<main className="flex flex-1 flex-col">{children}</main>`. Como el `<main>` es flex en columna, el contenedor de cada página (`mx-auto … max-w-*`) lleva `w-full` (Decisión 14).
    - **`<header>`:** `sticky top-0 z-40 border-b bg-background print:hidden`. Dentro, un contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8` con una fila:
      - por debajo de `lg`: `flex h-15 items-center gap-1`;
      - en `lg`: `lg:grid lg:h-19 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-6` (el stepper queda centrado).
@@ -172,9 +180,9 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
    | `app/(site)/eventos/[slug]/entradas/page.tsx` | `app/(purchase)/eventos/[slug]/entradas/page.tsx` |
    - **`/checkout`:**
      - Con un estado distinto de `ok`: `<PurchaseShell><CheckoutStatusMessage …/></PurchaseShell>`.
-     - Con `ok`: `<PurchaseShell currentStep={2} back={{ href: changeHref, label: "Volver a entradas" }}>`, con el contenedor de hoy (h1 `sr-only` + `CheckoutForm`). La flecha usa el mismo `href` que "Cambiar entradas".
+     - Con `ok`: `<PurchaseShell currentStep={2} back={{ href: changeHref, label: "Volver a entradas" }}>`, con el contenedor de hoy más `w-full` (h1 `sr-only` + `CheckoutForm`). La flecha usa el mismo `href` que "Cambiar entradas".
    - **`/checkout/confirmacion`:** con un código inválido, `<PurchaseShell><CheckoutStatusMessage variant="order-not-found" /></PurchaseShell>`; si no, `<OrderConfirmation code={code} />`.
-   - **`/eventos/[slug]/entradas`:** `<PurchaseShell currentStep={1} back={{ href: \`/eventos/${event.slug}\`, label: "Volver al evento" }}>` con el contenedor de hoy. El comentario sobre el padding inferior dice "llega al final de la página" en lugar de "al footer". `generateStaticParams`, `generateMetadata` y `notFound()` no cambian.
+   - **`/eventos/[slug]/entradas`:** `<PurchaseShell currentStep={1} back={{ href: \`/eventos/${event.slug}\`, label: "Volver al evento" }}>` con el contenedor de hoy más `w-full` (Decisión 14; se añade en la Fase 3). El comentario sobre el padding inferior dice "llega al final de la página" en lugar de "al footer". `generateStaticParams`, `generateMetadata` y `notFound()` no cambian.
    - **`app/(purchase)/eventos/[slug]/not-found.tsx`** (nuevo): `<SiteShell><NotFoundMessage title="No encontramos este evento" description="Puede que el enlace sea incorrecto o que el evento ya no esté disponible." /></SiteShell>`. Usa los mismos textos que `app/(site)/eventos/[slug]/not-found.tsx`, que no cambia.
    - Se elimina `components/shared/PurchaseStepper.tsx` cuando ya no lo importa nadie.
 8. **`OrderConfirmation`:**
@@ -183,6 +191,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
      - cargando y no encontrada: `<PurchaseShell>` (solo el logo);
      - confirmada: `<PurchaseShell currentStep={3}>` (sin `back`).
    - Desaparece el `<div className="w-full print:hidden">{stepper}</div>`: la cabecera ya es `print:hidden`.
+   - `CONTAINER_CLASS` añade `w-full` (Decisión 14; se añade en la Fase 3).
    - **Chip "Pedido N.º":** añade `bg-card`.
    - **"Qué sigue":**
      - el h2 pasa de `sr-only` a `text-lg font-bold md:sr-only`;
@@ -203,7 +212,7 @@ Al implementar y revisar, prevalece esta spec en estos puntos:
     - **Casilla de Términos:** añade `className="bg-background"` (Decisión 10).
     - Nada más cambia: la validación, el orden, los ids, el `PayButton` y la barra móvil siguen igual.
 11. **`PaymentMethodFields`:** junto a la etiqueta de cada método, un sufijo móvil opcional.
-    - `const MOBILE_LABEL_SUFFIX: Partial<Record<PaymentMethod, string>> = { card: " de crédito o débito" }`, renderizado dentro de `FieldTitle` como `<span className="sm:hidden">{suffix}</span>`.
+    - `const MOBILE_LABEL_SUFFIX: Partial<Record<PaymentMethod, string>> = { card: " de crédito o débito" }`, renderizado dentro de `FieldTitle` como `<span>{label}<span className="sm:hidden">{suffix}</span></span>`. El `<span>` envolvente es necesario: `FieldTitle` es flex con `gap` y, sin él, separaría el sufijo de la etiqueta (desviación aceptada en la revisión).
     - El nombre accesible del radio es "Tarjeta de crédito o débito" por debajo de `sm` y "Tarjeta" desde `sm`.
 12. **`OrderSummary`:**
     - En la cabecera de la tarjeta, la miniatura y el título llevan `max-lg:hidden`. Por debajo de `lg` solo queda la línea "sáb 14 nov · Lugar, Ciudad", porque la miniatura y el título ya están en el botón plegable.
@@ -264,11 +273,11 @@ Se verifican con Playwright (`npm run build && npm start`) a 375, 768 y 1440 px,
 ### Fase 1: pantalla de compra y textos del checkout
 - [ ] **Paso 2 a 1440 px.**
   - **Sin el sitio:** no existen la navegación "Categorías" ni el `contentinfo`.
-  - **Cabecera:** el único `banner` mide 76 px de alto y es blanco, con borde inferior. Tiene el logo "Mentec Tickets" a la izquierda (enlace a `/`); en el centro, el stepper "Entradas" (completado, con check) — "Datos y pago" (actual, `aria-current="step"`) — "Confirmación"; y "Compra segura" con candado a la derecha. No se ve ninguna flecha.
+  - **Cabecera:** el único `banner` mide 76 px + 1 px de borde = 77 px de alto y es blanco, con borde inferior. Tiene el logo "Mentec Tickets" a la izquierda (enlace a `/`); en el centro, el stepper "Entradas" (completado, con check) — "Datos y pago" (actual, `aria-current="step"`) — "Confirmación"; y "Compra segura" con candado a la derecha. No se ve ninguna flecha.
   - **Fondo y tarjetas:** el fondo de la página es el gris `--muted`, y las tarjetas "Datos del comprador", "Método de pago" y el resumen son blancas.
   - **Sticky:** al desplazarse, la cabecera sigue arriba y el resumen sigue visible debajo de ella, sin quedar tapado.
 - [ ] **Paso 2 a 768 px y 375 px.**
-  - **Cabecera:** a la izquierda, una flecha de 44 × 44 px llamada "Volver a entradas"; a su derecha, "Paso 2 de 3" sobre "Datos y pago"; a la derecha del todo, el candado. Debajo, la barra al 66 %. No se ve el logo ni el stepper horizontal.
+  - **Cabecera:** mide 65 px de alto (60 px de fila + 4 px de barra + 1 px de borde). A la izquierda, una flecha de 44 × 44 px llamada "Volver a entradas"; a su derecha, "Paso 2 de 3" sobre "Datos y pago"; a la derecha del todo, el candado. Debajo, la barra al 66 %. No se ve el logo ni el stepper horizontal.
   - **Flecha:** al pulsarla, se navega al mismo `href` que "Cambiar entradas".
   - Sin scroll horizontal.
 - [ ] **Teclado en el paso 2.** A 375 px, el primer Tab enfoca "Volver a entradas" (foco visible). A 1440 px, enfoca el logo. Después, el orden de tabulación del formulario es el de hoy.
@@ -324,7 +333,7 @@ Se verifican con Playwright (`npm run build && npm start`) a 375, 768 y 1440 px,
   - No se ven "Fecha" ni "Precio" ni la etiqueta "Qué quieres ver", pero el campo se llama "Qué quieres ver" en el árbol de accesibilidad. Sin scroll horizontal.
 - [ ] **Buscar conserva los filtros.** Dado `/eventos?mes=2026-11&precio=100-200` a 375 px, cuando se escribe "lima" y se pulsa "Buscar", entonces la URL contiene `q=lima`, `mes=2026-11` y `precio=100-200`, y los chips del mes y del precio siguen visibles.
 - [ ] **Buscador a 768 y 1440 px.** Es la píldora de hoy, sin cambios: "Qué quieres ver", "Fecha", "Precio" y "Buscar" con icono, en una fila, y sin lupa dentro del campo.
-- [ ] **Fila de resultados a 1440 px.** Dado `/eventos?categoria=conciertos&ciudad=lima&precio=100-200`, entonces en la parte superior de la columna de resultados hay **una sola fila**: "1 evento", los chips "Conciertos", "Lima" y "S/ 100 – S/ 200" a la izquierda, y "Ordenar por [Fecha | Precio más bajo]" alineado a la derecha y centrado en vertical con los chips. Debajo, la grilla. No queda ninguna fila vacía encima.
+- [ ] **Fila de resultados a 1440 px.** Dado `/eventos?categoria=conciertos&ciudad=Lima&precio=100-200` (el valor de `ciudad` distingue mayúsculas: `lima` no genera chip), entonces en la parte superior de la columna de resultados hay **una sola fila**: "1 evento", los chips "Conciertos", "Lima" y "S/ 100 – S/ 200" a la izquierda, y "Ordenar por [Fecha | Precio más bajo]" alineado a la derecha y centrado en vertical con los chips. Debajo, la grilla. No queda ninguna fila vacía encima.
 - [ ] **Fila de resultados a 1024 px.** Con los mismos filtros más `mes`, los chips pueden ocupar dos líneas, pero "Ordenar por" sigue arriba a la derecha. Sin scroll horizontal.
 - [ ] **Sin filtros a 1440 px.** En `/eventos`, la fila tiene "N eventos" a la izquierda y "Ordenar por" a la derecha.
 - [ ] **Móvil y tablet (375 y 768 px).** La fila "Filtros (n) + orden", las pills y la línea del contador con los chips se ven como hoy.
@@ -333,6 +342,13 @@ Se verifican con Playwright (`npm run build && npm start`) a 375, 768 y 1440 px,
 - [ ] **Código.**
   - `npx vitest run modules/events` y `npm run lint` pasan, y `npm run build` termina sin errores.
   - `pages/events-list.md` y MASTER §7 describen el buscador compacto y la fila única.
+
+### Fase 3: corrección del ancho de los contenedores
+- [ ] **Ancho del paso 1 a 1440 px.** Dado `/eventos/noche-de-sintetizadores-lima/entradas` a 1440 px, cuando se mide el contenedor de la página (`mx-auto … max-w-7xl`) antes y después de elegir una zona, entonces mide 1280 px en ambos casos y su contenido empieza alineado con el logo de la cabecera (x ≈ 112–113 px).
+- [ ] **Ancho del paso 2 a 1440 px.** En `/checkout?evento=festival-vive-latino-lima&campo-vip=2`, el contenedor mide 1280 px y está alineado con el logo (x ≈ 112–113 px).
+- [ ] **Ancho de la confirmación.** A 1440 px, en la confirmación (cargando, encontrada y no encontrada), el contenedor mide 896 px (`max-w-4xl`) y queda centrado; a 375 px ocupa todo el ancho, sin scroll horizontal.
+- [ ] **Página de diseño.** `pages/checkout.md` indica 77 px en `lg` y 65 px por debajo (borde incluido) y que los contenedores de los pasos llevan `w-full`.
+- [ ] **Código.** `npx vitest run modules/checkout` y `npm run lint` pasan, y `npm run build` termina sin errores.
 
 ## Diseño técnico
 
@@ -410,7 +426,7 @@ Ubicados junto al archivo probado.
     - no existe "Compra segura";
     - el h2 "Qué sigue" tiene la clase `md:sr-only` (y no `sr-only` sola);
     - cada tarjeta de "Qué sigue" contiene el texto corto (en un `span` con `md:hidden`) y el largo (con `max-md:hidden`);
-    - `getByText("Total pagado")` sigue funcionando, y el `span` " pagado" tiene `max-md:hidden`.
+    - el `<dt>` del total se encuentra con un matcher por su texto completo (`textContent === "Total pagado"`, p. ej. `getByText(byFullText("DT", "Total pagado"))`), porque `getByText("Total pagado")` no casa con el texto partido en `Total` + `<span> pagado</span>`; el `span` " pagado" tiene `max-md:hidden`.
   - **Cargando y no encontrada:** no existe la lista de pasos y existe el enlace "Mentec Tickets". Esto sustituye a "sin stepper".
   - El resto de casos, sin cambios y en verde.
 - **F1 `modules/checkout/components/CheckoutForm.test.tsx`** (ampliar):
@@ -438,6 +454,7 @@ Coordinación con otras specs (ninguna está en curso sobre estos archivos al re
 | F1 T2 | `legal-documents` F5 T2/T3 (`CheckoutForm.tsx`, su test, `app/(site)/checkout/page.tsx`, `pages/checkout.md`) | No en paralelo. Si `legal-documents` F5 va después, usa la ruta nueva `app/(purchase)/checkout/page.tsx`. |
 | F1 T4 y T5 | `seating-stadium-map` F4 T4 (página `/entradas`, `pages/ticket-selection.md`) y `seating-curved-venues` T6 (`pages/ticket-selection.md`) | No en paralelo. T5 espera a que T6 esté cerrada. Si F4 va después, usa la ruta nueva `app/(purchase)/eventos/[slug]/entradas/page.tsx`. |
 | F2 | `events-ui-refresh` (cerrada) | — |
+| F3 T1 | `seating-stadium-map` F6 T5 (en otra rama: envoltorio `Suspense` con `PreselectedTicketSelection` en `app/(purchase)/eventos/[slug]/entradas/page.tsx`) | Se puede hacer en paralelo: F3 T1 solo añade la clase `w-full` al contenedor, así que la fusión no tiene conflicto de lógica. Quien fusione después conserva la clase. |
 
 - F1 y F2 tienen archivos disjuntos (MASTER solo se toca en F2), así que pueden ejecutarse en cualquier orden, cada una en su sesión.
 - **Builds y commits:** los developers en paralelo no ejecutan `npm run build`; lo hace el reviewer al cerrar cada fase. Nadie hace commits.
@@ -453,3 +470,6 @@ Coordinación con otras specs (ninguna está en curso sobre estos archivos al re
 - [x] T1 — Buscador compacto por debajo de `md`, con el test ampliado · archivos: `modules/events/components/EventSearchBar.tsx`, `modules/events/components/EventSearchBar.test.tsx` · depende de: — · paralelo con T2
 - [x] T2 — Fila única de contador, chips y orden en `lg` · archivos: `app/(site)/eventos/page.tsx`, `modules/events/components/EventsResults.tsx`, `modules/events/components/EventsSort.tsx` · depende de: — · paralelo con T1
 - [x] T3 — `pages/events-list.md` (buscador compacto, fila única y tabulación) y la fila "Buscador" de MASTER §7 · archivos: `design-system/ticketera/pages/events-list.md`, `design-system/ticketera/MASTER.md` · depende de: T1, T2 · secuencial
+
+### Fase 3 — Corrección tras la revisión de F1–F2 (1 tarea, 3 archivos)
+- [ ] T1 — `w-full` en el contenedor del paso 1 y en `CONTAINER_CLASS` de `OrderConfirmation` (Decisión 14), y en `pages/checkout.md` las alturas de la cabecera (77 px en `lg` y 65 px por debajo, borde incluido; hoy dice 76/64) y la nota de `w-full` en los contenedores · archivos: `app/(purchase)/eventos/[slug]/entradas/page.tsx`, `modules/checkout/components/OrderConfirmation.tsx`, `design-system/ticketera/pages/checkout.md` · depende de: F1 · secuencial (coordinación con `seating-stadium-map` F6 T5 en la tabla de arriba)
