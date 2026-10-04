@@ -683,6 +683,75 @@ describe("TicketSelection · plano en arco", () => {
     expect(overlay.parentElement).toBe(zoomGroup().parentElement);
   });
 
+  it("desde sm, el minimapa va en la barra si el plano entero llegaría a su esquina, y se recoloca al redimensionar", () => {
+    const [, , planWidth, planHeight] = ARC_ZONE.seatViewBox.split(" ").map(Number);
+    const minimapSize = { width: 112, height: 80 };
+    // Medidas simuladas: el `<svg>` del plano mide `svgSize` y el minimapa `minimapSize`; el resto, 0 (jsdom).
+    let svgSize = { width: planWidth * 2, height: planHeight * 2 };
+    let resize = () => {};
+    const isMinimap = (element: Element) => element.hasAttribute("data-placement");
+    const spies = [
+      vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+        return this instanceof SVGSVGElement ? svgSize.width : 0;
+      }),
+      vi.spyOn(Element.prototype, "clientHeight", "get").mockImplementation(function (this: Element) {
+        return this instanceof SVGSVGElement ? svgSize.height : 0;
+      }),
+      vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+        return isMinimap(this) ? minimapSize.width : 0;
+      }),
+      vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+        return isMinimap(this) ? minimapSize.height : 0;
+      }),
+    ];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const placement = () => minimap(ARC_MAP)!.parentElement!;
+    const expectPlacement = (expected: "bar" | "overlay") => {
+      expect(placement().dataset.placement).toBe(expected);
+      const overlaid = expected === "overlay";
+      expect(placement().className.includes("sm:absolute sm:top-3 sm:left-3 sm:z-10")).toBe(overlaid);
+      expect(placement().parentElement!.className.includes("sm:contents")).toBe(overlaid);
+    };
+    const resizeTo = (size: typeof svgSize) => {
+      svgSize = size;
+      act(() => resize());
+    };
+
+    try {
+      openOriente();
+      // El plano llena el `<svg>`: su esquina queda bajo el minimapa → a la barra, antes del lienzo. El zoom sigue
+      // superpuesto abajo a la derecha.
+      expectPlacement("bar");
+      expect(placement().nextElementSibling).toBe(zoomGroup());
+      expect(zoomGroup().className).toContain("sm:absolute sm:right-3 sm:bottom-3 sm:z-10");
+
+      // Margen lateral justo para el minimapa (12 px + su ancho a cada lado del plano) → superpuesto.
+      const sideMargin = 12 + minimapSize.width;
+      resizeTo({ width: planWidth * 2 + 2 * sideMargin, height: planHeight * 2 });
+      expectPlacement("overlay");
+
+      // Un píxel menos de margen → otra vez a la barra.
+      resizeTo({ width: planWidth * 2 + 2 * sideMargin - 2, height: planHeight * 2 });
+      expectPlacement("bar");
+
+      // Margen superior suficiente (plano por debajo del minimapa) → superpuesto.
+      resizeTo({ width: planWidth * 2, height: planHeight * 2 + 2 * (12 + minimapSize.height) });
+      expectPlacement("overlay");
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("el lienzo es apaisado desde sm, con franja inferior solo si es estrecho y minimapa según su ancho, y conserva la proporción del plano en móvil", () => {
     openOriente();
 

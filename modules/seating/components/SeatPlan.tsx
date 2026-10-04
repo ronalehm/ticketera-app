@@ -1,7 +1,7 @@
 "use client";
 
 import { Maximize, Minus, Plus } from "lucide-react";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, RefObject } from "react";
 import {
   TransformComponent,
@@ -76,6 +76,8 @@ const ROW_LABEL_FONT_SIZE = 13;
 const SEAT_HIT_SIZE = 32;
 /** Radio de las luces del escenario en el fondo del estadio, en unidades del mapa (el mismo que en `VenueMapView`). */
 const STAGE_LIGHT_RADIUS = 5;
+/** Distancia (px) del minimapa superpuesto a los bordes superior e izquierdo del lienzo (`sm:top-3 sm:left-3`). */
+const MINIMAP_INSET = 12;
 
 // La librería inyecta su CSS sin capa (`width/height: fit-content`), que gana a las utilidades de Tailwind: el
 // tamaño del lienzo va en línea para que ocupe el contenedor.
@@ -89,6 +91,23 @@ function getAnimationTime(time?: number): number | undefined {
 function getClientPoint(event: TouchEvent | globalThis.MouseEvent): { x: number; y: number } | null {
   const point = "touches" in event ? event.touches[0] : event;
   return point ? { x: point.clientX, y: point.clientY } : null;
+}
+
+/**
+ * ¿Puede ir el minimapa superpuesto arriba a la izquierda sin tapar el plano entero (requisito 29)? Sí si el
+ * `seatViewBox` encajado en el `<svg>` (`xMidYMid meet`) empieza a la derecha del minimapa o por debajo de él: las
+ * butacas y las letras van dentro del `seatViewBox`, así que no hay solape por construcción, sea cual sea el plano.
+ * El `<svg>` empieza en la esquina del lienzo (el contenido solo reserva la franja inferior). Sin medidas (jsdom), sí.
+ */
+function canOverlayMinimap(svg: SVGSVGElement, minimap: HTMLElement, planWidth: number, planHeight: number): boolean {
+  const { unit, offsetX, offsetY } = getPlanFit({
+    planWidth,
+    planHeight,
+    viewportWidth: svg.clientWidth,
+    viewportHeight: svg.clientHeight,
+  });
+  if (unit <= 0) return true;
+  return offsetX >= MINIMAP_INSET + minimap.offsetWidth || offsetY >= MINIMAP_INSET + minimap.offsetHeight;
 }
 
 function isNavigationKey(key: string): key is SeatNavigationKey {
@@ -294,6 +313,7 @@ export function SeatPlan({
   const helpId = useId();
   const viewportRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const minimapRef = useRef<HTMLDivElement>(null);
   const seatsRef = useRef<SVGGElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -302,6 +322,8 @@ export function SeatPlan({
   const pointerTypeRef = useRef<string | null>(null);
   const [focusedSeatId, setFocusedSeatId] = useState<string | null>(null);
   const [tooltipAnchor, setTooltipAnchor] = useState<TooltipAnchor | null>(null);
+  /** Desde `sm`, si el minimapa cabe superpuesto (`canOverlayMinimap`); si no, va en la barra sobre el lienzo. */
+  const [minimapFits, setMinimapFits] = useState(true);
 
   const seats = zone.rows.flatMap((row) => row.seats);
   const selected = new Set(selectedSeatIds);
@@ -312,6 +334,23 @@ export function SeatPlan({
   const stageWidth = width - 2 * SEAT_PLAN_MARGIN.x;
   const { planTransform } = zone;
   const isArc = planTransform !== undefined;
+  /** Desde `sm`, minimapa en la barra sobre el lienzo en vez de superpuesto. */
+  const minimapInBar = isArc && !minimapFits;
+
+  // Antes de pintar (sin saltos al abrir la zona) y en cada cambio de tamaño del lienzo, que también cambia el del
+  // minimapa (`@2xl:w-28`) y la franja inferior. Mover el minimapa a la barra no cambia el lienzo: no hay bucle.
+  useLayoutEffect(() => {
+    const canvas = viewportRef.current;
+    const svg = svgRef.current;
+    const minimap = minimapRef.current;
+    if (!canvas || !svg || !minimap) return;
+    const update = () => setMinimapFits(canOverlayMinimap(svg, minimap, width, height));
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [zone.id, width, height]);
 
   const findSeat = (seatId: string) => seats.find((seat) => seat.id === seatId);
 
@@ -464,15 +503,20 @@ export function SeatPlan({
       >
         <SeatDetailLevelSync svgRef={svgRef} planWidth={width} planHeight={height} />
 
-        {/* Contenedor del lienzo: desde `sm` la barra es `contents` y el minimapa y el zoom se posicionan sobre el
-            lienzo (arriba a la izquierda y abajo a la derecha); por debajo, la barra los pone encima del lienzo. Es
+        {/* Contenedor del lienzo: por debajo de `sm`, la barra pone el minimapa y el zoom encima del lienzo. Desde `sm`
+            el zoom se superpone abajo a la derecha del lienzo (el bloque acaba donde el lienzo) y el minimapa arriba a
+            la izquierda si cabe sin tapar el plano entero; si no, sigue en la barra, que entonces no es `contents`. Es
             `@container` (mide lo mismo que el lienzo): el minimapa y la franja del zoom en arco dependen del ancho del
             lienzo, no de la ventana. */}
         <div className="@container relative flex flex-col gap-2">
-          <div className="flex items-end justify-between gap-2 sm:contents">
+          <div className={cn("flex items-end justify-between gap-2", !minimapInBar && "sm:contents")}>
             {planTransform && (
               // Decorativo: los gestos lo atraviesan para que el paneo y las butacas de debajo sigan respondiendo.
-              <div className="pointer-events-none flex sm:absolute sm:top-3 sm:left-3 sm:z-10">
+              <div
+                ref={minimapRef}
+                data-placement={minimapInBar ? "bar" : "overlay"}
+                className={cn("pointer-events-none flex", !minimapInBar && "sm:absolute sm:top-3 sm:left-3 sm:z-10")}
+              >
                 <SeatPlanMinimap
                   viewBox={venue.viewBox}
                   stage={venue.stage}
