@@ -522,7 +522,7 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
     | Test de `useSeatSelection.test.ts` | "changeQuantity activa la zona…" y `activeZoneId` "vip" en el test del límite | `activeZoneId` no cambia |
     | `ticket-selection.md` | Mapa con zonas botón; tarjetas botón; resaltado en los dos sentidos | Requisito 47 |
     | `seating-curved-venues.md` (aprobada, no se edita) | Criterio con `<svg role="group" aria-label="Mapa de zonas de …">`; "Mesa (agotada): se pulsa su forma o su tarjeta y no se abre nada" | Léase `role="img"` con el mismo `aria-label`. Lo de Mesa se sigue cumpliendo: la forma no hace nada y la tarjeta agotada no tiene controles. `elementFromPoint` sigue valiendo (decisión 38) |
-    | `seating-all-venue-maps.md` (aprobada, no se edita) | `svg[role="group"]` en el Playwright de F1b T4 y CC1; CC6 "pulsar su forma o su tarjeta no abre nada"; "orden… del Tab en el mapa" | Léase `svg[role="img"]` con el mismo `aria-label`. CC6 se sigue cumpliendo. El orden de las zonas es el de las tarjetas (el mapa no tiene paradas de Tab). `elementFromPoint` sigue valiendo |
+    | `seating-all-venue-maps.md` (aprobada, no se edita) | `svg[role="group"]` en el Playwright del requisito 25 (F1b) y en CC1; CC6 "pulsar su forma o su tarjeta no abre nada"; "orden… del Tab en el mapa" | Léase `svg[role="img"]` con el mismo `aria-label`. CC6 se sigue cumpliendo. El orden de las zonas es el de las tarjetas (el mapa no tiene paradas de Tab). `elementFromPoint` sigue valiendo |
 
 ## Requisitos
 
@@ -1388,12 +1388,119 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
 - [ ] Dado `design-system/ticketera/pages/event-detail.md`, entonces "Aside con mapa" documenta las filas como enlaces (destino, hover, foco, chevron, nombre accesible, agotadas como texto) y el botón "Ver mapa de zonas", y el diagrama ASCII lo refleja.
 - [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan.
 
+### Fase 7. Compra combinada y mapa no interactivo
+Los criterios con navegador se comprueban con Playwright a **375, 768 y 1440 px** contra `npm run start`, con la BD de desarrollo sembrada como deja `seating-curved-venues.md` (mapas curvos). Los ids de butaca se toman del DOM (`data-seat-id` de una butaca `available`), no se fijan en el criterio.
+
+**Mapa no interactivo** (`noche-de-sintetizadores-lima`, y lo mismo en `festival-vive-latino-lima` y `la-casa-de-los-espejos`):
+- [ ] Dado el sub-paso 1, entonces:
+  - el mapa es `svg[role="img"][aria-label="Mapa de zonas de <recinto>"]` y ningún elemento dentro tiene `role`, `tabindex`, `aria-label` ni `aria-disabled`;
+  - cada forma tiene `data-zone-id` y su `cursor` calculado no es `pointer`.
+- [ ] Dado un clic en el centro de la etiqueta de cada zona (VIP, Preferencial, General y Tribuna Norte), sobre la forma, entonces no cambian la URL, el indicador ("Paso 1 de 2 · Elige tus zonas"), "Tu compra" ni ningún stepper, y no se abre ningún sub-paso 2.
+- [ ] Dado el puntero sobre una forma del mapa, entonces ninguna tarjeta tiene `data-highlighted="true"` y no aparece el trazo navy.
+- [ ] Dado Tab desde "Volver al evento" hasta "Continuar", entonces ningún elemento enfocado está dentro del `<svg>` del mapa (`document.activeElement.closest("svg[role=img]")` es `null` en cada paso) y la primera parada dentro de la tarjeta "Elige tus entradas" es el primer control de la primera tarjeta de zona ("Quitar una entrada de VIP").
+- [ ] Dado el puntero sobre la tarjeta "General", o el foco en su "+", entonces la forma de General lleva el trazo navy encima y las otras 3 zonas y sus etiquetas quedan al 40 %. Al pasar el foco de "−" a "+" de la misma tarjeta, el resaltado sigue. Al salir, desaparece.
+
+**Compra combinada** (`noche-de-sintetizadores-lima`, en los 3 anchos):
+- [ ] Dado el sub-paso 1, entonces:
+  - el indicador dice "Paso 1 de 2 · Elige tus zonas";
+  - encima de las tarjetas se lee "Puedes combinar varias zonas en una misma compra.";
+  - VIP, Preferencial y General tienen el grupo "Cantidad de <zona>" en 0, con "−" deshabilitado;
+  - Tribuna Norte tiene el botón "Elegir butacas de Tribuna Norte";
+  - ningún `button` ni enlace contiene a la vez el nombre y el precio de una zona: las tarjetas no son botones;
+  - las tarjetas van en 2 columnas a 768 y 1440 y en 1 a 375.
+- [ ] Dados 2 "+" en VIP y 3 en General, entonces:
+  - el indicador sigue en "Paso 1 de 2 · Elige tus zonas";
+  - los steppers muestran 2 y 3, y el mapa lleva las insignias "✓ 2" y "✓ 3";
+  - "Tu compra" (a 1440; la hoja "Ver resumen de la compra" a 375 y 768) muestra "2 × VIP … S/ 1,100.00" y "3 × General … S/ 540.00".
+- [ ] Dado "Elegir butacas de Tribuna Norte" con esas 5 entradas, entonces:
+  - se abre "Paso 2 de 2 · Elige tus butacas" con "0 de 5 butacas" y el foco en el h3;
+  - aún no se ve "Agregar otra zona";
+  - tras elegir 2 butacas disponibles, el contador dice "2 de 5 butacas" y aparece el pie "Puedes combinar varias zonas en una misma compra." con "Agregar otra zona".
+- [ ] Dado "Agregar otra zona", entonces:
+  - vuelve "Paso 1 de 2 · Elige tus zonas";
+  - el foco está en la tarjeta de Tribuna Norte (resaltada), que dice "2 butacas elegidas" y cuyo botón pasa a "Cambiar butacas";
+  - VIP y General siguen en 2 y 3;
+  - el mapa lleva "✓ 2", "✓ 3" y "✓ 2".
+- [ ] Dado ese estado, entonces:
+  - "Tu compra" tiene **3 líneas** en el orden del mapa: "2 × VIP … S/ 1,100.00", "3 × General … S/ 540.00" y "2 × Tribuna Norte … S/ 440.00", esta con sus 2 etiquetas "Fila … · Asiento …";
+  - el total es "Total (7 entradas)" y "S/ 2,080.00" (a 375 y 768, la barra dice "Total · 7 entradas" y "S/ 2,080.00");
+  - "Continuar" lleva a `/checkout?evento=noche-de-sintetizadores-lima&vip=2&general=3&norte=2&asientos=<id1>%2C<id2>`;
+  - `/checkout` muestra las 3 zonas con sus cantidades, las 2 butacas y el total S/ 2,080.00.
+- [ ] Dado "Quitar General de tu compra" en ese estado, entonces:
+  - quedan 2 líneas y el total "S/ 1,540.00";
+  - el stepper de General vuelve a 0 y su insignia desaparece del mapa;
+  - el foco pasa a "Quitar Tribuna Norte de tu compra".
+- [ ] Dado "Quitar Tribuna Norte de tu compra", entonces su tarjeta ya no dice "2 butacas elegidas", su botón vuelve a "Elegir butacas" y, al abrirla, ninguna butaca está elegida ("0 de 8 butacas").
+- [ ] Dado que se quita la última línea, entonces "Tu compra" muestra "Todavía no elegiste entradas. Empieza eligiendo una zona.", el foco está en ese texto y "Continuar" queda deshabilitado. A 375, lo mismo dentro de la hoja.
+
+**Compra independiente** (`noche-de-sintetizadores-lima`, en los 3 anchos):
+- [ ] Dado un solo "+" en General, sin abrir ninguna zona, entonces:
+  - el indicador sigue en el sub-paso 1;
+  - "Tu compra" muestra "1 × General … S/ 180.00" y "Total (1 entrada)";
+  - "Continuar" lleva a `/checkout?evento=noche-de-sintetizadores-lima&general=1`, que muestra 1 × General y S/ 180.00.
+- [ ] Dadas solo butacas de Tribuna Norte ("Elegir butacas", 2 butacas y "Continuar"), entonces el enlace es `…&norte=2&asientos=<id1>%2C<id2>`, como antes de la Fase 7.
+
+**Límite de 10 combinado** (`noche-de-sintetizadores-lima`):
+- [ ] Dados 4 "+" en VIP y 4 en General, y 2 butacas de Tribuna Norte (el contador pasa de "0 de 2" a "2 de 2 butacas"), entonces:
+  - una tercera butaca no se elige y aparece el aviso "Máximo 10 entradas por compra";
+  - tras "Agregar otra zona", los "+" de VIP, Preferencial y General tienen `aria-disabled="true"` y siguen siendo enfocables;
+  - el pie dice "Llegaste al máximo de 10 entradas por compra.";
+  - "Cambiar butacas de Tribuna Norte" sigue habilitado.
+- [ ] Dado "Quitar VIP de tu compra" en ese estado, entonces los "+" se habilitan y el pie vuelve a "Máximo 10 entradas por compra.".
+
+**Móvil** (`noche-de-sintetizadores-lima` a 375 px):
+- [ ] Dados el sub-paso 1 (con steppers y botón), el sub-paso 2 de Tribuna Norte con el pie "Agregar otra zona" y la hoja "Tu compra" abierta con 3 líneas y sus "Quitar", entonces no hay scroll horizontal (`document.documentElement.scrollWidth ≤ clientWidth`), cada control mide ≥ 44 × 44 px y ningún control de una tarjeta se sale de ella.
+
+**Entrada por zona (F6) con la Fase 7:**
+- [ ] Dado el enlace "VIP" del aside de `/eventos/noche-de-sintetizadores-lima` (`?zona=vip`), entonces:
+  - se abre "Paso 2 de 2 · Elige la cantidad" con el panel en 0 y sin "Agregar otra zona";
+  - tras un "+", aparece el pie con "Agregar otra zona";
+  - al pulsarlo, vuelve el sub-paso 1 con el foco en la tarjeta VIP y su stepper en 1;
+  - un "+" en General añade una segunda línea a "Tu compra".
+- [ ] Dadas `?zona=xx`, `?zona=VIP` o `?zona=mesa` (`risas-sin-filtro`), entonces se abre "Paso 1 de 2 · Elige tus zonas" (F6 sin cambios en lo demás).
+
+**`festival-vive-latino-lima`** (3 anchos):
+- [ ] Dado el sub-paso 1, entonces:
+  - Campo VIP, Campo General y Tribuna Norte (de pie) tienen stepper;
+  - Tribuna Occidente y Tribuna Oriente tienen "Elegir butacas";
+  - el mapa curvo no es interactivo (como en noche: clic en la forma de Tribuna Oriente sin efecto y ninguna parada de Tab en el mapa).
+- [ ] Dados 1 Campo VIP y 2 Campo General (steppers), 2 butacas de Oriente y "Agregar otra zona", y 1 butaca de Occidente y "Agregar otra zona", entonces:
+  - "Tu compra" tiene 4 líneas en el orden del mapa: Campo VIP S/ 330.00, Campo General S/ 430.00, Tribuna Occidente S/ 180.00 y Tribuna Oriente S/ 310.00;
+  - el total es "Total (6 entradas)" y "S/ 1,250.00";
+  - "Continuar" lleva a `/checkout?evento=festival-vive-latino-lima&campo-vip=1&campo-general=2&occidente=1&oriente=2&asientos=…` con las 3 butacas, y `/checkout` lo acepta con el mismo total.
+
+**`la-casa-de-los-espejos`** (solo numeradas; 3 anchos):
+- [ ] Dado el sub-paso 1, entonces:
+  - no hay ningún stepper;
+  - Platea y Mezanine tienen "Elegir butacas" (Mezanine con "Últimas entradas");
+  - se ve la ayuda "Puedes combinar varias zonas en una misma compra.";
+  - el mapa no es interactivo.
+- [ ] Dadas 2 butacas de Platea, "Agregar otra zona", "Elegir butacas de Mezanine" y 1 butaca, entonces:
+  - "Tu compra" muestra "2 × Platea … S/ 360.00" y "1 × Mezanine … S/ 120.00", con el total "S/ 480.00";
+  - "Continuar" lleva a `…&platea=2&mezanine=1&asientos=…`;
+  - "Quitar Platea de tu compra" deja solo Mezanine (S/ 120.00).
+
+**Zona agotada** (`risas-sin-filtro`):
+- [ ] Dada la tarjeta "Mesa", entonces muestra "Agotado", no tiene ningún control (Tab la salta y no recibe foco) y no se resalta. Su forma en el mapa es gris con "Agotado" y un clic sobre ella no hace nada.
+
+**Código y verificación:**
+- [ ] Dado el código, entonces:
+  - `VenueMapView.tsx` no contiene `role="button"`, `tabIndex`, `onClick`, `onKeyDown`, `onPointerEnter`, `onFocus` ni `cursor-pointer`;
+  - `ZoneCards.tsx` no envuelve la tarjeta en un `<button>`;
+  - `ZoneCards`, `ZoneQuantityPanel` y `BestSeatsPicker` usan `QuantityStepper`, y el marcado del stepper (los dos `Button` y el valor) solo está en `QuantityStepper.tsx`;
+  - no hay hex ni colores por defecto de Tailwind;
+  - `git diff` de la fase solo toca los 12 archivos del plan.
+- [ ] Dado `design-system/ticketera/pages/ticket-selection.md`, entonces documenta lo del requisito 47 y no quedan referencias a zonas del mapa como botón, a abrir una zona desde el mapa ni al resaltado desde el mapa.
+- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan, y `/eventos/[slug]/entradas` sigue SSG (●).
+
 ## Diseño técnico
 
 ### Rutas (`app/`)
 Sin cambios en F1–F5. La página genera los slugs con `hasVenueMap`. La Fase 1 de `design-alignment-purchase-flow.md` la mueve de `app/(site)/eventos/[slug]/entradas/page.tsx` a `app/(purchase)/eventos/[slug]/entradas/page.tsx` (misma URL) y la envuelve en `PurchaseShell`. `app/(site)/eventos/[slug]/page.tsx` (detalle) no cambia en ninguna fase.
 
 F6: `app/(purchase)/eventos/[slug]/entradas/page.tsx` envuelve `PreselectedTicketSelection` en `Suspense` (requisito 36). Sigue prerenderizada (SSG) y no lee `searchParams`. URL de entrada nueva, sin ruta nueva: `/eventos/<slug>/entradas?zona=<zoneId>`.
+
+F7: sin cambios en `app/` ni en las URLs (ni `?zona=` ni la precarga ni el contrato C).
 
 ### Componentes
 - **shadcn instalados** (no hay nada que instalar):
@@ -1428,6 +1535,17 @@ F6: `app/(purchase)/eventos/[slug]/entradas/page.tsx` envuelve `PreselectedTicke
   - `SeatPlanMinimap.tsx` (F5): props `viewBox`, `stage`, `zones` (solo `id`/`path`), `activeZoneId`, `planTransform`, `planWidth`, `planHeight` y `planRef` (el `<svg>` del plano, para el `insetBottom`; enmienda F5).
   - `PreselectedTicketSelection.tsx` (F6; `"use client"`). Va separado de `TicketSelection` porque `useSearchParams` obliga a un `Suspense` cuyo `fallback` es el propio `TicketSelection`, que por eso no puede leer la URL.
 - **Se elimina** `ZoneList.tsx` (F3).
+- **Fase 7** (`modules/seating/components/`):
+  - **shadcn (instalado):** `button` (`variant="outline"` para "Elegir/Cambiar butacas" y "Agregar otra zona"; `ghost` para "Quitar"). No hay nada que instalar.
+  - **Buscado en shadcn y descartado:** no tiene un componente de stepper ni un input numérico con −/+. `npx shadcn@latest search @shadcn -q stepper`, `-q number` y `-q quantity` no encuentran nada; existen `input`, `input-group`, `input-otp` y `button-group`. `button-group` no aporta: el stepper ya es una pastilla con dos `Button` y el valor, y un `ButtonGroup` cambiaría su aspecto y su marcado probado.
+  - **Nuevo:** `QuantityStepper.tsx` (requisito 41). No existe en `components/ui` ni en `components/shared`. Su equivalente de `modules/events/components/TicketSelector.tsx` es interno de otro módulo (decisión 40).
+  - **Existentes que se modifican:**
+    - `VenueMapView.tsx`: ilustración (requisito 40);
+    - `ZoneCards.tsx`: control en línea (requisito 42);
+    - `ZoneQuantityPanel.tsx` y `BestSeatsPicker.tsx`: usan `QuantityStepper` (requisito 41);
+    - `PurchaseSummary.tsx` y `MobilePurchaseBar.tsx`: "Quitar" (requisito 45);
+    - `TicketSelection.tsx`: indicador, props, pie "Agregar otra zona" y `onRemoveLine` (requisito 43).
+  - **No se tocan:** `SeatPlan.tsx`, `ZoneStepHeader.tsx`, `PreselectedTicketSelection.tsx`, `ZonePricesCard.tsx`, `SeatLegend.tsx`, `SelectedSeatChips.tsx`, `SeatPlanMinimap.tsx` ni `index.ts`. `QuantityStepper` no se exporta.
 - **No se tocan:** `EventPurchaseStrip`, `SelectedSeatChips`, `SeatGridPreview` (hereda la forma de F4), `ZonePricesCard` en F1–F5 (hereda los tonos de F2; cambia en F6), `MobileBuyBar` ni `components/shared/PurchaseShell.tsx` (sustituye a `PurchaseStepper`, que ya no existe; es de `design-alignment-purchase-flow.md`).
 
 ### Schemas, tipos, utils, hooks, datos y service (`modules/seating`)
@@ -1460,6 +1578,7 @@ Hook `hooks/useSeatSelection.ts`:
 - F3: `selectZone` ignora las zonas agotadas o inexistentes, y se añade `closeZone(): void`.
 - F4: `pickBestSeats(zoneId: string, count: number): string[] | null` (requisito 26).
 - F6: segundo parámetro opcional `initial?: { selection?: SeatSelection; zoneId?: string | null }` (requisito 33).
+- F7: `changeQuantity` ya no activa la zona y se añade `clearZone(zoneId: string): void` (requisito 44).
 - El resto de la firma no cambia.
 
 Utils (F6): `utils/selectionSummary.ts` añade `parseSeatingPreselection(map: VenueMap, params: Pick<URLSearchParams, "getAll">): SeatSelection` (requisito 32). Reutiliza `parseSeatId`, `resolveSeats` y `MAX_TICKETS_PER_ORDER` (de `@/modules/events/purchase`, la entrada de la que el archivo ya importa `buildCheckoutHref`).
@@ -1536,6 +1655,30 @@ No hay API: son datos mock.
   // modules/seating/components/ZonePricesCard.tsx (props sin cambios)
   type ZonePricesCardProps = { slug: string; status: EventStatus; priceFrom: number; zones: VenueZone[] };
   ```
+- **Compra combinada (F7):** sin cambios en URLs ni en el contrato C. Interfaces que cambian:
+  ```ts
+  // modules/seating/hooks/useSeatSelection.ts
+  changeQuantity(zoneId: string, delta: 1 | -1): void; // ya no cambia activeZoneId
+  clearZone(zoneId: string): void;                    // nuevo: quita cantidad y butacas de la zona
+  // modules/seating/components/QuantityStepper.tsx (nuevo)
+  type QuantityStepperProps = Omit<ComponentProps<"div">, "children" | "role"> & {
+    value: number; decrementLabel: string; incrementLabel: string;
+    canDecrement: boolean; canIncrement: boolean; onDecrement: () => void; onIncrement: () => void;
+  };
+  // modules/seating/components/VenueMapView.tsx (sin onOpenZone ni onHighlightZone)
+  type VenueMapViewProps = Pick<VenueMap, "viewBox" | "stage" | "venue"> & {
+    zones: VenueZone[]; tones: Record<string, ZoneTone>; highlightedZoneId: string | null; selectedCountByZone: Record<string, number>;
+  };
+  // modules/seating/components/ZoneCards.tsx
+  type ZoneCardsProps = {
+    zones: VenueZone[]; tones: Record<string, ZoneTone>; highlightedZoneId: string | null; selectedCountByZone: Record<string, number>;
+    atLimit: boolean; onChangeQuantity: (zoneId: string, delta: 1 | -1) => void;
+    onOpenZone: (zoneId: string) => void; onHighlightZone: (zoneId: string | null) => void;
+  };
+  // modules/seating/components/PurchaseSummary.tsx y MobilePurchaseBar.tsx
+  type PurchaseSummaryContentProps = { lines: SelectionLine[]; ticketCount: number; total: number; checkoutHref: string | null; onRemoveLine: (zoneId: string) => void };
+  type MobilePurchaseBarProps = PurchaseSummaryContentProps & { className?: string };
+  ```
 
 ## Reutilización
 - `seating`:
@@ -1562,6 +1705,18 @@ No hay API: son datos mock.
   - ya usados: `Maximize`, `Sparkles`, `Minus`, `Plus`, `X` y `ArrowRight`;
   - `ZoomIn`/`ZoomOut` se sustituyen por `Plus`/`Minus`, como en la captura.
 - F6: `parseSeatId`, `resolveSeats` y `buildSeatingCheckoutHref` (para el test de ida y vuelta), `MAX_TICKETS_PER_ORDER`, `useSearchParams` + `Suspense` (documentación de Next 16). Es el mismo patrón que `PreselectedTicketSelector` de `modules/events` (ya implementado por la Fase 7 de `checkout-mock-payment.md`). Sin dependencias nuevas.
+- F7:
+  - el stepper de `ZoneQuantityPanel`/`BestSeatsPicker`, que se extrae a `QuantityStepper` (tercera repetición, decisión 40);
+  - `formatSelectedCount` (tarjeta numerada);
+  - el trazo de resaltado y la insignia de `VenueMapView`;
+  - `handleOpenZone`/`handleBack`, la transición y el foco de `TicketSelection`;
+  - `parseSeatId` (en `clearZone`);
+  - el patrón de foco de `SelectedSeatChips` (para "Quitar");
+  - `flushSync`;
+  - `Button` de shadcn;
+  - iconos `Plus`, `ChevronRight` y `Trash2` (nuevo) de `lucide-react`;
+  - container queries de Tailwind v4 (`@container`, `@xl:`), ya usadas en `SeatPlan` (F5).
+  - Sin dependencias nuevas.
 - F6 (entrada por zona): `ZonePricesCard` (se amplía), `Link` de `next/link`, `ChevronRight` (ya usado en `ZoneCards`), las clases de hover y foco de `ZoneCards` (`hover:bg-accent/40`, `ring-3 ring-ring/50`), `selectZone`/`closeZone` y el sub-paso 2 existentes (no hay pantalla nueva: solo cambia el estado inicial). shadcn `item` existe pero no se instala (requisito 38).
 
 ## Tests
@@ -1700,6 +1855,61 @@ No hay API: son datos mock.
     - la agotada: sin enlace, con "Agotado";
     - el botón "Ver mapa de zonas" con `href` `/eventos/<slug>/entradas`; ningún enlace se llama exactamente "Elegir entradas";
     - con `status="sold-out"`: ningún enlace de zona, sin "Ver mapa de zonas" y con "Entradas agotadas".
+- **F7:**
+  - `modules/seating/hooks/useSeatSelection.test.ts` (se adapta y se amplía):
+    - "changeQuantity activa la zona, sube y baja sin pasar de 0" pasa a "changeQuantity no cambia la zona activa…": con `activeZoneId` `null` sigue `null`, y con "norte" abierta sigue "norte". El resto del caso no cambia;
+    - en "limita a 10 entradas…", `activeZoneId` pasa de "vip" a `null`;
+    - `clearZone`:
+      - de una zona de pie con cantidad: borra su clave y actualizan `lines`, `ticketCount`, `total` y `checkoutHref`;
+      - de una numerada: quita solo sus butacas y conserva las de otra zona, en orden;
+      - de la última zona con entradas: `checkoutHref` `null`;
+      - limpia el aviso cuando cambia algo;
+      - una zona sin entradas o inexistente no cambia el estado (`result.current.quantities`/`seatIds` con la misma referencia y el aviso se conserva);
+      - no cambia `activeZoneId`.
+  - `modules/seating/components/TicketSelection.test.tsx` (se reescriben los casos del sub-paso 1, del resaltado, de la zona de pie, de la agotada y los de F6 que usan el mapa o las tarjetas como botón; los casos del plano se conservan):
+    - **Ayudantes:**
+      - `mapImage()` = `queryByRole("img", { name: "Mapa de zonas de Recinto de prueba" })`;
+      - `mapShape(id)` = su `path[data-zone-id="<id>"]`;
+      - `zoneCard(name)` = `within(list "Zonas").getByRole("group", { name })`;
+      - `stepper(name)` = el grupo "Cantidad de <zona>";
+      - `openNorte()` pulsa "Elegir butacas de Tribuna Norte" (o "Cambiar butacas…");
+      - `removeLine(name)` = el botón "Quitar <zona> de tu compra" del aside.
+    - **Sub-paso 1:**
+      - indicador "Paso 1 de 2 · Elige tus zonas";
+      - la ayuda "Puedes combinar varias zonas…" (y que no aparece con una sola zona comprable, con un mapa fixture);
+      - el mapa es `role="img"` y ningún descendiente tiene `role`, `tabindex` ni `aria-label`;
+      - las formas no tienen `cursor-pointer`;
+      - VIP y General tienen el stepper en 0, Norte "Elegir butacas de Tribuna Norte" y Mesa "Agotado" sin botones dentro de su tarjeta;
+      - no hay ningún `button` cuyo nombre empiece por el nombre de una zona seguido de ",".
+    - **Mapa sin efecto:** `click`, `keyDown` (Enter y Espacio) y `pointerEnter` sobre `mapShape("vip")` no cambian el indicador, no añaden el trazo y no ponen `data-highlighted` en ninguna tarjeta.
+    - **Resaltado desde la tarjeta:**
+      - `pointerEnter`/`pointerLeave` en la tarjeta General;
+      - `focus` en su "+": trazo y `opacity-40` en las demás;
+      - pasar el foco de "−" a "+" (`blur` con `relatedTarget` dentro de la tarjeta) lo mantiene, y el `blur` hacia fuera lo quita;
+      - Mesa no se resalta.
+    - **Stepper en línea:**
+      - "+" ×2 en VIP: valor 2, el indicador sigue en el sub-paso 1, insignia "2" en la etiqueta del mapa, "2 × VIP" en el resumen y `href` `…&vip=2`;
+      - "−" lo baja a 1;
+      - combinado con 3 en General y 2 butacas de Norte (`norte-A-1` y `norte-B-1`): 3 líneas en el orden del mapa y `href` `/checkout?evento=evento-prueba&vip=2&general=3&norte=2&asientos=norte-A-1%2Cnorte-B-1`.
+    - **Límite:**
+      - 10 entre VIP y General: todos los "+" con `aria-disabled="true"`, y el `status` dice "Llegaste al máximo de 10 entradas por compra.";
+      - "Elegir butacas de Tribuna Norte" sigue habilitado y abre "0 de 0 butacas".
+    - **Numerada:**
+      - el botón abre el plano, con el foco en el h3, el indicador y el contador;
+      - sin butacas no hay "Agregar otra zona";
+      - tras elegir una butaca aparece; al pulsarlo vuelve el sub-paso 1 y el foco está en `zoneCard("Tribuna Norte")`, con `data-highlighted="true"`, "1 butaca elegida" y el botón "Cambiar butacas de Tribuna Norte".
+    - **"Quitar" en "Tu compra":**
+      - quitar VIP deja su stepper en 0, borra su línea y lleva el foco al "Quitar" de la línea siguiente;
+      - quitar la última lleva el foco al texto vacío;
+      - quitar Tribuna Norte con su plano abierto desmarca sus butacas y el contador pasa a "0 de …";
+      - en la hoja móvil ("Ver resumen de la compra") también están los "Quitar".
+    - **Agotada:** la tarjeta Mesa no tiene controles y su forma no reacciona.
+    - **F6 adaptados:**
+      - con `initialSelection`, el stepper de VIP en 2 y la tarjeta Norte con "2 butacas elegidas";
+      - con `initialZoneId="vip"`: panel en 0 y sin "Agregar otra zona"; "+" lo muestra; al pulsarlo, vuelve al sub-paso 1 con el foco en `zoneCard("VIP")` y su stepper en 1;
+      - `PreselectedTicketSelection` con `zona=mesa`/`zona=xx`: `mapImage()` y la lista presentes.
+    - **Se conservan sin cambios:** los casos de `ZoneQuantityPanel` (con `initialZoneId`) y de `BestSeatsPicker` ("Quitar/Agregar una butaca", límites y deshabilitados), que prueban que la extracción a `QuantityStepper` no cambia el comportamiento.
+  - **Sin tests propios:** `QuantityStepper`, `VenueMapView`, `ZoneCards`, `PurchaseSummary` y `MobilePurchaseBar` son componentes del módulo (no de `components/shared/`) y se cubren con `TicketSelection.test.tsx`, como en F3–F6. La navegación real, el checkout, los 3 anchos y la ausencia de scroll horizontal se cubren con el Playwright del reviewer (criterios de F7).
 - **Sin tests propios:**
   - `VenueMapView`, `ZoneCards`, `ZoneStepHeader`, `ZoneQuantityPanel`, `SeatLegend`, `SeatTooltip`, `BestSeatsPicker`, `SeatPlanMinimap`, `PurchaseSummary` y `MobilePurchaseBar`: son de `modules/seating/components/` (no de `components/shared/`) y se cubren con `TicketSelection.test` donde tienen comportamiento;
   - el nivel de detalle y el zoom animado dependen del layout y no se prueban en jsdom (la librería está mockeada): se cubren la función pura (`getSeatDetailLevel`) y las capturas a 375 y 1440 del reviewer;
@@ -1844,6 +2054,40 @@ No hay API: son datos mock.
   - Depende de: T4.
   - Secuencial (archivo compartido `index.ts`); puede coincidir con T3 (archivos disjuntos). El reviewer verifica en `npm run build` que las 4 rutas siguen prerenderizadas (●).
 
+### Fase 7. Compra combinada y mapa no interactivo (5 tareas, 12 archivos)
+**Coordinación:**
+- **Depende de la Fase 6** (cerrada). No va en la misma sesión que otra fase que toque `modules/seating/components/**`, `useSeatSelection.ts` o `design-system/ticketera/pages/ticket-selection.md`.
+- **`seating-all-venue-maps.md` (Fase 1b en curso):**
+  - toca `modules/seating/services/*`, `modules/events/services/*` y `lib/db/**`, sin solape de archivos con esta fase;
+  - el único archivo compartido es `ticket-selection.md`, que allí editan las tareas de cierre (F1 T4, F2 T5 y F4 T3). La T5 de esta fase no coincide en la misma sesión con ninguna de ellas;
+  - sus criterios de Playwright que usan `svg[role="group"]` o el Tab en el mapa se leen como indica la decisión 41 (`svg[role="img"]`, mismo `aria-label`). `elementFromPoint` sobre las formas sigue funcionando.
+- **Mapas rectangulares en la máquina del usuario:** si su BD local no tiene la geometría curva, verá los mapas rectangulares de antes ("los cuadrados azules"). Lo arregla resembrar según la Fase 1b de `seating-all-venue-maps.md`, no esta fase, que es igual con cualquier geometría. El Playwright del reviewer usa la BD de desarrollo sembrada (mapas curvos).
+- **Sin archivos compartidos globales:** ninguna tarea toca `package.json`, `app/`, `lib/`, `components/ui/`, `components/shared/` ni `modules/seating/index.ts`.
+- **Paralelismo:** T1, T2 y T4 en paralelo (archivos disjuntos); T3 tras T2 (usa `QuantityStepper`) y en paralelo con T1 y T4; T5 al final, secuencial.
+  - Mientras no termine T5, `TicketSelection.tsx` no compila con las props nuevas de T3 y T4 y `TicketSelection.test.tsx` falla: es lo esperado. Los developers de T1–T4 verifican solo con `npx vitest run <sus tests>` (T1) y `npx eslint <sus archivos>`.
+  - T5 y el reviewer ejecutan `npx vitest run`, `npm run lint` y `npm run build`, y el reviewer, el Playwright de F7 a 375, 768 y 1440 contra `npm run start`.
+
+- [ ] T1. Hook: `changeQuantity` sin activar la zona y `clearZone`, con tests (requisito 44, decisiones 36 y 37).
+  - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
+  - Depende de: Fase 6.
+  - En paralelo con T2 y T4. Verificar `npx vitest run modules/seating/hooks`.
+- [ ] T2. `QuantityStepper` y su uso en `ZoneQuantityPanel` y `BestSeatsPicker`, sin cambios visibles (requisito 41, decisión 40).
+  - Archivos: `modules/seating/components/QuantityStepper.tsx` (nuevo), `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/BestSeatsPicker.tsx`.
+  - Depende de: Fase 6.
+  - En paralelo con T1 y T4. Es la base de T3.
+- [ ] T3. Mapa como ilustración y tarjetas con el control en línea (requisitos 40 y 42, decisiones 34 y 38).
+  - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
+  - Depende de: T2.
+  - En paralelo con T1 y T4.
+- [ ] T4. "Quitar" por línea en "Tu compra" y en la hoja móvil, con el foco (requisito 45, decisión 36).
+  - Archivos: `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
+  - Depende de: Fase 6.
+  - En paralelo con T1, T2 y T3.
+- [ ] T5. `TicketSelection` (indicador, props nuevas, pie "Agregar otra zona" y `onRemoveLine`), test reescrito y página de diseño (requisitos 43, 46 y 47).
+  - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T1, T2, T3 y T4.
+  - Secuencial. Verificar `npx vitest run`, `npm run lint` y `npm run build`.
+
 ## Preguntas abiertas
 1. **Tribuna Norte de pie** (decisión 4). La captura no deja ver su tarjeta. Se decidió "General · sin butaca" por la convención de tribuna popular y porque un plano del arco exterior no cumple los tamaños mínimos de butaca. ¿Se acepta, o debe ser numerada aunque haga falta otro tipo de plano (por tramos, o empezando con zoom)? **Dato nuevo:** la captura del resumen de checkout que compartió el usuario muestra "5 × Tribuna Norte" con "Fila B · 13 · Fila C · 6 · Fila D · 6 · Fila E · 18 · Fila J · 13". Es decir, Norte numerada, con filas hasta la J y al menos 18 butacas por fila. Eso apunta a la segunda opción y choca con el límite de ≤ 10 butacas por fila.
 2. **Filas A–J en lugar de A–M** (decisión 6). Con 13 filas, el plano de las tribunas laterales supera 400 de ancho y las butacas bajan de 24 px a 375 px. Consecuencia: el ejemplo "L-9 / M-8 de Tribuna Oriente" de `checkout-mock-payment.md` no existe. ¿Se acepta A–J, o se prefiere relajar la invariante (butacas < 24 px con el plano entero, y se elige con zoom)?
@@ -1866,3 +2110,5 @@ No hay API: son datos mock.
 19. **Referencias sin verificar en vivo:** el proxy bloqueó Ticketmaster, SeatGeek, Seats.io, Joinnus y Teleticket, así que los patrones salen del conocimiento de esos productos (ver "Investigación y diagnóstico"). Si tienes capturas del paso de butacas de Joinnus o Ticketmaster que quieras imitar en algo concreto (p. ej. la bandeja de selección o el tooltip), compártelas.
 20. **Luces del escenario:** en las capturas son amarillas. Se usan en cian Mentec (`highlight`), porque el amarillo cercano (`warning`) significa "Últimas entradas". ¿Se acepta?
 21. **Letras de fila por debajo de 12 px en móvil** (decisión 30). A 13 unidades, con el plano entero a la vista a 375 px, la letra mide ~10 px, por debajo del mínimo de MASTER §3 ("nada por debajo de 12px"). Se acepta como excepción por ser decorativa (`aria-hidden`; la fila está en el `aria-label` y en el tooltip). ¿Se acepta, o se prefiere un tamaño mayor solo por debajo de `sm` (p. ej. 16 unidades ≈ 12.5 px), a costa de que en móvil la letra compita algo más con la butaca?
+22. **`?zona=` de una zona de pie (F7, decisión 39).** Desde el aside del detalle, "VIP" sigue abriendo el panel de cantidad de VIP (vista específica, pedido 5), ahora con "Agregar otra zona" para combinar. La alternativa es abrir el sub-paso 1 con la tarjeta de VIP resaltada: un solo lugar para elegir cantidades, pero en móvil la tarjeta queda debajo del mapa y habría que desplazar la página hasta ella. ¿Se mantiene el panel?
+23. **"Paso 1 de 2" sin zonas numeradas comprables (F7).** En mapas donde todas las zonas comprables son de pie (p. ej. `risas-sin-filtro`, con Mesa agotada), la compra termina en el sub-paso 1 y el "Paso 2 de 2" solo existe con `?zona=`. ¿Se deja "Paso 1 de 2 · Elige tus zonas" en todos los mapas (decidido, por coherencia), o en esos mapas se muestra solo "Elige tus zonas"?
