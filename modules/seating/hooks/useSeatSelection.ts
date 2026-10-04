@@ -13,7 +13,13 @@ import {
 
 type SelectionState = { selection: SeatSelection; notice: string | null };
 
-const INITIAL_STATE: SelectionState = { selection: { quantities: {}, seatIds: [] }, notice: null };
+/**
+ * Estado con el que abre la pantalla. Ya validado: la selección viene de `parseSeatingPreselection`
+ * y la zona de `parseInitialZoneId`, así que el hook no los revalida.
+ */
+type InitialSeatSelection = { selection?: SeatSelection; zoneId?: string | null };
+
+const EMPTY_SELECTION: SeatSelection = { quantities: {}, seatIds: [] };
 const LIMIT_NOTICE = `Máximo ${MAX_TICKETS_PER_ORDER} entradas por compra`;
 
 function isAtLimit(selection: SeatSelection): boolean {
@@ -43,10 +49,16 @@ function getNoBlockNotice(count: number): string {
     : `No hay ${count} asientos juntos disponibles en esta zona.`;
 }
 
-/** Estado de la selección de entradas sobre el mapa: zona activa, cantidades de pie, asientos y aviso. */
-export function useSeatSelection(map: VenueMap) {
-  const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
-  const [{ selection, notice }, setState] = useState<SelectionState>(INITIAL_STATE);
+/**
+ * Estado de la selección de entradas sobre el mapa: zona activa, cantidades de pie, asientos y aviso.
+ * Sin `initial`, empieza sin zona abierta ni entradas.
+ */
+export function useSeatSelection(map: VenueMap, initial?: InitialSeatSelection) {
+  const [activeZoneId, setActiveZoneId] = useState<string | null>(() => initial?.zoneId ?? null);
+  const [{ selection, notice }, setState] = useState<SelectionState>(() => ({
+    selection: initial?.selection ?? EMPTY_SELECTION,
+    notice: null,
+  }));
 
   const ticketCount = getSelectionTicketCount(selection);
   const atLimit = ticketCount >= MAX_TICKETS_PER_ORDER;
