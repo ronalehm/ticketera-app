@@ -78,7 +78,8 @@ export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdmin
 
     /** Un lugar se puede reescribir o retirar: no está retenido y no es de un pedido real. */
     const demoOrderIds = data.events.map((event) => seedUuid(`order:${event.slug}`));
-    const withoutRealSale = sql`(${eventSeats.status} <> 'held' AND (${eventSeats.orderId} IS NULL OR ${eventSeats.orderId} = ANY(${uuidArray(demoOrderIds)})))`;
+    const withoutRealSale = sql`(${eventSeats.status} <> 'held'
+      AND (${eventSeats.orderId} IS NULL OR ${eventSeats.orderId} = ANY(${uuidArray(demoOrderIds)})))`;
 
     /** INSERT … ON CONFLICT por lotes; devuelve las filas escritas (insertadas o actualizadas). */
     async function upsertAll<T extends PgTable>(

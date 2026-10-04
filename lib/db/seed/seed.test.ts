@@ -265,7 +265,8 @@ async function fingerprint(tx: Tx, seedEmails: string[]) {
   for (const name of SEED_TABLE_NAMES) {
     const where: SQL = name === "users" ? sql`WHERE t.email = ANY(${sql.param(seedEmails)}::text[])` : sql``;
     const { rows } = await tx.execute<{ digest: string | null }>(
-      sql`SELECT md5(string_agg(t::text || '@' || t.xmin::text, ',' ORDER BY t::text)) AS digest FROM ${SEED_TABLES[name]} t ${where}`,
+      sql`SELECT md5(string_agg(t::text || '@' || t.xmin::text, ',' ORDER BY t::text)) AS digest
+          FROM ${SEED_TABLES[name]} t ${where}`,
     );
     digests[name] = rows[0].digest;
   }
@@ -329,9 +330,10 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
         const byType = (id: string) => retired.filter((seat) => seat.ticketTypeId === id);
         expect(retired).toHaveLength(400);
         expect(byType(ticketTypeId(COPA, "occidente"))).toHaveLength(200);
-        expect(new Set(byType(ticketTypeId(ECOS, "platea")).map(({ venueSeatId, status, orderCode }) => ({ venueSeatId, status, orderCode })))).toEqual(
-          new Set([{ venueSeatId: null, status: "sold", orderCode: "TK-DEMO-002" }]),
-        );
+        const ecosRetired = byType(ticketTypeId(ECOS, "platea"));
+        expect(ecosRetired).toHaveLength(200);
+        // Conservan su estado de venta demo.
+        expect(ecosRetired.filter((seat) => seat.status !== "sold" || seat.orderCode !== "TK-DEMO-002")).toEqual([]);
         expect(retired.filter((seat) => seat.venueSeatId !== null)).toEqual([]);
       });
     },
