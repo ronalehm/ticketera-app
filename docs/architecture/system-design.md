@@ -40,7 +40,7 @@ El objetivo es una ticketera con:
 | Backend | Monolito Next.js 16 (App Router). Server Components y Server Actions para todo lo interno; Route Handlers solo para webhooks y jobs. Código de negocio en `modules/<dominio>/` (ver `docs/SETUP.md`). |
 | Base de datos | PostgreSQL. Local: Neon. Producción: Cloud SQL (GCP). |
 | ORM | Drizzle con **un solo driver: `pg`** (node-postgres) en ambos entornos. |
-| Auth | Clerk (correo/contraseña y Google). La BD es la fuente de verdad del rol y de los datos peruanos del usuario; el rol se replica en `publicMetadata`. |
+| Auth | Clerk con componentes `<SignIn/>`/`<SignUp/>` (tema Mentec): correo + contraseña y **Google (OAuth 2.0 / OpenID Connect, conexión social de Clerk)**. La BD es la fuente de verdad del rol y de los datos peruanos del usuario; el rol se replica en `publicMetadata`. Spec: `docs/specs/auth-clerk.md`. |
 | Pagos | Solo tarjeta, Stripe (PaymentIntent). La plataforma cobra el 100%. |
 | Reparto | Comisión y neto congelados en cada orden. Liquidación al organizador con **Stripe Global Payouts** (PEN, cuenta bancaria peruana, RUC/DNI) después del evento. **Stripe Connect no se usa**: desde una plataforma en EE. UU. no paga a Perú. |
 | Organizadores | Solo en Perú. Tabla `organizers` 1:1 con `users`. |
@@ -70,6 +70,7 @@ flowchart LR
   B[Navegador] -->|HTML / Server Actions| N[Next.js 16 en Cloud Run]
   B -->|iframes de pago| SJ[Stripe.js]
   B -->|login| CK[Clerk]
+  CK -->|OAuth 2.0 / OIDC| GO[Google]
   N -->|pg| DB[(PostgreSQL<br/>Neon / Cloud SQL)]
   N --> ST[Stripe API]
   N --> CKA[Clerk Backend API]
@@ -126,7 +127,7 @@ Solo se crean los módulos cuando su fase los necesita (SETUP §1 regla 6).
 | App | `npm run dev` en `http://localhost:3000` | `https://mentec-tickets.dev` → Load Balancer + Cloud Armor → Cloud Run, `southamerica-west1`, imagen `output: "standalone"` |
 | BD | Neon, rama `dev`, conexión TCP con `pg` | Cloud SQL Postgres, misma región, socket `/cloudsql/<instancia>` (`--add-cloudsql-instances`, sin librería de conector) |
 | BD de tests | Neon, rama `test` (`DATABASE_URL_TEST`) | — |
-| Auth | Instancia de desarrollo de Clerk | Instancia de producción de Clerk |
+| Auth | Instancia de desarrollo de Clerk; Google con las credenciales compartidas de Clerk (sin configurar nada en Google Cloud) | Instancia de producción de Clerk; Google con **cliente OAuth propio** (Google Cloud Console: pantalla de consentimiento + Client ID/Secret, URI de redirección que indica Clerk) cargado en el dashboard de Clerk |
 | Stripe | Claves `sk_test_`/`pk_test_`; webhooks con `stripe listen --forward-to localhost:3000/api/webhooks/stripe` | Claves `sk_live_`/`pk_live_`; endpoint de webhook registrado en el Dashboard |
 | Correo | Resend con clave de prueba; solo a tu correo o `delivered@resend.dev` | Resend con dominio propio verificado (SPF/DKIM) |
 | Imágenes | Bucket de desarrollo | Bucket de producción |
@@ -143,7 +144,7 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `DATABASE_URL` | Conexión de la app (usuario `app`, solo DML). |
 | `DATABASE_URL_MIGRATOR` | Solo el job de migraciones (usuario `migrator`, DDL). |
 | `DATABASE_URL_TEST` | Solo tests de integración (local). |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET` | Clerk. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (`/login`), `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (`/registro`) | Clerk. Las credenciales de Google OAuth no van aquí: se configuran en el dashboard de Clerk. |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe. En local solo se aceptan claves de test; en producción, live. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Correo. |
 | `CRON_SECRET` | Autenticación de `/api/jobs/*`. |
@@ -202,7 +203,9 @@ Todos idempotentes y con `Authorization: Bearer <CRON_SECRET>`.
 ## 5. Integraciones
 
 ### Clerk
-- Login con correo/contraseña y Google. `LoginForm`/`RegisterForm` se recablean con `useSignIn`/`useSignUp`; celular y documento se guardan en `users` (Clerk no los guarda).
+- **Métodos de acceso:** correo + contraseña y **Google**. `/login` y `/registro` usan los componentes `<SignIn/>` y `<SignUp/>` de Clerk (rutas catch-all, español con `@clerk/localizations`, tema `shadcn` de `@clerk/ui` con los tokens Mentec); el botón "Continuar con Google" lo dibuja Clerk cuando la conexión social está activa. Se elimina el Google simulado (`GoogleSignIn`, `GoogleAccountChooser`).
+- **Google:** flujo OAuth 2.0 / OpenID Connect gestionado íntegramente por Clerk. Google entrega nombre, apellido y un correo **ya verificado**, por lo que `ensureUser()` puede vincular la fila del seed (super_admin) en el primer acceso con Google. La app **no guarda** tokens de Google ni contraseñas: solo `clerk_id` y los datos de perfil. El Client ID/Secret de producción viven en el dashboard de Clerk, no en `.env`.
+- **Datos peruanos:** Clerk no guarda celular ni documento; los pide "Completa tu perfil" (`/perfil/completar`) y se guardan en `users`, junto con los consentimientos en `consents`.
 - `ensureUser()` hace upsert por `clerk_id` en el primer acceso autenticado (no hace falta túnel en local). Si no existe fila con ese `clerk_id` pero sí una con el mismo correo y `clerk_id NULL` (usuario creado por seed), la vincula **solo si Clerk marca el correo como verificado**; si no, cualquiera podría registrarse con ese correo y heredar el rol.
 - MFA obligatorio para `admin` y `super_admin`: `proxy.ts` niega el acceso a `/admin` si la sesión no tiene segundo factor; las Server Actions de admin lo vuelven a comprobar.
 - Producción: dominio de Clerk con los CNAME que indica Clerk bajo `mentec-tickets.dev`.

@@ -237,7 +237,7 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 
 ### Identidad
 
-**`users`**: usuarios autenticados con Clerk. Fuente de verdad del rol.
+**`users`**: usuarios autenticados con Clerk (correo + contraseña o Google). Fuente de verdad del rol. La identidad y el método de acceso viven en Clerk: aquí no se guardan contraseñas, tokens de Google ni el proveedor de acceso; `email` es el correo primario verificado que entrega Clerk (con Google, el de la cuenta de Google).
 
 | Columna | Tipo | Notas |
 |---|---|---|
