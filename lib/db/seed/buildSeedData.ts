@@ -10,6 +10,7 @@ import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { eventDetailSchema } from "@/modules/events/schemas/events.schema";
+import { getAvailabilityStatus, LOW_STOCK_RATIO } from "@/modules/events/utils/availability";
 import { normalizeText } from "@/modules/events/utils/eventFilters";
 import { ORGANIZER_DRAFTS_MOCK, ORGANIZER_SALES_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
 import { organizerEventSchema } from "@/modules/organizer/schemas/organizer.schema";
@@ -73,22 +74,39 @@ function venueGeometry(layout: VenueLayout) {
     stage: layout.stage,
     zones: layout.zones.map((zone) =>
       zone.kind === "general"
-        ? { id: zone.id, kind: zone.kind, path: zone.path, labelPos: zone.labelPos, capacity: zone.capacity }
+        ? {
+            id: zone.id,
+            kind: zone.kind,
+            path: zone.path,
+            labelPos: zone.labelPos,
+            wrapLabel: zone.wrapLabel,
+            capacity: zone.capacity,
+          }
         : {
             id: zone.id,
             kind: zone.kind,
             path: zone.path,
             labelPos: zone.labelPos,
+            wrapLabel: zone.wrapLabel,
             seatViewBox: zone.seatViewBox,
+            planTransform: zone.planTransform,
             rows: zone.rows.map((row) => row.seats.map(({ row: label, number, x, y }) => ({ label, number, x, y }))),
           },
     ),
   };
 }
 
-/** Lugares de una zona general según el estado del mock: libres todos, el 10 % o ninguno. */
-function generalSeatPlan(key: string, capacity: number, status: MockStatus): SeatPlan[] {
-  const free = { available: capacity, "low-stock": Math.ceil(capacity * LOW_STOCK_FREE_RATIO), "sold-out": 0 }[status];
+/**
+ * Lugares de una zona general según el estado del mock: libres todos, el 10 % o ninguno. Con `fillAvailable`,
+ * una zona `available` deja libre solo lo justo para seguir `available` (el 20 % + 1), para que el evento
+ * entero pueda quedar en `low-stock` (p. ej. `festival-vive-latino-lima`).
+ */
+function generalSeatPlan(key: string, capacity: number, status: MockStatus, fillAvailable: boolean): SeatPlan[] {
+  const free = {
+    available: fillAvailable ? Math.floor(capacity * LOW_STOCK_RATIO) + 1 : capacity,
+    "low-stock": Math.ceil(capacity * LOW_STOCK_FREE_RATIO),
+    "sold-out": 0,
+  }[status];
   return Array.from({ length: capacity }, (_, index) => ({
     venueSeatId: null,
     sold: index >= free,
@@ -179,7 +197,15 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
   }
 
   /** Sección y asientos de una zona del mapa; devuelve la sección y el plan de lugares del evento. */
-  function zoneSection(zone: Zone, zoneIndex: number, name: string, venueId: string, venueKey: string, status: MockStatus) {
+  function zoneSection(
+    zone: Zone,
+    zoneIndex: number,
+    name: string,
+    venueId: string,
+    venueKey: string,
+    status: MockStatus,
+    fillAvailable: boolean,
+  ) {
     const base = {
       venueId,
       slug: zone.id,
@@ -188,13 +214,23 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
       mapPath: zone.path,
       labelX: zone.labelPos.x,
       labelY: zone.labelPos.y,
+      wrapLabel: zone.wrapLabel ?? false,
     };
     if (zone.kind === "general") {
       const id = sectionId({ ...base, seating: "general", capacity: zone.capacity, seatViewBox: null }, venueKey);
-      return { id, seats: generalSeatPlan(id, zone.capacity, status) };
+      return { id, seats: generalSeatPlan(id, zone.capacity, status, fillAvailable) };
     }
     const isNew = !data.venueSections.some((section) => section.slug === zone.id && section.venueId === venueId);
-    const id = sectionId({ ...base, seating: "numbered", capacity: null, seatViewBox: zone.seatViewBox }, venueKey);
+    const id = sectionId(
+      {
+        ...base,
+        seating: "numbered",
+        capacity: null,
+        seatViewBox: zone.seatViewBox,
+        planTransform: zone.planTransform ?? null,
+      },
+      venueKey,
+    );
     const seats = zone.rows.flatMap((row) =>
       row.seats.map((seat) => {
         const venueSeatId = seedUuid(`venue-seat:${venueKey}:${seat.id}`);
@@ -249,26 +285,39 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     let subtotalCents = 0;
     const eventSeatRows: Insert<typeof eventSeats>[] = [];
 
-    event.ticketTypes.forEach((ticketType, ticketTypeIndex) => {
-      const zoneIndex = layout?.zones.findIndex((zone) => zone.ticketTypeId === ticketType.id) ?? -1;
-      const section =
-        layout && zoneIndex >= 0
-          ? zoneSection(layout.zones[zoneIndex], zoneIndex, ticketType.name, eventVenueId, venueKey, ticketType.status)
-          : (() => {
-              const id = sectionId(
-                {
-                  venueId: eventVenueId,
-                  slug: ticketType.id,
-                  name: ticketType.name,
-                  sortOrder: ticketTypeIndex,
-                  seating: "general",
-                  capacity: DEMO_GENERAL_CAPACITY,
-                },
-                venueKey,
-              );
-              return { id, seats: generalSeatPlan(id, DEMO_GENERAL_CAPACITY, ticketType.status) };
-            })();
+    /** Sección y plan de lugares de cada tipo de entrada (las secciones y asientos se registran una sola vez). */
+    const planTicketTypes = (fillAvailable: boolean) =>
+      event.ticketTypes.map((ticketType, ticketTypeIndex) => {
+        const zoneIndex = layout?.zones.findIndex((zone) => zone.ticketTypeId === ticketType.id) ?? -1;
+        if (layout && zoneIndex >= 0) {
+          const zone = layout.zones[zoneIndex];
+          return zoneSection(zone, zoneIndex, ticketType.name, eventVenueId, venueKey, ticketType.status, fillAvailable);
+        }
+        const id = sectionId(
+          {
+            venueId: eventVenueId,
+            slug: ticketType.id,
+            name: ticketType.name,
+            sortOrder: ticketTypeIndex,
+            seating: "general",
+            capacity: DEMO_GENERAL_CAPACITY,
+          },
+          venueKey,
+        );
+        return { id, seats: generalSeatPlan(id, DEMO_GENERAL_CAPACITY, ticketType.status, fillAvailable) };
+      });
+    const eventStatus = (plans: { seats: SeatPlan[] }[]) => {
+      const seats = plans.flatMap((plan) => plan.seats);
+      return getAvailabilityStatus(seats.filter((seat) => !seat.sold).length, seats.length);
+    };
+    let sections = planTicketTypes(false);
+    if (eventStatus(sections) !== event.status) sections = planTicketTypes(true);
+    if (eventStatus(sections) !== event.status) {
+      throw new Error(`No se puede reproducir el estado "${event.status}" del evento ${event.slug}`);
+    }
 
+    event.ticketTypes.forEach((ticketType, ticketTypeIndex) => {
+      const section = sections[ticketTypeIndex];
       const ticketTypeId = seedUuid(`ticket-type:${event.slug}:${ticketType.id}`);
       const priceCents = toCents(ticketType.price);
       data.ticketTypes.push({

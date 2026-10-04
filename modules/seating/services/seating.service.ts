@@ -38,6 +38,8 @@ async function loadLayout(slug: string): Promise<RawLayout | null> {
         labelX: venueSections.labelX,
         labelY: venueSections.labelY,
         seatViewBox: venueSections.seatViewBox,
+        wrapLabel: venueSections.wrapLabel,
+        planTransform: venueSections.planTransform,
       })
       .from(ticketTypes)
       .innerJoin(venueSections, eq(venueSections.id, ticketTypes.sectionId))

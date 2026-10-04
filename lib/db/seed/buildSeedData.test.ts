@@ -39,16 +39,16 @@ describe("buildSeedData", () => {
     expect(buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toEqual(data);
   });
 
-  it("siembra 6 categorías, 12 eventos publicados, 1 borrador y 318 asientos de recinto", () => {
+  it("siembra 6 categorías, 13 eventos publicados, 1 borrador y 456 asientos de recinto", () => {
     expect(data.categories).toHaveLength(6);
-    expect(data.events.filter((event) => event.status === "published")).toHaveLength(12);
+    expect(data.events.filter((event) => event.status === "published")).toHaveLength(13);
     expect(data.events.filter((event) => event.status === "draft").map((event) => event.slug)).toEqual([
       "feria-familiar-de-verano",
     ]);
     const layoutSeats = VENUE_LAYOUTS_MOCK.flatMap((layout) =>
       layout.zones.flatMap((zone) => (zone.kind === "numbered" ? zone.rows.flatMap((row) => row.seats) : [])),
     );
-    expect(data.venueSeats).toHaveLength(318);
+    expect(data.venueSeats).toHaveLength(456);
     expect(data.venueSeats).toHaveLength(layoutSeats.length);
   });
 
@@ -81,6 +81,25 @@ describe("buildSeedData", () => {
     expect(sections.slice(4).every((section) => !section.mapPath && section.capacity === DEMO_GENERAL_CAPACITY)).toBe(
       true,
     );
+  });
+
+  it("la Costa Verde guarda las luces del escenario, wrapLabel y planTransform del mapa curvo", () => {
+    const costaVerde = data.venues.find((venue) => venue.name === "Costa Verde");
+    const layout = VENUE_LAYOUTS_MOCK.find((candidate) => candidate.eventSlug === "festival-vive-latino-lima");
+    expect(costaVerde?.stage).toEqual(layout?.stage);
+    expect(costaVerde?.stage?.lights).toHaveLength(7);
+    const sections = data.venueSections.filter((section) => section.venueId === costaVerde?.id);
+    for (const zone of layout?.zones ?? []) {
+      const section = sections.find((candidate) => candidate.slug === zone.id);
+      expect(section?.wrapLabel, zone.id).toBe(zone.wrapLabel ?? false);
+      expect(section?.planTransform ?? null, zone.id).toEqual((zone.kind === "numbered" && zone.planTransform) || null);
+    }
+    expect(sections.filter((section) => section.planTransform).map((section) => section.slug)).toEqual([
+      "occidente",
+      "oriente",
+    ]);
+    const rectangular = data.venueSections.filter((section) => section.venueId !== costaVerde?.id);
+    expect(rectangular.every((section) => !section.wrapLabel && !section.planTransform)).toBe(true);
   });
 
   it("las secciones numeradas no tienen capacidad y las generales sí", () => {
@@ -199,6 +218,13 @@ describe("buildSeedData", () => {
     const times = EVENTS_MOCK.map((event) => eventBySlug(event.slug).createdAt?.getTime() ?? 0);
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(new Set(times).size).toBe(times.length);
+  });
+
+  it("lanza si no puede reproducir el estado del evento", () => {
+    const festival = EVENTS_MOCK.find((event) => event.slug === "festival-vive-latino-lima");
+    if (!festival) throw new Error("falta festival-vive-latino-lima");
+    festival.status = "sold-out";
+    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/sold-out.*festival-vive-latino-lima/);
   });
 
   it("lanza si una zona apunta a un tipo de entrada inexistente", () => {

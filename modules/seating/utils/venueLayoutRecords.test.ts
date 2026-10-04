@@ -16,6 +16,8 @@ const GENERAL_ZONE: ZoneRecord = {
   labelX: 300,
   labelY: 421,
   seatViewBox: null,
+  wrapLabel: false,
+  planTransform: null,
 };
 
 const NUMBERED_ZONE: ZoneRecord = {
@@ -27,6 +29,8 @@ const NUMBERED_ZONE: ZoneRecord = {
   labelX: 300,
   labelY: 195,
   seatViewBox: "0 0 400 200",
+  wrapLabel: false,
+  planTransform: null,
 };
 
 function seat(rowLabel: string, number: number, flags: Partial<SeatRecord> = {}): SeatRecord {
@@ -45,6 +49,8 @@ function toRecords(layout: z.infer<typeof venueLayoutSchema>) {
     labelX: zone.labelPos.x,
     labelY: zone.labelPos.y,
     seatViewBox: zone.kind === "numbered" ? zone.seatViewBox : null,
+    wrapLabel: zone.wrapLabel ?? false,
+    planTransform: (zone.kind === "numbered" && zone.planTransform) || null,
   }));
   const seats: SeatRecord[] = layout.zones.flatMap((zone) =>
     zone.kind === "numbered"
@@ -117,6 +123,31 @@ describe("toVenueLayout", () => {
     expect(zone.rows[1].seats[0]).toEqual({ id: "platea-baja-B-1", row: "B", number: 1, x: 10, y: 50, status: "available" });
   });
 
+  it("mapea wrapLabel, planTransform y las luces del escenario solo cuando existen", () => {
+    const lights = [
+      { x: 1, y: 2 },
+      { x: 3, y: 4 },
+    ];
+    const planTransform = { scale: 1.95, x: -38.4, y: 9.45 };
+    const layout = venueLayoutSchema.parse(
+      toVenueLayout(
+        { ...VENUE, stage: { ...STAGE, lights } },
+        [{ ...GENERAL_ZONE, wrapLabel: true }, { ...NUMBERED_ZONE, planTransform }],
+        [seat("A", 1)],
+      ),
+    );
+
+    expect(layout.stage.lights).toEqual(lights);
+    expect(layout.zones[0].wrapLabel).toBe(true);
+    expect(layout.zones[1]).toMatchObject({ kind: "numbered", planTransform });
+    expect(layout.zones[1]).not.toHaveProperty("wrapLabel");
+
+    const plain = toVenueLayout(VENUE, [GENERAL_ZONE, NUMBERED_ZONE], [seat("A", 1)]);
+    expect(plain?.stage).not.toHaveProperty("lights");
+    expect(plain?.zones[0]).not.toHaveProperty("wrapLabel");
+    expect(plain?.zones[1]).not.toHaveProperty("planTransform");
+  });
+
   it("lanza un error si los datos de la sección son incoherentes", () => {
     expect(() => toVenueLayout(VENUE, [{ ...GENERAL_ZONE, capacity: null }], [])).toThrow(/capacity/);
     expect(() => toVenueLayout(VENUE, [{ ...NUMBERED_ZONE, seatViewBox: null }], [seat("A", 1)])).toThrow(/seat_view_box/);
@@ -135,7 +166,7 @@ describe("toVenueLayout", () => {
       const expected = venueLayoutSchema.parse(mock);
       const { venue, zones, seats } = toRecords(expected);
 
-      expect(venueLayoutSchema.parse(toVenueLayout(venue, zones, seats))).toEqual(expected);
+      expect(venueLayoutSchema.parse(toVenueLayout(venue, zones, seats))).toStrictEqual(expected);
     },
   );
 });

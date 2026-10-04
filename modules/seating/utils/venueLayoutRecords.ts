@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { formatSeatId, type venueLayoutSchema } from "../schemas/seating.schema";
+import type { PlanTransform, Point } from "../types/seating.types";
 
 type VenueLayoutInput = z.input<typeof venueLayoutSchema>;
 type ZoneLayoutInput = VenueLayoutInput["zones"][number];
@@ -8,7 +9,7 @@ type SeatRowInput = Extract<ZoneLayoutInput, { kind: "numbered" }>["rows"][numbe
 export type VenueRecord = {
   eventSlug: string;
   mapViewBox: string | null;
-  stage: { label: string; path: string; labelPos: { x: number; y: number } } | null;
+  stage: { label: string; path: string; labelPos: Point; lights?: Point[] } | null;
 };
 
 export type ZoneRecord = {
@@ -20,6 +21,8 @@ export type ZoneRecord = {
   labelX: number | null;
   labelY: number | null;
   seatViewBox: string | null;
+  wrapLabel: boolean;
+  planTransform: PlanTransform | null;
 };
 
 export type SeatRecord = {
@@ -63,6 +66,7 @@ function toZone(zone: ZoneRecord & { mapPath: string }, seats: SeatRecord[]): Zo
     ticketTypeId: zone.ticketTypeSlug,
     path: zone.mapPath,
     labelPos: { x: zone.labelX, y: zone.labelY },
+    ...(zone.wrapLabel && { wrapLabel: true }),
   };
 
   if (zone.seating === "general") {
@@ -70,7 +74,13 @@ function toZone(zone: ZoneRecord & { mapPath: string }, seats: SeatRecord[]): Zo
     return { ...base, kind: "general", capacity: zone.capacity };
   }
   if (zone.seatViewBox === null) throw new Error(`La sección numerada ${zone.sectionSlug} no tiene seat_view_box`);
-  return { ...base, kind: "numbered", seatViewBox: zone.seatViewBox, rows: toSeatRows(zone.sectionSlug, seats) };
+  return {
+    ...base,
+    kind: "numbered",
+    seatViewBox: zone.seatViewBox,
+    rows: toSeatRows(zone.sectionSlug, seats),
+    ...(zone.planTransform && { planTransform: zone.planTransform }),
+  };
 }
 
 /**

@@ -23,7 +23,12 @@ export const venues = pgTable("venues", {
   lng: doublePrecision("lng"),
   placeId: text("place_id"),
   mapViewBox: text("map_view_box"),
-  stage: jsonb("stage").$type<{ label: string; path: string; labelPos: { x: number; y: number } }>(),
+  stage: jsonb("stage").$type<{
+    label: string;
+    path: string;
+    labelPos: { x: number; y: number };
+    lights?: { x: number; y: number }[];
+  }>(),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -47,6 +52,9 @@ export const venueSections = pgTable(
     labelX: real("label_x"),
     labelY: real("label_y"),
     seatViewBox: text("seat_view_box"),
+    wrapLabel: boolean("wrap_label").notNull().default(false),
+    /** Solo `numbered` en arco: plano = estadio × `scale` + (`x`, `y`). */
+    planTransform: jsonb("plan_transform").$type<{ scale: number; x: number; y: number }>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

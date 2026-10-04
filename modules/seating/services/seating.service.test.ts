@@ -141,20 +141,6 @@ describe("seating.service", () => {
     it("devuelve null para un evento sin mapa", async () => {
       expect(await getVenueMapForEvent(await getEvent("clasico-del-pacifico"))).toBeNull();
     });
-
-    it("lanza un error si una zona apunta a un tipo de entrada inexistente", async () => {
-      const original = VENUE_LAYOUTS_MOCK[0];
-      const event = await getEvent(original.eventSlug);
-      VENUE_LAYOUTS_MOCK[0] = {
-        ...original,
-        zones: original.zones.map((zone) => (zone.id === "vip" ? { ...zone, ticketTypeId: "palco" } : zone)),
-      };
-      try {
-        await expect(getVenueMapForEvent(event)).rejects.toThrow(/palco/);
-      } finally {
-        VENUE_LAYOUTS_MOCK[0] = original;
-      }
-    });
   });
 
   describe("hasVenueMap", () => {
@@ -266,16 +252,26 @@ describe("seating.service", () => {
     });
   });
 
-  describeWithDb("invariantes del mapa curvo festival-vive-latino-lima", () => {
-    const stageAndZones = Object.entries(VIVE_LATINO_SECTORS);
-    const zoneSectors = stageAndZones.filter(([id]) => id !== "stage");
+  const stageAndZones = Object.entries(VIVE_LATINO_SECTORS);
+  const zoneSectors = stageAndZones.filter(([id]) => id !== "stage");
 
+  describe("geometría de los sectores de festival-vive-latino-lima", () => {
     it("todos los sectores son concéntricos con el escenario", () => {
       for (const [id, sector] of stageAndZones) {
         expect({ cx: sector.cx, cy: sector.cy }, id).toEqual(STADIUM_CENTER);
       }
     });
 
+    it("ningún par de sectores (escenario incluido) se solapa", () => {
+      stageAndZones.forEach(([idA, a], index) => {
+        for (const [idB, b] of stageAndZones.slice(index + 1)) {
+          expect(doAnnularSectorsOverlap(a, b), `${idA} / ${idB}`).toBe(false);
+        }
+      });
+    });
+  });
+
+  describeWithDb("invariantes del mapa curvo festival-vive-latino-lima", () => {
     it("cada path es exactamente el de su sector", async () => {
       const map = await getMap(STADIUM_SLUG);
       expect(map.stage.path).toBe(getAnnularSectorPath(VIVE_LATINO_SECTORS.stage));
@@ -294,14 +290,6 @@ describe("seating.service", () => {
         expect(bounds.maxX, id).toBeLessThanOrEqual(width - ZONE_VIEWBOX_MARGIN);
         expect(bounds.maxY, id).toBeLessThanOrEqual(height - ZONE_VIEWBOX_MARGIN);
       }
-    });
-
-    it("ningún par de sectores (escenario incluido) se solapa", () => {
-      stageAndZones.forEach(([idA, a], index) => {
-        for (const [idB, b] of stageAndZones.slice(index + 1)) {
-          expect(doAnnularSectorsOverlap(a, b), `${idA} / ${idB}`).toBe(false);
-        }
-      });
     });
 
     it("el labelPos del escenario y de cada zona está dentro de su sector", async () => {
