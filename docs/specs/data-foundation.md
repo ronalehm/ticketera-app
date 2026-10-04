@@ -175,6 +175,14 @@ Hoy la app lee todo de mocks en memoria. F1 (`docs/architecture/system-design.md
 - [ ] Dada la rama `dev` sembrada, cuando se ejecutan `npm run build` y `npm run dev`, entonces `/`, `/eventos`, `/eventos/noche-de-sintetizadores-lima`, `/eventos/noche-de-sintetizadores-lima/entradas` y `/eventos/clasico-del-pacifico` se ven igual que antes (verificación manual del reviewer).
 - [ ] Dada la Fase 3 terminada, cuando se ejecutan `npm run lint`, `npx vitest run` (con y sin `DATABASE_URL_TEST`) y `npm run build`, entonces pasan sin errores.
 
+### Fase 4 — Integración con `main` (PR #3)
+- [ ] Dado `origin/main` (merge del PR #3, commit `f53de04`), cuando se mergea en `feat/data-foundation`, entonces no quedan marcadores de conflicto y se conservan las dos intenciones: en `lib/env.ts` conviven `publicEnvSchema`/`publicEnv` (de `main`) y `serverEnvSchema`/`env` (de esta spec), cada uno con sus tests; `package.json` y `package-lock.json` tienen las dependencias de ambos lados; `.env.example` contiene las variables de ambos; `approvals.jsonl` conserva todas las líneas de ambos lados (solo se agregan, nunca se editan).
+- [ ] Dado el esquema de `seating` de `main` (`wrapLabel` en zonas, `planTransform` en zonas numeradas, `stage.lights`), cuando se aplica la migración `0003` en `dev`, entonces `venue_sections` tiene `wrap_label boolean NOT NULL DEFAULT false` y `plan_transform jsonb NULL` (`{ scale, x, y }`), y `stage` (jsonb de `venues`) admite `lights`.
+- [ ] Dado `npm run db:seed` dos veces en `dev`, entonces se siembra también `festival-vive-latino-lima` y la geometría nueva, sin cambios en la segunda ejecución, y el `super_admin` conserva su id.
+- [ ] Dado cada layout de `VENUE_LAYOUTS_MOCK` de `main`, cuando se reconstruye desde la BD, entonces `getVenueMapBySlug` y `getVenueMapForEvent` devuelven lo mismo que la versión mock de `main` (test de equivalencia), con la firma pública de `main` (`getVenueMapForEvent(event: Pick<EventDetail, "slug" | "venue" | "ticketTypes">)`) y usando `@/modules/events/catalog` como en `main`.
+- [ ] Dados los tests heredados de `main` en los archivos en conflicto (`events.service.test.ts`, `seating.service.test.ts`, `checkout.service.test.ts`, `zoneTone.test.ts`), entonces conservan sus aserciones salvo los ajustes ya permitidos en la Fase 3 (ids por `slug`/UUID, fechas de la BD como instante) y corren con `describeWithDb` donde consultan la BD.
+- [ ] `npm run lint`, `npx tsc --noEmit`, `npx vitest run` (con y sin `DATABASE_URL_TEST`) y `npm run build` pasan.
+
 ## Diseño técnico
 
 ### Rutas (`app/`)
@@ -409,6 +417,11 @@ Ningún agente escribe ni lee esos valores.
 - [x] T3 — `events.service` desde la BD y su test de equivalencia · archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts` · depende de: T1 · paralelo con T4
 - [x] T4 — `seating.service` (`getVenueMapBySlug`) desde la BD y su test de equivalencia · archivos: `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts` · depende de: T2 · paralelo con T3 (usa `getEventBySlug` por su firma pública, que no cambia)
 - [x] T5 — Marcar con `describeWithDb` y entorno `node` los tests de otros módulos que llaman a estos services · archivos: `modules/checkout/services/checkout.service.test.ts`, `modules/organizer/services/organizer.service.test.ts`, `modules/seating/utils/zoneTone.test.ts`, `modules/tickets/data/demoOrders.test.ts` · depende de: T3, T4 · secuencial (cierre; el reviewer ejecuta el build y la verificación manual)
+
+### Fase 4 — Integración con `main` (PR #3)
+- [ ] T1 — Merge de `origin/main` en `feat/data-foundation` y resolución de conflictos (env, dependencias, `.env.example`, `approvals.jsonl`, tests de checkout/events/seating/zoneTone, `seating.service`) conservando ambas intenciones; `getVenueMapForEvent` provisionalmente sobre la BD con el mapper actual · archivos: los 11 en conflicto + `modules/seating/services/seating.service.ts` · depende de: Fase 3 · secuencial
+- [ ] T2 — Migración `0003` (`venue_sections.wrap_label`, `venue_sections.plan_transform`; `stage.lights` dentro del jsonb existente), actualización de `buildSeedData`/`seed`, del mapper `venueLayoutRecords` y del ERD; aplicar en `dev`, re-sembrar dos veces y verificar equivalencia contra los mocks de `main` · archivos: `lib/db/schema/venues.ts`, `drizzle/0003_*.sql`, `drizzle/meta/*`, `lib/db/seed/buildSeedData.ts(.test.ts)`, `lib/db/seed/seed.ts`, `modules/seating/utils/venueLayoutRecords.ts(.test.ts)`, `modules/seating/services/seating.service.ts(.test.ts)`, `docs/architecture/erd.md` · depende de: T1 · secuencial
+- [ ] T3 — Revisión completa y PR a `main`; tras APROBADO del reviewer, merge del PR (pedido explícito del usuario el 2026-10-03) · depende de: T2
 
 ## Preguntas abiertas
 1. **`ticket_types.sort_order` (Decisión 6):** es una columna que no está en el ERD aprobado. Sin ella, la lista de tipos de entrada de `noche-de-sintetizadores-lima` y `risas-sin-filtro` cambiaría de orden. Por defecto se añade. La alternativa es ordenar los tipos por el orden de su sección y aceptar ese cambio visual.
