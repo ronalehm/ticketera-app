@@ -274,7 +274,8 @@ function SeatPlanBestSeats({
 /**
  * Sub-paso 2 de una zona numerada (debajo de `ZoneStepHeader`, que pone el nombre, el precio y el contador): plano de
  * butacas con zoom/paneo (`react-zoom-pan-pinch`), números al acercar, tooltip, leyenda y bandeja con "Mejores
- * butacas", el aviso y los chips. Las butacas son `role="checkbox"` con roving tabindex (flechas, Home/End;
+ * butacas", el aviso y los chips. En arco (`planTransform`) añade el fondo del estadio, el lienzo apaisado desde `sm` y
+ * el minimapa. Las butacas son `role="checkbox"` con roving tabindex (flechas, Home/End;
  * Espacio/Enter alternan) y eventos delegados en un solo `<g>`. Un clic que llega tras arrastrar el plano se ignora.
  */
 export function SeatPlan({
