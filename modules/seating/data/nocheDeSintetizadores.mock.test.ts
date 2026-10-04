@@ -18,13 +18,13 @@ function getNorte(): Extract<VenueZoneLayout, { kind: "numbered" }> | undefined 
 }
 
 describe("SINTETIZADORES_VENUE (arena curva)", () => {
-  it("usa el viewBox 0 0 600 580 y el escenario compartido", () => {
+  it("usa el viewBox 0 0 600 640 y el escenario compartido", () => {
     expect(layout.eventSlug).toBe(SLUG);
-    expect(layout.viewBox).toBe("0 0 600 580");
+    expect(layout.viewBox).toBe("0 0 600 640");
     expect(layout.stage).toEqual(STADIUM_STAGE);
   });
 
-  it("tiene los sectores exactos de la arena: 3 anillos de pie de 112° y Tribuna Norte de 66°", () => {
+  it("tiene los sectores exactos de la arena: 3 anillos de pie de 88° y Tribuna Norte de 40°", () => {
     const ring = (innerRadius: number, outerRadius: number, startAngle: number, endAngle: number) => ({
       ...STADIUM_CENTER,
       innerRadius,
@@ -34,10 +34,10 @@ describe("SINTETIZADORES_VENUE (arena curva)", () => {
     });
     expect(SINTETIZADORES_VENUE.sectors).toEqual({
       stage: STAGE_SECTOR,
-      vip: ring(102, 166, 34, 146),
-      preferencial: ring(174, 236, 34, 146),
-      general: ring(244, 306, 34, 146),
-      norte: ring(314, 518, 57, 123),
+      vip: ring(102, 214, 46, 134),
+      preferencial: ring(222, 320, 46, 134),
+      general: ring(328, 422, 46, 134),
+      norte: ring(430, 578, 70, 110),
     });
   });
 
@@ -52,21 +52,21 @@ describe("SINTETIZADORES_VENUE (arena curva)", () => {
         zone.labelPos,
       ]),
     ).toEqual([
-      ["vip", "vip", "general", 1500, { x: 300, y: 188 }],
-      ["preferencial", "preferencial", "general", 4000, { x: 300, y: 259 }],
-      ["general", "general", "general", 12000, { x: 300, y: 329 }],
-      ["norte", "norte", "numbered", null, { x: 300, y: 470 }],
+      ["vip", "vip", "general", 1500, { x: 300, y: 204 }],
+      ["preferencial", "preferencial", "general", 4000, { x: 300, y: 318 }],
+      ["general", "general", "general", 12000, { x: 300, y: 424 }],
+      ["norte", "norte", "numbered", null, { x: 300, y: 558 }],
     ]);
     for (const zone of layout.zones) expect(zone.path, zone.id).toBe(getAnnularSectorPath(sectors[zone.id]));
   });
 
-  it("Tribuna Norte: filas A–F con 10, 12, 13, 14, 15 y 16 butacas (80), seatViewBox 0 0 590 293 y escala 0.96", () => {
+  it("Tribuna Norte: filas A–F con 12, 12, 13, 14, 14 y 15 butacas (80), seatViewBox 0 0 564 275 y escala 1.305", () => {
     const norte = getNorte();
     expect(norte?.rows.map((row) => row.label).join("")).toBe("ABCDEF");
-    expect(norte?.rows.map((row) => row.seats.length)).toEqual([10, 12, 13, 14, 15, 16]);
+    expect(norte?.rows.map((row) => row.seats.length)).toEqual([12, 12, 13, 14, 14, 15]);
     expect(norte?.rows.flatMap((row) => row.seats)).toHaveLength(80);
-    expect(norte?.seatViewBox).toBe("0 0 590 293");
-    expect(norte?.planTransform?.scale).toBe(0.96);
+    expect(norte?.seatViewBox).toBe("0 0 564 275");
+    expect(norte?.planTransform?.scale).toBe(1.305);
   });
 
   it("Tribuna Norte: accesibles exactamente norte-F-1 y norte-F-15, con 53 disponibles y 25 ocupadas", () => {

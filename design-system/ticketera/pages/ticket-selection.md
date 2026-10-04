@@ -93,8 +93,8 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   | Recinto | Zonas | Barrido |
   |---|---|---|
   | Festival (Costa Verde) | Campo VIP y Campo General (de pie) · Tribuna Norte · Tribunas Occidente y Oriente (numeradas) | 112° (34°–146°) · 114° (33°–147°) · 40° a cada lado (150°–190° y −10°–30°) |
-  | Arena (Estadio Nacional) | VIP, Preferencial y General de pie | 112° (34°–146°) |
-  | Arena | Tribuna Norte (numerada) | 66° (57°–123°) |
+  | Arena (Estadio Nacional) | VIP, Preferencial y General de pie | 88° (46°–134°) |
+  | Arena | Tribuna Norte (numerada) | 40° (70°–110°) |
   | Teatro (Gran Teatro Nacional) | Platea y Mezanine (numeradas) | 84° (48°–132°) |
   | Comedia (Arena 1) | Mesa y Preferencial (numeradas) y General de pie | 98° (41°–139°) |
 
@@ -106,6 +106,7 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   - Precio (`S/ 330.00`) o "Agotado", `font-medium tabular-nums`, color de la clase `label` del tono.
   - `low-stock`: píldora "Últimas entradas" `rounded-full bg-warning text-warning-foreground`, **solo desde `md`** (a 375 px no cabe; el estado sigue en la tarjeta y en el `aria-label`).
   - Con selección: insignia tras el precio `h-5 rounded-full bg-background ring-1 ring-border text-xs font-bold` con `Check` y el número de entradas o butacas elegidas.
+  - **Sitio para las etiquetas en la arena** (`viewBox` 600 × 640): las bandas de pie miden 94–112 unidades (VIP 102–214, Preferencial 222–320, General 328–422) para que nombre y precio, y desde `md` la píldora de VIP, queden a ≥ 3 px del borde visible de su banda (radio ± 1.5 por el trazo blanco), y la insignia de selección a ≥ 0.5 px. Las etiquetas no se encogen: caben por geometría. Holgura mínima medida (Playwright, la menor de VIP, Preferencial y General; "sin selección / con la insignia ✓ 2"): 3.4 px (Preferencial y General) / 1.1 px (VIP y Preferencial) a 375, 20.4 / 18.4 px a 640, 11.6 / 11.6 px a 768, 3.7 / 3.7 px a 1024 (VIP, por la píldora: el mapa mide 461 px, limitado por su columna) y 9.8 / 9.8 px a 1440 (VIP). La píldora de VIP queda entera dentro de su banda: 18.3 px a 768, 6.4 px a 1024 y 15.7 px a 1440.
 
 ### Resaltado sincronizado mapa ↔ tarjetas
 
@@ -159,7 +160,7 @@ Dos variantes según la zona (los datos lo deciden):
 - **En arco** (con `planTransform`; las zonas numeradas de los 4 mapas mock): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
 - **En cuadrícula** (sin `planTransform`; mapas sin geometría, hoy ninguno en el mock, y la vista previa del organizer, `SeatGridPreview`): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
 
-**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–17 px (sirven para ver el plano); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 25.3 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero).
+**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero).
 
 ### Estructura (de arriba abajo)
 
@@ -208,7 +209,7 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
     - **lienzo estrecho (< 672 px**, p. ej. 576 a 640 de ventana o 516 a 1024): la misma franja de 64 px abajo (`sm:@max-2xl:pb-16`). El margen lateral del 16:10 no basta para la pastilla (a 516 px de lienzo la tocaba en `oriente-J-9`), y con la franja el plano queda siempre por encima de ella;
     - **lienzo ancho (≥ 672 px):** sin franja; el margen lateral del 16:10 aloja la pastilla.
     - El minimapa descuenta la franja de su recuadro (alto del lienzo − alto del `<svg>`, en `getVisiblePlanRect({ insetBottom })`).
-    - Holgura mínima medida entre la pastilla y la caja de la butaca más cercana (área de toque de 32 × 32), con el plano entero a la vista, en las 6 zonas numeradas de los 4 mapas: 27.5 px a 375 (la pastilla va en la barra), 41.2 px a 640, 18.8 px a 768, 32.6 px a 1024 y 29.2 px a 1440 (Platea, fila H). Con las letras de fila, igual salvo a 375 (25.7 px). Sin solapes en ningún ancho.
+    - Holgura mínima medida entre la pastilla y la caja de la butaca más cercana (área de toque de 32 × 32), con el plano entero a la vista, en las 6 zonas numeradas de los 4 mapas: 25.5 px a 375 (`norte-A-1`; la pastilla va en la barra), 41.2 px a 640 (`platea-H-5`), 18.8 px a 768 (`platea-H-4`), 31.7 px a 1024 (`norte-F-5`) y 29.2 px a 1440 (`platea-H-4`). Con las letras de fila: 25.7 px a 375 (Platea), 51.4 px a 640, 38.7 px a 768, 40.2 px a 1024 (Oriente) y 58.2 px a 1440. Sin solapes en ningún ancho.
     - Coste: con la franja, el plano entero a la vista es más pequeño (butaca de 15.5 px a 1024 y 17.7 px a 640, frente a 19.3 y 21.5 sin ella); se acerca con el zoom.
   - Con zoom, el paneo saca las butacas de debajo.
 - Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
@@ -242,9 +243,9 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
   - **Desde `sm`, superpuesto arriba a la izquierda solo si cabe** (`data-placement="overlay"`, con `sm:absolute sm:top-3 sm:left-3 sm:z-10`): cabe si el `seatViewBox` encajado en el `<svg>` (como `xMidYMid meet`, con `getPlanFit`) empieza a la derecha del minimapa (margen izquierdo ≥ 12 px + su ancho) o por debajo de él (margen superior ≥ 12 px + su alto). Las butacas y las letras van dentro del `seatViewBox`, así que superpuesto no tapa nada **por construcción**, sea cual sea el plano o el ancho.
     - **Si no cabe** (`data-placement="bar"`), sigue en la barra sobre el lienzo, como por debajo de `sm`, y la pastilla de zoom sigue superpuesta abajo a la derecha. Mover el minimapa no cambia el tamaño del lienzo.
     - `SeatPlan` lo decide antes de pintar (`useLayoutEffect`, sin salto al abrir la zona) y en cada cambio de tamaño del lienzo (`ResizeObserver`), que también cambia el ancho del minimapa y la franja inferior. Sin medidas (jsdom), superpuesto.
-    - **Por qué:** el margen lateral del 16:10 no basta en los planos apaisados. Con el minimapa siempre superpuesto, tapaba la esquina superior izquierda de Norte, Mezanine y Preferencial (filas A–C): butacas hasta −23.9 px (`norte-C-13`) y letras hasta −26.9 px a 1024; a 640, −10.8 / −13.7 px; también las letras de Norte de 740 a 800 y de 1180 a 1220 px.
+    - **Por qué:** el margen lateral del 16:10 no basta en los planos apaisados. Con el minimapa siempre superpuesto, tapaba la esquina superior izquierda de Norte, Mezanine y Preferencial (filas A–C): butacas hasta −23.9 px (`norte-C-13`) y letras hasta −26.9 px a 1024; a 640, −10.8 / −13.7 px; también las letras de Norte de 740 a 800 y de 1180 a 1220 px (medido con la geometría anterior de la arena, Norte de 66°).
     - **Resultado:** el festival (Oriente y Occidente, planos casi cuadrados) lo lleva superpuesto en todos los anchos, igual que antes; Norte, Platea, Mezanine y Preferencial, en la barra desde `sm` (su plano llega a la esquina, aunque en Platea las butacas no la tocaran).
-    - Holgura mínima medida con el plano entero a la vista, de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100), frente a la caja de la butaca más cercana (área de toque de 32 × 32) y a la de las letras de fila: superpuesto, 30.7 px (`occidente-J-9` a 1180) y 46.1 px con letras; en la barra queda fuera del lienzo (≥ 47.3 px). Sin solapes en ningún ancho. La pastilla no cambia (mínimo 16.9 px, `platea-H-4` a 1180).
+    - Holgura mínima medida con el plano entero a la vista, de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100), frente a la caja de la butaca más cercana (área de toque de 32 × 32) y a la de las letras de fila: superpuesto, 30.7 px (`occidente-J-9` a 1180) y 46.1 px con letras; en la barra queda fuera del lienzo (≥ 40.6 px, `norte-A-12` a 1024, y 41.8 px con letras). Sin solapes en ningún ancho. La pastilla no cambia (mínimo 16.9 px, `platea-H-4` a 1180). Con la Tribuna Norte de 40°, su minimapa (más alto, por el `viewBox` 600 × 640) mide 96 × 102 px y 112 × 119 px, y va en la barra en todos los anchos desde `sm`.
   - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
   - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 

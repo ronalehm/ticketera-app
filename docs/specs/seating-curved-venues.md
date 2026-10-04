@@ -1,7 +1,7 @@
 # Recintos curvos en todos los mapas ("Elige tus entradas" como estadio)
 
 - Módulo: seating
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Que el sub-paso 1 de "Elige tus entradas" (`/eventos/<slug>/entradas`) se vea como un estadio en **todos** los eventos con mapa, igual que el de "Festival Vive Latino Lima" (captura objetivo `images/20.png`): escenario semicircular navy con luces, zonas en anillos o sectores concéntricos separados en blanco y etiquetas con nombre y precio. Hoy los otros 3 recintos (`images/19.png`: "La casa de los espejos" con Escenario, Platea y Mezanine como rectángulos) usan rectángulos, y sus zonas numeradas abren un plano en cuadrícula sin fondo ni minimapa.
