@@ -369,6 +369,7 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `cancel_reason` | text NULL | |
 
 Restricción: `CHECK events_draft_complete_check (status = 'draft' OR (venue_id IS NOT NULL AND description IS NOT NULL AND image_url IS NOT NULL AND starts_at IS NOT NULL AND doors_open_at IS NOT NULL))`: un borrador solo exige título y categoría; al salir de `draft` exige las cinco. Que `description` no esté vacía y que `doors_open_at <= starts_at` lo valida el formulario al publicar.
+
 Índices: `(status, starts_at)`; GIN `(search_text gin_trgm_ops)`.
 
 **`ticket_types`**: zona en venta para un evento (precio por sección).
