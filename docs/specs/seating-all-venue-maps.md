@@ -632,7 +632,7 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
   - Depende de: —.
   - Secuencial (base: test compartido y `lib/`).
   - Verificar `npx vitest run modules/seating lib/db/seed`, sin BD y con BD.
-- [ ] T2. Copa del Norte en herradura (requisito 5), con su test.
+- [x] T2. Copa del Norte en herradura (requisito 5), con su test.
   - Archivos: `modules/seating/data/copaDelNorte.mock.ts` (nuevo), `modules/seating/data/copaDelNorte.mock.test.ts` (nuevo).
   - Depende de: T1. En paralelo con T3.
 - [ ] T3. Los Ecos del Sur, agotado (requisito 6), con su test.
