@@ -813,27 +813,34 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
       - el lienzo es `sm:aspect-[16/10]` (en vez del `aspect-ratio` del plano);
       - el `<svg>` del plano lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo;
       - `fitOnInit="contain"` centra el plano.
-    - **Minimapa:**
-      - desde `sm`, superpuesto con `sm:absolute sm:left-3 sm:top-3 sm:z-10`;
+    - **Contenedor del lienzo:** el bloque que agrupa la barra y el lienzo (miden lo mismo de ancho) lleva `@container`. El ancho del minimapa y la franja de la pastilla de zoom en arco dependen del **ancho del lienzo** (umbral `@2xl`, 672 px), no del de la ventana (decisión 12, enmienda F5).
+    - **Franja inferior del contenido transformado** (para la pastilla de zoom superpuesta): en cuadrícula `sm:pb-16` (F4); en arco `sm:@max-2xl:pb-16`, solo con el lienzo estrecho.
+    - **Minimapa** (envuelto en `<div className="pointer-events-none flex" data-placement="overlay" | "bar">`):
+      - desde `sm`, **superpuesto solo si cabe** (`data-placement="overlay"`, con `sm:absolute sm:left-3 sm:top-3 sm:z-10`). Cabe si `canOverlayMinimap(svg, minimap, planWidth, planHeight)` (función interna de `SeatPlan.tsx`): con `getPlanFit` sobre el tamaño del `<svg>`, `offsetX ≥ 12 + ancho del minimapa` u `offsetY ≥ 12 + alto del minimapa`. Sin medidas (jsdom), cabe;
+      - si no cabe (`data-placement="bar"`), en la barra sobre el lienzo, que deja de ser `sm:contents`; la pastilla de zoom sigue superpuesta abajo a la derecha. Mover el minimapa no cambia el tamaño del lienzo (sin bucle);
+      - se recalcula antes de pintar (`useLayoutEffect`, al abrir la zona) y en cada cambio de tamaño del lienzo (`ResizeObserver`);
       - por debajo de `sm`, a la izquierda de la barra sobre el lienzo;
-      - con el plano entero a la vista no tapa butacas (margen lateral del 16:10; se comprueba a 768 y 1440).
+      - con el plano entero a la vista no tapa butacas ni letras: superpuesto, por construcción; en la barra, queda fuera del lienzo (se comprueba a 768 y 1440).
+      - Resultado con los datos actuales: Oriente y Occidente (planos casi cuadrados) lo llevan superpuesto en todos los anchos desde `sm`; los planos apaisados, en la barra.
     - Las zonas en cuadrícula no cambian: sin fondo ni minimapa, con la proporción del plano.
 30. **`SeatPlanMinimap`** (nuevo, `"use client"` por estar dentro de `TransformWrapper`):
-    - SVG `aria-hidden` con el `viewBox` del mapa, en `h-auto w-24 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border md:w-28`.
+    - SVG `aria-hidden` con el `viewBox` del mapa, en `h-auto w-24 overflow-visible rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border @2xl:w-28` (96 px con el lienzo estrecho, 112 px con el ancho; antes `md:w-28`, que medía 112 px sobre un lienzo de 516 px a 1024 y tapaba butacas).
     - **Contenido:**
       - escenario `fill-brand-navy`;
       - zonas `fill-secondary`;
       - zona abierta `fill-primary`;
       - recuadro de la vista actual: `fill-none stroke-foreground`, 2 px no escalables.
-    - Lee la transformación con `useTransformEffect` (`state.scale`, `positionX`, `positionY`) y el tamaño de `instance.wrapperComponent`, y calcula el recuadro con `getVisiblePlanRect` y `toVenueRect`. Antes del primer efecto, el recuadro es el plano entero.
+    - Lee la transformación con `useTransformEffect` (`state.scale`, `positionX`, `positionY`), el tamaño de `instance.wrapperComponent` (el lienzo) y el alto del `<svg>` del plano, que recibe por la prop `planRef: RefObject<SVGSVGElement | null>`. Con ellos calcula el recuadro con `getVisiblePlanRect({ …, insetBottom: alto del lienzo − alto del <svg> })` y `toVenueRect`. Antes del primer efecto, el recuadro es el plano entero.
+    - **Medidas** con decimales del estilo calculado (`getComputedStyle(…).width/height`), no con `clientWidth`/`clientHeight` (redondeo a px enteros: desviaba el recuadro hasta ~1 unidad del mapa) ni con `getBoundingClientRect` (incluye el zoom y la animación de entrada).
 31. **`utils/planViewport.ts`** (se amplía; puro):
-    - `getVisiblePlanRect({ planWidth, planHeight, viewportWidth, viewportHeight, scale, positionX, positionY }): Rect`:
-      - usa `getPlanFit` (`u` y `off`);
-      - `x = (−positionX/scale − offX)/u`, `y = (−positionY/scale − offY)/u`, `width = vw/(scale·u)`, `height = vh/(scale·u)`;
-      - resultado recortado a [0, pw] × [0, ph].
+    - `getVisiblePlanRect({ planWidth, planHeight, viewportWidth, viewportHeight, scale, positionX, positionY, insetBottom? }): Rect`:
+      - usa `getPlanFit` (`u` y `off`) sobre el viewport **menos `insetBottom`** (la franja inferior que el contenido reserva con padding; por defecto 0, los negativos cuentan como 0);
+      - `x = (−positionX/scale − offX)/u`, `y = (−positionY/scale − offY)/u`, `width = vw/(scale·u)`, `height = vh/(scale·u)` (con el `vh` entero del lienzo);
+      - resultado recortado a [0, pw] × [0, ph];
+      - sin medidas (alguna ≤ 0) o con escala ≤ 0, el plano entero.
     - `toVenueRect(rect, planTransform): Rect` = ((x − tx)/s, (y − ty)/s, w/s, h/s).
 
-### Precarga desde la URL (Fase 6; antigua Fase 4)
+### Precarga y entrada por zona desde la URL (Fase 6; antigua Fase 4, ampliada)
 32. **`parseSeatingPreselection(map, params)`** en `utils/selectionSummary.ts` (pura; decisión 15):
     - Firma: `(map: VenueMap, params: Pick<URLSearchParams, "getAll">) => SeatSelection`. `ReadonlyURLSearchParams` encaja.
     - `remaining = MAX_TICKETS_PER_ORDER`. Se recorren las zonas de `map.zones` en orden y se omiten las `sold-out`:
