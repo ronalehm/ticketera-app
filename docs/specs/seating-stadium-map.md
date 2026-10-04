@@ -1,7 +1,7 @@
 # Mapa de estadio curvo y selección de entradas en dos sub-pasos
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Llevar la pantalla `/eventos/<slug>/entradas` (paso 1 "Entradas" de la compra) al nuevo diseño "Elige tus entradas":
@@ -13,7 +13,7 @@ Llevar la pantalla `/eventos/<slug>/entradas` (paso 1 "Entradas" de la compra) a
 Para estrenarlo se añade el evento "Festival Vive Latino Lima" (Costa Verde, Lima) con 5 zonas. Solo UI/UX con datos mock (sin backend), español (Perú), PEN.
 
 Es una **continuación de `docs/specs/seating-ticket-selection.md`** (en adelante, "spec base"), que no se edita:
-- siguen vigentes sus contratos A (`PurchaseStepper`), B (`getVenueMapBySlug`, `hasVenueMap`, `parseSeatIds`, `resolveSeats`, `getVenueMapForEvent`, ids `<zona>-<FILA>-<n>`), C (paso a `/checkout` con `asientos`) y H (`ZonePricesCard` y `MobileBuyBar` en el detalle);
+- siguen vigentes sus contratos A (stepper de 3 pasos; desde `docs/specs/design-alignment-purchase-flow.md` lo dibuja `components/shared/PurchaseShell.tsx`, que sustituye a `PurchaseStepper`), B (`getVenueMapBySlug`, `hasVenueMap`, `parseSeatIds`, `resolveSeats`, `getVenueMapForEvent`, ids `<zona>-<FILA>-<n>`), C (paso a `/checkout` con `asientos`) y H (`ZonePricesCard` y `MobileBuyBar` en el detalle; la Fase 6 amplía `ZonePricesCard` con un enlace por zona, decisión 31);
 - siguen vigentes sus decisiones 1–14, salvo lo que esta spec amplía de forma explícita (decisiones 4, 5 y 9).
 
 Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarjetas; sub-paso 2: plano de "Tribuna Oriente") y del detalle del evento. De ahí salen la forma, el layout, el flujo y los textos. La identidad visual sigue siendo Mentec (`design-system/ticketera/MASTER.md`): tokens, Creato Display, marca "Mentec Tickets" y los tonos por precio de `zoneTone`. **No** se usan el índigo, el naranja, Poppins, los hex ni el logo "Ticketera" de las capturas.
