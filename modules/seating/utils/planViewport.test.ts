@@ -106,6 +106,29 @@ describe("getVisiblePlanRect", () => {
     ).toEqual({ x: 0, y: 0, width: 400, height: 400 });
   });
 
+  it("con insetBottom el plano encaja sobre la franja reservada y se ve entero sin zoom", () => {
+    // Plano 400×400 en 1000×800 con 64 px abajo: encaja en 1000×736 (unit 1.84, offsetX 132).
+    expect(
+      getVisiblePlanRect({
+        planWidth: 400,
+        planHeight: 400,
+        viewportWidth: 1000,
+        viewportHeight: 800,
+        scale: 1,
+        positionX: 0,
+        positionY: 0,
+        insetBottom: 64,
+      }),
+    ).toEqual({ x: 0, y: 0, width: 400, height: 400 });
+  });
+
+  it("con insetBottom y zoom descuenta la franja en la escala y el margen", () => {
+    // Plano 400×200 en 800×464 con 64 px abajo: encaja en 800×400 (unit 2, sin márgenes). La vista mide 800×464 px.
+    expect(
+      getVisiblePlanRect({ ...plan, viewportHeight: 464, insetBottom: 64, scale: 2, positionX: -400, positionY: -200 }),
+    ).toEqual({ x: 100, y: 50, width: 200, height: 116 });
+  });
+
   it("recorta al borde superior izquierdo al panear más allá del origen", () => {
     // Sin recorte sería (−25, −12.5, 200, 100).
     expect(getVisiblePlanRect({ ...plan, scale: 2, positionX: 100, positionY: 50 })).toEqual({

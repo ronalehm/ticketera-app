@@ -465,8 +465,10 @@ export function SeatPlan({
         <SeatDetailLevelSync svgRef={svgRef} planWidth={width} planHeight={height} />
 
         {/* Contenedor del lienzo: desde `sm` la barra es `contents` y el minimapa y el zoom se posicionan sobre el
-            lienzo (arriba a la izquierda y abajo a la derecha); por debajo, la barra los pone encima del lienzo. */}
-        <div className="relative flex flex-col gap-2">
+            lienzo (arriba a la izquierda y abajo a la derecha); por debajo, la barra los pone encima del lienzo. Es
+            `@container` (mide lo mismo que el lienzo): el minimapa y la franja del zoom en arco dependen del ancho del
+            lienzo, no de la ventana. */}
+        <div className="@container relative flex flex-col gap-2">
           <div className="flex items-end justify-between gap-2 sm:contents">
             {planTransform && (
               // Decorativo: los gestos lo atraviesan para que el paneo y las butacas de debajo sigan respondiendo.
@@ -479,6 +481,7 @@ export function SeatPlan({
                   planTransform={planTransform}
                   planWidth={width}
                   planHeight={height}
+                  planRef={svgRef}
                 />
               </div>
             )}
@@ -496,11 +499,14 @@ export function SeatPlan({
             style={{ "--plan-aspect": `${width} / ${height}` } as CSSProperties}
           >
             <TransformComponent wrapperStyle={FILL_STYLE} contentStyle={FILL_STYLE}>
-              {/* En cuadrícula, desde `sm`, franja inferior libre para la pastilla de zoom superpuesta (requisito 27).
-                  Va en este contenedor y no en `contentClass`: el CSS sin capa de la librería (`padding: 0`) gana a la
-                  utilidad. En arco no hay franja: el lienzo 16:10 deja margen lateral para el minimapa y el zoom, y el
-                  `<svg>` mide lo mismo que el lienzo, que es lo que mide el minimapa para su recuadro (requisito 30). */}
-              <div className={cn("size-full", !isArc && "sm:pb-16")}>
+              {/* Desde `sm`, franja inferior libre para la pastilla de zoom superpuesta (requisitos 22 y 27): con el
+                  plano entero a la vista ninguna butaca queda bajo ella. Va en este contenedor y no en `contentClass`:
+                  el CSS sin capa de la librería (`padding: 0`) gana a la utilidad.
+                  - En cuadrícula, siempre.
+                  - En arco, solo con el lienzo estrecho (< 42rem, p. ej. 516 px en dos columnas a 1024): ahí el margen
+                    lateral del 16:10 no basta para la pastilla. Con el lienzo ancho, ese margen la aloja y no hay franja.
+                  El minimapa descuenta la franja de su recuadro (alto del lienzo − alto del `<svg>`; requisito 30). */}
+              <div className={cn("size-full", isArc ? "sm:@max-2xl:pb-16" : "sm:pb-16")}>
                 <svg
                   ref={svgRef}
                   viewBox={zone.seatViewBox}

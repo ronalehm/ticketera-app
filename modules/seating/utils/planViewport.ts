@@ -32,11 +32,18 @@ export function getSeatDetailLevel(unit: number, scale: number): SeatDetailLevel
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
-type VisiblePlanRectInput = PlanFitInput & { scale: number; positionX: number; positionY: number };
+type VisiblePlanRectInput = PlanFitInput & {
+  scale: number;
+  positionX: number;
+  positionY: number;
+  /** Franja libre (px sin escalar) bajo el plano dentro del contenido transformado, p. ej. la de la pastilla de zoom. */
+  insetBottom?: number;
+};
 
 /**
  * Parte del plano (unidades del `viewBox`) que se ve en el viewport con la transformación de
  * `react-zoom-pan-pinch` (`translate(positionX, positionY) scale(scale)`), recortada a [0, pw] × [0, ph].
+ * Con `insetBottom`, el plano encaja en el viewport menos esa franja inferior (el contenido la reserva con padding).
  * Sin medidas (alguna ≤ 0) o con escala ≤ 0, el plano entero.
  */
 export function getVisiblePlanRect({
@@ -47,8 +54,14 @@ export function getVisiblePlanRect({
   scale,
   positionX,
   positionY,
+  insetBottom = 0,
 }: VisiblePlanRectInput): Rect {
-  const { unit, offsetX, offsetY } = getPlanFit({ planWidth, planHeight, viewportWidth, viewportHeight });
+  const { unit, offsetX, offsetY } = getPlanFit({
+    planWidth,
+    planHeight,
+    viewportWidth,
+    viewportHeight: viewportHeight - Math.max(insetBottom, 0),
+  });
   if (unit <= 0 || scale <= 0) {
     return { x: 0, y: 0, width: Math.max(planWidth, 0), height: Math.max(planHeight, 0) };
   }

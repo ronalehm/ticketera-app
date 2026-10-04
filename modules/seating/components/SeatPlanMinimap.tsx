@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { RefObject } from "react";
 import { useTransformEffect } from "react-zoom-pan-pinch";
 import type { ReactZoomPanPinchContextState } from "react-zoom-pan-pinch";
 
@@ -19,6 +20,8 @@ type SeatPlanMinimapProps = {
   /** Ancho y alto del `seatViewBox` de la zona abierta. */
   planWidth: number;
   planHeight: number;
+  /** `<svg>` del plano: su alto frente al del lienzo da la franja que el contenido reserva abajo para el zoom. */
+  planRef: RefObject<SVGSVGElement | null>;
 };
 
 /**
@@ -33,6 +36,7 @@ export function SeatPlanMinimap({
   planTransform,
   planWidth,
   planHeight,
+  planRef,
 }: SeatPlanMinimapProps) {
   // `null` hasta el primer cambio de transformación: se muestra el plano entero.
   const [visiblePlanRect, setVisiblePlanRect] = useState<Rect | null>(null);
@@ -40,19 +44,23 @@ export function SeatPlanMinimap({
   const syncVisibleRect = useCallback(
     ({ instance, state }: ReactZoomPanPinchContextState) => {
       const wrapper = instance.wrapperComponent;
+      const viewportHeight = wrapper?.clientHeight ?? 0;
+      // Medidas de layout (sin escalar): el plano ocupa el lienzo menos la franja inferior reservada (`sm:pb-16`).
+      const svgHeight = planRef.current?.clientHeight ?? viewportHeight;
       setVisiblePlanRect(
         getVisiblePlanRect({
           planWidth,
           planHeight,
           viewportWidth: wrapper?.clientWidth ?? 0,
-          viewportHeight: wrapper?.clientHeight ?? 0,
+          viewportHeight,
           scale: state.scale,
           positionX: state.positionX,
           positionY: state.positionY,
+          insetBottom: viewportHeight - svgHeight,
         }),
       );
     },
-    [planWidth, planHeight],
+    [planWidth, planHeight, planRef],
   );
 
   useTransformEffect(syncVisibleRect);
@@ -60,11 +68,12 @@ export function SeatPlanMinimap({
   const viewRect = toVenueRect(visiblePlanRect ?? { x: 0, y: 0, width: planWidth, height: planHeight }, planTransform);
 
   // `overflow-visible`: el plano entero sobresale un poco del `viewBox` (su margen); el recuadro se dibuja sobre el `p-1`.
+  // El ancho depende del lienzo (contenedor `@container` de `SeatPlan`), no de la ventana: 112 px desde 672 px de lienzo.
   return (
     <svg
       viewBox={viewBox}
       aria-hidden
-      className="h-auto w-24 overflow-visible rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border md:w-28"
+      className="h-auto w-24 overflow-visible rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border @2xl:w-28"
     >
       <path d={stage.path} className="fill-brand-navy" />
       {zones.map((zone) => (
