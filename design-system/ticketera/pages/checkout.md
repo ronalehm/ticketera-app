@@ -207,7 +207,7 @@ Fondo bg-muted
 ```
 
 - Cabecera: `OrderConfirmation` (`{ code }`, sin prop `stepper`) envuelve cada estado en `PurchaseShell`: la orden confirmada, con `currentStep={3}` (sin `back`); cargando y no encontrada, sin paso (solo el logo). La página `app/(purchase)/checkout/confirmacion/page.tsx` solo valida `orden` y compone.
-- Contenedor (`CONTAINER_CLASS`, en los tres estados) `mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
+- Contenedor (`CONTAINER_CLASS`, en "cargando" y "encontrada"; "no encontrada" usa `CheckoutStatusMessage`, centrado) `mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
 - Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full bg-card ring-1 ring-border` "Pedido N.º **MT-AB12CD**" (blanco sobre el fondo gris).
 - **Correo del comprador** en el texto de la cabecera: "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
 

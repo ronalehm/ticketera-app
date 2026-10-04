@@ -23,7 +23,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     // Los worktrees de agentes (`.claude/worktrees/`) son copias del repo: no se ejecutan sus tests.
-    exclude: [...configDefaults.exclude, ".claude/**"],
+    exclude: [...configDefaults.exclude, ".claude/worktrees/**"],
     env: testDatabaseUrl
       ? { DATABASE_URL: testDatabaseUrl, DATABASE_URL_TEST: testDatabaseUrl }
       : { DATABASE_URL: INERT_DATABASE_URL },
