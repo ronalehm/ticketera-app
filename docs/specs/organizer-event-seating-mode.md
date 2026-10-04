@@ -577,11 +577,11 @@ Coordinación:
   - Archivos: `modules/events/format.ts`, `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerEventForm.ts`, `modules/organizer/utils/organizerEventForm.test.ts`, `modules/organizer/utils/eventPreview.test.ts` (solo si deja de compilar).
   - Depende de: —.
   - Secuencial (base: entrada pública de `events`).
-- [ ] T2. Selector de modo, filas según el modo, "Descripción (opcional)" y "Máximo por compra" por fila, y "Ciudad" como `Select`, con test.
+- [x] T2. Selector de modo, filas según el modo, "Descripción (opcional)" y "Máximo por compra" por fila, y "Ciudad" como `Select`, con test.
   - Archivos: `modules/organizer/components/SeatingModeField.tsx` (nuevo), `modules/organizer/components/TicketTypesField.tsx`, `modules/organizer/components/TicketTypeCapacityFields.tsx`, `modules/organizer/components/OrganizerEventForm.tsx`, `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T1.
   - Secuencial.
-- [ ] T3. Portada obligatoria: guía, validación asíncrona, `hasCoverImage` y "Así se recorta tu portada", con test.
+- [x] T3. Portada obligatoria: guía, validación asíncrona, `hasCoverImage` y "Así se recorta tu portada", con test.
   - Archivos: `modules/organizer/components/CoverImageField.tsx`, `modules/organizer/components/CoverCropPreview.tsx` (nuevo), `modules/organizer/components/OrganizerEventForm.tsx`, `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T2 (mismos archivos de formulario).
   - Secuencial.

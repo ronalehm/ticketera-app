@@ -9,15 +9,19 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
+import { COVER_IMAGE_RULES } from "../schemas/organizer.schema";
+import { CoverCropPreview } from "./CoverCropPreview";
 import { FORM_CONTROL_SCROLL } from "./TicketTypesField";
 
 const ACCEPTED_TYPES = "image/png,image/jpeg";
+const COVER_IMAGE_HINT = `JPG o PNG, hasta ${COVER_IMAGE_RULES.maxBytes / (1024 * 1024)} MB. Recomendado: 1920 × 1080 px (16:9); mínimo ${COVER_IMAGE_RULES.minWidth} × ${COVER_IMAGE_RULES.minHeight} px.`;
 
 type CoverImageFieldProps = {
   /** URL local (`blob:`) de la imagen elegida; `null` muestra la zona de subida. */
   previewUrl: string | null;
+  /** Error del archivo elegido o, sin él, el de portada obligatoria al publicar. */
   error?: string;
-  /** Recibe el archivo elegido o soltado; el formulario valida el tipo. */
+  /** Recibe el archivo elegido o soltado; el formulario lo valida (tipo, peso y tamaño). */
   onSelect: (file: File) => void;
   onRemove: () => void;
 };
@@ -134,11 +138,16 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
             <span className="lg:hidden">Subir imagen</span>
           </span>
           <span id={hintId} className="text-sm text-muted-foreground">
-            JPG o PNG, horizontal (16:9)
+            {COVER_IMAGE_HINT}
           </span>
         </label>
       )}
+      <p className="text-sm text-muted-foreground">
+        Es la imagen principal de la página de tu evento. Deja lo importante (rostros, texto, logo) en el centro: cada
+        pantalla la recorta de forma distinta.
+      </p>
       <FieldError id={errorId}>{error}</FieldError>
+      {previewUrl && <CoverCropPreview src={previewUrl} className="mt-2" />}
     </div>
   );
 }

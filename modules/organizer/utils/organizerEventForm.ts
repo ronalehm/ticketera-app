@@ -137,14 +137,6 @@ export function toOrganizerEvent(values: OrganizerEventFormValues, id: string): 
 
 const ACCEPTED_COVER_IMAGE_TYPES = ["image/png", "image/jpeg"];
 
-/**
- * @deprecated Lo sustituye `getCoverImageError`. Se mantiene solo mientras `OrganizerEventForm` lo importe
- * (lo cambia la tarea T3 de la Fase 1); después se elimina junto con su test.
- */
-export function isAcceptedCoverImage(file: File): boolean {
-  return ACCEPTED_COVER_IMAGE_TYPES.includes(file.type);
-}
-
 const MAX_COVER_MEGABYTES = COVER_IMAGE_RULES.maxBytes / (1024 * 1024);
 
 /**

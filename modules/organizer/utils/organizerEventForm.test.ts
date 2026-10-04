@@ -14,7 +14,6 @@ import {
   getSeatGridSize,
   getTicketCapacity,
   getTicketTypeErrors,
-  isAcceptedCoverImage,
   toOrganizerEvent,
 } from "./organizerEventForm";
 
@@ -399,18 +398,5 @@ describe("toOrganizerEvent", () => {
       status: "draft",
     });
     expect(organizerEventSchema.safeParse(event).success).toBe(true);
-  });
-});
-
-// Se elimina junto con `isAcceptedCoverImage` cuando `OrganizerEventForm` pase a `getCoverImageError` (T3).
-describe("isAcceptedCoverImage", () => {
-  it.each([
-    ["image/png", true],
-    ["image/jpeg", true],
-    ["image/gif", false],
-    ["image/webp", false],
-    ["application/pdf", false],
-  ])("%s → %s", (type, expected) => {
-    expect(isAcceptedCoverImage(new File(["x"], "portada", { type }))).toBe(expected);
   });
 });
