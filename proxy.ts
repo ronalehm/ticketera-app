@@ -1,6 +1,11 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default clerkMiddleware();
+const isProtectedRoute = createRouteMatcher(["/perfil(.*)", "/mis-entradas(.*)", "/organizador(.*)"]);
+
+// Solo exige sesión (redirige a NEXT_PUBLIC_CLERK_SIGN_IN_URL); los permisos los aplica requireUser().
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) await auth.protect();
+});
 
 export const config = {
   matcher: [

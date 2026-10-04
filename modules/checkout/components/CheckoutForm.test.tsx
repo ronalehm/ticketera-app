@@ -1,11 +1,18 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useAuthStore } from "@/modules/auth/session";
 import { PaymentError, processMockPayment } from "../services/payment.service";
 import { useOrdersStore } from "../stores/orders.store";
 import type { CheckoutOrder, Order } from "../types/checkout.types";
 import { CheckoutForm } from "./CheckoutForm";
+
+const session = vi.hoisted(() => ({
+  user: null as { firstName: string; lastName: string; email: string } | null,
+}));
+
+vi.mock("@/modules/auth/session", () => ({
+  useSessionUser: () => ({ isLoaded: true, user: session.user && { ...session.user }, signOut: vi.fn() }),
+}));
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
@@ -59,7 +66,7 @@ const PAID_ORDER: Order = {
   ],
 };
 
-const SESSION_USER = { id: "usr-001", firstName: "Ana", lastName: "Quispe", email: "ana@correo.pe" };
+const SESSION_USER = { firstName: "Ana", lastName: "Quispe", email: "ana@correo.pe" };
 
 const DECLINED_MESSAGE = "Tu tarjeta fue rechazada. Prueba con otra tarjeta o elige otro método de pago.";
 
@@ -99,7 +106,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.useRealTimers();
-  useAuthStore.setState({ user: null });
+  session.user = null;
   useOrdersStore.setState({ orders: [] });
   localStorage.clear();
 });
@@ -284,7 +291,7 @@ describe("CheckoutForm", () => {
   });
 
   it("con sesión precarga Nombres, Apellidos y Correo", () => {
-    useAuthStore.setState({ user: SESSION_USER });
+    session.user = SESSION_USER;
     renderForm();
     expect(input("Nombres").value).toBe("Ana");
     expect(input("Apellidos").value).toBe("Quispe");
@@ -292,15 +299,26 @@ describe("CheckoutForm", () => {
   });
 
   it("sin sesión los campos quedan vacíos y la precarga no sobrescribe lo ya escrito", () => {
-    renderForm();
+    const { rerender } = renderForm();
     expect(input("Nombres").value).toBe("");
 
     type("Nombres", "Luis");
-    act(() => useAuthStore.setState({ user: SESSION_USER }));
+    session.user = SESSION_USER;
+    rerender(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" />);
 
     expect(input("Nombres").value).toBe("Luis");
     expect(input("Apellidos").value).toBe("Quispe");
     expect(input("Correo electrónico").value).toBe("ana@correo.pe");
+  });
+
+  it("con sesión, vaciar un campo precargado no lo vuelve a rellenar en el siguiente render", () => {
+    session.user = SESSION_USER;
+    renderForm();
+
+    type("Nombres", "");
+    type("Apellidos", "Ramos");
+
+    expect(input("Nombres").value).toBe("");
   });
 
   it("el botón del resumen alterna aria-expanded", () => {

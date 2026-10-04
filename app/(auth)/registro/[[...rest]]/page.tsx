@@ -1,6 +1,5 @@
+import { SignUp } from "@clerk/nextjs";
 import type { Metadata } from "next";
-
-import { AuthTabs, RegisterForm } from "@/modules/auth";
 
 export const metadata: Metadata = {
   title: "Crear cuenta — Mentec Tickets",
@@ -9,8 +8,7 @@ export const metadata: Metadata = {
 export default function RegisterPage() {
   return (
     <div className="flex w-full max-w-md flex-col gap-6">
-      <AuthTabs current="register" />
-      <RegisterForm />
+      <SignUp />
     </div>
   );
 }

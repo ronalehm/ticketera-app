@@ -1,15 +1,25 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuthStore } from "@/modules/auth/session";
 import { type Order, useOrdersStore } from "@/modules/checkout/orders";
 import { DEMO_ACCOUNT_EMAIL, DEMO_ORDERS } from "../data/demoOrders";
 import type { MyOrdersState } from "../types/tickets.types";
 import { useMyOrders } from "./useMyOrders";
 
+type SessionIdentity = { firstName: string; lastName: string; email: string };
+
+const session = vi.hoisted(() => ({
+  isLoaded: true,
+  user: null as SessionIdentity | null,
+}));
+
+vi.mock("@/modules/auth/session", () => ({
+  useSessionUser: () => ({ ...session, signOut: vi.fn() }),
+}));
+
 const NOW = new Date("2026-10-03T12:00:00-05:00");
 
-const ana = { id: "usr-002", firstName: "Ana", lastName: "Pérez", email: "ana@correo.pe" };
-const demo = { id: "usr-001", firstName: "Ana", lastName: "Quispe", email: DEMO_ACCOUNT_EMAIL };
+const ana = { firstName: "Ana", lastName: "Pérez", email: "ana@correo.pe" };
+const demo = { firstName: "Ana", lastName: "Quispe", email: DEMO_ACCOUNT_EMAIL };
 
 function makeOrder(code: string, ownerEmail: string, startsAt: string): Order {
   return {
@@ -46,9 +56,9 @@ const ownUpcomingSoon = makeOrder("MT-AAAAA2", ana.email, "2026-10-10T20:00:00-0
 const ownPast = makeOrder("MT-AAAAA3", ana.email, "2026-09-10T20:00:00-05:00");
 const foreign = makeOrder("MT-BBBBB1", "otro@correo.pe", "2026-11-01T20:00:00-05:00");
 
-// Siembra localStorage con la forma que guarda `persist`, como en una recarga real.
-function seedStorage({ user, orders = [] }: { user: typeof ana | null; orders?: Order[] }) {
-  localStorage.setItem("mentec-auth", JSON.stringify({ state: { user }, version: 0 }));
+// Fija la sesión de Clerk y siembra las órdenes con la forma que guarda `persist`, como en una recarga real.
+function seedStorage({ user, orders = [] }: { user: SessionIdentity | null; orders?: Order[] }) {
+  session.user = user;
   localStorage.setItem("mentec-orders", JSON.stringify({ state: { orders }, version: 0 }));
 }
 
@@ -67,7 +77,8 @@ const codes = (orders: Order[]) => orders.map((order) => order.code);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
-  useAuthStore.setState({ user: null });
+  session.isLoaded = true;
+  session.user = null;
   useOrdersStore.setState({ orders: [] });
   localStorage.clear(); // setState también persiste
 });
@@ -127,12 +138,28 @@ describe("useMyOrders", () => {
     expect([...codes(upcoming), ...codes(past)].sort()).toEqual(codes(DEMO_ORDERS).sort());
   });
 
-  it("signOut tras ready pasa a signed-out", async () => {
+  it("mientras Clerk carga sigue en loading y luego pasa a ready sin pasar por signed-out", async () => {
+    session.isLoaded = false;
+    seedStorage({ user: null, orders: [ownUpcomingSoon] });
+    const { result, states, rerender } = renderMyOrders();
+    await waitFor(() => expect(states.length).toBeGreaterThan(1)); // órdenes ya rehidratadas
+    expect(result.current).toEqual({ status: "loading" });
+
+    session.isLoaded = true;
+    session.user = ana;
+    rerender();
+
+    expect(result.current.status).toBe("ready");
+    expect(states.some((state) => state.status === "signed-out")).toBe(false);
+  });
+
+  it("al cerrar sesión tras ready pasa a signed-out", async () => {
     seedStorage({ user: ana, orders: [ownUpcomingSoon] });
-    const { result } = renderMyOrders();
+    const { result, rerender } = renderMyOrders();
     await waitFor(() => expect(result.current.status).toBe("ready"));
 
-    act(() => useAuthStore.getState().signOut());
+    session.user = null;
+    rerender();
 
     expect(result.current).toEqual({ status: "signed-out" });
   });

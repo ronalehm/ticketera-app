@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "../stores/auth.store";
+import { useSessionUser } from "../hooks/useSessionUser";
 import { ACCOUNT_LINKS } from "./accountLinks";
 import { UserMenu } from "./UserMenu";
 import { UserSummary } from "@/components/shared/UserSummary";
@@ -31,15 +30,12 @@ type AuthHeaderActionsProps = {
 };
 
 export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
-  const user = useAuthStore((state) => state.user);
-  const signOut = useAuthStore((state) => state.signOut);
+  const { isLoaded, user, signOut } = useSessionUser();
   const pathname = usePathname();
 
-  useEffect(() => {
-    useAuthStore.persist.rehydrate();
-  }, []);
-
   if (variant === "bar") {
+    // Mientras Clerk carga no se muestra nada: evita el parpadeo de "Iniciar sesión" con sesión abierta.
+    if (!isLoaded) return null;
     if (user) {
       return (
         <UserMenu

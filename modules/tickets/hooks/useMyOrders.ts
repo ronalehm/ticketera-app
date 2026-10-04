@@ -1,21 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAuthStore } from "@/modules/auth/session";
+import { useSessionUser } from "@/modules/auth/session";
 import { useOrdersStore } from "@/modules/checkout/orders";
 import type { MyOrdersState, OrdersByTimeframe } from "../types/tickets.types";
 import { getUserOrders, splitOrdersByDate } from "../utils/myOrders";
 
 export function useMyOrders(): MyOrdersState {
-  // `now` es null hasta rehidratar ambos stores: el primer render (servidor y cliente) es "loading",
-  // sin desajuste de hidratación por la fecha ni un "sin sesión" fugaz antes de leer localStorage.
+  // `now` es null hasta rehidratar las órdenes: el primer render (servidor y cliente) es "loading",
+  // sin desajuste de hidratación por la fecha. Mientras Clerk carga también es "loading", no un "sin sesión" fugaz.
   const [now, setNow] = useState<Date | null>(null);
-  const user = useAuthStore((state) => state.user);
+  const { isLoaded, user } = useSessionUser();
   const orders = useOrdersStore((state) => state.orders);
 
   useEffect(() => {
     let active = true;
-    Promise.all([useAuthStore.persist.rehydrate(), useOrdersStore.persist.rehydrate()]).then(() => {
+    Promise.resolve(useOrdersStore.persist.rehydrate()).then(() => {
       if (active) setNow(new Date());
     });
     return () => {
@@ -29,7 +29,7 @@ export function useMyOrders(): MyOrdersState {
     [orders, email, now],
   );
 
-  if (!now) return { status: "loading" };
+  if (!now || !isLoaded) return { status: "loading" };
   if (!split) return { status: "signed-out" };
   return { status: "ready", ...split };
 }

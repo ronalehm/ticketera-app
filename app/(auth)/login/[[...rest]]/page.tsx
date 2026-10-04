@@ -1,6 +1,5 @@
+import { SignIn } from "@clerk/nextjs";
 import type { Metadata } from "next";
-
-import { AuthTabs, LoginForm } from "@/modules/auth";
 
 export const metadata: Metadata = {
   title: "Iniciar sesión — Mentec Tickets",
@@ -9,8 +8,7 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div className="flex w-full max-w-md flex-col gap-6">
-      <AuthTabs current="login" />
-      <LoginForm />
+      <SignIn />
     </div>
   );
 }

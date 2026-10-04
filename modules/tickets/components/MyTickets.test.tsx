@@ -1,19 +1,26 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useAuthStore } from "@/modules/auth/session";
 import { useOrdersStore } from "@/modules/checkout/orders";
 import { DEMO_ACCOUNT_EMAIL } from "../data/demoOrders";
 import { MyTickets } from "./MyTickets";
 
+type SessionIdentity = { firstName: string; lastName: string; email: string };
+
+const session = vi.hoisted(() => ({ user: null as SessionIdentity | null }));
+
+vi.mock("@/modules/auth/session", () => ({
+  useSessionUser: () => ({ isLoaded: true, user: session.user, signOut: vi.fn() }),
+}));
+
 const NOW = new Date("2026-10-03T12:00:00-05:00");
 
-const demo = { id: "usr-001", firstName: "Ana", lastName: "Quispe", email: DEMO_ACCOUNT_EMAIL };
-const ana = { id: "usr-002", firstName: "Ana", lastName: "Pérez", email: "ana@correo.pe" };
+const demo = { firstName: "Ana", lastName: "Quispe", email: DEMO_ACCOUNT_EMAIL };
+const ana = { firstName: "Ana", lastName: "Pérez", email: "ana@correo.pe" };
 
-// Siembra localStorage con la forma que guarda `persist`, como en una recarga real.
-function seedStorage(user: typeof demo | null) {
-  localStorage.setItem("mentec-auth", JSON.stringify({ state: { user }, version: 0 }));
+// Fija la sesión de Clerk y siembra las órdenes con la forma que guarda `persist`, como en una recarga real.
+function seedStorage(user: SessionIdentity | null) {
+  session.user = user;
   localStorage.setItem("mentec-orders", JSON.stringify({ state: { orders: [] }, version: 0 }));
 }
 
@@ -23,7 +30,7 @@ const cardTitle = () => within(screen.getByRole("article")).getByRole("heading",
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
-  useAuthStore.setState({ user: null });
+  session.user = null;
   useOrdersStore.setState({ orders: [] });
   localStorage.clear(); // setState también persiste
 });

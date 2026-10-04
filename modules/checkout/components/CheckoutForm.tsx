@@ -19,7 +19,7 @@ import { useZodForm } from "@/hooks/useZodForm";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES } from "@/lib/formFields";
 import { INLINE_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/modules/auth/session";
+import { useSessionUser } from "@/modules/auth/session";
 import { formatEventPrice } from "@/modules/events/format";
 import { checkoutFormSchema } from "../schemas/payment.schema";
 import { PaymentError, processMockPayment } from "../services/payment.service";
@@ -110,7 +110,7 @@ type CheckoutFormProps = {
 
 export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
+  const { user } = useSessionUser();
   const [isExpired, setIsExpired] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   // Tras un pago aprobado, useZodForm vuelve a isSubmitting=false mientras la navegación sigue en curso:
@@ -128,16 +128,20 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
   const isDni = values.documentType === "dni";
   const totalLabel = formatEventPrice(order.total);
 
-  // Precarga desde la sesión solo en los campos vacíos: nunca sobrescribe lo ya escrito.
-  const prefillFromSession = useEffectEvent((sessionUser: NonNullable<typeof user>) => {
+  // Precarga desde la sesión solo en los campos vacíos: nunca sobrescribe lo ya escrito. Sin sesión (invitado) no hace nada.
+  const prefillFromSession = useEffectEvent(() => {
+    if (!user) return;
     for (const name of PREFILL_FIELDS) {
-      if (!values[name]) setValue(name, sessionUser[name]);
+      if (!values[name]) setValue(name, user[name]);
     }
   });
 
+  // Depende del correo, no de `user`: el hook devuelve un objeto nuevo en cada render y la precarga
+  // volvería a rellenar un campo que el comprador vació a propósito.
+  const sessionEmail = user?.email;
   useEffect(() => {
-    if (user) prefillFromSession(user);
-  }, [user]);
+    if (sessionEmail) prefillFromSession();
+  }, [sessionEmail]);
 
   useEffect(() => {
     if (paymentError) paymentErrorRef.current?.focus();
