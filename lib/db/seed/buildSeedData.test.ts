@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { getAvailabilityStatus } from "@/modules/events/utils/availability";
-import { VENUE_LAYOUTS_MOCK } from "@/modules/seating/data/venueMaps.mock";
+import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { DEMO_GENERAL_CAPACITY, buildSeedData, seedUuid } from "./buildSeedData";
 
 const SUPER_ADMIN_ID = seedUuid("test:super-admin");
@@ -14,6 +14,16 @@ const eventBySlug = (slug: string) => {
   if (!event) throw new Error(`Evento no sembrado: ${slug}`);
   return event;
 };
+
+const layoutBySlug = (slug: string) => {
+  const layout = VENUE_LAYOUTS_MOCK.find((candidate) => candidate.eventSlug === slug);
+  if (!layout) throw new Error(`Layout inexistente: ${slug}`);
+  return layout;
+};
+
+/** Conjunto ordenado de pares (id del recinto, slug) de secciones. */
+const sectionKeySet = (sections: { venueId: string; slug: string }[]) =>
+  [...new Set(sections.map((section) => `${section.venueId}/${section.slug}`))].sort();
 
 function countSeats(predicate: (seat: (typeof data.eventSeats)[number]) => boolean) {
   const seats = data.eventSeats.filter(predicate);
@@ -62,7 +72,11 @@ describe("buildSeedData", () => {
   it("un solo Estadio Nacional con geometría y 8 secciones en su orden", () => {
     const stadiums = data.venues.filter((venue) => venue.name === "Estadio Nacional");
     expect(stadiums).toHaveLength(1);
-    expect(stadiums[0]).toMatchObject({ city: "Lima", mapViewBox: "0 0 600 560", createdBy: SUPER_ADMIN_ID });
+    expect(stadiums[0]).toMatchObject({
+      city: "Lima",
+      mapViewBox: layoutBySlug("noche-de-sintetizadores-lima").viewBox,
+      createdBy: SUPER_ADMIN_ID,
+    });
     expect(stadiums[0].stage).toMatchObject({ label: "ESCENARIO" });
     const sections = data.venueSections
       .filter((section) => section.venueId === stadiums[0].id)
@@ -83,23 +97,55 @@ describe("buildSeedData", () => {
     );
   });
 
-  it("la Costa Verde guarda las luces del escenario, wrapLabel y planTransform del mapa curvo", () => {
-    const costaVerde = data.venues.find((venue) => venue.name === "Costa Verde");
-    const layout = VENUE_LAYOUTS_MOCK.find((candidate) => candidate.eventSlug === "festival-vive-latino-lima");
-    expect(costaVerde?.stage).toEqual(layout?.stage);
-    expect(costaVerde?.stage?.lights).toHaveLength(7);
-    const sections = data.venueSections.filter((section) => section.venueId === costaVerde?.id);
-    for (const zone of layout?.zones ?? []) {
-      const section = sections.find((candidate) => candidate.slug === zone.id);
-      expect(section?.wrapLabel, zone.id).toBe(zone.wrapLabel ?? false);
-      expect(section?.planTransform ?? null, zone.id).toEqual((zone.kind === "numbered" && zone.planTransform) || null);
+  it("cada recinto con layout guarda el viewBox y el escenario de su layout", () => {
+    for (const layout of VENUE_LAYOUTS_MOCK) {
+      const venue = data.venues.find((candidate) => candidate.id === eventBySlug(layout.eventSlug).venueId);
+      expect(venue?.mapViewBox, layout.eventSlug).toBe(layout.viewBox);
+      expect(venue?.stage, layout.eventSlug).toEqual(layout.stage);
     }
-    expect(sections.filter((section) => section.planTransform).map((section) => section.slug)).toEqual([
-      "occidente",
-      "oriente",
-    ]);
-    const rectangular = data.venueSections.filter((section) => section.venueId !== costaVerde?.id);
-    expect(rectangular.every((section) => !section.wrapLabel && !section.planTransform)).toBe(true);
+  });
+
+  it("la Costa Verde guarda el escenario del layout con sus 7 luces", () => {
+    const costaVerde = data.venues.find((venue) => venue.name === "Costa Verde");
+    const layout = layoutBySlug("festival-vive-latino-lima");
+    expect(costaVerde?.stage).toEqual(layout.stage);
+    expect(costaVerde?.stage?.lights).toHaveLength(7);
+  });
+
+  it("cada sección guarda wrapLabel y planTransform de su zona, y las secciones sin zona no los tienen", () => {
+    const zoneSections = new Set<(typeof data.venueSections)[number]>();
+    for (const layout of VENUE_LAYOUTS_MOCK) {
+      const venueId = eventBySlug(layout.eventSlug).venueId;
+      for (const zone of layout.zones) {
+        const label = `${layout.eventSlug}/${zone.id}`;
+        const section = data.venueSections.find(
+          (candidate) => candidate.venueId === venueId && candidate.slug === zone.id,
+        );
+        if (!section) throw new Error(`Sección no sembrada: ${label}`);
+        zoneSections.add(section);
+        expect(section.wrapLabel, label).toBe(zone.wrapLabel ?? false);
+        expect(section.planTransform ?? null, label).toEqual((zone.kind === "numbered" && zone.planTransform) || null);
+      }
+    }
+    const withoutZone = data.venueSections.filter((section) => !zoneSections.has(section));
+    expect(withoutZone.length).toBeGreaterThan(0);
+    for (const section of withoutZone) {
+      expect(section.wrapLabel ?? false, section.slug).toBe(false);
+      expect(section.planTransform ?? null, section.slug).toBeNull();
+    }
+  });
+
+  it("las secciones con planTransform son exactamente las zonas numeradas de los recintos curvos", () => {
+    const expected = VENUE_LAYOUTS_MOCK.filter((layout) => layout.eventSlug in VENUE_SECTORS_MOCK).flatMap((layout) =>
+      layout.zones
+        .filter((zone) => zone.kind === "numbered")
+        // Los eventos publicados del seed siempre tienen recinto (events_draft_complete_check).
+        .map((zone) => ({ venueId: eventBySlug(layout.eventSlug).venueId!, slug: zone.id })),
+    );
+    expect(expected.length).toBeGreaterThan(0);
+    expect(sectionKeySet(data.venueSections.filter((section) => section.planTransform))).toEqual(
+      sectionKeySet(expected),
+    );
   });
 
   it("las secciones numeradas no tienen capacidad y las generales sí", () => {

@@ -4,6 +4,7 @@ import { pgEnum, timestamp } from "drizzle-orm/pg-core";
 export const userRoleEnum = pgEnum("user_role", ["customer", "organizer", "admin", "super_admin"]);
 export const documentTypeEnum = pgEnum("document_type", ["dni", "ce", "passport"]);
 export const taxIdTypeEnum = pgEnum("tax_id_type", ["ruc", "dni"]);
+export const venueStatusEnum = pgEnum("venue_status", ["pending_review", "approved"]);
 export const seatingTypeEnum = pgEnum("seating_type", ["general", "numbered"]);
 export const eventStatusEnum = pgEnum("event_status", [
   "draft",

@@ -45,6 +45,10 @@ describe("toEvent", () => {
   it("una categoría desconocida hace fallar eventSchema.parse", () => {
     expect(() => eventSchema.parse(toEvent({ ...record, category: "opera" }))).toThrow();
   });
+
+  it.each(["startsAt", "imageUrl"] as const)("lanza con el slug si %s es null", (field) => {
+    expect(() => toEvent({ ...record, [field]: null })).toThrow(`Evento publicado incompleto: ${record.slug}`);
+  });
 });
 
 describe("toEventDetail", () => {
@@ -73,5 +77,11 @@ describe("toEventDetail", () => {
       organizer: "Pulso Producciones",
       address: "Av. José Díaz s/n",
     });
+  });
+
+  it.each(["description", "doorsOpenAt"] as const)("lanza con el slug si %s es null", (field) => {
+    expect(() => toEventDetail({ ...record, [field]: null }, ticketTypes)).toThrow(
+      `Evento publicado incompleto: ${record.slug}`,
+    );
   });
 });

@@ -1,38 +1,50 @@
-import { generateSeatRows } from "../utils/seatRows";
-import type { MockVenue } from "./stadium.mock";
+import { type AnnularSector, getAnnularSectorPath } from "../utils/annularSector";
+import { generateArcSeatRows } from "../utils/arcSeatRows";
+import { type MockVenue, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
+
+/** Sectores del teatro de "La casa de los espejos": abanico de 84° frente al escenario (decisión 2 de `seating-curved-venues`). */
+export const ESPEJOS_SECTORS: Record<"stage" | "platea" | "mezanine", AnnularSector> = {
+  stage: STAGE_SECTOR,
+  platea: { ...STADIUM_CENTER, innerRadius: 102, outerRadius: 281, startAngle: 48, endAngle: 132 },
+  mezanine: { ...STADIUM_CENTER, innerRadius: 289, outerRadius: 422, startAngle: 48, endAngle: 132 },
+};
 
 // Nombre, precio y estado de cada zona salen del `ticketType` del evento (service).
 export const ESPEJOS_VENUE: MockVenue = {
+  sectors: ESPEJOS_SECTORS,
   layout: {
     eventSlug: "la-casa-de-los-espejos",
-    viewBox: "0 0 600 520",
-    stage: { label: "ESCENARIO", path: "M150 16 H450 V64 H150 Z", labelPos: { x: 300, y: 40 } },
+    viewBox: "0 0 600 484",
+    stage: STADIUM_STAGE,
     zones: [
       {
         id: "platea",
         ticketTypeId: "platea",
         kind: "numbered",
-        path: "M60 90 H540 V300 H60 Z",
-        labelPos: { x: 300, y: 195 },
-        ...generateSeatRows({
+        path: getAnnularSectorPath(ESPEJOS_SECTORS.platea),
+        labelPos: { x: 300, y: 245 },
+        ...generateArcSeatRows({
           zoneId: "platea",
-          rowLabels: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
-          seatsPerRow: [8, 8, 9, 9, 10, 10, 10, 10, 10, 10],
+          sector: ESPEJOS_SECTORS.platea,
+          scale: 1.455,
+          rowLabels: ["A", "B", "C", "D", "E", "F", "G", "H"],
           occupiedRatio: 0.4,
-          accessibleSeats: ["platea-J-1", "platea-J-10"],
+          accessibleSeats: ["platea-H-1", "platea-H-15"],
         }),
       },
       {
         id: "mezanine",
         ticketTypeId: "mezanine",
         kind: "numbered",
-        path: "M40 330 H560 V490 H40 Z",
-        labelPos: { x: 300, y: 410 },
-        ...generateSeatRows({
+        path: getAnnularSectorPath(ESPEJOS_SECTORS.mezanine),
+        labelPos: { x: 300, y: 409 },
+        ...generateArcSeatRows({
           zoneId: "mezanine",
-          rowLabels: ["A", "B", "C", "D", "E", "F"],
-          seatsPerRow: 10,
+          sector: ESPEJOS_SECTORS.mezanine,
+          scale: 0.995,
+          rowLabels: ["A", "B", "C", "D"],
           occupiedRatio: 0.85,
+          accessibleSeats: ["mezanine-D-16"],
         }),
       },
     ],

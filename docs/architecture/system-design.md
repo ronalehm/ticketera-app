@@ -46,7 +46,7 @@ El objetivo es una ticketera con:
 | Organizadores | Solo en Perú. Tabla `organizers` 1:1 con `users`. |
 | Roles | `customer`, `organizer`, `admin`, `super_admin`. Staff de puerta por evento (`event_staff`), no es un rol. |
 | Inventario | Una fila por lugar vendible (`event_seats`), también en zonas generales. Un solo mecanismo de reserva: `UPDATE … FOR UPDATE SKIP LOCKED` con expiración perezosa. |
-| Recintos | Catálogo reutilizable (`venues` → `venue_sections` → `venue_seats`) gestionado por admin. |
+| Recintos | Catálogo reutilizable (`venues` → `venue_sections` → `venue_seats`) gestionado por admin, más recintos propios que crea un organizador (`pending_review`, solo visibles para su dueño) y que un admin aprueba al catálogo (`approved`). |
 | Correo | Resend, envío directo después del commit con reintento por job. |
 | Imágenes | Google Cloud Storage. |
 | Documentos legales | En la BD (markdown, versionados e inmutables al publicar), editables por `super_admin`. |
@@ -248,6 +248,7 @@ Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y
 | Solicitar ser organizador | | ✓ | | | |
 | Registrar reclamo | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Crear y editar **sus** eventos; enviarlos a revisión | | | ✓ | | |
+| Crear recinto propio (queda en revisión; solo lo ve su dueño hasta su aprobación) | | | ✓ | | |
 | Solicitar cancelación o reprogramación de **sus** eventos | | | ✓ | | |
 | Ver **sus** ventas (agregados) y liquidaciones | | | ✓ | | |
 | Invitar `event_staff` en **sus** eventos | | | ✓ | ✓ | ✓ |
@@ -257,7 +258,7 @@ Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y
 | Cancelar evento; resolver solicitudes de organizadores | | | | ✓ | ✓ |
 | Reembolsar entradas; resolver solicitudes de reembolso | | | | ✓ | ✓ |
 | Responder reclamos y solicitudes ARCO | | | | ✓ | ✓ |
-| Gestionar catálogo de recintos | | | | ✓ | ✓ |
+| Gestionar catálogo de recintos; aprobar recintos de organizadores | | | | ✓ | ✓ |
 | Aprobar solicitudes de organizador; dar/quitar `organizer`; gestionar usuarios | | | | ✓ | ✓ |
 | Ver órdenes y reembolsos (operación) | | | | ✓ | ✓ |
 | Crear/quitar `admin` | | | | | ✓ |
@@ -278,6 +279,7 @@ Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y
 - Quitar el rol `organizer` se **bloquea** mientras tenga eventos `pending_review`/`published` o payouts `pending` (mensaje: "Tiene 1 evento publicado y 1 payout pendiente"). Primero se cancelan o transfieren los eventos y se resuelven los payouts.
 - MFA obligatorio para `admin` y `super_admin`.
 - El organizador solo accede a eventos con `events.organizer_id` propio.
+- El organizador ve los recintos `approved` y los suyos (`status = 'approved' OR organizer_id = <él>`); un recinto `pending_review` solo lo ven su dueño y los admins.
 - Defensa en profundidad: `proxy.ts` filtra rutas por `publicMetadata.role`; **cada Server Action vuelve a validar** con `can(user, action, resource)` contra la BD.
 
 ## 7. Flujos críticos
@@ -398,6 +400,9 @@ Base legal: D.S. 016-2024-JUS (reglamento de la Ley 29733, vigente desde el 31/0
 Estados: `draft` → `pending_review` → `published` → `finished`; `published` → `cancelled`.
 
 - El organizador crea y edita en `draft` y pulsa "Enviar a revisión" → `pending_review`.
+- Un borrador solo exige título y categoría. Salir de `draft` exige fecha, apertura de puertas, recinto, imagen y descripción (CHECK `events_draft_complete_check`).
+- La moderación incluye recintos: el recinto propio de un organizador nace `pending_review` y un admin lo pasa a `approved` (entra en el catálogo y conserva su `organizer_id`). Si no se aprueba, sigue `pending_review` y el organizador lo corrige o elige otro.
+- Un evento solo se publica con recinto `approved`. El organizador puede enviar a revisión un evento con recinto propio `pending_review`; el admin aprueba primero el recinto y luego el evento.
 - Un admin aprueba (→ `published`, se generan los `event_seats`, `revalidateTag`) o rechaza (→ `draft` con `review_note`). Correo al organizador.
 - Con al menos una venta, el organizador solo puede editar descripción, imagen, edad mínima y precio de zonas **para ventas futuras** (lo vendido conserva su `unit_price_cents`). No puede cambiar fecha, hora o recinto ni quitar zonas con ventas: para eso usa una solicitud (§7.12).
 - Editar fecha, recinto o zonas de un evento publicado **sin ventas** lo devuelve a `pending_review`.
@@ -486,7 +491,7 @@ Cada fase es una spec en `docs/specs/` con su aprobación.
 | F1 | Fundación de datos | Drizzle + `pg`, `lib/env.ts`, esquema completo y migraciones, seed desde los mocks (`events.mock.ts`, `venueMaps.mock.ts` con su geometría, `organizerEvents.mock.ts`); `events` y `seating` leen de la BD. |
 | F2 | Identidad y legal | Clerk (MFA para admin), `users`, roles y sus reglas, seed del `super_admin`, `ensureUser`, webhook, `proxy.ts`, documentos legales con editor, páginas legales y footer, consentimientos, reaceptación, banner de cookies, ARCO (descargar datos y eliminar cuenta). |
 | F3 | Compra | Reserva, PaymentIntent, webhook, entradas con QR real, correos (Resend), "Mis entradas" desde la BD, búsqueda `pg_trgm`, caché del catálogo. Reemplaza el pago simulado y el store del navegador de `checkout-mock-payment.md`. |
-| F4 | Libro de Reclamaciones y admin | Formulario público, respuestas, reembolsos y solicitudes de reembolso, cancelación de evento, moderación de eventos, gestión de roles, solicitudes ARCO, `audit_logs`. |
+| F4 | Libro de Reclamaciones y admin | Formulario público, respuestas, reembolsos y solicitudes de reembolso, cancelación de evento, moderación de eventos y recintos, gestión de roles, solicitudes ARCO, `audit_logs`. |
 | F5 | Organizadores | Alta de organizador, dashboard, crear evento y enviar a revisión, edición limitada, solicitudes, catálogo de recintos, invitación de `event_staff`. |
 | F6 | Check-in | Escáner en puerta. |
 | F7 | Liquidación | Global Payouts (requiere habilitación de Stripe). |
