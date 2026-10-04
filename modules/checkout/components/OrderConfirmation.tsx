@@ -1,10 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { CalendarPlus, CircleCheck, Mail, QrCode, Ticket } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -23,54 +23,68 @@ const OUTLINE_ACTION_CLASS = cn(
   "text-primary-strong hover:bg-accent hover:text-primary-strong",
 );
 
-const NEXT_STEPS: { icon: LucideIcon; title: string; description: string }[] = [
-  { icon: Mail, title: "Revisa tu correo", description: "Ahí llegan tus entradas y el comprobante de pago." },
+/** `shortDescription` se muestra por debajo de `md`, donde las tarjetas van apiladas. */
+const NEXT_STEPS: { icon: LucideIcon; title: string; shortDescription: string; description: string }[] = [
+  {
+    icon: Mail,
+    title: "Revisa tu correo",
+    shortDescription: "Ahí llegan tus entradas y el comprobante.",
+    description: "Ahí llegan tus entradas y el comprobante de pago.",
+  },
   {
     icon: QrCode,
     title: "Muestra tu QR",
+    shortDescription: "Cada entrada tiene su QR. Muéstralo en el ingreso.",
     description: "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso.",
   },
   {
     icon: Ticket,
     title: "Todo en Mis entradas",
+    shortDescription: "Ingresa con tu cuenta para verlas cuando quieras.",
     description: "Entra con tu cuenta para ver y descargar tus entradas cuando quieras.",
   },
 ];
 
 type OrderConfirmationProps = {
   code: string;
-  /** Stepper de la compra; solo se muestra si se encuentra la orden. */
-  stepper: ReactNode;
 };
 
-export function OrderConfirmation({ code, stepper }: OrderConfirmationProps) {
+/** Paso 3 de la compra. La cabecera solo muestra el stepper si se encuentra la orden. */
+export function OrderConfirmation({ code }: OrderConfirmationProps) {
   const storedOrder = useStoredOrder(code);
 
-  if (storedOrder.status === "not-found") return <CheckoutStatusMessage variant="order-not-found" />;
+  if (storedOrder.status === "not-found") {
+    return (
+      <PurchaseShell>
+        <CheckoutStatusMessage variant="order-not-found" />
+      </PurchaseShell>
+    );
+  }
 
   if (storedOrder.status === "loading") {
     return (
-      <div className={CONTAINER_CLASS}>
-        <div role="status" className="flex items-center gap-3 py-16 text-muted-foreground">
-          <Spinner aria-hidden className="size-5 motion-reduce:animate-none" />
-          Cargando tu compra…
+      <PurchaseShell>
+        <div className={CONTAINER_CLASS}>
+          <div role="status" className="flex items-center gap-3 py-16 text-muted-foreground">
+            <Spinner aria-hidden className="size-5 motion-reduce:animate-none" />
+            Cargando tu compra…
+          </div>
         </div>
-      </div>
+      </PurchaseShell>
     );
   }
 
   const { order } = storedOrder;
 
   return (
-    <>
-      <div className="w-full print:hidden">{stepper}</div>
+    <PurchaseShell currentStep={3}>
       <div className={CONTAINER_CLASS}>
         <ConfirmationHeader code={order.code} email={order.buyer.email} />
         <ConfirmationTicketCard order={order} />
         <ConfirmationActions order={order} />
         <NextSteps />
       </div>
-    </>
+    </PurchaseShell>
   );
 }
 
@@ -85,7 +99,7 @@ function ConfirmationHeader({ code, email }: { code: string; email: string }) {
         Enviamos tus entradas a <strong className="font-semibold break-all text-foreground">{email}</strong>. También
         las tienes siempre en Mis entradas.
       </p>
-      <p className="flex h-9 items-center rounded-full px-4 text-sm text-muted-foreground ring-1 ring-border">
+      <p className="flex h-9 items-center rounded-full bg-card px-4 text-sm text-muted-foreground ring-1 ring-border">
         Pedido N.º
         <strong className="ml-1.5 font-semibold text-foreground tabular-nums">{code}</strong>
       </p>
@@ -145,11 +159,11 @@ function ConfirmationActions({ order }: { order: Order }) {
 function NextSteps() {
   return (
     <section aria-labelledby="order-next-steps" className="flex w-full flex-col gap-4 print:hidden">
-      <h2 id="order-next-steps" className="sr-only">
+      <h2 id="order-next-steps" className="text-lg font-bold md:sr-only">
         Qué sigue
       </h2>
       <ol className="grid gap-3 md:grid-cols-3">
-        {NEXT_STEPS.map(({ icon: Icon, title, description }) => (
+        {NEXT_STEPS.map(({ icon: Icon, title, shortDescription, description }) => (
           <li
             key={title}
             className="flex items-center gap-4 rounded-2xl bg-card p-4 ring-1 ring-border md:flex-col md:items-start md:gap-3 md:p-5"
@@ -159,7 +173,10 @@ function NextSteps() {
             </span>
             <span className="flex flex-col gap-1">
               <span className="font-semibold">{title}</span>
-              <span className="text-sm leading-relaxed text-muted-foreground">{description}</span>
+              <span className="text-sm leading-relaxed text-muted-foreground">
+                <span className="md:hidden">{shortDescription}</span>
+                <span className="max-md:hidden">{description}</span>
+              </span>
             </span>
           </li>
         ))}

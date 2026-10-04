@@ -6,14 +6,13 @@ import { SORT_OPTIONS } from "../data/searchOptions";
 import type { EventFilters } from "../schemas/eventFilters.schema";
 import { buildEventsHref } from "../utils/eventFilters";
 
-const LABEL_ID = "events-sort-label";
-
 // Server Component: enlaces de orden que conservan todos los filtros (sin `orden` equivale a "fecha").
+// Se nombra con aria-label (no aria-labelledby) porque /eventos lo pinta dos veces, una por ancho: sin ids repetidos.
 export function EventsSort({ className, filters }: { className?: string; filters: EventFilters }) {
   const current = filters.orden ?? "fecha";
   return (
-    <div role="group" aria-labelledby={LABEL_ID} className={cn("flex items-center gap-2.5", className)}>
-      <span id={LABEL_ID} className="sr-only text-sm text-muted-foreground sm:not-sr-only">
+    <div role="group" aria-label="Ordenar por" className={cn("flex items-center gap-2.5", className)}>
+      <span aria-hidden className="sr-only text-sm text-muted-foreground sm:not-sr-only">
         Ordenar por
       </span>
       <div className="flex gap-1 rounded-xl p-1 ring-1 ring-border">

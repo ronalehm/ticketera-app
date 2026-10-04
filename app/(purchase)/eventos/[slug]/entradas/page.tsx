@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { PurchaseStepper } from "@/components/shared/PurchaseStepper";
+import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { getEventBySlug, getEvents } from "@/modules/events";
 import { EventPurchaseStrip, getVenueMapBySlug, hasVenueMap, TicketSelection } from "@/modules/seating";
 
@@ -28,10 +28,9 @@ export default async function TicketSelectionPage({ params }: PageProps<"/evento
   const [event, map] = await Promise.all([getEventBySlug(slug), getVenueMapBySlug(slug)]);
   if (!event || !map) notFound();
 
-  // Sin padding inferior en móvil: la barra sticky de TicketSelection es el último elemento y llega al footer.
+  // Sin padding inferior en móvil: la barra sticky de TicketSelection es el último elemento y llega al final de la página.
   return (
-    <>
-      <PurchaseStepper currentStep={1} />
+    <PurchaseShell currentStep={1} back={{ href: `/eventos/${event.slug}`, label: "Volver al evento" }}>
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 md:px-6 md:pt-8 lg:px-8 lg:pb-12">
         <EventPurchaseStrip
           slug={event.slug}
@@ -43,6 +42,6 @@ export default async function TicketSelectionPage({ params }: PageProps<"/evento
         />
         <TicketSelection map={map} />
       </div>
-    </>
+    </PurchaseShell>
   );
 }

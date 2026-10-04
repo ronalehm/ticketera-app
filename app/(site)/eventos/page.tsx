@@ -41,7 +41,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/eventos">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 md:px-6 md:py-12 lg:grid-cols-[288px_minmax(0,1fr)] lg:items-start lg:gap-10 lg:px-8">
         <EventFiltersSidebar className="hidden lg:block" filters={filters} facets={facets} months={months} />
         <section aria-label="Resultados" className="flex min-w-0 flex-col gap-4 md:gap-6">
-          <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2 lg:hidden">
             <EventFiltersSheet
               className="lg:hidden"
               filters={filters}
@@ -52,7 +52,11 @@ export default async function EventsPage({ searchParams }: PageProps<"/eventos">
             <EventsSort filters={filters} />
           </div>
           <CategoryFilter className="lg:hidden" filters={filters} />
-          <EventsResults events={events} chips={getActiveFilterChips(filters)} />
+          <EventsResults
+            events={events}
+            chips={getActiveFilterChips(filters)}
+            sort={<EventsSort className="hidden shrink-0 lg:flex" filters={filters} />}
+          />
         </section>
       </div>
     </>
