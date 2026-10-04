@@ -1,0 +1,2 @@
+# Registro de aprobaciones (solo se agregan líneas): unir ambos lados en los merges.
+docs/specs/approvals.jsonl merge=union
