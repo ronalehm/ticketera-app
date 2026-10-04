@@ -143,7 +143,7 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
      - forzar la geometría de la arena: un partido con "ESCENARIO" y sin cancha;
      - deducir la etiqueta del escenario de la categoría en el service: lógica de presentación en el service, y el mock y la BD dejarían de coincidir;
      - duplicar el recinto "Estadio Nacional": rompe "un solo Estadio Nacional" y el catálogo de recintos;
-     - dejar el Clásico sin mapa: es la opción si el usuario no quiere migrar (Preguntas abiertas 1).
+     - dejar el Clásico sin mapa: descartada: el usuario eligió migrar (Preguntas abiertas, resuelta).
    - **Solución:** configuración de mapa opcional por evento.
      - `events.map_view_box text NULL` y `events.map_stage jsonb NULL`, con CHECK `events_map_override_check`: las dos `NULL` o las dos con valor.
      - El service usa las del evento si las tiene y, si no, las del recinto. Las secciones siguen siendo del recinto.
@@ -610,7 +610,7 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 
 ## Plan de tareas
 **Coordinación:**
-- **Orden de las fases:** F1 → F2 → F3 → F4, una por sesión. F3 y F4 solo se ejecutan si el usuario confirma la migración (Preguntas abiertas 1).
+- **Orden de las fases:** F1 → F2 → F3 → F4, una por sesión. El usuario confirmó la migración, así que F3 y F4 se ejecutan (Preguntas abiertas, resuelta).
 - **`design-system/ticketera/pages/ticket-selection.md`:** lo tocan las tareas de cierre (F1 T4, F2 T5 y F4 T3). No se ejecutan en la misma sesión que otra tarea que edite ese archivo, como la enmienda F6 de `seating-stadium-map.md` o `design-alignment-purchase-flow.md`. Esta spec no toca `ZonePricesCard`, `MobileBuyBar`, `TicketSelection` ni `app/`, aunque esas specs sigan en curso.
 - **Developers en paralelo** (tareas de recinto):
   - solo tocan sus 2 archivos;
