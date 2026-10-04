@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Lock } from "lucide-react";
@@ -10,7 +10,7 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldContent, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,7 +27,9 @@ import type { MockPaymentInput } from "../services/payment.service";
 import { persistOrder } from "../stores/orders.store";
 import type { CheckoutFormValues, CheckoutOrder } from "../types/checkout.types";
 import { CheckoutSummaryPanel } from "./CheckoutSummaryPanel";
+import { OrderSummary } from "./OrderSummary";
 import { PaymentMethodFields } from "./PaymentMethodFields";
+import { RequiredMark } from "./RequiredMark";
 import { ReservationTimer } from "./ReservationTimer";
 
 const PAYMENT_TITLE_ID = "checkout-payment-title";
@@ -35,6 +37,13 @@ const UNEXPECTED_ERROR = "Ocurrió un error inesperado al procesar el pago. Int�
 const PREFILL_FIELDS = ["firstName", "lastName", "email"] as const;
 
 type TextField = "firstName" | "lastName" | "email" | "phone" | "documentNumber";
+
+// Abreviatura para el selector estrecho (w-32); la lista desplegada conserva los nombres completos.
+const DOCUMENT_TYPE_SHORT_LABELS = {
+  dni: "DNI",
+  ce: "CE",
+  passport: "Pasaporte",
+} satisfies Record<CheckoutFormValues["documentType"], string>;
 
 const INITIAL_VALUES: CheckoutFormValues = {
   firstName: "",
@@ -55,39 +64,51 @@ type PayButtonProps = {
   totalLabel: string;
   isProcessing: boolean;
   disabled: boolean;
+  termsPending: boolean;
   className?: string;
 };
 
-// Se renderiza dos veces (panel en lg y barra inferior en móvil); en cada ancho solo una es visible.
-function PayButton({ totalLabel, isProcessing, disabled, className }: PayButtonProps) {
+// Se renderiza dos veces (tarjeta del resumen en lg y barra inferior en móvil); en cada ancho solo una es visible.
+// Con Términos pendientes usa `aria-disabled` (no `disabled`): sigue en el orden de Tab y el envío llega a `onSubmit`,
+// que lleva el foco a la casilla. `disabled` nativo solo al expirar la reserva o mientras se procesa.
+function PayButton({ totalLabel, isProcessing, disabled, termsPending, className }: PayButtonProps) {
+  const hintId = useId();
   return (
-    <Button
-      type="submit"
-      disabled={disabled}
-      className={cn("h-12 w-full cursor-pointer font-semibold duration-200 hover:bg-primary-strong", className)}
-    >
-      {isProcessing ? (
-        <>
-          <Spinner aria-hidden className="motion-reduce:animate-none" />
-          Procesando pago…
-        </>
-      ) : (
-        <>
-          <Lock aria-hidden />
-          Pagar {totalLabel}
-        </>
+    <div className={cn("flex flex-col gap-2", className)}>
+      <Button
+        type="submit"
+        disabled={disabled}
+        aria-disabled={termsPending ? "true" : undefined}
+        aria-describedby={termsPending ? hintId : undefined}
+        className="h-12 w-full cursor-pointer font-semibold duration-200 hover:bg-primary-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary aria-disabled:active:not-aria-[haspopup]:translate-y-0"
+      >
+        {isProcessing ? (
+          <>
+            <Spinner aria-hidden className="motion-reduce:animate-none" />
+            Procesando pago…
+          </>
+        ) : (
+          <>
+            <Lock aria-hidden />
+            Pagar {totalLabel}
+          </>
+        )}
+      </Button>
+      {termsPending && (
+        <p id={hintId} className="text-center text-sm text-muted-foreground">
+          Acepta los términos para continuar.
+        </p>
       )}
-    </Button>
+    </div>
   );
 }
 
 type CheckoutFormProps = {
   order: CheckoutOrder;
   changeHref: string;
-  summary: ReactNode;
 };
 
-export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) {
+export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const [isExpired, setIsExpired] = useState(false);
@@ -99,6 +120,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
   // re-renderice, así que isSubmitting/isRedirecting aún valen false en el segundo. Se libera solo si el pago falla.
   const paymentInFlightRef = useRef(false);
   const paymentErrorRef = useRef<HTMLDivElement>(null);
+  const termsRef = useRef<HTMLElement>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
     checkoutFormSchema,
     INITIAL_VALUES,
@@ -127,6 +149,12 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     // Se corta antes de handleSubmit: si no, su `finally` pondría isSubmitting=false con el primer pago aún en curso.
     if (isExpired || isProcessing || paymentInFlightRef.current) {
       event.preventDefault();
+      return;
+    }
+    // Sin Términos no se valida (ni errores ni service): el foco va a la casilla, que explica por qué no se paga.
+    if (!values.acceptTerms) {
+      event.preventDefault();
+      termsRef.current?.focus();
       return;
     }
     handleSubmit(async (data) => {
@@ -158,6 +186,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     value: values[name],
     onChange: (event: ChangeEvent<HTMLInputElement>) => setValue(name, event.target.value),
     onBlur: () => handleBlur(name),
+    required: true,
     "aria-invalid": !!errors[name],
     "aria-describedby": errors[name] ? `checkout-${name}-error` : undefined,
   });
@@ -166,7 +195,8 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
     <FieldError id={`checkout-${name}-error`}>{errors[name]}</FieldError>
   );
 
-  const payButtonProps = { totalLabel, isProcessing, disabled: isExpired || isProcessing };
+  const termsPending = !values.acceptTerms && !isExpired && !isProcessing;
+  const payButtonProps = { totalLabel, isProcessing, disabled: isExpired || isProcessing, termsPending };
 
   return (
     <div className="flex flex-col gap-6">
@@ -180,26 +210,48 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
         <Card className="rounded-2xl ring-border lg:col-start-1 lg:row-start-1">
           <CardHeader>
             <h2 className="text-xl font-bold">Datos del comprador</h2>
-            <CardDescription className="text-base">Enviaremos tus entradas al correo que indiques.</CardDescription>
+            <CardDescription className="text-base">
+              Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2 sm:gap-4">
             <Field data-invalid={!!errors.firstName}>
-              <FieldLabel htmlFor="checkout-firstName">Nombres</FieldLabel>
+              <FieldLabel htmlFor="checkout-firstName">
+                <span>
+                  Nombres
+                  <RequiredMark />
+                </span>
+              </FieldLabel>
               <Input {...textProps("firstName")} autoComplete="given-name" className="h-11" />
               {fieldError("firstName")}
             </Field>
             <Field data-invalid={!!errors.lastName}>
-              <FieldLabel htmlFor="checkout-lastName">Apellidos</FieldLabel>
+              <FieldLabel htmlFor="checkout-lastName">
+                <span>
+                  Apellidos
+                  <RequiredMark />
+                </span>
+              </FieldLabel>
               <Input {...textProps("lastName")} autoComplete="family-name" className="h-11" />
               {fieldError("lastName")}
             </Field>
-            <Field data-invalid={!!errors.email}>
-              <FieldLabel htmlFor="checkout-email">Correo electrónico</FieldLabel>
+            <Field data-invalid={!!errors.email} className="sm:col-span-2">
+              <FieldLabel htmlFor="checkout-email">
+                <span>
+                  Correo electrónico
+                  <RequiredMark />
+                </span>
+              </FieldLabel>
               <Input {...textProps("email")} type="email" autoComplete="email" className="h-11" />
               {fieldError("email")}
             </Field>
             <Field data-invalid={!!errors.phone}>
-              <FieldLabel htmlFor="checkout-phone">Celular</FieldLabel>
+              <FieldLabel htmlFor="checkout-phone">
+                <span>
+                  Celular
+                  <RequiredMark />
+                </span>
+              </FieldLabel>
               <InputGroup className="h-11">
                 <InputGroupAddon>
                   <InputGroupText>+51</InputGroupText>
@@ -215,40 +267,53 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
               </InputGroup>
               {fieldError("phone")}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="checkout-documentType">Tipo de documento</FieldLabel>
-              <Select
-                items={DOCUMENT_TYPE_LABELS}
-                value={values.documentType}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setValue("documentType", value);
-                  handleBlur("documentType");
-                  handleBlur("documentNumber");
-                }}
-              >
-                <SelectTrigger id="checkout-documentType" className="w-full cursor-pointer data-[size=default]:h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type} className="min-h-11 cursor-pointer">
-                      {DOCUMENT_TYPE_LABELS[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field data-invalid={!!errors.documentNumber}>
-              <FieldLabel htmlFor="checkout-documentNumber">Número de documento</FieldLabel>
-              <Input
-                {...textProps("documentNumber")}
-                inputMode={isDni ? "numeric" : undefined}
-                maxLength={isDni ? 8 : undefined}
-                className="h-11"
-              />
+            <FieldSet data-invalid={!!errors.documentNumber} className="min-w-0 gap-2 data-[invalid=true]:text-destructive">
+              <FieldLegend variant="label" className="mb-2">
+                Documento de identidad
+                <RequiredMark />
+              </FieldLegend>
+              <div className="flex gap-2">
+                <FieldLabel htmlFor="checkout-documentType" className="sr-only">
+                  Tipo de documento
+                </FieldLabel>
+                <Select
+                  items={DOCUMENT_TYPE_LABELS}
+                  value={values.documentType}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setValue("documentType", value);
+                    handleBlur("documentType");
+                    handleBlur("documentNumber");
+                  }}
+                >
+                  <SelectTrigger
+                    id="checkout-documentType"
+                    className="w-32 shrink-0 cursor-pointer data-[size=default]:h-11"
+                  >
+                    <SelectValue>
+                      {(value: CheckoutFormValues["documentType"]) => DOCUMENT_TYPE_SHORT_LABELS[value]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type} className="min-h-11 cursor-pointer">
+                        {DOCUMENT_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldLabel htmlFor="checkout-documentNumber" className="sr-only">
+                  Número de documento
+                </FieldLabel>
+                <Input
+                  {...textProps("documentNumber")}
+                  inputMode={isDni ? "numeric" : undefined}
+                  maxLength={isDni ? 8 : undefined}
+                  className="h-11 min-w-0 flex-1"
+                />
+              </div>
               {fieldError("documentNumber")}
-            </Field>
+            </FieldSet>
           </CardContent>
         </Card>
 
@@ -282,7 +347,9 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
 
         <Field orientation="horizontal" data-invalid={!!errors.acceptTerms} className="lg:row-start-3">
           <Checkbox
+            ref={termsRef}
             id="checkout-acceptTerms"
+            required
             checked={values.acceptTerms}
             onCheckedChange={(checked) => {
               setValue("acceptTerms", checked);
@@ -302,6 +369,7 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
                 Política de privacidad
               </Link>
               .
+              <RequiredMark />
             </FieldLabel>
             {fieldError("acceptTerms")}
           </FieldContent>
@@ -312,10 +380,13 @@ export function CheckoutForm({ order, changeHref, summary }: CheckoutFormProps) 
           imageUrl={order.event.imageUrl}
           ticketCount={order.ticketCount}
           totalLabel={totalLabel}
-          footer={<PayButton {...payButtonProps} className="hidden lg:flex" />}
           className="order-first lg:order-none lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:sticky lg:top-24 lg:self-start"
         >
-          {summary}
+          <OrderSummary
+            order={order}
+            changeHref={changeHref}
+            footer={<PayButton {...payButtonProps} className="hidden lg:flex" />}
+          />
         </CheckoutSummaryPanel>
 
         <p role="status" className="sr-only">

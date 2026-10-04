@@ -1,130 +1,106 @@
-import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { Search } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
-import { CITIES, PRICE_RANGES } from "../data/searchOptions";
+import { PRICE_RANGES } from "../data/searchOptions";
 import type { EventFilters } from "../schemas/eventFilters.schema";
-import { toSearchParamEntries } from "../utils/eventFilters";
+import { buildEventsHref, toSearchParamEntries, type MonthOption } from "../utils/eventFilters";
 
-type SelectOption = { label: string; value: string | null };
+/** Claves que el buscador muestra; el resto de filtros de la URL viaja en inputs ocultos. */
+const VISIBLE_KEYS = new Set(["q", "mes", "precio"]);
 
-const CITY_ITEMS: SelectOption[] = [
-  { label: "Todas", value: null },
-  ...CITIES.map((city) => ({ label: city, value: city })),
-];
+/** El control ocupa todo el segmento: 56 px de alto, sin borde ni sombra, con hueco arriba para la etiqueta. */
+const CONTROL_CLASS =
+  "h-14 cursor-pointer rounded-xl border-0 bg-transparent px-4 pt-5 pb-1 shadow-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-transparent";
 
-const PRICE_ITEMS: SelectOption[] = [{ label: "Cualquier precio", value: null }, ...PRICE_RANGES];
+// `className` de NativeSelect va al wrapper: el <select> y su icono se estilizan desde ahí (mismas reglas que CONTROL_CLASS).
+const SELECT_CLASS =
+  "w-full *:data-[slot=native-select]:h-14 *:data-[slot=native-select]:cursor-pointer *:data-[slot=native-select]:rounded-xl *:data-[slot=native-select]:border-0 *:data-[slot=native-select]:bg-transparent *:data-[slot=native-select]:pt-5 *:data-[slot=native-select]:pb-1 *:data-[slot=native-select]:pl-4 *:data-[slot=native-select]:pr-10 *:data-[slot=native-select]:shadow-none *:data-[slot=native-select]:focus-visible:ring-2 *:data-[slot=native-select]:focus-visible:ring-ring *:data-[slot=native-select]:dark:bg-transparent *:data-[slot=native-select]:dark:hover:bg-transparent *:data-[slot=native-select-icon]:right-4";
 
-const labelClassName = "text-xs font-bold tracking-wider text-muted-foreground uppercase";
-
-// Select es cliente (de shadcn) y envía su valor con un input oculto `name`; `null` envía vacío.
-function SelectField({
-  name,
-  label,
-  items,
-  defaultValue,
-}: {
-  name: string;
-  label: string;
-  items: SelectOption[];
-  defaultValue?: string;
-}) {
+function SearchSegment({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-1.5">
-      <Select name={name} items={items} defaultValue={defaultValue ?? null}>
-        <SelectPrimitive.Label className={labelClassName}>{label}</SelectPrimitive.Label>
-        <SelectTrigger className="w-full cursor-pointer data-[size=default]:h-11">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.label} value={item.value} className="min-h-11 cursor-pointer">
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-type EventSearchBarVariant = "full" | "compact";
-
-const FORM_CLASS: Record<EventSearchBarVariant, string> = {
-  full: "grid gap-3 rounded-2xl bg-card p-4 ring-1 ring-border md:grid-cols-4 md:items-end md:gap-4 md:p-5 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))_auto]",
-  compact: "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 rounded-2xl bg-card p-3 ring-1 ring-border md:gap-4 md:p-4",
-};
-
-function QueryField({ className, defaultValue }: { className?: string; defaultValue?: string }) {
-  return (
-    <div className={cn("grid gap-1.5", className)}>
-      <label htmlFor="search-q" className={labelClassName}>
-        Buscar
+    <div className="relative rounded-xl transition-colors duration-200 hover:bg-accent/60">
+      <label htmlFor={id} className="pointer-events-none absolute top-2 left-4 z-10 text-xs font-bold text-foreground">
+        {label}
       </label>
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input
-          id="search-q"
-          name="q"
-          type="search"
-          placeholder="Artista, evento o lugar"
-          className="h-11 pl-9"
-          defaultValue={defaultValue}
-        />
-      </div>
+      {children}
     </div>
   );
 }
 
 type EventSearchBarProps = {
-  className?: string;
+  /** Meses con eventos (`getEventMonths`), los mismos que la barra lateral. */
+  months: MonthOption[];
+  /** Filtros de la URL. En la landing no se pasan. */
   defaultValues?: EventFilters;
-  /** `full` (landing): texto + ciudad + fecha + precio. `compact` (/eventos): solo texto; conserva el resto de filtros con inputs ocultos. */
-  variant?: EventSearchBarVariant;
+  className?: string;
 };
 
-// Server Component. full — móvil: apilado; md: texto en su fila + ciudad/fecha/precio/Buscar; lg: una fila. compact — texto + Buscar en una fila.
-export function EventSearchBar({ className, defaultValues, variant = "full" }: EventSearchBarProps) {
+/**
+ * Server Component. Barra píldora única de `/eventos` y la landing: "Qué quieres ver" (`q`), "Fecha" (`mes`),
+ * "Precio" (`precio`) y "Buscar". Campos no controlados; el `key` del form (la URL serializada) lo vuelve a montar
+ * cuando otro control cambia la URL. Móvil: segmentos apilados; md+: una fila con divisores verticales.
+ */
+export function EventSearchBar({ months, defaultValues, className }: EventSearchBarProps) {
+  const values = defaultValues ?? {};
+  const hiddenEntries = toSearchParamEntries(values).filter(([key]) => !VISIBLE_KEYS.has(key));
+
   return (
     <section aria-label="Buscar eventos" className={cn("mx-auto max-w-7xl px-4 pt-6 md:px-6 md:pt-8 lg:px-8", className)}>
-      <form action="/eventos" method="get" role="search" className={FORM_CLASS[variant]}>
-        {variant === "compact" ? (
-          <>
-            <QueryField defaultValue={defaultValues?.q} />
-            {toSearchParamEntries(defaultValues ?? {})
-              .filter(([key]) => key !== "q")
-              .map(([key, value]) => (
-                <input key={`${key}-${value}`} type="hidden" name={key} value={value} />
+      <form
+        key={buildEventsHref(values)}
+        action="/eventos"
+        method="get"
+        role="search"
+        className="flex flex-col rounded-2xl bg-card p-2 shadow-lg ring-1 shadow-foreground/5 ring-border md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_minmax(0,11rem)_auto] md:items-center lg:grid-cols-[minmax(0,1fr)_minmax(0,13rem)_minmax(0,13rem)_auto]"
+      >
+        <div className="divide-y divide-border md:col-span-3 md:grid md:grid-cols-subgrid md:items-center md:divide-x md:divide-y-0">
+          <SearchSegment id="search-q" label="Qué quieres ver">
+            <Input
+              id="search-q"
+              name="q"
+              type="search"
+              placeholder="Artista, evento o ciudad"
+              defaultValue={values.q}
+              className={CONTROL_CLASS}
+            />
+          </SearchSegment>
+
+          <SearchSegment id="search-mes" label="Fecha">
+            <NativeSelect id="search-mes" name="mes" defaultValue={values.mes ?? ""} className={SELECT_CLASS}>
+              <NativeSelectOption value="">Cualquier fecha</NativeSelectOption>
+              {months.map((month) => (
+                <NativeSelectOption key={month.value} value={month.value}>
+                  {month.label}
+                </NativeSelectOption>
               ))}
-          </>
-        ) : (
-          <>
-            <QueryField className="md:col-span-4 lg:col-span-1" defaultValue={defaultValues?.q} />
+            </NativeSelect>
+          </SearchSegment>
 
-            <SelectField name="ciudad" label="Ciudad" items={CITY_ITEMS} defaultValue={defaultValues?.ciudad?.[0]} />
+          <SearchSegment id="search-precio" label="Precio">
+            <NativeSelect id="search-precio" name="precio" defaultValue={values.precio ?? ""} className={SELECT_CLASS}>
+              <NativeSelectOption value="">Cualquier precio</NativeSelectOption>
+              {PRICE_RANGES.map((range) => (
+                <NativeSelectOption key={range.value} value={range.value}>
+                  {range.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </SearchSegment>
+        </div>
 
-            <div className="grid gap-1.5">
-              <label htmlFor="search-date" className={labelClassName}>
-                Fecha
-              </label>
-              <Input
-                id="search-date"
-                name="fecha"
-                type="date"
-                className="h-11 cursor-pointer"
-                defaultValue={defaultValues?.fecha}
-              />
-            </div>
+        {hiddenEntries.map(([key, value]) => (
+          <input key={`${key}-${value}`} type="hidden" name={key} value={value} />
+        ))}
 
-            <SelectField name="precio" label="Precio" items={PRICE_ITEMS} defaultValue={defaultValues?.precio} />
-          </>
-        )}
-
-        <Button type="submit" className="h-11 cursor-pointer px-6 font-semibold hover:bg-primary-strong">
+        <Button
+          type="submit"
+          className="mt-2 h-12 w-full cursor-pointer rounded-xl px-6 font-semibold hover:bg-primary-strong md:mt-0 md:ml-2 md:w-auto"
+        >
           <Search className="size-5" aria-hidden />
           Buscar
         </Button>

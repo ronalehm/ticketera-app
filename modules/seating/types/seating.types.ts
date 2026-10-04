@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { EventStatus } from "@/modules/events";
 import type {
+  planTransformSchema,
+  pointSchema,
   seatRowSchema,
   seatSchema,
   seatStatusSchema,
@@ -8,6 +10,8 @@ import type {
   venueZoneLayoutSchema,
 } from "../schemas/seating.schema";
 
+export type Point = z.infer<typeof pointSchema>;
+export type PlanTransform = z.infer<typeof planTransformSchema>;
 export type SeatStatus = z.infer<typeof seatStatusSchema>;
 export type Seat = z.infer<typeof seatSchema>;
 export type SeatRow = z.infer<typeof seatRowSchema>;
@@ -21,4 +25,4 @@ export type VenueMap = Omit<VenueLayout, "zones"> & { venue: string; zones: Venu
 export type ResolvedSeat = { id: string; label: string; zoneId: string; ticketTypeId: string };
 export type SeatSelection = { quantities: Record<string, number>; seatIds: string[] };
 export type SelectionLine = { zoneId: string; name: string; quantity: number; amount: number; seatLabels: string[] };
-export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "sold-out";
+export type ZoneTone = "tier-1" | "tier-2" | "tier-3" | "tier-4" | "tier-5" | "sold-out";

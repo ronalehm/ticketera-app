@@ -10,6 +10,7 @@ export { EventsResults } from "./components/EventsResults";
 export { EventsSort } from "./components/EventsSort";
 export { FeaturedEventsRail } from "./components/FeaturedEventsRail";
 export { HeroCarousel } from "./components/HeroCarousel";
+export { PreselectedTicketSelector } from "./components/PreselectedTicketSelector";
 export { RelatedEvents } from "./components/RelatedEvents";
 export { TicketSelector } from "./components/TicketSelector";
 export { UpcomingEvents } from "./components/UpcomingEvents";

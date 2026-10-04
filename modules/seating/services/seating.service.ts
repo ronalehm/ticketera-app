@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
-import { getEventBySlug } from "@/modules/events";
+import type { EventDetail } from "@/modules/events";
+import { getEventBySlug } from "@/modules/events/catalog";
 import { VENUE_LAYOUTS_MOCK } from "../data/venueMaps.mock";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import type { VenueMap, VenueZone } from "../types/seating.types";
@@ -11,8 +12,14 @@ import { toVenueLayout } from "../utils/venueLayoutRecords";
 /** Libre para vender: disponible, o retenido con la retención vencida. */
 const isSeatAvailable = sql<boolean>`(${eventSeats.status} = 'available' OR (${eventSeats.status} = 'held' AND ${eventSeats.heldUntil} < now())) IS TRUE`;
 
-/** Mapa del recinto con cada zona completada con nombre, precio y estado de su tipo de entrada. */
-export async function getVenueMapBySlug(slug: string): Promise<VenueMap | null> {
+function findLayout(slug: string) {
+  return VENUE_LAYOUTS_MOCK.find((layout) => layout.eventSlug === slug);
+}
+
+type RawLayout = NonNullable<ReturnType<typeof toVenueLayout>>;
+
+/** Layout del recinto de un evento publicado, sin validar; `null` si no existe o no tiene geometría. */
+async function loadLayout(slug: string): Promise<RawLayout | null> {
   const [venue] = await db
     .select({ eventId: events.id, mapViewBox: venues.mapViewBox, stage: venues.stage })
     .from(events)
@@ -53,12 +60,11 @@ export async function getVenueMapBySlug(slug: string): Promise<VenueMap | null> 
       .orderBy(sql`length(${venueSeats.rowLabel})`, venueSeats.rowLabel, venueSeats.number),
   ]);
 
-  const rawLayout = toVenueLayout({ eventSlug: slug, ...venue }, zones, seats);
-  if (!rawLayout) return null;
+  return toVenueLayout({ eventSlug: slug, ...venue }, zones, seats);
+}
 
-  const event = await getEventBySlug(slug);
-  if (!event) return null;
-
+/** Valida el layout y completa cada zona con nombre, precio y estado de su tipo de entrada. */
+function toVenueMap(rawLayout: RawLayout, event: Pick<EventDetail, "venue" | "ticketTypes">): VenueMap {
   const { zones: layoutZones, ...layout } = venueLayoutSchema.parse(rawLayout);
   return {
     ...layout,
@@ -73,7 +79,26 @@ export async function getVenueMapBySlug(slug: string): Promise<VenueMap | null> 
   };
 }
 
+/** Mapa del recinto con cada zona completada con nombre, precio y estado de su tipo de entrada. */
+export async function getVenueMapBySlug(slug: string): Promise<VenueMap | null> {
+  const rawLayout = await loadLayout(slug);
+  if (!rawLayout) return null;
+
+  const event = await getEventBySlug(slug);
+  if (!event) return null;
+
+  return toVenueMap(rawLayout, event);
+}
+
+/** Igual que `getVenueMapBySlug`, a partir de un evento ya cargado (no lo vuelve a cargar). */
+export async function getVenueMapForEvent(
+  event: Pick<EventDetail, "slug" | "venue" | "ticketTypes">,
+): Promise<VenueMap | null> {
+  const rawLayout = await loadLayout(event.slug);
+  return rawLayout && toVenueMap(rawLayout, event);
+}
+
 // ponytail: sigue leyendo el mock porque es síncrono (Decisión 9); pasarlo a la BD en F5.
 export function hasVenueMap(slug: string): boolean {
-  return VENUE_LAYOUTS_MOCK.some((layout) => layout.eventSlug === slug);
+  return findLayout(slug) !== undefined;
 }

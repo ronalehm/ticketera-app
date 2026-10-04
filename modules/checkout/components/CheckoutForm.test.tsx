@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useAuthStore } from "@/modules/auth/session";
@@ -63,15 +63,20 @@ const SESSION_USER = { id: "usr-001", firstName: "Ana", lastName: "Quispe", emai
 
 const DECLINED_MESSAGE = "Tu tarjeta fue rechazada. Prueba con otra tarjeta o elige otro método de pago.";
 
-const input = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+// Por rol y nombre accesible: el `*` (aria-hidden) queda dentro del <label> pero fuera del nombre.
+const input = (label: string) => screen.getByRole("textbox", { name: label }) as HTMLInputElement;
 const type = (label: string, value: string) => fireEvent.change(input(label), { target: { value } });
 // Dos botones "Pagar" en el DOM: el del panel (lg) y el de la barra inferior (móvil).
 const payButtons = () =>
   screen.getAllByRole("button", { name: /Pagar S\/|Procesando pago…/ }) as HTMLButtonElement[];
 const pay = () => fireEvent.click(payButtons()[0]);
+const termsCheckbox = () => screen.getByRole("checkbox", { name: /Acepto los/ });
+const toggleTerms = () => fireEvent.click(screen.getByText(/^Acepto los/));
+const TERMS_HINT = "Acepta los términos para continuar.";
+const summaryPanel = () => screen.getByRole("complementary", { name: "Resumen de la compra" });
 
-function renderForm() {
-  return render(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" summary={<p>Resumen</p>} />);
+function renderForm(order: CheckoutOrder = ORDER) {
+  return render(<CheckoutForm order={order} changeHref="/eventos/noche-de-sintetizadores-lima" />);
 }
 
 function fillBuyer() {
@@ -80,7 +85,7 @@ function fillBuyer() {
   type("Correo electrónico", BUYER.email);
   type("Celular", BUYER.phone);
   type("Número de documento", BUYER.documentNumber);
-  fireEvent.click(screen.getByText(/^Acepto los/));
+  toggleTerms();
 }
 
 function fillCard(number = "4242424242424242") {
@@ -100,18 +105,24 @@ afterEach(() => {
 });
 
 describe("CheckoutForm", () => {
-  it("muestra los botones 'Pagar' con el total del pedido", () => {
+  it("muestra los botones 'Pagar' con el total del pedido, bloqueados con aria-disabled hasta aceptar los Términos", () => {
     renderForm();
     const buttons = payButtons();
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       expect(button.textContent).toBe("Pagar S/ 910.00");
       expect(button.type).toBe("submit");
+      expect(button.getAttribute("aria-disabled")).toBe("true");
+      expect(button.hasAttribute("disabled")).toBe(false);
+      const hintId = button.getAttribute("aria-describedby");
+      expect(hintId).toBeTruthy();
+      expect(document.getElementById(hintId!)?.textContent).toBe(TERMS_HINT);
     }
   });
 
-  it("envío vacío muestra los errores (comprador, tarjeta y Términos), enfoca 'Nombres' y no llama al service", () => {
+  it("con Términos marcados, el envío vacío muestra los errores del comprador y de la tarjeta, enfoca 'Nombres' y no llama al service", () => {
     renderForm();
+    toggleTerms();
     pay();
 
     for (const message of [
@@ -124,10 +135,10 @@ describe("CheckoutForm", () => {
       "Ingresa la fecha de vencimiento",
       "Ingresa el CVV",
       "Ingresa el nombre que figura en la tarjeta",
-      "Debes aceptar los Términos y condiciones y la Política de privacidad",
     ]) {
       expect(screen.getByText(message)).toBeTruthy();
     }
+    expect(screen.queryByText("Debes aceptar los Términos y condiciones y la Política de privacidad")).toBeNull();
     expect(input("Nombres").getAttribute("aria-describedby")).toBe("checkout-firstName-error");
     expect(document.activeElement).toBe(input("Nombres"));
     expect(processMockPayment).not.toHaveBeenCalled();
@@ -146,7 +157,7 @@ describe("CheckoutForm", () => {
     renderForm();
 
     fireEvent.click(screen.getByRole("radio", { name: "Yape" }));
-    expect(screen.queryByLabelText("Número de tarjeta")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Número de tarjeta" })).toBeNull();
     expect(screen.getByText(/código QR para pagar desde tu app de Yape/)).toBeTruthy();
 
     fillBuyer();
@@ -315,5 +326,158 @@ describe("CheckoutForm", () => {
 
     fireEvent.submit(container.querySelector("form")!);
     expect(processMockPayment).not.toHaveBeenCalled();
+  });
+  it("marca los campos obligatorios con required y un * oculto a la tecnología de apoyo", () => {
+    const { container } = renderForm();
+    for (const label of [
+      "Nombres",
+      "Apellidos",
+      "Correo electrónico",
+      "Celular",
+      "Número de documento",
+      "Número de tarjeta",
+      "Vencimiento",
+      "CVV",
+      "Nombre en la tarjeta",
+    ]) {
+      expect(input(label).required).toBe(true);
+    }
+    const terms = termsCheckbox();
+    expect(terms.getAttribute("aria-required") === "true" || terms.hasAttribute("required")).toBe(true);
+
+    expect(screen.queryByRole("textbox", { name: /\*/ })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /\*/ })).toBeNull();
+    expect(screen.queryByRole("group", { name: /\*/ })).toBeNull();
+    const marks = [...container.querySelectorAll("span")].filter((span) => span.textContent === "*");
+    expect(marks.length).toBeGreaterThanOrEqual(10);
+    for (const mark of marks) expect(mark.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("agrupa tipo y número en el grupo 'Documento de identidad' y el selector muestra la abreviatura", () => {
+    renderForm();
+    const group = screen.getByRole("group", { name: "Documento de identidad" });
+    const typeSelect = within(group).getByRole("combobox", { name: "Tipo de documento" });
+    expect(typeSelect.querySelector("[data-slot=select-value]")?.textContent).toBe("DNI");
+    expect(within(group).getByRole("textbox", { name: "Número de documento" })).toBeTruthy();
+  });
+
+  it("muestra la nota de demo y las tarjetas de prueba solo con Tarjeta", () => {
+    renderForm();
+    expect(screen.getByText(/Demo: no se realiza ningún cobro real\./)).toBeTruthy();
+    expect(screen.getByText(/4242 4242 4242 4242/)).toBeTruthy();
+    expect(screen.queryByText(/Pago simulado:/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Yape" }));
+    expect(screen.getByText(/Demo: no se realiza ningún cobro real\./)).toBeTruthy();
+    expect(screen.queryByText(/4242 4242 4242 4242/)).toBeNull();
+  });
+
+  it("el resumen compacto lleva líneas, fecha corta, total y el 'Pagar' de la tarjeta con su aviso", () => {
+    renderForm();
+    const panel = summaryPanel();
+    const panelPay = within(panel).getByRole("button", { name: "Pagar S/ 910.00" });
+    const totalRow = within(panel).getByText("Total", { exact: false, selector: "span" });
+    expect(totalRow.textContent).toBe("Total (3 entradas)");
+    expect(panelPay.closest("[data-slot=card-content]")).toBe(totalRow.closest("[data-slot=card-content]"));
+    expect(totalRow.closest("[data-slot=card-content]")?.textContent).toContain("S/ 910.00");
+    expect(within(panel).getByText("2 × General")).toBeTruthy();
+    expect(within(panel).getByText("1 × VIP")).toBeTruthy();
+    expect(within(panel).getByText(/sáb 14 nov/).closest("p")?.textContent).toBe("sáb 14 nov · Estadio, Lima");
+    expect(within(panel).getByText(TERMS_HINT)).toBeTruthy();
+  });
+
+  it("con 1 entrada con asientos el resumen dice 'Total (1 entrada)' y muestra los asientos compactos", () => {
+    renderForm({
+      ...ORDER,
+      items: [
+        {
+          ticketTypeId: "tribuna-oriente",
+          name: "Tribuna Oriente",
+          unitPrice: 155,
+          quantity: 1,
+          seats: [{ id: "tribuna-oriente-L-9", label: "Tribuna Oriente · Fila L · Asiento 9" }],
+        },
+      ],
+      quantities: { "tribuna-oriente": 1 },
+      ticketCount: 1,
+      total: 155,
+    });
+    const panel = summaryPanel();
+    expect(within(panel).getByText("Total", { exact: false, selector: "span" }).textContent).toBe("Total (1 entrada)");
+    expect(screen.getByRole("button", { name: /Resumen del pedido:/ }).textContent).toContain("1 entrada · S/ 155.00");
+    expect(within(panel).getByText("Fila L · 9")).toBeTruthy();
+  });
+
+  it("con dos asientos de filas distintas muestra 'Fila L · 9 · Fila M · 8'", () => {
+    renderForm({
+      ...ORDER,
+      items: [
+        {
+          ticketTypeId: "tribuna-oriente",
+          name: "Tribuna Oriente",
+          unitPrice: 155,
+          quantity: 2,
+          seats: [
+            { id: "tribuna-oriente-L-9", label: "Tribuna Oriente · Fila L · Asiento 9" },
+            { id: "tribuna-oriente-M-8", label: "Tribuna Oriente · Fila M · Asiento 8" },
+          ],
+        },
+      ],
+      quantities: { "tribuna-oriente": 2 },
+      ticketCount: 2,
+      total: 310,
+    });
+    expect(within(summaryPanel()).getByText("Fila L · 9 · Fila M · 8")).toBeTruthy();
+  });
+
+  it("con Términos sin marcar, pagar (clic o Enter) no valida ni llama al service y enfoca la casilla de Términos", () => {
+    const { container } = renderForm();
+    type("Nombres", BUYER.firstName);
+    type("Apellidos", BUYER.lastName);
+    type("Correo electrónico", BUYER.email);
+    type("Celular", BUYER.phone);
+    type("Número de documento", BUYER.documentNumber);
+    fillCard();
+
+    pay();
+    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(screen.queryByText("Debes aceptar los Términos y condiciones y la Política de privacidad")).toBeNull();
+    expect(screen.queryByText("Procesando pago…")).toBeNull();
+    expect(document.activeElement).toBe(termsCheckbox());
+
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.submit(container.querySelector("form")!);
+    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(termsCheckbox());
+  });
+
+  it("con el formulario vacío y Términos sin marcar no muestra ningún error", () => {
+    renderForm();
+    pay();
+    expect(screen.queryByText("Ingresa tus nombres")).toBeNull();
+    expect(document.activeElement).toBe(termsCheckbox());
+  });
+
+  it("al marcar los Términos desaparece el aviso y 'Pagar' pierde aria-disabled; al desmarcarlos, vuelven", () => {
+    renderForm();
+    toggleTerms();
+    expect(screen.queryAllByText(TERMS_HINT)).toHaveLength(0);
+    for (const button of payButtons()) {
+      expect(button.hasAttribute("aria-disabled")).toBe(false);
+      expect(button.hasAttribute("aria-describedby")).toBe(false);
+    }
+
+    toggleTerms();
+    expect(screen.getAllByText(TERMS_HINT)).toHaveLength(2);
+    for (const button of payButtons()) expect(button.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("con la reserva expirada y Términos sin marcar, 'Pagar' queda disabled y sin aviso de términos", () => {
+    vi.useFakeTimers();
+    renderForm();
+    act(() => vi.advanceTimersByTime(600_000));
+
+    for (const button of payButtons()) expect(button.disabled).toBe(true);
+    expect(screen.queryAllByText(TERMS_HINT)).toHaveLength(0);
   });
 });

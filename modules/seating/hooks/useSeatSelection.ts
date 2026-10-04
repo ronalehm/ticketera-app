@@ -52,8 +52,16 @@ export function useSeatSelection(map: VenueMap) {
   const atLimit = ticketCount >= MAX_TICKETS_PER_ORDER;
   const lines = getSelectionLines(map, selection);
 
+  /** Abre la zona; no hace nada si no existe o está agotada. */
   function selectZone(zoneId: string) {
+    const zone = map.zones.find((candidate) => candidate.id === zoneId);
+    if (!zone || zone.status === "sold-out") return;
     setActiveZoneId(zoneId);
+  }
+
+  /** Vuelve a la lista de zonas sin tocar la selección. */
+  function closeZone() {
+    setActiveZoneId(null);
   }
 
   /** Solo zonas de pie no agotadas; "+" no hace nada en el límite y "−" no baja de 0. */
@@ -93,27 +101,36 @@ export function useSeatSelection(map: VenueMap) {
     });
   }
 
-  /** Reemplaza los asientos de la zona por el mejor bloque de tantos como ya había (o 1 si no había). */
-  function pickBestSeats(zoneId: string) {
+  /**
+   * Sustituye las butacas de la zona por el mejor bloque de `count` y lo devuelve. Calcula con la
+   * selección del render (se llama desde un manejador de clic). Devuelve `null` sin cambios si
+   * `count` no es un entero ≥ 1 o la zona no es numerada, y `null` con aviso si no hay bloque libre
+   * o se pasaría del límite de entradas.
+   */
+  function pickBestSeats(zoneId: string, count: number): string[] | null {
     const zone = map.zones.find((candidate) => candidate.id === zoneId);
-    if (!zone || zone.kind !== "numbered") return;
+    if (!Number.isInteger(count) || count < 1 || !zone || zone.kind !== "numbered") return null;
 
-    setState((current) => {
-      const { seatIds } = current.selection;
-      const zoneSeatIds = seatIds.filter((id) => parseSeatId(id)?.zoneId === zoneId);
-      // Con 0 elegidos se añade 1 asiento: hace falta hueco bajo el límite.
-      if (zoneSeatIds.length === 0 && isAtLimit(current.selection)) return { ...current, notice: LIMIT_NOTICE };
+    const showNotice = (message: string) => setState((current) => ({ ...current, notice: message }));
 
-      const count = Math.max(zoneSeatIds.length, 1);
-      const best = zone.status === "sold-out" ? null : findBestAvailableSeats(zone, count);
-      if (!best) return { ...current, notice: getNoBlockNotice(count) };
+    const best = zone.status === "sold-out" ? null : findBestAvailableSeats(zone, count);
+    if (!best) {
+      showNotice(getNoBlockNotice(count));
+      return null;
+    }
 
-      const otherSeatIds = seatIds.filter((id) => !zoneSeatIds.includes(id));
-      return {
-        selection: { ...current.selection, seatIds: [...otherSeatIds, ...best] },
-        notice: getPickedNotice(zone, best),
-      };
+    const otherSeatIds = selection.seatIds.filter((id) => parseSeatId(id)?.zoneId !== zoneId);
+    const zoneSeatCount = selection.seatIds.length - otherSeatIds.length;
+    if (ticketCount - zoneSeatCount + count > MAX_TICKETS_PER_ORDER) {
+      showNotice(LIMIT_NOTICE);
+      return null;
+    }
+
+    setState({
+      selection: { ...selection, seatIds: [...otherSeatIds, ...best] },
+      notice: getPickedNotice(zone, best),
     });
+    return best;
   }
 
   return {
@@ -127,6 +144,7 @@ export function useSeatSelection(map: VenueMap) {
     checkoutHref: buildSeatingCheckoutHref(map.eventSlug, map, selection),
     notice,
     selectZone,
+    closeZone,
     changeQuantity,
     toggleSeat,
     removeSeat,

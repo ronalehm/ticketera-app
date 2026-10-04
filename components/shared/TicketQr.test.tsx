@@ -18,6 +18,31 @@ const expectedFinder = (r: number, c: number) => {
   return ring !== 1;
 };
 
+/** Matriz de `VALUE` fijada con el código anterior a `lib/hash.ts`: la salida no debe cambiar. */
+const PINNED_MODULES = [
+  "111111101010001111111",
+  "100000100100001000001",
+  "101110100111001011101",
+  "101110100000001011101",
+  "101110100000101011101",
+  "100000100110101000001",
+  "111111101000101111111",
+  "000000000101100000000",
+  "111010000101001000101",
+  "110110100110101000010",
+  "111001100110100010110",
+  "110011001101011010110",
+  "111011001101100011010",
+  "000000000101001100011",
+  "111111101101010000010",
+  "100000101111010110000",
+  "101110100010011100001",
+  "101110101101101000001",
+  "101110101011000010000",
+  "100000101100101100001",
+  "111111100111011111101",
+];
+
 afterEach(cleanup);
 
 describe("TicketQr", () => {
@@ -94,5 +119,12 @@ describe("getQrModules", () => {
 
     expect(ratio).toBeGreaterThan(0.3);
     expect(ratio).toBeLessThan(0.7);
+  });
+
+  it("da exactamente la matriz fijada para el mismo valor", () => {
+    const rows = getQrModules(VALUE).map((row) => row.map((dark) => (dark ? "1" : "0")).join(""));
+
+    expect(rows).toEqual(PINNED_MODULES);
+    expect(rows.join("").replace(/0/g, "")).toHaveLength(217);
   });
 });

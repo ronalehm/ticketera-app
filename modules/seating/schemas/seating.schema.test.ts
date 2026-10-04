@@ -132,6 +132,66 @@ describe("venueLayoutSchema", () => {
   ])("rechaza %s", (_, build) => {
     expect(venueLayoutSchema.safeParse(build()).success).toBe(false);
   });
+
+  describe("campos opcionales del mapa curvo", () => {
+    function curvedLayout(scale: number): LayoutInput {
+      const layout = validLayout();
+      layout.stage.lights = [
+        { x: 280, y: 30 },
+        { x: 320, y: 30 },
+      ];
+      layout.zones[0].wrapLabel = false;
+      const numbered = layout.zones[1] as NumberedInput;
+      numbered.wrapLabel = true;
+      numbered.planTransform = { scale, x: -12.5, y: 40 };
+      return layout;
+    }
+
+    it("acepta lights, wrapLabel y planTransform válidos y los conserva", () => {
+      const result = venueLayoutSchema.safeParse(curvedLayout(1.95));
+      expect(result.success).toBe(true);
+      expect(result.data?.stage.lights).toEqual([
+        { x: 280, y: 30 },
+        { x: 320, y: 30 },
+      ]);
+      expect(result.data?.zones[0].wrapLabel).toBe(false);
+      expect(result.data?.zones[1]).toMatchObject({ wrapLabel: true, planTransform: { scale: 1.95, x: -12.5, y: 40 } });
+    });
+
+    it("sin los campos opcionales no los añade", () => {
+      const result = venueLayoutSchema.parse(validLayout());
+      expect(result.stage).not.toHaveProperty("lights");
+      expect(result.zones[0]).not.toHaveProperty("wrapLabel");
+      expect(result.zones[1]).not.toHaveProperty("planTransform");
+    });
+
+    it.each([
+      ["scale 0", 0],
+      ["scale negativa", -1],
+    ])("rechaza planTransform con %s", (_, scale) => {
+      expect(venueLayoutSchema.safeParse(curvedLayout(scale)).success).toBe(false);
+    });
+
+    it.each<[string, () => unknown]>([
+      ["una luz sin y", () => ({ ...validLayout(), stage: { ...validLayout().stage, lights: [{ x: 1 }] } })],
+      [
+        "wrapLabel que no es booleano",
+        () => {
+          const layout = validLayout();
+          return { ...layout, zones: [{ ...layout.zones[0], wrapLabel: "sí" }, layout.zones[1]] };
+        },
+      ],
+      [
+        "planTransform sin x",
+        () => {
+          const layout = validLayout();
+          return { ...layout, zones: [layout.zones[0], { ...layout.zones[1], planTransform: { scale: 1, y: 0 } }] };
+        },
+      ],
+    ])("rechaza %s", (_, build) => {
+      expect(venueLayoutSchema.safeParse(build()).success).toBe(false);
+    });
+  });
 });
 
 describe("seatIdsParamSchema", () => {

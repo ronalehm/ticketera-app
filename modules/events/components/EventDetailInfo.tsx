@@ -1,13 +1,16 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CalendarClock, Clock, ExternalLink, MapPin, QrCode, Users } from "lucide-react";
+import { CalendarClock, Clock, ExternalLink, QrCode, Users } from "lucide-react";
 
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
+import { publicEnv } from "@/lib/env";
 import { cn } from "@/lib/utils";
 
 import type { EventDetail } from "../types/events.types";
 import { formatTime } from "../utils/formatEvent";
+import { buildDirectionsUrl, buildMapEmbedUrl } from "../utils/venueMap";
+import { VenueMap } from "./VenueMap";
 
 // El icono va dentro del `dt` para que el `dl` sea válido (un `div` de `dl` solo admite `dt`/`dd`).
 // En móvil queda encima del texto; desde `md` se posiciona a la izquierda de la tarjeta.
@@ -29,9 +32,9 @@ function InfoItem({ icon: Icon, label, children }: { icon: LucideIcon; label: st
 }
 
 export function EventDetailInfo({ event }: { event: EventDetail }) {
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    `${event.venue}, ${event.address}, ${event.city}`,
-  )}`;
+  const location = { venue: event.venue, address: event.address, city: event.city };
+  // Un partido no es un show.
+  const startLabel = event.category === "deportes" ? "Inicio del partido" : "Inicio del show";
 
   return (
     <div className="flex flex-col gap-12 md:gap-16">
@@ -49,10 +52,10 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
         <SectionHeader title="Información importante" />
         <dl className="grid grid-cols-2 gap-3 md:gap-4">
           <InfoItem icon={Clock} label="Apertura de puertas">
-            <time dateTime={event.doorsOpenAt}>{formatTime(event.doorsOpenAt)}</time>
+            <time dateTime={event.doorsOpenAt}>{`${formatTime(event.doorsOpenAt)} h`}</time>
           </InfoItem>
-          <InfoItem icon={CalendarClock} label="Inicio">
-            <time dateTime={event.startsAt}>{formatTime(event.startsAt)}</time>
+          <InfoItem icon={CalendarClock} label={startLabel}>
+            <time dateTime={event.startsAt}>{`${formatTime(event.startsAt)} h`}</time>
           </InfoItem>
           <InfoItem icon={Users} label="Edad mínima">
             {event.minAge === 0 ? "Todo público" : `+${event.minAge}`}
@@ -66,9 +69,10 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
       <section>
         <SectionHeader title="Lugar" />
         <div className="overflow-hidden rounded-2xl ring-1 ring-border">
-          <div aria-hidden className="flex aspect-[16/7] items-center justify-center bg-accent">
-            <MapPin className="size-8 text-primary" />
-          </div>
+          <VenueMap
+            venue={event.venue}
+            embedUrl={buildMapEmbedUrl(location, publicEnv.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY)}
+          />
           <div className="flex items-center justify-between gap-4 p-4 md:px-6 md:py-5">
             <address className="flex min-w-0 flex-col gap-0.5 not-italic">
               <span className="font-bold">{event.venue}</span>
@@ -77,7 +81,7 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
               </span>
             </address>
             <a
-              href={mapsHref}
+              href={buildDirectionsUrl(location)}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(

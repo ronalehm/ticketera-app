@@ -2,16 +2,17 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CalendarPlus, CircleCheck, Download, Mail, QrCode, Ticket } from "lucide-react";
+import { CalendarPlus, CircleCheck, Mail, QrCode, Ticket } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { TicketQr } from "@/components/shared/TicketQr";
+import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
 import { useStoredOrder } from "../hooks/useStoredOrder";
 import type { Order } from "../types/checkout.types";
+import { buildTicketPdfInput } from "../utils/ticketPdfInput";
 import { CheckoutStatusMessage } from "./CheckoutStatusMessage";
 import { ConfirmationTicketCard } from "./ConfirmationTicketCard";
 
@@ -64,17 +65,16 @@ export function OrderConfirmation({ code, stepper }: OrderConfirmationProps) {
     <>
       <div className="w-full print:hidden">{stepper}</div>
       <div className={CONTAINER_CLASS}>
-        <ConfirmationHeader code={order.code} />
+        <ConfirmationHeader code={order.code} email={order.buyer.email} />
         <ConfirmationTicketCard order={order} />
         <ConfirmationActions order={order} />
         <NextSteps />
-        <PrintableTickets order={order} />
       </div>
     </>
   );
 }
 
-function ConfirmationHeader({ code }: { code: string }) {
+function ConfirmationHeader({ code, email }: { code: string; email: string }) {
   return (
     <div className="flex flex-col items-center gap-3 text-center md:gap-4">
       <span className="flex size-16 items-center justify-center rounded-full bg-accent text-primary md:size-20">
@@ -82,7 +82,8 @@ function ConfirmationHeader({ code }: { code: string }) {
       </span>
       <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">¡Compra confirmada!</h1>
       <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-        Enviamos tus entradas a tu correo. También las tienes siempre en Mis entradas.
+        Enviamos tus entradas a <strong className="font-semibold break-all text-foreground">{email}</strong>. También
+        las tienes siempre en Mis entradas.
       </p>
       <p className="flex h-9 items-center rounded-full px-4 text-sm text-muted-foreground ring-1 ring-border">
         Pedido N.º
@@ -130,10 +131,12 @@ function ConfirmationActions({ order }: { order: Order }) {
           <span className="sm:hidden">Calendario</span>
           <span className="hidden sm:inline">Agregar al calendario</span>
         </Button>
-        <Button type="button" variant="outline" onClick={() => window.print()} className={OUTLINE_ACTION_CLASS}>
-          <Download aria-hidden />
-          Descargar PDF
-        </Button>
+        <TicketsPdfButton
+          variant="outline"
+          input={buildTicketPdfInput(order)}
+          className={OUTLINE_ACTION_CLASS}
+          errorClassName="col-span-2 text-center sm:basis-full"
+        />
       </div>
     </div>
   );
@@ -142,7 +145,7 @@ function ConfirmationActions({ order }: { order: Order }) {
 function NextSteps() {
   return (
     <section aria-labelledby="order-next-steps" className="flex w-full flex-col gap-4 print:hidden">
-      <h2 id="order-next-steps" className="text-xl font-bold tracking-tight">
+      <h2 id="order-next-steps" className="sr-only">
         Qué sigue
       </h2>
       <ol className="grid gap-3 md:grid-cols-3">
@@ -165,29 +168,3 @@ function NextSteps() {
   );
 }
 
-/** Solo visible al imprimir ("Descargar PDF"): una ficha por entrada con su QR. */
-function PrintableTickets({ order }: { order: Order }) {
-  return (
-    <section aria-labelledby="order-printable-tickets" className="hidden w-full print:block">
-      <h2 id="order-printable-tickets" className="mb-4 text-xl font-bold">
-        Tus entradas
-      </h2>
-      <ul className="flex flex-col gap-4">
-        {order.tickets.map((ticket) => (
-          <li
-            key={ticket.code}
-            className="flex break-inside-avoid items-center gap-6 rounded-2xl p-4 ring-1 ring-border"
-          >
-            <TicketQr value={ticket.code} className="size-28 shrink-0" />
-            <div className="flex flex-col gap-1">
-              <p className="font-bold tabular-nums">{ticket.code}</p>
-              <p>{ticket.ticketTypeName}</p>
-              {ticket.seatLabel && <p>{ticket.seatLabel}</p>}
-              <p className="text-muted-foreground">Titular: {ticket.holderName}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}

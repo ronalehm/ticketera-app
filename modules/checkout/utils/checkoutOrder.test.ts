@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { EventDetail } from "@/modules/events";
 import type { VenueMap } from "@/modules/seating";
-import { buildCheckoutOrder, parseTicketQuantities } from "./checkoutOrder";
+import { buildChangeTicketsHref, buildCheckoutOrder, parseTicketQuantities } from "./checkoutOrder";
 
 const event: EventDetail = {
   id: "evt-test",
@@ -211,5 +211,61 @@ describe("buildCheckoutOrder con asientos", () => {
       status: "sold-out",
       eventSlug: "evento-prueba",
     });
+  });
+});
+
+describe("buildChangeTicketsHref", () => {
+  const items = [
+    { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 2 },
+    { ticketTypeId: "vip", name: "VIP", unitPrice: 120.5, quantity: 1 },
+  ];
+
+  it("sin mapa → detalle del evento con las cantidades y el ancla #entradas", () => {
+    expect(buildChangeTicketsHref({ event, items }, false)).toBe(
+      "/eventos/evento-prueba?general=2&vip=1#entradas",
+    );
+  });
+
+  it("con mapa y sin asientos → selección de entradas con las cantidades", () => {
+    expect(buildChangeTicketsHref({ event, items }, true)).toBe(
+      "/eventos/evento-prueba/entradas?general=2&vip=1",
+    );
+  });
+
+  it("con mapa y asientos en dos items → asientos al final, en orden de items y de seats, unidos por %2C", () => {
+    const seatedItems = [
+      {
+        ticketTypeId: "platea",
+        name: "Platea",
+        unitPrice: 80,
+        quantity: 2,
+        seats: [
+          { id: "platea-B-3", label: "Platea · Fila B · Asiento 3" },
+          { id: "platea-B-1", label: "Platea · Fila B · Asiento 1" },
+        ],
+      },
+      { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 1 },
+      {
+        ticketTypeId: "vip",
+        name: "VIP",
+        unitPrice: 120.5,
+        quantity: 1,
+        seats: [{ id: "vip-A-2", label: "VIP · Fila A · Asiento 2" }],
+      },
+    ];
+    expect(buildChangeTicketsHref({ event, items: seatedItems }, true)).toBe(
+      "/eventos/evento-prueba/entradas?platea=2&general=1&vip=1&asientos=platea-B-3%2Cplatea-B-1%2Cvip-A-2",
+    );
+  });
+
+  it("ida y vuelta: los parámetros (sin asientos) pasados por parseTicketQuantities dan las cantidades del pedido", () => {
+    const result = buildCheckoutOrder(event, { general: 2, vip: 1 });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    const href = buildChangeTicketsHref(result.order, true);
+    const params = new URLSearchParams(href.split("?")[1]);
+    params.delete("asientos");
+    expect(parseTicketQuantities(Object.fromEntries(params))).toEqual(result.order.quantities);
   });
 });

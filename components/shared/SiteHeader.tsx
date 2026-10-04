@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AuthHeaderActions } from "@/modules/auth/header";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
+import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 const NAV_LINK =
   "inline-flex cursor-pointer items-center rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring";
@@ -59,6 +59,7 @@ export function SiteHeader() {
                 <SheetTitle>Menú</SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-6 px-4 pb-6">
+                <AuthHeaderActions variant="sheet" />
                 <nav aria-label="Categorías" className="flex flex-col">
                   {categoryLinks.map((link) => (
                     <SheetClose
@@ -71,7 +72,6 @@ export function SiteHeader() {
                     </SheetClose>
                   ))}
                 </nav>
-                <AuthHeaderActions variant="sheet" />
               </div>
             </SheetContent>
           </Sheet>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatEventDate, formatEventPrice, formatLongDate, formatTime } from "./formatEvent";
+import {
+  formatEventDate,
+  formatEventPrice,
+  formatLongDate,
+  formatLongDayMonth,
+  formatShortDayMonth,
+  formatTime,
+  getDateChipParts,
+} from "./formatEvent";
 
 describe("formatTime", () => {
   it("devuelve HH:mm en zona America/Lima aunque el ISO UTC sea del día siguiente", () => {
@@ -43,5 +51,46 @@ describe("formatEventPrice", () => {
 
   it("formatea precio 0", () => {
     expect(formatEventPrice(0)).toBe("S/ 0.00");
+  });
+});
+
+describe("formatShortDayMonth", () => {
+  it("formatea día corto, día y mes corto en minúsculas", () => {
+    expect(formatShortDayMonth("2026-10-05T14:00:00-05:00")).toBe("lun 5 oct");
+  });
+
+  it("usa el día de Lima con un ISO UTC que cambia de día", () => {
+    expect(formatShortDayMonth("2026-11-15T03:00:00Z")).toBe("sáb 14 nov");
+  });
+});
+
+describe("formatLongDayMonth", () => {
+  it("formatea día y mes largos en minúsculas", () => {
+    expect(formatLongDayMonth("2026-10-05T14:00:00-05:00")).toBe("lunes 5 de octubre");
+  });
+
+  it("usa el día de Lima con un ISO UTC que cambia de día", () => {
+    expect(formatLongDayMonth("2026-11-15T03:00:00Z")).toBe("sábado 14 de noviembre");
+  });
+});
+
+describe("formatShortDayMonth y formatLongDayMonth", () => {
+  it.each(["2026-10-05T14:00:00-05:00", "2026-11-15T03:00:00Z"])("no incluyen puntos, comas, año ni hora (%s)", (iso) => {
+    for (const text of [formatShortDayMonth(iso), formatLongDayMonth(iso)]) {
+      expect(text).not.toMatch(/[.,:]/);
+      expect(text).not.toMatch(/\d{4}/);
+      expect(text).not.toMatch(/\b(?:am|pm|h)\b/i);
+    }
+  });
+});
+
+describe("getDateChipParts", () => {
+  it.each([
+    ["2026-11-14T21:00:00-05:00", { month: "NOV", day: "14" }],
+    ["2026-12-05T20:00:00-05:00", { month: "DIC", day: "05" }],
+    ["2026-11-15T03:00:00Z", { month: "NOV", day: "14" }],
+    ["2027-01-10T11:00:00-05:00", { month: "ENE", day: "10" }],
+  ])("%s → %o (America/Lima)", (iso, expected) => {
+    expect(getDateChipParts(iso)).toEqual(expected);
   });
 });

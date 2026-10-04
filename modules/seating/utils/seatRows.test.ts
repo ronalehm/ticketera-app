@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hashString, mixHash } from "@/lib/hash";
 import { seatRowSchema } from "../schemas/seating.schema";
 import { generateSeatRows, SEAT_PITCH, SEAT_PLAN_MARGIN } from "./seatRows";
 
@@ -87,6 +88,15 @@ describe("generateSeatRows", () => {
     expect(allSeats(result)).toHaveLength(100);
     expect(occupied).toBeGreaterThanOrEqual(15);
     expect(occupied).toBeLessThanOrEqual(45);
+  });
+
+  it("ocupa un asiento si y solo si mixHash(hashString(id)) / 2³² < occupiedRatio", () => {
+    const result = generateSeatRows({ zoneId: "norte", rowLabels: ROWS_A_TO_H, seatsPerRow: 10, occupiedRatio: 0.3 });
+
+    for (const seat of allSeats(result)) {
+      const occupied = mixHash(hashString(seat.id)) / 2 ** 32 < 0.3;
+      expect(seat.status === "occupied", seat.id).toBe(occupied);
+    }
   });
 
   it("marca como accesibles los asientos indicados solo si no están ocupados", () => {

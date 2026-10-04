@@ -33,7 +33,7 @@ export function OrganizerBanner() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/organizadores"
+                href="/organizador/eventos/nuevo"
                 className={cn(
                   buttonVariants(),
                   ctaBase,
@@ -43,7 +43,7 @@ export function OrganizerBanner() {
                 Publica tu evento
               </Link>
               <Link
-                href="/organizadores"
+                href="/organizador"
                 className={cn(
                   buttonVariants({ variant: "outline" }),
                   ctaBase,

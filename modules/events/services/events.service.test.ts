@@ -63,7 +63,7 @@ describeWithDb("events.service (BD)", () => {
     });
 
     it("con limit 1 devuelve el de la misma categoría aunque haya otros antes en fecha", async () => {
-      const [related] = await getRelatedEvents("festival-arena-y-mar-piura", 1);
+      const [related] = await getRelatedEvents("festival-vive-latino-lima", 1);
       expect(related.slug).toBe("festival-sol-de-verano");
     });
   });
@@ -85,7 +85,7 @@ describe("invariantes del mock", () => {
       expect(event.ticketTypes).toEqual([{ id: "entrada-libre", name: "Entrada libre", price: 0, status: "available" }]);
     } else {
       expect(event.ticketTypes.length).toBeGreaterThanOrEqual(2);
-      expect(event.ticketTypes.length).toBeLessThanOrEqual(4);
+      expect(event.ticketTypes.length).toBeLessThanOrEqual(5);
     }
     event.ticketTypes.forEach((type) => expect(type.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/));
     expect(Date.parse(event.doorsOpenAt)).toBeLessThan(Date.parse(event.startsAt));

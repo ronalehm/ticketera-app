@@ -5,7 +5,7 @@ const DB_URL = "postgres://user:pass@127.0.0.1:5432/app";
 
 // lib/env.ts valida process.env al importarse.
 vi.stubEnv("DATABASE_URL", DB_URL);
-const { env, serverEnvSchema } = await import("./env");
+const { env, publicEnvSchema, serverEnvSchema } = await import("./env");
 
 function errorOf(input: Record<string, string>) {
   const result = serverEnvSchema.safeParse(input);
@@ -75,5 +75,34 @@ describe("env", () => {
     vi.resetModules();
     vi.stubEnv("DATABASE_URL", "");
     await expect(import("./env")).rejects.toThrow(/DATABASE_URL/);
+  });
+});
+
+describe("publicEnvSchema", () => {
+  it("deja la clave undefined si la variable no existe", () => {
+    expect(
+      publicEnvSchema.parse({}).NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+    ).toBeUndefined();
+  });
+
+  it("trata una cadena vacía como ausente", () => {
+    expect(
+      publicEnvSchema.parse({ NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY: "" })
+        .NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+    ).toBeUndefined();
+  });
+
+  it("trata una cadena con solo espacios como ausente", () => {
+    expect(
+      publicEnvSchema.parse({ NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY: "   " })
+        .NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+    ).toBeUndefined();
+  });
+
+  it("recorta los espacios de una clave con valor", () => {
+    expect(
+      publicEnvSchema.parse({ NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY: " abc " })
+        .NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+    ).toBe("abc");
   });
 });

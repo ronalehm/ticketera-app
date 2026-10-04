@@ -1,129 +1,176 @@
-import type { KeyboardEvent } from "react";
+import { Check } from "lucide-react";
+import type { CSSProperties, KeyboardEvent } from "react";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatEventPrice } from "@/modules/events/purchase";
 
-import type { VenueMap, VenueZone, ZoneTone } from "../types/seating.types";
+import type { Point, VenueMap, VenueZone, ZoneTone } from "../types/seating.types";
+import { parseViewBox } from "../utils/viewBox";
 import { ZONE_TONE_CLASSES } from "../utils/zoneTone";
+import { formatSelectedCount } from "./ZoneCards";
 
 type VenueMapViewProps = Pick<VenueMap, "viewBox" | "stage" | "venue"> & {
   zones: VenueZone[];
   tones: Record<string, ZoneTone>;
-  activeZoneId: string | null;
-  onSelectZone: (zoneId: string) => void;
+  highlightedZoneId: string | null;
+  /** Entradas de pie o butacas elegidas por zona (las zonas sin selección pueden faltar). */
+  selectedCountByZone: Record<string, number>;
+  onOpenZone: (zoneId: string) => void;
+  onHighlightZone: (zoneId: string | null) => void;
 };
 
-// Geometría de las etiquetas en unidades del viewBox (decisión 10). A 375 px el SVG de 600 unidades se pinta a
-// ~287 px (0.48 px/unidad), así que 26 → ~12.4 px (≥ 12 px). El bloque de 3 líneas mide 2·30 + 2 + 32 = 94
-// unidades y cabe en las zonas "Últimas entradas" más bajas de los mocks (104).
-const LABEL_FONT_SIZE = 26;
-const LABEL_LINE_HEIGHT = 30;
-const PILL_WIDTH = 264;
-const PILL_HEIGHT = 32;
+/** Radio de las luces del escenario, en unidades del viewBox. */
+const STAGE_LIGHT_RADIUS = 5;
 
-function getZoneAriaLabel(zone: VenueZone): string {
+function getZoneAriaLabel(zone: VenueZone, selectedCount: number): string {
   const parts = [zone.name, zone.status === "sold-out" ? "agotado" : formatEventPrice(zone.price)];
   if (zone.kind === "numbered") parts.push("asientos numerados");
   if (zone.status === "low-stock") parts.push("últimas entradas");
+  if (selectedCount > 0) parts.push(formatSelectedCount(zone.kind, selectedCount));
   return parts.join(", ");
 }
 
-function ZoneLabel({ zone, className }: { zone: VenueZone; className: string }) {
-  const { x, y } = zone.labelPos;
-  const lowStock = zone.status === "low-stock";
-  // Bloque de 2 líneas (nombre, precio) o 3 con la píldora, centrado verticalmente en labelPos.
-  const top = y - (lowStock ? 2 * LABEL_LINE_HEIGHT + PILL_HEIGHT + 2 : 2 * LABEL_LINE_HEIGHT) / 2;
-  const pillTop = top + 2 * LABEL_LINE_HEIGHT + 2;
+/** Posición de una etiqueta HTML en % del viewBox, para que no escale con el ancho (decisión 18). */
+function getLabelStyle({ x, y }: Point, width: number, height: number): CSSProperties {
+  return { left: `${(x / width) * 100}%`, top: `${(y / height) * 100}%` };
+}
 
+const LABEL_CLASS = "absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center leading-[1.15]";
+
+function ZoneName({ name, wrap }: { name: string; wrap: boolean }) {
+  const splitAt = wrap ? name.indexOf(" ") : -1;
+  if (splitAt === -1) return <span className="text-xs font-bold whitespace-nowrap md:text-sm">{name}</span>;
+
+  // El espacio queda al final de la 1.ª línea: no se ve, pero mantiene "Tribuna Occidente" como texto.
   return (
-    <g aria-hidden className="pointer-events-none" textAnchor="middle" fontSize={LABEL_FONT_SIZE}>
-      <text x={x} dominantBaseline="central" y={top + LABEL_LINE_HEIGHT / 2} className={cn("font-bold", className)}>
-        {zone.name}
-      </text>
-      <text x={x} dominantBaseline="central" y={top + LABEL_LINE_HEIGHT * 1.5} className={cn("font-medium", className)}>
-        {zone.status === "sold-out" ? "Agotado" : formatEventPrice(zone.price)}
-      </text>
-      {lowStock && (
-        <>
-          <rect
-            x={x - PILL_WIDTH / 2}
-            y={pillTop}
-            width={PILL_WIDTH}
-            height={PILL_HEIGHT}
-            rx={PILL_HEIGHT / 2}
-            className="fill-warning"
-          />
-          <text x={x} dominantBaseline="central" y={pillTop + PILL_HEIGHT / 2} className="fill-warning-foreground font-bold">
-            Últimas entradas
-          </text>
-        </>
-      )}
-    </g>
+    <span className="flex flex-col text-xs font-bold md:text-sm">
+      <span className="whitespace-nowrap">{name.slice(0, splitAt + 1)}</span>
+      <span className="whitespace-nowrap">{name.slice(splitAt + 1)}</span>
+    </span>
   );
 }
 
-export function VenueMapView({ viewBox, stage, venue, zones, tones, activeZoneId, onSelectZone }: VenueMapViewProps) {
-  const handleKeyDown = (event: KeyboardEvent<SVGPathElement>, zoneId: string) => {
+export function VenueMapView({
+  viewBox,
+  stage,
+  venue,
+  zones,
+  tones,
+  highlightedZoneId,
+  selectedCountByZone,
+  onOpenZone,
+  onHighlightZone,
+}: VenueMapViewProps) {
+  const { width, height } = parseViewBox(viewBox);
+  const highlightedZone = zones.find((zone) => zone.id === highlightedZoneId && zone.status !== "sold-out");
+  const isDimmed = (zoneId: string) => highlightedZone !== undefined && zoneId !== highlightedZone.id;
+
+  const handleKeyDown = (event: KeyboardEvent<SVGPathElement>, zone: VenueZone) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    onSelectZone(zoneId);
+    if (zone.status !== "sold-out") onOpenZone(zone.id);
+  };
+
+  const highlight = (zone: VenueZone) => {
+    if (zone.status !== "sold-out") onHighlightZone(zone.id);
   };
 
   return (
-    <Card className="gap-4 rounded-2xl ring-border">
-      <CardHeader className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-xl font-bold tracking-tight">Elige tu zona</h2>
-        <p className="text-sm text-muted-foreground">Toca una zona del mapa</p>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-xl bg-muted p-3">
-          <svg viewBox={viewBox} className="h-auto w-full" role="group" aria-label={`Mapa de zonas de ${venue}`}>
-            <g aria-hidden>
-              <path d={stage.path} className="fill-foreground" />
-              <text
-                x={stage.labelPos.x}
-                y={stage.labelPos.y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={LABEL_FONT_SIZE}
-                className="fill-background font-bold tracking-widest uppercase"
+    <div className="rounded-xl bg-muted p-3 md:p-4">
+      <div
+        className="relative mx-auto w-full"
+        style={{ aspectRatio: `${width} / ${height}`, maxWidth: `calc(min(64svh, 600px) * ${width} / ${height})` }}
+      >
+        <svg viewBox={viewBox} className="absolute inset-0 size-full" role="group" aria-label={`Mapa de zonas de ${venue}`}>
+          <g aria-hidden>
+            <path d={stage.path} className="fill-brand-navy" />
+            {stage.lights?.map((light) => (
+              <circle key={`${light.x}-${light.y}`} cx={light.x} cy={light.y} r={STAGE_LIGHT_RADIUS} className="fill-highlight" />
+            ))}
+          </g>
+
+          {zones.map((zone) => {
+            const soldOut = zone.status === "sold-out";
+
+            return (
+              <path
+                key={zone.id}
+                d={zone.path}
+                role="button"
+                tabIndex={0}
+                aria-label={getZoneAriaLabel(zone, selectedCountByZone[zone.id] ?? 0)}
+                aria-disabled={soldOut || undefined}
+                className={cn(
+                  "stroke-background stroke-3 outline-none transition-opacity duration-200",
+                  ZONE_TONE_CLASSES[tones[zone.id]].shape,
+                  soldOut ? "cursor-not-allowed" : "cursor-pointer",
+                  isDimmed(zone.id) && "opacity-40",
+                  "focus-visible:stroke-ring focus-visible:stroke-4 focus-visible:[stroke-dasharray:8_6]",
+                )}
+                onClick={() => {
+                  if (!soldOut) onOpenZone(zone.id);
+                }}
+                onKeyDown={(event) => handleKeyDown(event, zone)}
+                onPointerEnter={() => highlight(zone)}
+                onPointerLeave={() => onHighlightZone(null)}
+                onFocus={() => highlight(zone)}
+                onBlur={() => onHighlightZone(null)}
+              />
+            );
+          })}
+
+          {/* Trazo superpuesto (no un halo detrás): las formas translúcidas dejarían verlo por dentro (decisión 28). */}
+          {highlightedZone && (
+            <path
+              d={highlightedZone.path}
+              aria-hidden
+              className="pointer-events-none fill-none stroke-brand-navy stroke-4"
+            />
+          )}
+        </svg>
+
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <span
+            className={cn(LABEL_CLASS, "text-xs font-bold tracking-widest text-background uppercase md:text-sm")}
+            style={getLabelStyle(stage.labelPos, width, height)}
+          >
+            {stage.label}
+          </span>
+
+          {zones.map((zone) => {
+            const selectedCount = selectedCountByZone[zone.id] ?? 0;
+
+            return (
+              <div
+                key={zone.id}
+                className={cn(
+                  LABEL_CLASS,
+                  "transition-opacity duration-200",
+                  ZONE_TONE_CLASSES[tones[zone.id]].label,
+                  isDimmed(zone.id) && "opacity-40",
+                )}
+                style={getLabelStyle(zone.labelPos, width, height)}
               >
-                {stage.label}
-              </text>
-            </g>
-
-            {zones.map((zone) => {
-              const tone = ZONE_TONE_CLASSES[tones[zone.id]];
-              const isActive = zone.id === activeZoneId;
-
-              return (
-                <g key={zone.id}>
-                  {isActive && (
-                    <path d={zone.path} aria-hidden className="pointer-events-none fill-none stroke-brand-navy stroke-8" />
+                <ZoneName name={zone.name} wrap={zone.wrapLabel === true} />
+                <span className="flex items-center text-xs font-medium whitespace-nowrap tabular-nums md:text-sm">
+                  {zone.status === "sold-out" ? "Agotado" : formatEventPrice(zone.price)}
+                  {selectedCount > 0 && (
+                    <span className="ml-1 inline-flex h-5 items-center gap-0.5 rounded-full bg-background px-1.5 text-xs font-bold text-foreground tabular-nums ring-1 ring-border">
+                      <Check className="size-3" aria-hidden />
+                      {selectedCount}
+                    </span>
                   )}
-                  <path
-                    d={zone.path}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isActive}
-                    aria-label={getZoneAriaLabel(zone)}
-                    className={cn(
-                      "cursor-pointer outline-none transition-[fill,stroke,opacity] duration-200 hover:opacity-85",
-                      tone.shape,
-                      isActive && "stroke-background stroke-3",
-                      "focus-visible:stroke-ring focus-visible:stroke-4 focus-visible:[stroke-dasharray:8_6]",
-                    )}
-                    onClick={() => onSelectZone(zone.id)}
-                    onKeyDown={(event) => handleKeyDown(event, zone.id)}
-                  />
-                  <ZoneLabel zone={zone} className={tone.label} />
-                </g>
-              );
-            })}
-          </svg>
+                </span>
+                {zone.status === "low-stock" && (
+                  <span className="mt-1 hidden rounded-full bg-warning px-2 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground md:inline-flex">
+                    Últimas entradas
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

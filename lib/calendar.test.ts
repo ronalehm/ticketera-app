@@ -67,6 +67,10 @@ describe("buildIcsEvent", () => {
     ).not.toBe(uid);
   });
 
+  it("mantiene el UID fijado para la misma entrada", () => {
+    expect(getProperty(buildIcsEvent(baseInput), "UID")).toBe("UID:b9c9de17@mentectickets.pe");
+  });
+
   it("escapa comas, punto y coma, barras invertidas y saltos de línea", () => {
     const ics = buildIcsEvent({
       title: "Rock; pop, y más",
@@ -128,7 +132,12 @@ describe("downloadIcs", () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
 
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     vi.restoreAllMocks();
@@ -157,6 +166,7 @@ describe("downloadIcs", () => {
     expect(link.getAttribute("href")).toBe("blob:mock-url");
     expect(link.isConnected).toBe(false);
 
+    vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
     expect(revokeObjectURL.mock.invocationCallOrder[0]).toBeGreaterThan(
       click.mock.invocationCallOrder[0],

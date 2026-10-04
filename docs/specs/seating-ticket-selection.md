@@ -1,7 +1,7 @@
 # Selección de entradas con mapa de zonas y asientos (paso 1 de la compra)
 
 - Módulo: seating
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Que el comprador elija sus entradas sobre el mapa del recinto en `/eventos/<slug>/entradas` (paso 1 de 3 de la compra): zonas de pie por cantidad (Campo, General) y, en zonas numeradas (Tribunas, Platea, Mezanine), asientos individuales sobre un plano con zoom. Al continuar se pasa a `/checkout` con la selección. El detalle del evento enlaza a esta pantalla cuando el evento tiene mapa. Solo UI/UX con datos mock (sin backend ni reserva real), español (Perú), PEN.
@@ -974,7 +974,7 @@ Coordinación:
 - Todas las tareas van en secuencia: T1 toca `lib/` y `components/shared/` (base); T2 crea una entrada pública del módulo (base); T3 depende de `lib/hash.ts` (T1) y comparte `seating.service.test.ts` con T2. Ninguna va en paralelo.
 - Total: 3 tareas y 16 archivos (1 de documentación de diseño).
 
-- [ ] T1. Hash compartido `lib/hash.ts` con test, y `TicketQr` y `lib/calendar.ts` usándolo sin cambiar su salida.
+- [x] T1. Hash compartido `lib/hash.ts` con test, y `TicketQr` y `lib/calendar.ts` usándolo sin cambiar su salida.
   - Orden dentro de la tarea:
     1. Añadir a `TicketQr.test.tsx` y `calendar.test.ts` los tests que fijan la salida actual (criterios F5), y comprobar que pasan con el código actual.
     2. Crear `lib/hash.ts` con su test.
@@ -983,12 +983,12 @@ Coordinación:
   - Archivos: `lib/hash.ts`, `lib/hash.test.ts`, `components/shared/TicketQr.tsx`, `components/shared/TicketQr.test.tsx`, `lib/calendar.ts`, `lib/calendar.test.ts`.
   - Depende de: Fase 4 y Fase 2 de `checkout-mock-payment.md`.
   - Secuencial (base: `lib/` y `components/shared/`).
-- [ ] T2. Entrada de servidor `seats.ts`, `getVenueMapForEvent` y una sola carga del evento en `resolveCheckoutOrder`; `checkout` importa de `@/modules/seating/seats`. Con tests.
+- [x] T2. Entrada de servidor `seats.ts`, `getVenueMapForEvent` y una sola carga del evento en `resolveCheckoutOrder`; `checkout` importa de `@/modules/seating/seats`. Con tests.
   - Archivos: `modules/seating/seats.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`, `modules/checkout/services/checkout.service.ts`, `modules/checkout/services/checkout.service.test.ts`, `modules/checkout/utils/checkoutOrder.ts`.
   - Depende de: T1 (orden de la fase) y Fase 2 de `checkout-mock-payment.md`.
   - Secuencial (entrada pública del módulo y archivos de `checkout`).
   - La verificación del manifiesto de `/checkout` necesita `npm run build`: la hace el reviewer.
-- [ ] T3. Ocupación mezclada en `generateSeatRows`, escenario centrado en los mocks e invariantes nuevas, con tests; corregir la cuenta de tamaños en el diseño de página.
+- [x] T3. Ocupación mezclada en `generateSeatRows`, escenario centrado en los mocks e invariantes nuevas, con tests; corregir la cuenta de tamaños en el diseño de página.
   - Archivos: `modules/seating/utils/seatRows.ts`, `modules/seating/utils/seatRows.test.ts`, `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1 (`lib/hash.ts`) y T2 (`seating.service.test.ts`).
   - Secuencial.

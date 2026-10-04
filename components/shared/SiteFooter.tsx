@@ -1,16 +1,16 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { BookOpen } from "lucide-react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Separator } from "@/components/ui/separator";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events";
+import { cn } from "@/lib/utils";
+import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 const FOCUS = "cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-highlight";
 
 const LINK =
   `${FOCUS} inline-flex min-h-11 items-center gap-2 text-sm text-white/70 transition-colors duration-200 hover:text-white md:min-h-0`;
 
-const COLUMNS: { title: string; links: { href: string; label: string; icon?: ReactNode }[] }[] = [
+const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
   {
     title: "Explorar",
     links: EVENT_CATEGORIES.map((slug) => ({
@@ -32,11 +32,8 @@ const COLUMNS: { title: string; links: { href: string; label: string; icon?: Rea
       { href: "/ayuda", label: "Centro de ayuda" },
       { href: "/terminos", label: "Términos y condiciones" },
       { href: "/privacidad", label: "Política de privacidad" },
-      {
-        href: "/libro-de-reclamaciones",
-        label: "Libro de reclamaciones",
-        icon: <BookOpen className="size-4" aria-hidden />,
-      },
+      { href: "/cookies", label: "Política de cookies" },
+      { href: "/devoluciones", label: "Garantía y devoluciones" },
     ],
   },
 ];
@@ -123,7 +120,6 @@ export function SiteFooter() {
                 {column.links.map((link) => (
                   <li key={link.href}>
                     <Link href={link.href} className={LINK}>
-                      {link.icon}
                       {link.label}
                     </Link>
                   </li>
@@ -135,9 +131,33 @@ export function SiteFooter() {
 
         <Separator className="my-8 bg-white/10" />
 
-        <p className="text-sm text-white/70">
-          © {new Date().getFullYear()} Mentec Tickets. Todos los derechos reservados.
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm text-white/70">
+              © {new Date().getFullYear()} Mentec Tickets. Todos los derechos reservados.
+            </p>
+            <p className="text-sm text-white/70">
+              Solo usamos cookies esenciales para mantener tu sesión y proteger tus pagos.{" "}
+              <Link
+                href="/cookies"
+                className={`${FOCUS} text-white underline underline-offset-4 hover:text-white/90`}
+              >
+                Más información
+              </Link>
+              .
+            </p>
+          </div>
+          <Link
+            href="/libro-de-reclamaciones"
+            className={cn(
+              FOCUS,
+              "inline-flex h-11 items-center gap-2 self-start rounded-lg bg-white/10 px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/20 md:self-auto",
+            )}
+          >
+            <BookOpen className="size-5" aria-hidden />
+            Libro de Reclamaciones
+          </Link>
+        </div>
       </div>
     </footer>
   );
