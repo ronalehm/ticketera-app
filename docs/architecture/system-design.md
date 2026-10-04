@@ -52,7 +52,7 @@ El objetivo es una ticketera con:
 | Documentos legales | En la BD (markdown, versionados e inmutables al publicar), editables por `super_admin`. |
 | Moneda / documentos | PEN. DNI, CE, pasaporte. |
 | Región GCP | `southamerica-west1` (Santiago), la más cercana a Lima. |
-| Dominio | `mentec-tickets.dev` (`.dev` está en la lista HSTS preload: HTTPS obligatorio). |
+| Dominio | `ticketera-mentec.dev` (`.dev` está en la lista HSTS preload: HTTPS obligatorio). |
 | Borde | External HTTPS Load Balancer + Cloud Armor (WAF, límite por IP) + Cloud CDN para imágenes, delante de Cloud Run. |
 | Moderación | Los eventos pasan por revisión de un admin antes de publicarse. |
 | MFA | Obligatorio para `admin` y `super_admin` (Clerk). |
@@ -124,7 +124,7 @@ Solo se crean los módulos cuando su fase los necesita (SETUP §1 regla 6).
 
 | | Local | Producción |
 |---|---|---|
-| App | `npm run dev` en `http://localhost:3000` | `https://mentec-tickets.dev` → Load Balancer + Cloud Armor → Cloud Run, `southamerica-west1`, imagen `output: "standalone"` |
+| App | `npm run dev` en `http://localhost:3000` | `https://ticketera-mentec.dev` → Load Balancer + Cloud Armor → Cloud Run, `southamerica-west1`, imagen `output: "standalone"` |
 | BD | Neon, rama `dev`, conexión TCP con `pg` | Cloud SQL Postgres, misma región, socket `/cloudsql/<instancia>` (`--add-cloudsql-instances`, sin librería de conector) |
 | BD de tests | Neon, rama `test` (`DATABASE_URL_TEST`) | — |
 | Auth | Instancia de desarrollo de Clerk; Google con las credenciales compartidas de Clerk (sin configurar nada en Google Cloud) | Instancia de producción de Clerk; Google con **cliente OAuth propio** (Google Cloud Console: pantalla de consentimiento + Client ID/Secret, URI de redirección que indica Clerk) cargado en el dashboard de Clerk |
@@ -150,7 +150,7 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `CRON_SECRET` | Autenticación de `/api/jobs/*`. |
 | `GCS_BUCKET` | Imágenes de portada. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional) | Mapa del recinto; sin clave no se muestra el mapa. |
-| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://mentec-tickets.dev`. |
+| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://ticketera-mentec.dev`. |
 | `SUPER_ADMIN_EMAIL` | Correo del primer `super_admin` que crea el seed (`ronalehm@gmail.com`). |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Errores de servidor y cliente. |
 
@@ -160,7 +160,7 @@ Cada instancia de Cloud Run abre un `Pool` de `pg`. Regla: `max_instances × poo
 
 ### Producción y operación
 
-**Borde.** `mentec-tickets.dev` → External HTTPS Load Balancer (certificado gestionado) → Cloud Run (serverless NEG). Cloud Armor: reglas WAF preconfiguradas y límite por IP en rutas de compra y formularios públicos. Cloud CDN para imágenes de Cloud Storage. Costo base aproximado del balanceador: USD 18/mes.
+**Borde.** `ticketera-mentec.dev` → External HTTPS Load Balancer (certificado gestionado) → Cloud Run (serverless NEG). Cloud Armor: reglas WAF preconfiguradas y límite por IP en rutas de compra y formularios públicos. Cloud CDN para imágenes de Cloud Storage. Costo base aproximado del balanceador: USD 18/mes.
 
 **CI/CD (GitHub Actions).**
 - En cada PR: `npm run lint`, `npx vitest run`, `npm run build`. Bloquea el merge si falla.
@@ -208,7 +208,7 @@ Todos idempotentes y con `Authorization: Bearer <CRON_SECRET>`.
 - **Datos peruanos:** Clerk no guarda celular ni documento; los pide "Completa tu perfil" (`/perfil/completar`) y se guardan en `users`, junto con los consentimientos en `consents`.
 - `ensureUser()` hace upsert por `clerk_id` en el primer acceso autenticado (no hace falta túnel en local). Si no existe fila con ese `clerk_id` pero sí una con el mismo correo y `clerk_id NULL` (usuario creado por seed), la vincula **solo si Clerk marca el correo como verificado**; si no, cualquiera podría registrarse con ese correo y heredar el rol.
 - MFA obligatorio para `admin` y `super_admin`: `proxy.ts` niega el acceso a `/admin` si la sesión no tiene segundo factor; las Server Actions de admin lo vuelven a comprobar.
-- Producción: dominio de Clerk con los CNAME que indica Clerk bajo `mentec-tickets.dev`.
+- Producción: dominio de Clerk con los CNAME que indica Clerk bajo `ticketera-mentec.dev`.
 - Webhook (verificado con svix): `user.updated` sincroniza nombre y correo; `user.deleted` anonimiza el usuario y conserva sus órdenes.
 - Cambio de rol: BD → `clerkClient.users.updateUserMetadata(..., { publicMetadata: { role } })` → `audit_logs`.
 - Clerk guarda datos en EE. UU.: requiere el consentimiento `international_transfer` (Ley 29733).
@@ -232,7 +232,7 @@ Correos de esta etapa:
 - Se envía **después del commit**. Si falla, se registra y la operación no se revierte.
 - Reintento sin outbox: columnas `orders.tickets_emailed_at` y `complaints.receipt_emailed_at`; un job reenvía las que siguen en `NULL`.
 - Plantillas como componentes React pasados al SDK (`react:`).
-- Remitente `entradas@mentec-tickets.dev`; SPF y DKIM en el DNS del dominio.
+- Remitente `entradas@ticketera-mentec.dev`; SPF y DKIM en el DNS del dominio.
 - Correos adicionales: invitación de staff de puerta, resultado de solicitud de organizador, resultado de solicitud de reembolso, resultado de revisión de evento.
 
 ### Cloud Storage
@@ -498,7 +498,7 @@ Cada fase es una spec en `docs/specs/` con su aprobación.
 | F5 | Organizadores | Alta de organizador, dashboard, crear evento y enviar a revisión, edición limitada, solicitudes, catálogo de recintos, invitación de `event_staff`. |
 | F6 | Check-in | Escáner en puerta. |
 | F7 | Liquidación | Global Payouts (requiere habilitación de Stripe). |
-| F8 | Producción GCP | Dominio `mentec-tickets.dev`, Load Balancer + Cloud Armor + CDN, Cloud Run, Cloud SQL con PITR, Secret Manager, Cloud Scheduler, Cloud Storage, GitHub Actions, Sentry y alertas, job de retención. |
+| F8 | Producción GCP | Dominio `ticketera-mentec.dev`, Load Balancer + Cloud Armor + CDN, Cloud Run, Cloud SQL con PITR, Secret Manager, Cloud Scheduler, Cloud Storage, GitHub Actions, Sentry y alertas, job de retención. |
 
 F1 se implementa primero; el resto se especifica cuando le toque.
 
