@@ -688,6 +688,6 @@ Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado c
   - Depende de: T1 y T2. Secuencial.
 
 ## Preguntas abiertas
-1. **¿Se hace la migración del Clásico del Pacífico (Fases 3 y 4)?** Es la única forma limpia de que el partido tenga su propio mapa ("CANCHA") en el mismo Estadio Nacional que la arena de conciertos (decisión 4). Añade la migración aditiva `0005` (dos columnas nulas en `events` y un CHECK), que tendrás que aplicar en tu Neon con `npm run db:migrate`.
-   - **Recomendación:** hacerla.
-   - **Si prefieres no migrar,** se quitan las Fases 3 y 4 antes de aprobar: el Clásico se queda con `TicketSelector` como el circo y la entrada libre, y la orden demo `MT-3HX9RB` no cambia.
+Ninguna.
+
+- ~~**¿Se hace la migración del Clásico del Pacífico (Fases 3 y 4)?**~~ **Resuelta (respuesta del usuario, 2026-10-04): sí, con migración.** Se mantienen las Fases 3 y 4 y la migración aditiva `0005` (dos columnas nulas en `events` y un CHECK). El cierre recuerda aplicarla en Neon con `npm run db:migrate` y volver a sembrar.
