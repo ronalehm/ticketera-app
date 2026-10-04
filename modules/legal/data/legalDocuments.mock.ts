@@ -159,12 +159,12 @@ Las cookies son pequeños archivos que un sitio guarda en tu navegador. Hay tecn
 
 | Nombre | Finalidad | Tipo | Duración |
 |---|---|---|---|
-| [POR DEFINIR] nombre | Mantener la sesión iniciada | Esencial | [POR DEFINIR] |
+| \`__session\`, \`__client_uat\` | Mantener la sesión iniciada (Clerk) | Esencial | [POR DEFINIR] |
 | [POR DEFINIR] proveedor de pagos | Prevenir el fraude en los pagos | Esencial | [POR DEFINIR] |
 
 ## 3. Almacenamiento local del navegador
 
-Hoy la demo guarda en el almacenamiento local de tu navegador: \`mentec-auth\` (tu sesión), \`mentec-orders\` (tus compras), \`mentec-saved\` (tus eventos guardados) y \`mentec-organizer-events\` (los eventos del organizador).
+Hoy la demo guarda en el almacenamiento local de tu navegador: \`mentec-orders\` (tus compras), \`mentec-saved\` (tus eventos guardados) y \`mentec-organizer-events\` (los eventos del organizador).
 
 ## 4. Por qué no pedimos consentimiento
 

@@ -1,26 +1,29 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useAuthStore } from "@/modules/auth/session";
 import { OrganizerUserCard } from "./OrganizerUserCard";
 
-const router = vi.hoisted(() => ({ push: vi.fn() }));
+const session = vi.hoisted(() => ({
+  isLoaded: true,
+  user: null as { firstName: string; lastName: string; email: string } | null,
+  signOut: vi.fn(() => Promise.resolve()),
+}));
 
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/modules/auth/session", () => ({ useSessionUser: () => session }));
 
-const user = { id: "usr-001", firstName: "Ana", lastName: "Quispe", email: "demo@mentectickets.pe" };
+const user = { firstName: "Ana", lastName: "Quispe", email: "demo@mentectickets.pe" };
 
 beforeEach(() => {
-  router.push.mockClear();
-  useAuthStore.setState({ user: null });
-  localStorage.clear();
+  session.isLoaded = true;
+  session.user = null;
+  session.signOut.mockClear();
 });
 
 afterEach(cleanup);
 
 describe("OrganizerUserCard", () => {
   it("con usuario muestra nombre completo, correo e iniciales", () => {
-    useAuthStore.setState({ user });
+    session.user = user;
     render(<OrganizerUserCard />);
 
     expect(screen.getByText("Ana Quispe")).toBeTruthy();
@@ -28,15 +31,13 @@ describe("OrganizerUserCard", () => {
     expect(screen.getByText("AQ")).toBeTruthy();
   });
 
-  it("Cerrar sesión borra la sesión y navega al inicio", () => {
-    useAuthStore.setState({ user });
+  it("Cerrar sesión llama al signOut de la sesión", () => {
+    session.user = user;
     render(<OrganizerUserCard />);
 
     fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 
-    expect(useAuthStore.getState().user).toBeNull();
-    expect(router.push).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith("/");
+    expect(session.signOut).toHaveBeenCalledTimes(1);
   });
 
   it("sin usuario muestra el enlace Iniciar sesión y no el botón Cerrar sesión", () => {
@@ -46,10 +47,10 @@ describe("OrganizerUserCard", () => {
     expect(screen.queryByRole("button", { name: "Cerrar sesión" })).toBeNull();
   });
 
-  it("con la sesión guardada muestra el usuario tras rehidratar al montar", async () => {
-    localStorage.setItem("mentec-auth", JSON.stringify({ state: { user }, version: 0 }));
-    render(<OrganizerUserCard />);
+  it("mientras Clerk carga no muestra ni el usuario ni Iniciar sesión", () => {
+    session.isLoaded = false;
+    const { container } = render(<OrganizerUserCard />);
 
-    expect(await screen.findByText("Ana Quispe")).toBeTruthy();
+    expect(container.textContent).toBe("");
   });
 });

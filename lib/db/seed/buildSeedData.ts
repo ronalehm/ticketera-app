@@ -3,15 +3,19 @@ import { isDeepStrictEqual } from "node:util";
 import type { z } from "zod";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
-// Excepción documentada (spec data-foundation, Decisión 15): el seed es tooling y lee internals de los módulos.
+// Excepción documentada (spec data-foundation, Decisión 15; auth-clerk, Decisión 13): el seed es tooling y lee
+// internals de los módulos.
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { eventDetailSchema } from "@/modules/events/schemas/events.schema";
 import { getAvailabilityStatus, LOW_STOCK_RATIO } from "@/modules/events/utils/availability";
 import { normalizeText } from "@/modules/events/utils/eventFilters";
+import { LEGAL_DOCUMENTS_MOCK } from "@/modules/legal/data/legalDocuments.mock";
+import { legalDocumentSchema } from "@/modules/legal/schemas/legal.schema";
 import { ORGANIZER_DRAFTS_MOCK, ORGANIZER_SALES_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
 import { organizerEventSchema } from "@/modules/organizer/schemas/organizer.schema";
 import { VENUE_LAYOUTS_MOCK } from "@/modules/seating/data/venueMaps.mock";
@@ -44,6 +48,7 @@ export type SeedData = {
   ticketTypes: Insert<typeof ticketTypes>[];
   orders: Insert<typeof orders>[];
   eventSeats: Insert<typeof eventSeats>[];
+  legalDocuments: Insert<typeof legalDocuments>[];
 };
 
 type VenueLayout = z.infer<typeof venueLayoutSchema>;
@@ -135,6 +140,18 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     ticketTypes: [],
     orders: [],
     eventSeats: [],
+    legalDocuments: legalDocumentSchema
+      .array()
+      .parse(LEGAL_DOCUMENTS_MOCK)
+      .map((document) => ({
+        id: seedUuid(`legal-document:${document.kind}:${document.version}`),
+        kind: document.kind,
+        version: String(document.version),
+        content: document.content,
+        status: "published",
+        publishedAt: new Date(document.publishedAt),
+        publishedBy: superAdminId,
+      })),
   };
 
   const organizerIds = new Map<string, string>();

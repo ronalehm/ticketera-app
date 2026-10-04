@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { getAvailabilityStatus } from "@/modules/events/utils/availability";
+import { LEGAL_DOCUMENT_KINDS } from "@/modules/legal/schemas/legal.schema";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { DEMO_GENERAL_CAPACITY, buildSeedData, seedUuid } from "./buildSeedData";
 
@@ -255,6 +256,16 @@ describe("buildSeedData", () => {
       seating: "general",
       capacity: 1500,
     });
+  });
+
+  it("siembra una versión published de cada kind legal, con ids deterministas y fecha de publicación", () => {
+    expect(data.legalDocuments.map((document) => document.kind).sort()).toEqual([...LEGAL_DOCUMENT_KINDS].sort());
+    for (const document of data.legalDocuments) {
+      expect(document).toMatchObject({ status: "published", version: "1", publishedBy: SUPER_ADMIN_ID });
+      expect(document.id).toBe(seedUuid(`legal-document:${document.kind}:1`));
+      expect(document.publishedAt).toBeInstanceOf(Date);
+      expect(document.content).toMatch(/\S/);
+    }
   });
 
   it("search_text normalizado y created_at creciente en el orden del mock", () => {

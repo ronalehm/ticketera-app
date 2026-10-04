@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { requireUser } from "@/modules/auth/server";
 import { MyTickets } from "@/modules/tickets";
 
 export const metadata: Metadata = {
@@ -7,6 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function MyTicketsPage() {
+export default async function MyTicketsPage() {
+  await requireUser({ returnTo: "/mis-entradas" });
   return <MyTickets />;
 }

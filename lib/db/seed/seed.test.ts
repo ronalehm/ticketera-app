@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { count, eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
@@ -15,8 +16,8 @@ const SUPER_ADMIN_EMAIL = "super.admin@example.com";
 /** Un seed completo contra Neon tarda decenas de segundos. */
 const SEED_TIMEOUT_MS = 120_000;
 
+/** Sin `users`: se cuenta aparte, solo los del seed, porque otros tests de integración crean usuarios en paralelo. */
 const TABLES = {
-  users,
   organizers,
   categories,
   venues,
@@ -26,16 +27,21 @@ const TABLES = {
   ticketTypes,
   orders,
   eventSeats,
+  legalDocuments,
 };
 
-async function countRows() {
+async function countRows(seedEmails: string[]) {
+  const [{ value: seedUsers }] = await db
+    .select({ value: count() })
+    .from(users)
+    .where(inArray(users.email, seedEmails));
   const entries = await Promise.all(
     Object.entries(TABLES).map(async ([name, table]) => {
       const [{ value }] = await db.select({ value: count() }).from(table);
       return [name, value] as const;
     }),
   );
-  return Object.fromEntries(entries);
+  return { users: seedUsers, ...Object.fromEntries(entries) };
 }
 
 describeWithDb("seed (Postgres)", () => {
@@ -44,7 +50,8 @@ describeWithDb("seed (Postgres)", () => {
 
     const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
     const expected = Object.fromEntries(Object.entries(data).map(([name, rows]) => [name, rows.length]));
-    expect(await countRows()).toEqual({ ...expected, users: data.users.length + 1 }); // + super admin
+    const seedEmails = [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
+    expect(await countRows(seedEmails)).toEqual({ ...expected, users: seedEmails.length });
   }, SEED_TIMEOUT_MS);
 
   it("el super admin tiene el correo en minúsculas, rol super_admin, sin clerk_id y es el creador de los recintos", async () => {

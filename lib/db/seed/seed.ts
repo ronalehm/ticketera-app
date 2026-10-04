@@ -2,6 +2,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { buildSeedData, seedUuid } from "./buildSeedData";
@@ -42,5 +43,6 @@ export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdmin
     await insertAll(ticketTypes, data.ticketTypes);
     await insertAll(orders, data.orders);
     await insertAll(eventSeats, data.eventSeats);
+    await insertAll(legalDocuments, data.legalDocuments);
   });
 }

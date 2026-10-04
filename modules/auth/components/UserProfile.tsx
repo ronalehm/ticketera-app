@@ -1,65 +1,24 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { UserRound } from "lucide-react";
-
-import { EmptyState } from "@/components/shared/EmptyState";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/formFields";
 import { getFullName } from "@/lib/userName";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "../stores/auth.store";
-import type { AuthUser } from "../types/auth.types";
+import type { SessionUser } from "../types/auth.types";
 import { formatMemberSince } from "../utils/formatMemberSince";
 
-/** Página "Mi perfil": límite cliente; la sesión vive en el store persistido del navegador. */
-export function UserProfile() {
-  // Arranca en "cargando" (también en SSR) y solo decide tras rehidratar: sin desajuste de hidratación
-  // ni un "sin sesión" fugaz antes de leer localStorage.
-  const [hydrated, setHydrated] = useState(false);
-  const user = useAuthStore((state) => state.user);
-
-  useEffect(() => {
-    let active = true;
-    // `await` convierte el thenable síncrono de zustand en un paso asíncrono real (como `useMyOrders`).
-    async function hydrate() {
-      await useAuthStore.persist.rehydrate();
-      if (active) setHydrated(true);
-    }
-    hydrate();
-    return () => {
-      active = false;
-    };
-  }, []);
-
+/** Página "Mi perfil": muestra la fila `users` de la sesión (la BD manda). */
+export function UserProfile({ user }: { user: SessionUser }) {
   return (
     <section className="bg-muted">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 md:gap-8 md:px-6 md:py-12">
         <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">Mi perfil</h1>
-        {!hydrated ? (
-          <div role="status">
-            <span className="sr-only">Cargando tu perfil…</span>
-            <Skeleton aria-hidden className="h-96 rounded-2xl bg-background motion-reduce:animate-none" />
-          </div>
-        ) : user ? (
-          <ProfileCard user={user} />
-        ) : (
-          <EmptyState
-            icon={UserRound}
-            title="Inicia sesión para ver tu perfil"
-            description="Ingresa con tu cuenta para ver tus datos y tus entradas."
-            actionLabel="Iniciar sesión"
-            actionHref="/login"
-          />
-        )}
+        <ProfileCard user={user} />
       </div>
     </section>
   );
 }
 
-function getProfileFields(user: AuthUser) {
+function getProfileFields(user: SessionUser) {
   const { firstName, lastName, email, phone, documentType, documentNumber, createdAt } = user;
   return [
     { label: "Nombres", value: firstName },
@@ -70,11 +29,11 @@ function getProfileFields(user: AuthUser) {
       label: "Documento",
       value: documentType && documentNumber ? `${DOCUMENT_TYPE_LABELS[documentType]} ${documentNumber}` : undefined,
     },
-    { label: "Miembro desde", value: createdAt ? formatMemberSince(createdAt) : undefined },
+    { label: "Miembro desde", value: formatMemberSince(createdAt.toISOString()) },
   ];
 }
 
-function ProfileCard({ user }: { user: AuthUser }) {
+function ProfileCard({ user }: { user: SessionUser }) {
   return (
     <section aria-labelledby="profile-name" className="rounded-2xl bg-card p-6 ring-1 ring-border md:p-8">
       <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
@@ -98,7 +57,7 @@ function ProfileCard({ user }: { user: AuthUser }) {
                 !value && "font-normal text-muted-foreground",
               )}
             >
-              {value || "No registrado"}
+              {value || "—"}
             </dd>
           </div>
         ))}
