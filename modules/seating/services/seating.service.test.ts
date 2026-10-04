@@ -2,7 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
 import { getEventBySlug } from "@/modules/events";
-import { STADIUM_CENTER, VENUE_LAYOUTS_MOCK, VIVE_LATINO_SECTORS } from "../data/venueMaps.mock";
+import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
+import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
+import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "../data/venueMaps.mock";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import type { NumberedVenueZone, PlanTransform, VenueMap } from "../types/seating.types";
 import {
@@ -17,10 +19,19 @@ import { findBestAvailableSeats } from "../utils/bestSeats";
 import { getZoneTones } from "../utils/zoneTone";
 import { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./seating.service";
 
-/** Mapas con formas rectangulares (spec base). */
-const RECT_MAP_SLUGS = ["noche-de-sintetizadores-lima", "la-casa-de-los-espejos", "risas-sin-filtro"];
+/**
+ * Recintos cuyas zonas numeradas se eligen tras un "Acercar" en móvil (decisión 3 de
+ * `seating-curved-venues`): sin límite de butacas por fila, ≤ 12 filas y plano de ≤ 622 de ancho,
+ * para que tras un "Acercar" (×1.5) a 375 px el área de toque mida ≥ 24 px.
+ */
+const ZOOM_TO_PICK_SLUGS = ["noche-de-sintetizadores-lima", "la-casa-de-los-espejos", "risas-sin-filtro"];
+const MAX_ZOOM_TO_PICK_PLAN_WIDTH = 622;
 const STADIUM_SLUG = "festival-vive-latino-lima";
-const MAP_SLUGS = [...RECT_MAP_SLUGS, STADIUM_SLUG];
+const MAP_SLUGS = [...ZOOM_TO_PICK_SLUGS, STADIUM_SLUG];
+/** Mapas con geometría curva: los que exportan `sectors`. */
+const CURVED_SLUGS = Object.keys(VENUE_SECTORS_MOCK);
+/** Mapas con formas rectangulares (spec base). */
+const RECT_MAP_SLUGS = MAP_SLUGS.filter((slug) => !(slug in VENUE_SECTORS_MOCK));
 
 async function getMap(slug: string): Promise<VenueMap> {
   const map = await getVenueMapBySlug(slug);
@@ -48,6 +59,9 @@ function toPlanSector(sector: AnnularSector, { scale, x, y }: PlanTransform): An
   };
 }
 
+const MAX_SEATS_PER_ROW = 10;
+const MAX_ROWS = 12;
+const MAX_PLAN_WIDTH = 400;
 const SEAT_RADIUS = 12;
 const ZONE_VIEWBOX_MARGIN = 4;
 const ROW_LABEL_MARGIN = 12;
@@ -223,14 +237,21 @@ describe("seating.service", () => {
       }
     });
 
-    it("tiene ≤ 10 asientos por fila, ≤ 12 filas y anchos de viewBox dentro del límite", async () => {
+    it("tiene ≤ 12 filas por zona y anchos de viewBox dentro del límite de su mapa", async () => {
       const map = await getMap(slug);
+      const zoomToPick = ZOOM_TO_PICK_SLUGS.includes(slug);
       expect(viewBoxWidth(map.viewBox)).toBeLessThanOrEqual(600);
       for (const zone of map.zones) {
         if (zone.kind !== "numbered") continue;
-        expect(zone.rows.length, zone.id).toBeLessThanOrEqual(12);
-        for (const row of zone.rows) expect(row.seats.length, `${zone.id}-${row.label}`).toBeLessThanOrEqual(10);
-        expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(400);
+        expect(zone.rows.length, zone.id).toBeLessThanOrEqual(MAX_ROWS);
+        if (zoomToPick) {
+          expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_ZOOM_TO_PICK_PLAN_WIDTH);
+        } else {
+          for (const row of zone.rows) {
+            expect(row.seats.length, `${zone.id}-${row.label}`).toBeLessThanOrEqual(MAX_SEATS_PER_ROW);
+          }
+          expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_PLAN_WIDTH);
+        }
       }
     });
   });
@@ -252,14 +273,24 @@ describe("seating.service", () => {
     });
   });
 
-  const stageAndZones = Object.entries(VIVE_LATINO_SECTORS);
-  const zoneSectors = stageAndZones.filter(([id]) => id !== "stage");
+  describe("VENUE_SECTORS_MOCK", () => {
+    it("solo tiene mapas mock, incluido el festival con sus sectores", () => {
+      for (const slug of CURVED_SLUGS) expect(MAP_SLUGS, slug).toContain(slug);
+      expect(VENUE_SECTORS_MOCK[STADIUM_SLUG]).toBe(VIVE_LATINO_SECTORS);
+    });
+  });
 
-  describe("geometría de los sectores de festival-vive-latino-lima", () => {
+  describe.each(CURVED_SLUGS)("geometría de los sectores de %s", (slug) => {
+    const stageAndZones = Object.entries(VENUE_SECTORS_MOCK[slug]);
+
     it("todos los sectores son concéntricos con el escenario", () => {
       for (const [id, sector] of stageAndZones) {
         expect({ cx: sector.cx, cy: sector.cy }, id).toEqual(STADIUM_CENTER);
       }
+    });
+
+    it("el sector del escenario es el compartido", () => {
+      expect(VENUE_SECTORS_MOCK[slug].stage).toEqual(STAGE_SECTOR);
     });
 
     it("ningún par de sectores (escenario incluido) se solapa", () => {
@@ -271,18 +302,36 @@ describe("seating.service", () => {
     });
   });
 
-  describeWithDb("invariantes del mapa curvo festival-vive-latino-lima", () => {
+  describeWithDb.each(CURVED_SLUGS)("invariantes del mapa curvo %s", (slug) => {
+    const sectors = VENUE_SECTORS_MOCK[slug];
+    const stageAndZones = Object.entries(sectors);
+    const zoneIds = stageAndZones.map(([id]) => id).filter((id) => id !== "stage");
+
+    /** Zonas numeradas del mapa con su sector en coordenadas del plano. */
+    async function getArcZones() {
+      const zones = (await getMap(slug)).zones.filter((zone) => zone.kind === "numbered");
+      return zones.map((zone) => {
+        if (!zone.planTransform) throw new Error(`Sin planTransform: ${zone.id}`);
+        return { zone, planSector: toPlanSector(sectors[zone.id], zone.planTransform) };
+      });
+    }
+
+    it("el escenario es el compartido, con sus 7 luces dentro de su sector", async () => {
+      const { stage } = await getMap(slug);
+      expect(stage).toEqual(STADIUM_STAGE);
+      expect(stage.lights).toHaveLength(7);
+      for (const light of stage.lights ?? []) expect(isPointInAnnularSector(light, sectors.stage)).toBe(true);
+    });
+
     it("cada path es exactamente el de su sector", async () => {
-      const map = await getMap(STADIUM_SLUG);
-      expect(map.stage.path).toBe(getAnnularSectorPath(VIVE_LATINO_SECTORS.stage));
-      expect(map.zones.map((zone) => zone.id)).toEqual(zoneSectors.map(([id]) => id));
-      for (const zone of map.zones) {
-        expect(zone.path, zone.id).toBe(getAnnularSectorPath(VIVE_LATINO_SECTORS[zone.id as keyof typeof VIVE_LATINO_SECTORS]));
-      }
+      const map = await getMap(slug);
+      expect(map.stage.path).toBe(getAnnularSectorPath(sectors.stage));
+      expect(map.zones.map((zone) => zone.id)).toEqual(zoneIds);
+      for (const zone of map.zones) expect(zone.path, zone.id).toBe(getAnnularSectorPath(sectors[zone.id]));
     });
 
     it("el escenario y cada zona quedan dentro del viewBox con ≥ 4 unidades de margen", async () => {
-      const { width, height } = viewBoxSize((await getMap(STADIUM_SLUG)).viewBox);
+      const { width, height } = viewBoxSize((await getMap(slug)).viewBox);
       for (const [id, sector] of stageAndZones) {
         const bounds = getAnnularSectorBounds(sector);
         expect(bounds.minX, id).toBeGreaterThanOrEqual(ZONE_VIEWBOX_MARGIN);
@@ -293,63 +342,57 @@ describe("seating.service", () => {
     });
 
     it("el labelPos del escenario y de cada zona está dentro de su sector", async () => {
-      const map = await getMap(STADIUM_SLUG);
-      expect(isPointInAnnularSector(map.stage.labelPos, VIVE_LATINO_SECTORS.stage), "stage").toBe(true);
+      const map = await getMap(slug);
+      expect(isPointInAnnularSector(map.stage.labelPos, sectors.stage), "stage").toBe(true);
       for (const zone of map.zones) {
-        const sector = VIVE_LATINO_SECTORS[zone.id as keyof typeof VIVE_LATINO_SECTORS];
-        expect(isPointInAnnularSector(zone.labelPos, sector), zone.id).toBe(true);
+        expect(isPointInAnnularSector(zone.labelPos, sectors[zone.id]), zone.id).toBe(true);
       }
     });
 
-    describe.each(["occidente", "oriente"] as const)("zona numerada en arco %s", (zoneId) => {
-      async function getArcZone() {
-        const zone = await getNumberedZone(STADIUM_SLUG, zoneId);
-        if (!zone.planTransform) throw new Error(`Sin planTransform: ${zoneId}`);
-        return { zone, planSector: toPlanSector(VIVE_LATINO_SECTORS[zoneId], zone.planTransform) };
+    it("toda zona numerada tiene planTransform", async () => {
+      for (const zone of (await getMap(slug)).zones) {
+        if (zone.kind === "numbered") expect(zone.planTransform, zone.id).toBeDefined();
       }
+    });
 
-      it("todas las butacas están dentro del sector del plano, con su radio de 12 dentro de la banda", async () => {
-        const { zone, planSector } = await getArcZone();
+    it("todas las butacas están dentro del sector del plano, con su radio de 12 dentro de la banda", async () => {
+      for (const { zone, planSector } of await getArcZones()) {
         for (const seat of zone.rows.flatMap((row) => row.seats)) {
           const radius = Math.hypot(seat.x - planSector.cx, seat.y - planSector.cy);
           expect(isPointInAnnularSector(seat, planSector), seat.id).toBe(true);
           expect(radius - SEAT_RADIUS, seat.id).toBeGreaterThanOrEqual(planSector.innerRadius);
           expect(radius + SEAT_RADIUS, seat.id).toBeLessThanOrEqual(planSector.outerRadius);
         }
-      });
+      }
+    });
 
-      it("las letras de fila quedan dentro del seatViewBox con ≥ 12 unidades de margen", async () => {
-        const { zone } = await getArcZone();
+    it("las letras de fila quedan dentro del seatViewBox con ≥ 12 unidades de margen", async () => {
+      for (const { zone } of await getArcZones()) {
         const { width, height } = viewBoxSize(zone.seatViewBox);
         for (const row of zone.rows) {
           const { start, end } = getRowEdgeLabelPoints(row);
+          const label = `${zone.id}-${row.label}`;
           for (const point of [start, end]) {
-            expect(point.x, row.label).toBeGreaterThanOrEqual(ROW_LABEL_MARGIN);
-            expect(point.y, row.label).toBeGreaterThanOrEqual(ROW_LABEL_MARGIN);
-            expect(point.x, row.label).toBeLessThanOrEqual(width - ROW_LABEL_MARGIN);
-            expect(point.y, row.label).toBeLessThanOrEqual(height - ROW_LABEL_MARGIN);
+            expect(point.x, label).toBeGreaterThanOrEqual(ROW_LABEL_MARGIN);
+            expect(point.y, label).toBeGreaterThanOrEqual(ROW_LABEL_MARGIN);
+            expect(point.x, label).toBeLessThanOrEqual(width - ROW_LABEL_MARGIN);
+            expect(point.y, label).toBeLessThanOrEqual(height - ROW_LABEL_MARGIN);
           }
         }
-      });
+      }
+    });
 
-      it("tiene al menos 1 butaca disponible y 1 accesible", async () => {
-        const { zone } = await getArcZone();
+    it("cada zona numerada no agotada tiene al menos 1 butaca disponible y 1 accesible", async () => {
+      for (const { zone } of await getArcZones()) {
+        if (zone.status === "sold-out") continue;
         const statuses = zone.rows.flatMap((row) => row.seats.map((seat) => seat.status));
-        expect(statuses).toContain("available");
-        expect(statuses).toContain("accessible");
-      });
+        expect(statuses, zone.id).toContain("available");
+        expect(statuses, zone.id).toContain("accessible");
+      }
     });
   });
 
-  describeWithDb("escenario y reparto de la ocupación", () => {
-    it.each([
-      ["noche-de-sintetizadores-lima", { x: 300, y: 38 }],
-      ["la-casa-de-los-espejos", { x: 300, y: 40 }],
-      ["risas-sin-filtro", { x: 300, y: 40 }],
-    ])("%s: el texto del escenario está centrado en su forma", async (slug, labelPos) => {
-      expect((await getMap(slug)).stage.labelPos).toEqual(labelPos);
-    });
-
+  describeWithDb("reparto de la ocupación", () => {
     it.each([
       ["noche-de-sintetizadores-lima", "norte"],
       ["la-casa-de-los-espejos", "platea"],
