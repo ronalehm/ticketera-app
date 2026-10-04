@@ -775,11 +775,23 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
   - `stadium.mock.ts`: añade `PITCH_STAGE`;
   - 7 archivos nuevos de recinto con su test (requisito 4). No existen porque cada recinto es propio de su evento;
   - `venueMaps.mock.ts`: los añade al final de `MOCK_VENUES`.
-- **Service:** `modules/seating/services/seating.service.ts` (Fase 4, requisito 16). Utils, hooks, schema y tipos de `seating` no cambian.
+- **Services:**
+  - `modules/seating/services/seating.service.ts`: filtro de retirados (Fase 1b, requisito 23) y mapa por evento (Fase 4, requisito 16);
+  - `modules/events/services/events.service.ts`: filtro de retirados en los dos joins (Fase 1b, requisito 23).
+
+  Utils, hooks, schema y tipos de `seating` y `events` no cambian.
+- **BD** (Fase 1b):
+  - `lib/db/schema/events.ts`: `eventSeats.retiredAt`;
+  - `drizzle/0005_event_seat_retired.sql` y `drizzle/meta/*`;
+  - `lib/db/seed/seed.ts`: `SEED_OWNED_COLUMNS`, `upsertAll`, retiro y `SeedReport`;
+  - `lib/db/seed/run.ts`: imprime el informe;
+  - `lib/db/migrations.test.ts`: test nuevo, sin BD;
+  - `lib/db/testTransaction.ts`: helper nuevo de tests con transacción revertida. No existe: `rolledBack` de `constraints.test.ts` es local a ese archivo y no reenvía el `db` de los services. Va en `lib/db/` porque lo usan tests de `lib/` y de dos módulos;
+  - `docs/architecture/erd.md` y `README.md`.
 - **BD** (Fase 3):
   - `lib/db/schema/venues.ts` (tipo `MapStage`) y `lib/db/schema/events.ts` (columnas y CHECK);
-  - `drizzle/0005_event_map_override.sql` y `drizzle/meta/*`;
-  - `lib/db/seed/buildSeedData.ts`;
+  - `drizzle/0006_event_map_override.sql` y `drizzle/meta/*`;
+  - `lib/db/seed/buildSeedData.ts`, y `lib/db/seed/seed.ts` (`SEED_OWNED_COLUMNS.events`);
   - `docs/architecture/erd.md`.
 - **Contrato:** sin API HTTP.
   - `VenueLayout`, `VenueMap`, `getVenueMapBySlug`, `resolveSeats`, los ids `<zona>-<FILA>-<n>`, `asientos=` y `?zona=` no cambian.
@@ -796,10 +808,27 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
   mapViewBox: text("map_view_box"),            // NULL = el del recinto
   mapStage: jsonb("map_stage").$type<MapStage>(), // NULL = el del recinto
   // check("events_map_override_check", sql`(${t.mapViewBox} IS NULL) = (${t.mapStage} IS NULL)`)
+
+  // lib/db/schema/events.ts (dentro de pgTable("event_seats", …)), Fase 1b
+  retiredAt: timestamptz("retired_at"), // NULL = en inventario
+
+  // lib/db/seed/seed.ts, Fase 1b
+  export const SEED_OWNED_COLUMNS: { [K in keyof SeedData]: (keyof SeedData[K][number])[] }; // requisito 21
+  export type SeedReport = { written: Record<keyof SeedData, number>; retiredEventSeats: number; obsoleteWithSales: number };
+  export async function seed(db: NodePgDatabase, options: { superAdminEmail: string }): Promise<SeedReport>;
+
+  // lib/db/testTransaction.ts, Fase 1b (solo tests)
+  export const db: NodePgDatabase; // proxy: la transacción activa o el db real
+  export async function inRolledBackTransaction<T>(run: (tx: Tx) => Promise<T>): Promise<T>;
   ```
 
   ```sql
-  -- drizzle/0005_event_map_override.sql (generada por drizzle-kit)
+  -- drizzle/0005_event_seat_retired.sql (generada por drizzle-kit), Fase 1b
+  ALTER TABLE "event_seats" ADD COLUMN "retired_at" timestamp with time zone;
+  ```
+
+  ```sql
+  -- drizzle/0006_event_map_override.sql (generada por drizzle-kit), Fase 3
   ALTER TABLE "events" ADD COLUMN "map_view_box" text;
   ALTER TABLE "events" ADD COLUMN "map_stage" jsonb;
   ALTER TABLE "events" ADD CONSTRAINT "events_map_override_check" CHECK (("events"."map_view_box" IS NULL) = ("events"."map_stage" IS NULL));
@@ -815,7 +844,10 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
 - **Patrón de un archivo por recinto con su test,** con partes sin BD y con BD: `risasSinFiltro.mock.ts` y `risasSinFiltro.mock.test.ts` son la plantilla.
 - **Invariantes del mapa curvo** de `seating.service.test.ts`. Tras el requisito 2 se aplican solas a cada recinto registrado.
 - **Ocupación determinista** (`getGeneratedSeatStatus`) y estados del seed (`getAvailabilityStatus`): el `occupiedRatio` de cada zona reproduce el estado del mock.
-- **Seed existente** (`buildSeedData`): copia los layouts nuevos sin cambios hasta la Fase 3.
+- **Seed existente** (`buildSeedData`): copia los layouts nuevos sin cambios hasta la Fase 3. La Fase 1b no lo toca: sus ids ya son deterministas por clave natural (`seedUuid`), y su salida es la lista de filas esperadas para el upsert y el retiro.
+- **Simulación del estado de producción:** `buildSeedData` con `VENUE_LAYOUTS_MOCK` sin Copa ni Ecos, que es idéntico a `b90d48a`. La mutación y restauración de `VENUE_LAYOUTS_MOCK` sigue el patrón de `buildSeedData.test.ts` (`afterEach`).
+- **Transacción revertida:** el patrón `rolledBack` de `lib/db/constraints.test.ts` (`tx.rollback()` + `TransactionRollbackError`), generalizado en `lib/db/testTransaction.ts`.
+- **Drizzle 0.45:** `onConflictDoUpdate({ target, set, setWhere })`. Sin dependencias nuevas.
 - **Detalle, `/entradas` y checkout:** ya funcionan con cualquier evento con mapa (contrato H, precarga, `?zona=`).
 - Nada nuevo de shadcn ni dependencias.
 
@@ -833,18 +865,25 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
   - F3: los layouts sintéticos (requisito 15): mapa propio por evento, geometría distinta por sección y nombres distintos;
   - F4: el Estadio Nacional (requisito 18).
 - **`lib/db/constraints.test.ts`** (F3): `events_map_override_check` (requisito 13).
+- **Fase 1b** (requisitos 20 y 24):
+  - `lib/db/migrations.test.ts` (sin BD): journal coherente y ninguna sentencia destructiva;
+  - `lib/db/seed/seed.test.ts` (con BD): convergencia desde el estado de producción, idempotencia (informe 0 y filas idénticas en la 2.ª ejecución), datos ajenos intactos y nada borrado;
+  - `modules/events/services/events.service.test.ts` y `modules/seating/services/seating.service.test.ts` (con BD): un test cada uno de lugares retirados;
+  - `lib/db/testTransaction.ts` es un helper de tests: se prueba a través de esos tests.
+- **Fases 2–4:** cada cierre comprueba sobre `ticketera_dev`, ya sembrada con la fase anterior, que `db:migrate && db:seed` converge y que una 2.ª ejecución del seed escribe 0. El test de convergencia de la Fase 1b no se toca.
 - **`modules/tickets`** (F4): `demoOrders.test.ts` no cambia; valida la butaca nueva con BD. `TicketCard.test.tsx` cambia 2 aserciones (requisito 17).
 - **`modules/checkout/services/checkout.service.test.ts`** (F4): el caso "sin mapa" pasa al circo.
-- **Sin cambios:** `TicketSelection.test.tsx`, `useSeatSelection.test.ts`, `seatIds.test.ts`, `seatNavigation.test.ts`, `bestSeats.test.ts`, `selectionSummary.test.ts`, `arcSeatRows.test.ts`, `annularSector.test.ts`, `seating.schema.test.ts`, `zoneTone.test.ts`, `venueLayoutRecords.test.ts`, los tests de `modules/events` (`TicketSelector`, `EventCard`, `events.service`), `organizer.service.test.ts` y el resto de `modules/checkout` y `modules/tickets`.
+- **Sin cambios:** `TicketSelection.test.tsx`, `useSeatSelection.test.ts`, `seatIds.test.ts`, `seatNavigation.test.ts`, `bestSeats.test.ts`, `selectionSummary.test.ts`, `arcSeatRows.test.ts`, `annularSector.test.ts`, `seating.schema.test.ts`, `zoneTone.test.ts`, `venueLayoutRecords.test.ts`, los tests de `modules/events` (`TicketSelector`, `EventCard`; `events.service.test.ts` solo gana el test de retirados de la F1b), `organizer.service.test.ts` y el resto de `modules/checkout` y `modules/tickets`.
 - **Verificación final de cada fase** (reviewer):
   - `npx vitest run` sin BD y con BD (una sola ejecución con BD a la vez);
-  - BD de desarrollo migrada y vuelta a sembrar;
+  - BD de desarrollo migrada y sembrada sin vaciar (2.ª ejecución del seed: 0 escrituras);
   - `npm run lint` y `npm run build`;
   - el script de Playwright de la fase.
 
 ## Plan de tareas
 **Coordinación:**
-- **Orden de las fases:** F1 → F2 → F3 → F4, una por sesión. El usuario confirmó la migración, así que F3 y F4 se ejecutan (Preguntas abiertas, resuelta).
+- **Orden de las fases:** F1 → F1b → F2 → F3 → F4, una por sesión. El usuario confirmó la migración, así que F3 y F4 se ejecutan (Preguntas abiertas, resuelta).
+- **Merge de la Fase 1:** el PR de F1 incluye la F1b y no se fusiona en `main` hasta que el reviewer de la F1b dé APROBADO (pedido del usuario). Nadie hace commits ni merges sin el usuario.
 - **`design-system/ticketera/pages/ticket-selection.md`:** lo tocan las tareas de cierre (F1 T4, F2 T5 y F4 T3). No se ejecutan en la misma sesión que otra tarea que edite ese archivo, como la enmienda F6 de `seating-stadium-map.md` o `design-alignment-purchase-flow.md`. Esta spec no toca `ZonePricesCard`, `MobileBuyBar`, `TicketSelection` ni `app/`, aunque esas specs sigan en curso.
 - **Developers en paralelo** (tareas de recinto):
   - solo tocan sus 2 archivos;
@@ -853,12 +892,12 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 - **Tarea de cierre de cada fase** (developer):
   1. registra los recintos en el agregador;
   2. ejecuta `npx vitest run` sin BD y después con BD (una sola ejecución con BD a la vez);
-  3. vacía y vuelve a sembrar `ticketera_dev` (con `npm run db:migrate` desde F3);
+  3. ejecuta `npm run db:migrate && npm run db:seed` sobre `ticketera_dev`, **sin vaciarla** (ya sembrada con la fase anterior), y comprueba que una 2.ª ejecución del seed escribe 0 y retira 0;
   4. ejecuta `npm run lint`, `npm run build` y `npm run start`;
   5. ejecuta el script de Playwright y anota las holguras en `ticket-selection.md`.
 
   El reviewer lo repite.
-- **BD local** (decisión 7): solo `127.0.0.1:5433` (`ticketera_dev`/`ticketera_test`). Nunca la de Neon del usuario.
+- **BD local** (decisión 7): solo `127.0.0.1:5433` (`ticketera_dev`/`ticketera_test`). Nunca la de Neon del usuario. Solo la reproducción de producción de la F1b (requisito 25) recrea `ticketera_dev`. Ninguna otra tarea la vacía.
 
 ### Fase 1. Base, Copa del Norte y Los Ecos del Sur (4 tareas, 9 archivos)
 - [x] T1. Base guiada por los datos: `PITCH_STAGE`, `seating.service.test.ts` sin listas fijas y `buildSeedData.test.ts` sin el literal 456 (requisitos 1–3).
@@ -875,6 +914,31 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 - [x] T4. Cierre: registro en el agregador, verificación con BD, build, Playwright de la Fase 1 y diseño de página (requisito 19).
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2 y T3. Secuencial.
+
+### Fase 1b. Migración y seed no destructivos (4 tareas, 15 archivos; antes del merge de la Fase 1)
+Entregable por sí misma: producción se actualiza con `npm run db:migrate && npm run db:seed`, sin vaciar, y Copa y Ecos tienen mapa. Va en secuencia: T2 y T3 tienen archivos disjuntos, pero los dos necesitan la BD de test, que solo admite una ejecución a la vez (decisión 7).
+- [ ] T1. Base de BD: columna `retired_at` y migración `0005`, test de migraciones aditivas, helper de transacción revertida y ERD (requisito 20 y helper del requisito 24).
+  - Archivos: `lib/db/schema/events.ts`, `drizzle/0005_event_seat_retired.sql` (generado), `drizzle/meta/0005_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/migrations.test.ts` (nuevo), `lib/db/testTransaction.ts` (nuevo), `docs/architecture/erd.md`.
+  - Depende de: Fase 1 (T1–T4). Secuencial (base: `lib/`).
+  - Verificar: `npx vitest run lib/db` sin BD y con BD, y `npm run db:migrate` sobre `ticketera_dev`.
+- [ ] T2. Los lectores excluyen lo retirado, con sus tests (requisitos 23 y 24).
+  - Archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`.
+  - Depende de: T1. Secuencial.
+  - Verificar: `npx vitest run modules/events/services modules/seating/services`, sin BD y con BD.
+- [ ] T3. Seed incremental: `SEED_OWNED_COLUMNS`, `upsertAll` con guarda de ventas reales, retiro, `SeedReport` en `run.ts`, y el test de convergencia desde producción (requisitos 21, 22 y 24).
+  - Archivos: `lib/db/seed/seed.ts`, `lib/db/seed/run.ts`, `lib/db/seed/seed.test.ts`.
+  - Depende de: T1 (y T2, por la secuencia de la BD de test). Secuencial.
+  - Verificar: `npx vitest run lib/db/seed`, sin BD y con BD.
+- [ ] T4. Cierre:
+  - sección "Base de datos" del `README.md`;
+  - suite completa sin BD y con BD;
+  - reproducción de producción en `ticketera_dev` (requisito 25: `b90d48a` → `db:migrate` → `db:seed` ×2, con datos ajenos);
+  - `npm run lint`, `npm run build` y `npm run start`;
+  - Playwright de los 2 slugs: 200 con mapa, y CC7.
+  - Archivos: `README.md`.
+  - Depende de: T1–T3. Secuencial.
+  - El worktree temporal de `b90d48a` va en el scratchpad y se elimina al terminar (`git worktree remove`).
+  - El reviewer repite el requisito 25 entero. El merge de la Fase 1 espera a su APROBADO.
 
 ### Fase 2. Sol de Verano, Arena y Mar, Micro abierto y Sueños andinos (5 tareas, 10 archivos)
 - [ ] T1. Sol de Verano (requisito 7), con su test.
@@ -893,16 +957,16 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1–T4. Secuencial.
 
-### Fase 3. Mapa propio por evento en la BD (2 tareas, 9 archivos)
+### Fase 3. Mapa propio por evento en la BD (2 tareas, 10 archivos)
 Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado con layouts sintéticos. No cambia nada visible.
-- [ ] T1. Esquema, migración `0005`, test de la restricción y ERD (requisito 13).
-  - Archivos: `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0005_event_map_override.sql` (generado), `drizzle/meta/0005_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/constraints.test.ts`, `docs/architecture/erd.md`.
+- [ ] T1. Esquema, migración `0006`, test de la restricción y ERD (requisito 13).
+  - Archivos: `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0006_event_map_override.sql` (generado), `drizzle/meta/0006_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/constraints.test.ts`, `docs/architecture/erd.md`.
   - Depende de: Fase 2. Secuencial (`lib/`).
-  - Aplicar la migración solo a la BD local (`npm run db:migrate` sobre `ticketera_dev`; la de test la migra `testGlobalSetup`).
+  - Aplicar la migración solo a la BD local (`npm run db:migrate` sobre `ticketera_dev`; la de test la migra `testGlobalSetup`). `lib/db/migrations.test.ts` debe pasar sin cambios.
 - [ ] T2. Seed con mapa propio por evento y coherencia por sección, con sus tests (requisitos 14 y 15).
-  - Archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/buildSeedData.test.ts`.
+  - Archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/buildSeedData.test.ts`, `lib/db/seed/seed.ts` (`SEED_OWNED_COLUMNS.events`).
   - Depende de: T1. Secuencial.
-  - Al terminar: suite completa con BD, BD de desarrollo vaciada, migrada y vuelta a sembrar, `npm run lint` y `npm run build`.
+  - Al terminar: suite completa con BD; BD de desarrollo migrada y sembrada sin vaciar (2.ª ejecución: 0 escrituras); `npm run lint` y `npm run build`.
 
 ### Fase 4. Clásico del Pacífico (3 tareas, 10 archivos)
 - [ ] T1. Clásico en herradura con Palco y Popular al fondo (requisito 11), con su test.
@@ -922,6 +986,11 @@ Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado c
   - Depende de: T1 y T2. Secuencial.
 
 ## Preguntas abiertas
-Ninguna.
+1. **¿Con qué versión se sembró la BD de Neon de producción?** La spec supone el seed de `main` en `b90d48a` o una versión con la misma salida: desde el merge de `seating-curved-venues`, los 4 mapas tienen la geometría de hoy. El seed de la Fase 1b converge también desde versiones anteriores:
+   - actualiza la geometría;
+   - retira las butacas que ya no están;
+   - liga cada tipo a su zona.
 
-- ~~**¿Se hace la migración del Clásico del Pacífico (Fases 3 y 4)?**~~ **Resuelta (respuesta del usuario, 2026-10-04): sí, con migración.** Se mantienen las Fases 3 y 4 y la migración aditiva `0005` (dos columnas nulas en `events` y un CHECK). El cierre recuerda aplicarla en Neon con `npm run db:migrate` y volver a sembrar.
+   Una única excepción haría fallar el seed (en una transacción, sin dañar nada): que una versión antigua hubiera creado una sección con otro `slug` y el mismo nombre en el mismo recinto (`venue_sections_venue_id_name_unique`). No se espera. No bloquea; si el usuario sabe que Neon se sembró antes de `seating-curved-venues`, el reviewer reproduce también ese commit.
+
+- ~~**¿Se hace la migración del Clásico del Pacífico (Fases 3 y 4)?**~~ **Resuelta (respuesta del usuario, 2026-10-04): sí, con migración.** Se mantienen las Fases 3 y 4 y la migración aditiva, que pasa a ser la `0006` (dos columnas nulas en `events` y un CHECK) porque la `0005` es la de la Fase 1b. El cierre recuerda aplicarla en Neon con `npm run db:migrate && npm run db:seed`, sin vaciar.
