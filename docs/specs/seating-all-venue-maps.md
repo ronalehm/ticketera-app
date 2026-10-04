@@ -921,7 +921,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
   - Archivos: `lib/db/schema/events.ts`, `drizzle/0005_event_seat_retired.sql` (generado), `drizzle/meta/0005_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/migrations.test.ts` (nuevo), `lib/db/testTransaction.ts` (nuevo), `docs/architecture/erd.md`.
   - Depende de: Fase 1 (T1–T4). Secuencial (base: `lib/`).
   - Verificar: `npx vitest run lib/db` sin BD y con BD, y `npm run db:migrate` sobre `ticketera_dev`.
-- [ ] T2. Los lectores excluyen lo retirado, con sus tests (requisitos 23 y 24).
+- [x] T2. Los lectores excluyen lo retirado, con sus tests (requisitos 23 y 24).
   - Archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`.
   - Depende de: T1. Secuencial.
   - Verificar: `npx vitest run modules/events/services modules/seating/services`, sin BD y con BD.
