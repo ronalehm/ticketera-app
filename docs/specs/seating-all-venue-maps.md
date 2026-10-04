@@ -89,7 +89,7 @@ Lo cubre la **Fase 1b** (decisión 7 y requisitos 20–25), que va antes del mer
    | Evento | Mapa | Motivo |
    |---|---|---|
    | `copa-del-norte-trujillo` (deportes) | sí (F1) | Recinto propio (Estadio Mansiche). |
-   | `los-ecos-del-sur-arequipa` (conciertos, agotado) | sí (F1) | Cada tipo es un lugar (Galería y Platea). El mapa se ve con todo agotado (decisión 8). |
+   | `los-ecos-del-sur-arequipa` (conciertos, agotado) | sí (F1) | Cada tipo es un lugar: General (Galería) y Platea. El mapa se ve con todo agotado (decisión 8). |
    | `festival-sol-de-verano` (festivales) | sí (F2) | 3 zonas de pie. |
    | `festival-arena-y-mar-piura` (festivales) | sí (F2) | 2 zonas de pie. |
    | `micro-abierto-arequipa` (stand-up) | sí (F2) | Mesa (numerada) y General. |
@@ -613,7 +613,7 @@ Holguras previstas de las etiquetas, en px: "sin selección / con insignia", la 
 
 ## Criterios de aceptación
 Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de cierre y los repite el reviewer. Entorno de Playwright:
-- `npm run build && npm run start`, con la BD de desarrollo vaciada, migrada y vuelta a sembrar (decisión 7);
+- `npm run build && npm run start`, con la BD de desarrollo (`ticketera_dev`) migrada y sembrada **sin vaciar** (`npm run db:migrate && npm run db:seed`, decisión 7). En la Fase 1b y en el reviewer de la Fase 1, sobre la reproducción de producción del requisito 25;
 - Chromium de `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`) o `npx -y playwright install chromium`;
 - anchos 375 × 812, 640 × 900, 768 × 1024, 1024 × 768 y 1440 × 900;
 - antes de medir, el mapa se desplaza a la vista (`scrollIntoView`).
@@ -660,16 +660,44 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
   - el mapa coincide;
   - las dos zonas están `sold-out`.
 - [ ] Dado `npx vitest run` sin BD y con BD (una sola ejecución con BD a la vez), entonces pasa entero. Siguen pasando sin cambios `checkout.service.test.ts` ("evento agotado → sold-out" con Ecos) y `demoOrders.test.ts`.
-- [ ] Dada la BD de desarrollo vaciada y vuelta a sembrar, cuando se ejecutan `npm run lint` y `npm run build`, entonces pasan sin errores. Las rutas `/eventos/copa-del-norte-trujillo/entradas` y `/eventos/los-ecos-del-sur-arequipa/entradas` quedan prerenderizadas.
+- [ ] Dada la BD de desarrollo migrada y sembrada sin vaciar, cuando se ejecutan `npm run lint` y `npm run build`, entonces pasan sin errores. Las rutas `/eventos/copa-del-norte-trujillo/entradas` y `/eventos/los-ecos-del-sur-arequipa/entradas` quedan prerenderizadas.
 - [ ] Playwright, con CC1–CC8 en los 2 eventos:
-  - `/checkout?evento=copa-del-norte-trujillo&occidente=1&asientos=occidente-A-2` muestra el formulario de pago con "Occidente · Fila A · Asiento 2";
+  - `/checkout?evento=copa-del-norte-trujillo&occidente=1&asientos=occidente-A-2` muestra el formulario de pago con el resumen compacto de `OrderSummary`: «1 × Occidente» y «Asientos: Fila A · 2». La etiqueta «Occidente · Fila A · Asiento 2» va en el payload del pedido, no en el resumen visible;
   - `/checkout?evento=copa-del-norte-trujillo&popular=2&oriente=1` muestra el formulario de pago;
   - `/checkout?evento=los-ecos-del-sur-arequipa&platea=1&asientos=platea-A-1` muestra el estado de evento agotado, no el formulario;
-  - el detalle de Ecos muestra "Entradas agotadas" en el aside, Galería y Platea con "Agotado", y no tiene `MobileBuyBar`.
+  - el detalle de Ecos muestra "Entradas agotadas" en el aside, General (Galería) y Platea con «Agotado», y no tiene `MobileBuyBar`. La zona se llama "General", el nombre del `ticketType`; "Galería, sin numerar." es la descripción, que `ZonePricesCard` no muestra.
 - [ ] Dados `/eventos/el-circo-de-las-estrellas` y `/eventos/aventura-en-el-bosque-magico`, entonces siguen con `TicketSelector` ("Añadir una entrada <tipo>"), y sus `/entradas` dan el 404 "No encontramos este evento".
 - [ ] Dado el cierre de la fase, entonces:
   - `ticket-selection.md` incluye Copa y Ecos (requisito 19);
-  - el resumen al usuario indica que, tras el merge, debe vaciar y volver a sembrar su BD de desarrollo (`npm run db:migrate && npm run db:seed`). Sin ese paso, el CTA de esos eventos lleva a un 404 (decisión 7).
+  - el resumen al usuario indica que, tras el merge (que espera al APROBADO del reviewer de la Fase 1b), debe ejecutar en su BD de Neon `npm run db:migrate && npm run db:seed`, sin vaciar. Sin ese paso, el CTA de esos eventos lleva a un 404 (decisión 7).
+
+### Fase 1b. Migración y seed no destructivos (antes del merge de la Fase 1)
+- [ ] **Migrate no destructivo.**
+  - Dado `npx vitest run lib/db/migrations.test.ts`, entonces pasa con las migraciones `0000`–`0005`.
+  - `drizzle/0005_event_seat_retired.sql` contiene solo `ALTER TABLE "event_seats" ADD COLUMN "retired_at" timestamp with time zone;`.
+  - `git diff origin/main --stat -- drizzle/` solo añade archivos, salvo `_journal.json`, que solo añade una entrada.
+- [ ] **Migrate sobre producción.** Dada la reproducción de producción (requisito 25, paso 4), cuando se ejecuta `npm run db:migrate`, entonces:
+  - los conteos de todas las tablas son los mismos que antes;
+  - `event_seats.retired_at` existe y es `NULL` en todas las filas.
+- [ ] **Seed idempotente.** Dada la reproducción de producción, cuando se ejecuta `npm run db:seed` dos veces, entonces:
+  - la 1.ª imprime los valores del requisito 22 (con los datos ajenos: `retiredEventSeats` 399 y `obsoleteWithSales` 1, con aviso);
+  - la 2.ª imprime 0 en todas las tablas, 0 retiradas y el mismo `obsoleteWithSales`;
+  - los conteos por tabla después de la 2.ª son iguales a los de después de la 1.ª: eventos, zonas (`venue_sections`), tipos, `venue_seats` y `event_seats`, activos y retirados.
+- [ ] **Identificador estable.** Dado lo anterior, entonces Copa y Ecos tienen los mismos ids que antes en `events`, `venues`, `venue_sections` y `ticket_types` (`seedUuid` de su clave natural). No hay filas duplicadas por slug: `events.slug`, `(venue_id, slug)` y `(event_id, slug)` siguen siendo únicos, y sus conteos coinciden con `buildSeedData`.
+- [ ] **Nada se borra.** Dado lo anterior, entonces:
+  - cada id que existía antes de migrar sigue existiendo;
+  - el usuario, el pedido y los 2 lugares ajenos están intactos;
+  - `grep -nE "\b(DELETE|TRUNCATE)\b" lib/db/seed/seed.ts lib/db/seed/run.ts` no encuentra nada.
+- [ ] **Sin 404.** Dado lo anterior, cuando se ejecutan `npm run build && npm run start`, entonces:
+  - `/eventos/copa-del-norte-trujillo/entradas` y `/eventos/los-ecos-del-sur-arequipa/entradas` responden 200 con su mapa (3 y 2 zonas; Copa con "CANCHA");
+  - el plano de Occidente tiene 39 butacas;
+  - los detalles cumplen CC7.
+- [ ] Dado `seed.test.ts` con BD, entonces pasan los casos (a), (b) y (c) del requisito 24, y los tests de retirados de `events.service.test.ts` y `seating.service.test.ts`.
+- [ ] Dado `npx vitest run` sin BD y con BD (de uno en uno), y `npm run lint` y `npm run build`, entonces pasan. Los tests existentes, incluidos los de la Fase 1, no cambian de resultado.
+- [ ] Dado `README.md`, entonces tiene la sección "Base de datos" del requisito 25. Dado `docs/architecture/erd.md`, entonces documenta `retired_at`.
+- [ ] **Merge.** Dado el cierre de la Fase 1b, entonces:
+  - el PR de la Fase 1 no se fusiona en `main` hasta que el reviewer de la Fase 1b dé APROBADO;
+  - el resumen al usuario dice que en producción basta con `npm run db:migrate && npm run db:seed`, sin vaciar.
 
 ### Fase 2. Sol de Verano, Arena y Mar, Micro abierto y Sueños andinos
 - [ ] Dados los 4 recintos, entonces cada `<recinto>.mock.test.ts` comprueba sin BD su requisito (7, 8, 9 o 10):
@@ -682,25 +710,28 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
   - `resolveSeats` da "Mesa · Fila A · Asiento 2" y "Preferencial · Fila A · Asiento 5".
 - [ ] Dado T1–T4, entonces ninguno toca `seating.service.test.ts`, `buildSeedData.test.ts` ni `venueMaps.mock.ts`, y los dos tests siguen pasando tras el cierre.
 - [ ] Dado `npx vitest run` sin BD y con BD (de uno en uno), entonces pasa entero.
-- [ ] Dada la BD vaciada y vuelta a sembrar, entonces `npm run lint` y `npm run build` pasan, y las 4 rutas `/entradas` nuevas quedan prerenderizadas.
+- [ ] Dada la BD de desarrollo, sembrada antes con la Fase 1b, y luego migrada y sembrada sin vaciar, entonces:
+  - `npm run lint` y `npm run build` pasan, y las 4 rutas `/entradas` nuevas quedan prerenderizadas;
+  - el informe del seed retira las 400 filas generales de Mesa y de Preferencial de Sueños (200 + 200);
+  - una 2.ª ejecución escribe 0 y retira 0.
 - [ ] Playwright, con CC1–CC8 en los 4 eventos, y además:
   - desde `md`, la píldora "Últimas entradas" de Preferencial (Sol de Verano) se ve entera dentro de su banda, a ≥ 3 px (previsto 5.5 a 1024);
   - `/checkout?evento=micro-abierto-arequipa&mesa=1&asientos=mesa-A-2` y `/checkout?evento=suenos-de-una-noche-andina&preferencial=1&asientos=preferencial-A-5` muestran el formulario con su butaca;
   - `/checkout?evento=festival-sol-de-verano&general=1&preferencial=1&vip=1` y `/checkout?evento=festival-arena-y-mar-piura&general=2&vip=1` muestran el formulario.
 - [ ] Dado el cierre, entonces:
   - `ticket-selection.md` incluye los 4 recintos;
-  - el resumen al usuario recuerda volver a sembrar la BD.
+  - el resumen al usuario recuerda ejecutar en Neon `npm run db:migrate && npm run db:seed`, sin vaciar.
 
 ### Fase 3. Mapa propio por evento en la BD
-- [ ] Dada la migración `0005`, cuando se aplica a `ticketera_dev` con `npm run db:migrate`, entonces:
+- [ ] Dada la migración `0006`, cuando se aplica a `ticketera_dev` (ya sembrada) con `npm run db:migrate`, entonces:
   - `events` tiene `map_view_box text NULL`, `map_stage jsonb NULL` y `events_map_override_check`;
   - no cambia ningún dato existente.
 - [ ] Dado `lib/db/constraints.test.ts` con BD, entonces los dos casos del requisito 13 pasan.
 - [ ] Dado `DATABASE_URL_TEST= npx vitest run lib/db/seed/buildSeedData.test.ts`, entonces pasan los tests del requisito 15. El archivo no contiene "Dos layouts distintos" y usa `aventura-en-el-bosque-magico` en los tests sintéticos.
 - [ ] Dado el seed real, entonces ningún evento tiene `mapViewBox` (todavía no hay mapas por evento) y `getVenueMapBySlug` da lo mismo que antes en todos los mapas: `seating.service.test.ts` pasa sin cambios.
-- [ ] Dado `npx vitest run` sin BD y con BD, y la BD de desarrollo migrada y vuelta a sembrar, entonces `npm run lint` y `npm run build` pasan.
+- [ ] Dado `npx vitest run` sin BD y con BD, y la BD de desarrollo migrada y sembrada sin vaciar, entonces `npm run lint` y `npm run build` pasan. `lib/db/migrations.test.ts` acepta la `0006`, y una 2.ª ejecución del seed escribe 0.
 - [ ] Dado `docs/architecture/erd.md`, entonces documenta las columnas, el CHECK y la nota del requisito 13.
-- [ ] Dado el cierre, entonces el resumen al usuario indica que, tras el merge, debe ejecutar `npm run db:migrate` en su BD de Neon (migración `0005`, aditiva) y volver a sembrarla.
+- [ ] Dado el cierre, entonces el resumen al usuario indica que, tras el merge, debe ejecutar en su BD de Neon `npm run db:migrate && npm run db:seed`, sin vaciar (migración `0006`, aditiva).
 
 ### Fase 4. Clásico del Pacífico
 - [ ] Dado `CLASICO_VENUE`, entonces `clasicoDelPacifico.mock.test.ts` comprueba sin BD el requisito 11:
@@ -717,7 +748,11 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
 - [ ] Dado `demoOrders.test.ts` con BD, entonces "si el evento tiene mapa, cada asiento existe…" valida `MT-3HX9RB` con `occidente-F-4` y la etiqueta "Occidente · Fila F · Asiento 4". `TicketCard.test.tsx` pasa con esa etiqueta. `MT-9LM2TC` no cambia.
 - [ ] Dado `checkout.service.test.ts`, entonces "asientos en un evento sin mapa" usa el circo y pasa.
 - [ ] Dado `buildSeedData.test.ts`, entonces el test del Estadio Nacional cumple el requisito 18 y los del requisito 15 siguen pasando.
-- [ ] Dado `npx vitest run` sin BD y con BD, y la BD de desarrollo migrada y vuelta a sembrar, entonces `npm run lint` y `npm run build` pasan. `/eventos/clasico-del-pacifico/entradas` queda prerenderizada.
+- [ ] Dado `npx vitest run` sin BD y con BD, y la BD de desarrollo, sembrada antes con la Fase 3, migrada y sembrada sin vaciar, entonces:
+  - `npm run lint` y `npm run build` pasan, y `/eventos/clasico-del-pacifico/entradas` queda prerenderizada;
+  - el seed da al Clásico su `map_view_box`/`map_stage` y la geometría de sus 4 secciones;
+  - retira los lugares generales de Oriente y Occidente y los 80 sobrantes de Palco;
+  - una 2.ª ejecución escribe 0 y retira 0.
 - [ ] Playwright, con CC1–CC8 en el Clásico, y además:
   - desde `md`, la píldora "Últimas entradas" de Occidente se ve entera dentro de su zona, a ≥ 3 px (previsto 3.1 a 1024);
   - `/eventos/noche-de-sintetizadores-lima/entradas` sigue mostrando "ESCENARIO" y sus 4 zonas, sin cambios;
@@ -726,7 +761,7 @@ Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de c
 - [ ] Dado `/mis-entradas` con la cuenta demo, entonces la entrada de `MT-3HX9RB` muestra "Occidente · Fila F · Asiento 4".
 - [ ] Dado el cierre, entonces:
   - `ticket-selection.md` incluye el Clásico;
-  - el resumen al usuario recuerda migrar y volver a sembrar su BD de Neon.
+  - el resumen al usuario recuerda ejecutar en Neon `npm run db:migrate && npm run db:seed`, sin vaciar.
 
 ## Diseño técnico
 - **Rutas (`app/`):** sin cambios. Ya se adaptan solas:
