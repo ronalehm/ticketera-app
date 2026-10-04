@@ -917,7 +917,7 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 
 ### Fase 1b. Migración y seed no destructivos (4 tareas, 15 archivos; antes del merge de la Fase 1)
 Entregable por sí misma: producción se actualiza con `npm run db:migrate && npm run db:seed`, sin vaciar, y Copa y Ecos tienen mapa. Va en secuencia: T2 y T3 tienen archivos disjuntos, pero los dos necesitan la BD de test, que solo admite una ejecución a la vez (decisión 7).
-- [ ] T1. Base de BD: columna `retired_at` y migración `0005`, test de migraciones aditivas, helper de transacción revertida y ERD (requisito 20 y helper del requisito 24).
+- [x] T1. Base de BD: columna `retired_at` y migración `0005`, test de migraciones aditivas, helper de transacción revertida y ERD (requisito 20 y helper del requisito 24).
   - Archivos: `lib/db/schema/events.ts`, `drizzle/0005_event_seat_retired.sql` (generado), `drizzle/meta/0005_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/migrations.test.ts` (nuevo), `lib/db/testTransaction.ts` (nuevo), `docs/architecture/erd.md`.
   - Depende de: Fase 1 (T1–T4). Secuencial (base: `lib/`).
   - Verificar: `npx vitest run lib/db` sin BD y con BD, y `npm run db:migrate` sobre `ticketera_dev`.

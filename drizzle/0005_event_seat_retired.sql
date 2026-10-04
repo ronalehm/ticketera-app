@@ -1,0 +1,1 @@
+ALTER TABLE "event_seats" ADD COLUMN "retired_at" timestamp with time zone;

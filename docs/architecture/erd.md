@@ -122,6 +122,7 @@ erDiagram
     seat_status status
     uuid order_id FK
     timestamptz held_until
+    timestamptz retired_at
   }
   orders {
     uuid id PK
@@ -399,11 +400,15 @@ Restricciones: `UNIQUE (event_id, section_id)`; `UNIQUE (event_id, slug)`.
 | `status` | `seat_status` | Default `available`. |
 | `order_id` | uuid NULL → `orders.id` | Orden que lo reserva o compró. |
 | `held_until` | timestamptz NULL | Vence la reserva (expiración perezosa). |
+| `retired_at` | timestamptz NULL | `NULL` = en inventario. Con fecha = fuera del inventario: no se vende, no cuenta ni se pinta en el mapa (el seed retira lo que su layout ya no tiene). |
 
 Restricciones: `UNIQUE (event_id, venue_seat_id)`; `CHECK ((status = 'available') = (order_id IS NULL))`.
 Índice: `(ticket_type_id, status)`.
 
-Disponibles de una zona: `status = 'available' OR (status = 'held' AND held_until < now())`.
+Total de una zona: sus filas con `retired_at IS NULL`.
+Disponibles de una zona: `retired_at IS NULL AND (status = 'available' OR (status = 'held' AND held_until < now()))`.
+
+El inventario no se borra: una fila obsoleta se retira (`retired_at`) y conserva `status`, `order_id` y sus FKs (`tickets`, `orders`), con su historial.
 
 **`event_staff`**: staff de puerta por evento, invitado por correo.
 
@@ -671,7 +676,7 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 | Dato | Cálculo |
 |---|---|
 | "Desde S/" del evento | `MIN(ticket_types.price_cents)` |
-| Estado de zona (disponible, últimas, agotado) | Conteo de `event_seats` disponibles vs. total |
+| Estado de zona (disponible, últimas, agotado) | Conteo de `event_seats` disponibles vs. total, sin los retirados (`retired_at IS NULL`) |
 | Saldo del organizador | Órdenes pagadas − reembolsos − payouts |
 | Ingresos y entradas vendidas (dashboard) | Agregados sobre `orders` y `tickets` |
 | Documento legal vigente | Última versión `published` por `kind` |
