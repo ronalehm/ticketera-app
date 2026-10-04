@@ -1,49 +1,61 @@
-import { generateSeatRows } from "../utils/seatRows";
-import type { MockVenue } from "./stadium.mock";
+import { type AnnularSector, getAnnularSectorPath } from "../utils/annularSector";
+import { generateArcSeatRows } from "../utils/arcSeatRows";
+import { type MockVenue, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
+
+/** Sectores de la arena de "Noche de sintetizadores" (coordenadas del mapa, ángulos en grados con 0° = +x y sentido horario). */
+const SINTETIZADORES_SECTORS: Record<"stage" | "vip" | "preferencial" | "general" | "norte", AnnularSector> = {
+  stage: STAGE_SECTOR,
+  vip: { ...STADIUM_CENTER, innerRadius: 102, outerRadius: 166, startAngle: 34, endAngle: 146 },
+  preferencial: { ...STADIUM_CENTER, innerRadius: 174, outerRadius: 236, startAngle: 34, endAngle: 146 },
+  general: { ...STADIUM_CENTER, innerRadius: 244, outerRadius: 306, startAngle: 34, endAngle: 146 },
+  norte: { ...STADIUM_CENTER, innerRadius: 314, outerRadius: 518, startAngle: 57, endAngle: 123 },
+};
 
 // Nombre, precio y estado de cada zona salen del `ticketType` del evento (service).
 export const SINTETIZADORES_VENUE: MockVenue = {
+  sectors: SINTETIZADORES_SECTORS,
   layout: {
     eventSlug: "noche-de-sintetizadores-lima",
-    viewBox: "0 0 600 560",
-    stage: { label: "ESCENARIO", path: "M200 16 H400 V60 H200 Z", labelPos: { x: 300, y: 38 } },
+    viewBox: "0 0 600 580",
+    stage: STADIUM_STAGE,
     zones: [
       {
         id: "vip",
         ticketTypeId: "vip",
         kind: "general",
         capacity: 1500,
-        path: "M150 76 H450 V180 H150 Z",
-        labelPos: { x: 300, y: 128 },
+        path: getAnnularSectorPath(SINTETIZADORES_SECTORS.vip),
+        labelPos: { x: 300, y: 188 },
       },
       {
         id: "preferencial",
         ticketTypeId: "preferencial",
         kind: "general",
         capacity: 4000,
-        path: "M90 196 H510 V296 H90 Z",
-        labelPos: { x: 300, y: 246 },
+        path: getAnnularSectorPath(SINTETIZADORES_SECTORS.preferencial),
+        labelPos: { x: 300, y: 259 },
       },
       {
         id: "general",
         ticketTypeId: "general",
         kind: "general",
         capacity: 12000,
-        path: "M20 312 H580 V444 H20 Z",
-        labelPos: { x: 300, y: 378 },
+        path: getAnnularSectorPath(SINTETIZADORES_SECTORS.general),
+        labelPos: { x: 300, y: 329 },
       },
       {
         id: "norte",
         ticketTypeId: "norte",
         kind: "numbered",
-        path: "M20 460 H580 V544 H20 Z",
-        labelPos: { x: 300, y: 502 },
-        ...generateSeatRows({
+        path: getAnnularSectorPath(SINTETIZADORES_SECTORS.norte),
+        labelPos: { x: 300, y: 470 },
+        ...generateArcSeatRows({
           zoneId: "norte",
-          rowLabels: ["A", "B", "C", "D", "E", "F", "G", "H"],
-          seatsPerRow: 10,
+          sector: SINTETIZADORES_SECTORS.norte,
+          scale: 0.96,
+          rowLabels: ["A", "B", "C", "D", "E", "F"],
           occupiedRatio: 0.3,
-          accessibleSeats: ["norte-H-1", "norte-H-10"],
+          accessibleSeats: ["norte-F-1", "norte-F-15"],
         }),
       },
     ],
