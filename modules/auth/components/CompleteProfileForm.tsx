@@ -3,60 +3,38 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldSeparator,
-} from "@/components/ui/field";
+import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useZodForm } from "@/hooks/useZodForm";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES } from "@/lib/formFields";
-import { INLINE_LINK, TEXT_LINK } from "@/lib/linkStyles";
-import { cn } from "@/lib/utils";
-import { registerSchema } from "../schemas/auth.schema";
-import { AuthError, register } from "../services/auth.service";
-import { useAuthStore } from "../stores/auth.store";
-import type { RegisterInput } from "../types/auth.types";
-import { GENERIC_ERROR } from "./formShared";
-import { GoogleSignIn } from "./GoogleSignIn";
-import { PasswordInput } from "./PasswordInput";
+import { INLINE_LINK } from "@/lib/linkStyles";
+import { completeProfileAction } from "../actions/profile.actions";
+import { completeProfileSchema } from "../schemas/auth.schema";
+import type { CompleteProfileInput } from "../types/auth.types";
 
-const PASSWORD_HINT_ID = "register-password-description";
+const GENERIC_ERROR = "No pudimos completar la solicitud. Inténtalo de nuevo.";
 
-type TextField = Exclude<keyof RegisterInput, "documentType" | "acceptTerms" | "marketingOptIn">;
-
-const INITIAL_VALUES: RegisterInput = {
-  firstName: "",
-  lastName: "",
-  email: "",
+const INITIAL_VALUES: CompleteProfileInput = {
   phone: "",
   documentType: "dni",
   documentNumber: "",
-  password: "",
-  confirmPassword: "",
   acceptTerms: false,
   marketingOptIn: false,
 };
 
-export function RegisterForm() {
-  const router = useRouter();
-  const signIn = useAuthStore((state) => state.signIn);
+/** "Completa tu perfil": celular, documento y consentimientos. Si se guarda, la acción redirige a `redirectUrl`. */
+export function CompleteProfileForm({ redirectUrl }: { redirectUrl: string | null }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
-    registerSchema,
+    completeProfileSchema,
     INITIAL_VALUES,
   );
   const isDni = values.documentType === "dni";
@@ -64,36 +42,34 @@ export function RegisterForm() {
   const onSubmit = handleSubmit(async (data) => {
     setServerError(null);
     try {
-      signIn(await register(data));
-      router.replace("/");
-    } catch (error) {
-      setServerError(error instanceof AuthError ? error.message : GENERIC_ERROR);
+      // Si guarda, la acción redirige y no hay resultado.
+      const result = await completeProfileAction(data, redirectUrl);
+      if (result?.error) setServerError(result.error);
+    } catch {
+      setServerError(GENERIC_ERROR);
     }
   });
 
   // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y del error.
-  const textProps = (name: TextField) => ({
-    id: `register-${name}`,
+  const textProps = (name: "phone" | "documentNumber") => ({
+    id: `profile-${name}`,
     value: values[name],
     onChange: (event: ChangeEvent<HTMLInputElement>) => setValue(name, event.target.value),
     onBlur: () => handleBlur(name),
     "aria-invalid": !!errors[name],
-    "aria-describedby": errors[name] ? `register-${name}-error` : undefined,
+    "aria-describedby": errors[name] ? `profile-${name}-error` : undefined,
   });
 
-  const fieldError = (name: keyof RegisterInput) => (
-    <FieldError id={`register-${name}-error`}>{errors[name]}</FieldError>
+  const fieldError = (name: keyof CompleteProfileInput) => (
+    <FieldError id={`profile-${name}-error`}>{errors[name]}</FieldError>
   );
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Crea tu cuenta</h1>
-        <p className="text-base text-muted-foreground">Guarda tus entradas y recibe novedades de tus eventos.</p>
+        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Completa tu perfil</h1>
+        <p className="text-base text-muted-foreground">Lo usamos para emitir tus entradas a tu nombre.</p>
       </div>
-
-      <GoogleSignIn />
-      <FieldSeparator>o</FieldSeparator>
 
       <form noValidate onSubmit={onSubmit}>
         <FieldGroup>
@@ -104,33 +80,8 @@ export function RegisterForm() {
             </Alert>
           )}
 
-          <div className="grid gap-5 sm:grid-cols-2 sm:gap-4">
-            <Field data-invalid={!!errors.firstName}>
-              <FieldLabel htmlFor="register-firstName">Nombres</FieldLabel>
-              <Input {...textProps("firstName")} autoComplete="given-name" className="h-11" />
-              {fieldError("firstName")}
-            </Field>
-            <Field data-invalid={!!errors.lastName}>
-              <FieldLabel htmlFor="register-lastName">Apellidos</FieldLabel>
-              <Input {...textProps("lastName")} autoComplete="family-name" className="h-11" />
-              {fieldError("lastName")}
-            </Field>
-          </div>
-
-          <Field data-invalid={!!errors.email}>
-            <FieldLabel htmlFor="register-email">Correo electrónico</FieldLabel>
-            <Input
-              {...textProps("email")}
-              type="email"
-              autoComplete="email"
-              placeholder="tu@email.com"
-              className="h-11"
-            />
-            {fieldError("email")}
-          </Field>
-
           <Field data-invalid={!!errors.phone}>
-            <FieldLabel htmlFor="register-phone">Celular</FieldLabel>
+            <FieldLabel htmlFor="profile-phone">Celular</FieldLabel>
             <InputGroup className="h-11">
               <InputGroupAddon>
                 <InputGroupText>+51</InputGroupText>
@@ -149,7 +100,7 @@ export function RegisterForm() {
 
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-4">
             <Field>
-              <FieldLabel htmlFor="register-documentType">Tipo de documento</FieldLabel>
+              <FieldLabel htmlFor="profile-documentType">Tipo de documento</FieldLabel>
               <Select
                 items={DOCUMENT_TYPE_LABELS}
                 value={values.documentType}
@@ -160,10 +111,7 @@ export function RegisterForm() {
                   handleBlur("documentNumber");
                 }}
               >
-                <SelectTrigger
-                  id="register-documentType"
-                  className="w-full cursor-pointer data-[size=default]:h-11"
-                >
+                <SelectTrigger id="profile-documentType" className="w-full cursor-pointer data-[size=default]:h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,7 +124,7 @@ export function RegisterForm() {
               </Select>
             </Field>
             <Field data-invalid={!!errors.documentNumber}>
-              <FieldLabel htmlFor="register-documentNumber">Número de documento</FieldLabel>
+              <FieldLabel htmlFor="profile-documentNumber">Número de documento</FieldLabel>
               <Input
                 {...textProps("documentNumber")}
                 inputMode={isDni ? "numeric" : undefined}
@@ -187,38 +135,19 @@ export function RegisterForm() {
             </Field>
           </div>
 
-          <Field data-invalid={!!errors.password}>
-            <FieldLabel htmlFor="register-password">Contraseña</FieldLabel>
-            <PasswordInput
-              {...textProps("password")}
-              autoComplete="new-password"
-              aria-describedby={errors.password ? `${PASSWORD_HINT_ID} register-password-error` : PASSWORD_HINT_ID}
-            />
-            <FieldDescription id={PASSWORD_HINT_ID}>
-              Mínimo 8 caracteres, con al menos una letra y un número.
-            </FieldDescription>
-            {fieldError("password")}
-          </Field>
-
-          <Field data-invalid={!!errors.confirmPassword}>
-            <FieldLabel htmlFor="register-confirmPassword">Confirmar contraseña</FieldLabel>
-            <PasswordInput {...textProps("confirmPassword")} autoComplete="new-password" />
-            {fieldError("confirmPassword")}
-          </Field>
-
           <Field orientation="horizontal" data-invalid={!!errors.acceptTerms}>
             <Checkbox
-              id="register-acceptTerms"
+              id="profile-acceptTerms"
               checked={values.acceptTerms}
               onCheckedChange={(checked) => {
                 setValue("acceptTerms", checked);
                 handleBlur("acceptTerms");
               }}
               aria-invalid={!!errors.acceptTerms}
-              aria-describedby={errors.acceptTerms ? "register-acceptTerms-error" : undefined}
+              aria-describedby={errors.acceptTerms ? "profile-acceptTerms-error" : undefined}
             />
             <FieldContent>
-              <FieldLabel htmlFor="register-acceptTerms" className="block font-normal">
+              <FieldLabel htmlFor="profile-acceptTerms" className="block font-normal">
                 Acepto los{" "}
                 <Link href="/terminos" target="_blank" rel="noopener noreferrer" className={INLINE_LINK}>
                   Términos y condiciones
@@ -227,6 +156,7 @@ export function RegisterForm() {
                 <Link href="/privacidad" target="_blank" rel="noopener noreferrer" className={INLINE_LINK}>
                   Política de privacidad
                 </Link>
+                , incluida la transferencia internacional de mis datos a proveedores en EE. UU.
               </FieldLabel>
               {fieldError("acceptTerms")}
             </FieldContent>
@@ -234,11 +164,11 @@ export function RegisterForm() {
 
           <Field orientation="horizontal">
             <Checkbox
-              id="register-marketingOptIn"
+              id="profile-marketingOptIn"
               checked={values.marketingOptIn}
               onCheckedChange={(checked) => setValue("marketingOptIn", checked)}
             />
-            <FieldLabel htmlFor="register-marketingOptIn" className="font-normal">
+            <FieldLabel htmlFor="profile-marketingOptIn" className="font-normal">
               Quiero recibir novedades y promociones por correo
             </FieldLabel>
           </Field>
@@ -251,21 +181,14 @@ export function RegisterForm() {
             {isSubmitting ? (
               <>
                 <Spinner aria-hidden className="motion-reduce:animate-none" />
-                Creando cuenta…
+                Guardando…
               </>
             ) : (
-              "Crear cuenta"
+              "Guardar y continuar"
             )}
           </Button>
         </FieldGroup>
       </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        ¿Ya tienes cuenta?{" "}
-        <Link href="/login" className={cn(TEXT_LINK, "font-semibold")}>
-          Inicia sesión
-        </Link>
-      </p>
     </div>
   );
 }

@@ -2,14 +2,26 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useAuthStore } from "../stores/auth.store";
 import { AuthHeaderActions } from "./AuthHeaderActions";
 
 const navigation = vi.hoisted(() => ({ pathname: "/" }));
+const clerk = vi.hoisted(() => ({
+  isLoaded: true,
+  user: null as null | { firstName: string; lastName: string; primaryEmailAddress: { emailAddress: string } },
+  signOut: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({ usePathname: () => navigation.pathname }));
+vi.mock("@clerk/nextjs", () => ({
+  useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
+  useClerk: () => ({ signOut: clerk.signOut }),
+}));
 
-const user = { id: "usr-001", firstName: "Ana", lastName: "Quispe", email: "demo@mentectickets.pe" };
+const clerkUser = { firstName: "Ana", lastName: "Quispe", primaryEmailAddress: { emailAddress: "demo@mentectickets.pe" } };
+
+function signIn() {
+  clerk.user = clerkUser;
+}
 
 const ACCOUNT_BUTTON = "Cuenta de Ana Quispe";
 
@@ -23,14 +35,11 @@ function renderSheet() {
   );
 }
 
-function storedUser() {
-  return JSON.parse(localStorage.getItem("mentec-auth") ?? "null").state.user;
-}
-
 beforeEach(() => {
   navigation.pathname = "/";
-  useAuthStore.setState({ user: null });
-  localStorage.clear();
+  clerk.isLoaded = true;
+  clerk.user = null;
+  clerk.signOut.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -44,8 +53,14 @@ describe("AuthHeaderActions (bar)", () => {
     expect(screen.queryByText("Mis entradas")).toBeNull();
   });
 
-  it("con usuario guardado muestra el botón de cuenta tras rehidratar, sin saludo ni enlaces sueltos", async () => {
-    localStorage.setItem("mentec-auth", JSON.stringify({ state: { user }, version: 0 }));
+  it("mientras Clerk carga no muestra ni los botones de acceso ni el menú", () => {
+    clerk.isLoaded = false;
+    const { container } = render(<AuthHeaderActions variant="bar" />);
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("con sesión muestra el botón de cuenta, sin saludo ni enlaces sueltos", async () => {
+    signIn();
     render(<AuthHeaderActions variant="bar" />);
 
     expect(await screen.findByRole("button", { name: ACCOUNT_BUTTON })).toBeTruthy();
@@ -55,8 +70,8 @@ describe("AuthHeaderActions (bar)", () => {
     expect(screen.queryByRole("button", { name: "Cerrar sesión" })).toBeNull();
   });
 
-  it("Cerrar sesión desde el menú borra la sesión y vuelve a los enlaces", async () => {
-    useAuthStore.getState().signIn(user);
+  it("Cerrar sesión desde el menú cierra la sesión de Clerk y lleva a /", async () => {
+    signIn();
     render(<AuthHeaderActions variant="bar" />);
     fireEvent.click(await screen.findByRole("button", { name: ACCOUNT_BUTTON }));
 
@@ -65,14 +80,12 @@ describe("AuthHeaderActions (bar)", () => {
       fireEvent.click(signOutItem);
     });
 
-    expect(await screen.findByRole("link", { name: "Iniciar sesión" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Crear cuenta" })).toBeTruthy();
-    expect(storedUser()).toBeNull();
+    expect(clerk.signOut).toHaveBeenCalledWith({ redirectUrl: "/" });
   });
 
   it("en /mis-entradas el item Mis entradas del menú tiene aria-current=page", async () => {
     navigation.pathname = "/mis-entradas";
-    useAuthStore.getState().signIn(user);
+    signIn();
     render(<AuthHeaderActions variant="bar" />);
     fireEvent.click(await screen.findByRole("button", { name: ACCOUNT_BUTTON }));
 
@@ -83,7 +96,7 @@ describe("AuthHeaderActions (bar)", () => {
 
   it("Mi perfil es el primer item del menú y en /perfil tiene aria-current=page", async () => {
     navigation.pathname = "/perfil";
-    useAuthStore.getState().signIn(user);
+    signIn();
     render(<AuthHeaderActions variant="bar" />);
     fireEvent.click(await screen.findByRole("button", { name: ACCOUNT_BUTTON }));
 
@@ -97,9 +110,9 @@ describe("AuthHeaderActions (bar)", () => {
 });
 
 describe("AuthHeaderActions (sheet)", () => {
-  it("con usuario muestra la tarjeta, la navegación Tu cuenta y Cerrar sesión borra la sesión", async () => {
+  it("con sesión muestra la tarjeta, la navegación Tu cuenta y Cerrar sesión cierra la sesión de Clerk", async () => {
     navigation.pathname = "/mis-entradas";
-    useAuthStore.getState().signIn(user);
+    signIn();
     renderSheet();
 
     expect(await screen.findByText("Ana Quispe")).toBeTruthy();
@@ -125,13 +138,12 @@ describe("AuthHeaderActions (sheet)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
     });
-    expect(useAuthStore.getState().user).toBeNull();
-    expect(storedUser()).toBeNull();
+    expect(clerk.signOut).toHaveBeenCalledWith({ redirectUrl: "/" });
   });
 
   it("en /perfil el primer enlace de Tu cuenta es Mi perfil con aria-current=page", async () => {
     navigation.pathname = "/perfil";
-    useAuthStore.getState().signIn(user);
+    signIn();
     renderSheet();
 
     const nav = await screen.findByRole("navigation", { name: "Tu cuenta" });

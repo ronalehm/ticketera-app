@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
+import { requireUser } from "@/modules/auth/server";
 import { OrganizerMobileBar, OrganizerSidebar } from "@/modules/organizer";
 
 export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function OrganizerLayout({ children }: LayoutProps<"/organizador">) {
+export default async function OrganizerLayout({ children }: LayoutProps<"/organizador">) {
+  await requireUser({ returnTo: "/organizador" });
   return (
     <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <OrganizerSidebar />

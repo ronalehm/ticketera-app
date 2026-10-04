@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Ruta interna de la app (`/login`). */
+const appPath = z.string().startsWith("/");
+
 /** Variable opcional: un valor vacío (`VAR=`) cuenta como ausente. */
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
@@ -10,6 +13,7 @@ export const serverEnvSchema = z.object({
   DATABASE_URL_MIGRATOR: optional(z.url()),
   DATABASE_URL_TEST: optional(z.url()),
   SUPER_ADMIN_EMAIL: optional(z.email().transform((email) => email.toLowerCase())),
+  CLERK_SECRET_KEY: z.string().startsWith("sk_"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -31,10 +35,16 @@ export const publicEnvSchema = z.object({
     .trim()
     .transform((value) => value || undefined)
     .optional(),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: appPath,
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: appPath,
 });
 
 // Acceso literal a process.env.NEXT_PUBLIC_* para que Next lo incruste en el build.
 export const publicEnv = publicEnvSchema.parse({
   NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY:
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
 });

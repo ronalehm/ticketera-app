@@ -1,0 +1,65 @@
+import "server-only";
+
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import type { SessionUser } from "../types/auth.types";
+import { isMfaPending } from "../utils/can";
+import { isProfileComplete } from "../utils/isProfileComplete";
+import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
+
+/**
+ * Usuario de la sesión (fila de `users` + `mfaVerified`) o `null` sin sesión. Con fila existente solo lee `auth()`; la
+ * primera vez pide el usuario a Clerk, crea o vincula la fila y replica su rol en `publicMetadata.role` si difiere.
+ */
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const { userId, factorVerificationAge } = await auth();
+  if (!userId) return null;
+
+  const user = await findOrCreateUser(userId);
+  // `factorVerificationAge` = [primer factor, segundo factor] en minutos; -1 si la sesión no usó ese factor.
+  return user && { ...user, mfaVerified: (factorVerificationAge?.[1] ?? -1) >= 0 };
+}
+
+async function findOrCreateUser(userId: string) {
+  const existing = await findUserByClerkId(userId);
+  if (existing) return existing;
+
+  const clerkUser = await currentUser();
+  if (!clerkUser) return null;
+  const primaryEmail = clerkUser.primaryEmailAddress;
+  if (!primaryEmail) throw new AccountLinkError("La cuenta no tiene un correo principal");
+
+  const user = await ensureUser({
+    clerkId: userId,
+    email: primaryEmail.emailAddress,
+    emailVerified: primaryEmail.verification?.status === "verified",
+    firstName: clerkUser.firstName ?? "",
+    lastName: clerkUser.lastName ?? "",
+  });
+  if (clerkUser.publicMetadata.role !== user.role) {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, { publicMetadata: { role: user.role } });
+  }
+  return user;
+}
+
+/**
+ * Usuario de la sesión para páginas y layouts privados (Decisión 10): sin sesión redirige a `/login`; un rol con MFA
+ * sin segundo factor en la sesión, a `/perfil/seguridad`; con el perfil incompleto (sin celular o documento), a
+ * `/perfil/completar?redirect_url=<returnTo>`, salvo con `allowIncompleteProfile` (la propia página de completar).
+ */
+export async function requireUser(
+  options: { returnTo?: string; allowIncompleteProfile?: boolean } = {},
+): Promise<SessionUser> {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  if (isMfaPending(user)) redirect("/perfil/seguridad");
+  if (!isProfileComplete(user) && !options.allowIncompleteProfile) {
+    redirect(
+      options.returnTo
+        ? `/perfil/completar?${new URLSearchParams({ redirect_url: options.returnTo })}`
+        : "/perfil/completar",
+    );
+  }
+  return user;
+}

@@ -1,3 +1,6 @@
+import { ClerkProvider } from "@clerk/nextjs";
+import { esES } from "@clerk/localizations";
+import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -24,7 +27,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={cn("font-sans", creatoDisplay.variable)}>
-      <body className="flex min-h-dvh flex-col">{children}</body>
+      <body className="flex min-h-dvh flex-col">
+        <ClerkProvider appearance={{ theme: shadcn }} localization={esES}>
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }
