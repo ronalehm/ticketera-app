@@ -1,8 +1,42 @@
 # Página: checkout `/checkout` y `/checkout/confirmacion`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra y textos).
 
 Pasos 2 ("Datos y pago", `/checkout`) y 3 ("Confirmación", `/checkout/confirmacion`) de la compra. El pago es **simulado**: no hay pasarela ni se envían datos a ningún servicio; los datos de tarjeta solo existen en el estado del formulario. La orden aprobada se guarda solo en el navegador (`localStorage`).
+
+## Pantalla de compra (`PurchaseShell`)
+
+> Spec: `docs/specs/design-alignment-purchase-flow.md` Fase 1 (Requisito 6, decisiones 1–5 y 10).
+
+Los tres pasos de la compra (`/eventos/[slug]/entradas`, `/checkout` y `/checkout/confirmacion`) viven en el route group `app/(purchase)`, **sin el header ni el footer del sitio** (sin `SiteShell`) y sin `layout.tsx` propio: cada página compone `components/shared/PurchaseShell`, porque solo ella conoce su paso. Las URL no cambian.
+
+```
+Escritorio (lg+, 76 px, h-19):
+[logo Mentec]      ① Entradas ── ② Datos y pago ── ③ Confirmación      [candado] Compra segura
+  grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]: logo a la izquierda, stepper centrado y
+  "Compra segura" a la derecha (pasos 1 y 2; en el paso 3 no hay)
+
+Móvil y tablet (< lg: fila de 60 px + barra de 4 px):
+Pasos 1 y 2:  [←]  Paso 2 de 3                                [candado]
+                   Datos y pago
+              ████████████████████████████░░░░░░░░░░░░░░  barra al 66 % (33 % en el paso 1)
+Paso 3:       [logo Mentec]                              Paso 3 de 3
+              ██████████████████████████████████████████  barra al 100 %
+Errores y carga (todos los anchos):  [logo Mentec]   (sin pasos, candado, barra ni flecha)
+```
+
+- **Raíz:** `<div className="flex flex-1 flex-col bg-muted">` con `<header>` y un único `<main className="flex flex-1 flex-col">`. El fondo de la página es el gris `--muted`; las tarjetas (`Card`, tarjeta-entrada, "Qué sigue") quedan blancas encima.
+- **`<header>`** (único `banner`): `sticky top-0 z-40 border-b bg-background print:hidden`. Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8` con una fila `flex h-15 items-center gap-1` que en `lg` pasa a `lg:grid lg:h-19 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-6`. Un único DOM para todos los anchos; la variante cambia en `lg` (en una fila, logo + stepper + "Compra segura" no caben a 768 px).
+- **Elementos, en orden del DOM:**
+  1. **Flecha de vuelta** (pasos 1 y 2, prop `back`): `Link` `lg:hidden size-11 rounded-xl -ml-2` con `ArrowLeft` `size-5` (`aria-hidden`), `aria-label` "Volver al evento" (paso 1, a `/eventos/<slug>`) o "Volver a entradas" (paso 2, al mismo `href` que "Cambiar entradas"); hover `bg-accent` y foco visible. Por debajo de `lg` es el primer Tab.
+  2. **Logo:** `Link href="/"` con `BrandLogo` (`h-7 w-auto lg:h-8`, nombre accesible "Mentec Tickets"), `lg:justify-self-start`. Con flecha lleva `max-lg:hidden`: en móvil la flecha ocupa su lugar. En `lg` es el primer Tab.
+  3. **Paso en móvil** (`aria-hidden`, `lg:hidden`): en los pasos 1 y 2, "Paso n de 3" (`text-xs text-muted-foreground`) sobre el título del paso (`text-base font-bold`: "Elige tus entradas" o "Datos y pago"); en el paso 3, solo "Paso 3 de 3", alineado a la derecha (`ml-auto`).
+  4. **Stepper** `<ol aria-label="Pasos de la compra">`: `sr-only` por debajo de `lg` y `lg:flex` desde `lg`. Círculos `size-7`: actual y completados `bg-primary text-primary-foreground` (los completados con `Check` y "(completado)" `sr-only`), pendientes `border-2 border-input` con el texto `text-muted-foreground`; conectores `h-0.5 w-10` (`bg-primary` tras un completado, `bg-input` si no); paso actual con `aria-current="step"` y `font-semibold`. Se conservan los colores Mentec, no el negro del diseño.
+  5. **"Compra segura"** (pasos 1 y 2): `Lock` (`size-5 lg:size-4`, `aria-hidden`) + texto `max-lg:sr-only`, `text-sm text-muted-foreground`, `lg:justify-self-end`. En móvil se ve solo el candado y el lector anuncia "Compra segura".
+- **Barra de progreso** (`< lg`, con paso): fuera del contenedor, a todo el ancho, `h-1 bg-secondary` con relleno `bg-primary` al 33 %, 66 % o 100 %; `aria-hidden`.
+- **Sin paso** (errores y carga): la fila solo tiene el logo.
+- **Sticky:** la cabecera mide 76 px en `lg` y 64 px por debajo; los `lg:sticky lg:top-24` del resumen y de "Tu compra" quedan 20 px por debajo de ella.
+- **Impresión:** la cabecera es `print:hidden`.
 
 ## Paso 2: `/checkout`
 
@@ -11,9 +45,10 @@ Pasos 2 ("Datos y pago", `/checkout`) y 3 ("Confirmación", `/checkout/confirmac
 ### Layout
 
 ```
-Header sticky     (igual que la landing)
-Stepper           franja border-b: ① Entradas — ② Datos y pago — ③ Confirmación · "Compra segura"
-                  (móvil: "Paso 2 de 3" + "Datos y pago" + barra de progreso al 66 %)
+Cabecera de compra  PurchaseShell currentStep={2}, flecha "Volver a entradas":
+                    logo · ① Entradas ✓ — ② Datos y pago — ③ Confirmación · "Compra segura"
+                    (< lg: [←] "Paso 2 de 3" / "Datos y pago" · candado + barra al 66 %)
+Fondo bg-muted
 h1 sr-only        "Finalizar compra" (no se ve; único h1 y primer encabezado)
 Banner            [reloj] Reservamos tus entradas por mm:ss. Completa el pago antes de que se liberen.
 ┌──────────────────────────────────────────┬──────────────────────┐
@@ -37,16 +72,16 @@ Banner            [reloj] Reservamos tus entradas por mm:ss. Completa el pago an
 │   de privacidad. *                       │                      │
 └──────────────────────────────────────────┴──────────────────────┘
 Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos debajo si aplica)
-Footer            (igual que la landing)
+(sin footer)
 ```
 
-- Stepper (`components/shared/PurchaseStepper`, `currentStep={2}`) fuera del contenedor, a ancho completo, con su propio `max-w-7xl` (como en `/eventos/[slug]/entradas`).
+- Página `app/(purchase)/checkout/page.tsx`: `<PurchaseShell currentStep={2} back={{ href: changeHref, label: "Volver a entradas" }}>` (ver "Pantalla de compra"). La flecha usa el mismo `href` que "Cambiar entradas" (`buildChangeTicketsHref`).
 - Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 pb-8 md:pb-12`, `flex flex-col gap-6`: h1 y `CheckoutForm` (banner + formulario).
-- **Sin título visible:** bajo el stepper solo se ve el banner del temporizador. El h1 "Finalizar compra" va con `sr-only`: sigue siendo el único h1 y el primer encabezado que anuncia el lector. Los estados de error (`CheckoutStatusMessage`) sustituyen la página entera con su propio h1 visible y sin stepper.
+- **Sin título visible:** bajo la cabecera solo se ve el banner del temporizador. El h1 "Finalizar compra" va con `sr-only`: sigue siendo el único h1 y el primer encabezado que anuncia el lector. Los estados de error (`CheckoutStatusMessage`) sustituyen el contenido con su propio h1 visible, dentro de `<PurchaseShell>` sin paso: fondo gris y cabecera solo con el logo (sin stepper, "Compra segura", barra ni flecha).
 - Formulario `<form noValidate>` en grilla `grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-12`, sin ancestros con `overflow` distinto de `visible` (para los `sticky`). Columna izquierda con posición explícita: comprador (`row-start-1`), método de pago (`row-start-2`), Términos (`row-start-3`, debajo de "Método de pago" en todos los anchos, nunca dentro del resumen). Columna derecha: `CheckoutSummaryPanel` (`lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:sticky lg:top-24 lg:self-start`).
 - Secciones en `Card rounded-2xl`, h2 `text-xl font-bold`. Campos `h-11`.
 - **Orden del DOM:** banner → comprador → método de pago → Términos → resumen (con "Pagar" en `lg`) → estado `sr-only` → barra móvil. "Pagar" nunca se alcanza con el tabulador antes que los campos.
-- **Móvil (< lg):** una columna. El resumen sube con `order-first` como botón plegable (único cambio entre orden visual y de tabulación); "Pagar" vive en la barra inferior `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), `border-t bg-background`, `pb-[max(0.75rem,env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo mientras se rellena y no tapa el footer al final.
+- **Móvil (< lg):** una columna. El resumen sube con `order-first` como botón plegable (único cambio entre orden visual y de tabulación); "Pagar" vive en la barra inferior `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), `border-t bg-background`, `pb-[max(0.75rem,env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo mientras se rellena y llega al final de la página.
 - **Un solo resumen, nunca duplicado.** El botón "Pagar" sí se renderiza dos veces (dentro de la tarjeta del resumen `hidden lg:flex` y en la barra `lg:hidden`); `display:none` deja solo uno visible y accesible en cada ancho. En móvil, al desplegar el resumen no aparece un segundo "Pagar".
 
 ### Banner del temporizador (`ReservationTimer`)
@@ -63,7 +98,11 @@ Footer            (igual que la landing)
 
 ### Datos del comprador
 
-- Descripción (`CardDescription`): "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios."
+- Descripción (`CardDescription`), con texto por ancho (`display: none`: nada se anuncia dos veces):
+  - por debajo de `sm`: "Enviaremos tus entradas a este correo. Los campos con * son obligatorios." (`<span className="sm:hidden">`);
+  - desde `sm`: "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios." (`<span className="max-sm:hidden">`).
+  - La leyenda de los `*` va en todos los anchos (el diseño no tiene `*`; la app sí).
+- **Placeholders:** Nombres y Apellidos, "Como figura en tu documento"; Correo electrónico, "tu@email.com"; Celular, "Número de celular" (a la derecha de "+51"); número de documento, "Número". Caben sin cortarse a 375 px.
 - Grilla `sm:grid-cols-2`, sin huecos:
 
   ```
@@ -84,7 +123,7 @@ Footer            (igual que la landing)
 - `<aside aria-label="Resumen de la compra">`.
 - Móvil: botón `lg:hidden min-h-16 rounded-2xl ring-1 ring-border` con `aria-expanded`/`aria-controls`: miniatura 48 px (`alt=""`), título `line-clamp-1`, "3 entradas · S/ 910.00" ("1 entrada" en singular), `sr-only` "Resumen del pedido:" y `ChevronDown` (`aria-hidden`, rota 180° abierto, `motion-safe:transition-transform`). Plegado por defecto; en `lg` el contenido siempre se ve.
 - `OrderSummary`, tarjeta compacta (`Card rounded-2xl`, h2 `sr-only` "Resumen del pedido"):
-  1. Cabecera `flex items-center gap-3`: miniatura `next/image` `size-16 rounded-xl object-cover` (`alt=""`, `sizes="64px"`); título `font-bold leading-snug line-clamp-2`; debajo `text-sm text-muted-foreground` con fecha corta y lugar: "sáb 14 nov · Lugar, Ciudad" (`<time>`, minúsculas, sin año ni hora; `formatShortDayMonth`).
+  1. Cabecera `flex items-center gap-3`: miniatura `next/image` `size-16 rounded-xl object-cover` (`alt=""`, `sizes="64px"`); título `font-bold leading-snug line-clamp-2`. **Miniatura y título llevan `max-lg:hidden`:** en móvil ya están en el botón plegable, así que el resumen desplegado empieza por la fecha y el lugar. Debajo, en todos los anchos, `text-sm text-muted-foreground` con fecha corta y lugar: "sáb 14 nov · Lugar, Ciudad" (`<time>`, minúsculas, sin año ni hora; `formatShortDayMonth`).
   2. `Separator` continuo.
   3. Una línea por tipo: izquierda "2 × General" (`font-medium`), derecha el subtotal "S/ 500.00" (`font-semibold tabular-nums`). Sin precio unitario. Si hay asientos, debajo en `text-sm text-muted-foreground` los asientos compactos agrupados por fila: "Fila L · 9 · Fila M · 8" o "Fila L · 9, 10" (con `sr-only` "Asientos: " delante).
   4. Enlace "Cambiar entradas" (`TEXT_LINK font-semibold`).
@@ -100,6 +139,7 @@ Footer            (igual que la landing)
 
 - Sin aviso arriba de los métodos.
 - `RadioGroup` nombrado por el h2 de la sección, `grid gap-3 sm:grid-cols-3`: radio cards (patrón "choice card" de shadcn) `min-h-16 cursor-pointer`, seleccionada `border-primary bg-accent`; iconos `CreditCard` (Tarjeta), `Smartphone` (Yape), `Store` (PagoEfectivo), `aria-hidden`.
+- **"Tarjeta de crédito o débito" en móvil:** por debajo de `sm` (métodos apilados a todo el ancho), Tarjeta lleva el sufijo `<span className="sm:hidden"> de crédito o débito</span>` (`MOBILE_LABEL_SUFFIX`), y el radio se llama "Tarjeta de crédito o débito". Desde `sm` (tres columnas) dice "Tarjeta". `PAYMENT_METHOD_LABELS` no cambia.
 - Tarjeta: grilla `grid-cols-2 sm:grid-cols-4 gap-4`: "Número de tarjeta *" (`col-span-2`, "0000 0000 0000 0000", se agrupa de 4 en 4), "Vencimiento *" ("MM/AA"), "CVV *" ("3 o 4 dígitos"), "Nombre en la tarjeta *" (ancho completo). Todos `required`, `autoComplete="off"` (simulación: no se invita a guardar tarjetas reales), `inputMode="numeric"` en los numéricos, `h-11`.
 - Yape / PagoEfectivo: sin campos; bloque `rounded-2xl bg-accent p-4` con su icono y el texto informativo.
 - **Nota de demo** al pie (tras los campos de tarjeta o el bloque de Yape/PagoEfectivo): `<p className="flex gap-2 text-sm text-muted-foreground">` con `Info` (`aria-hidden`, `size-4 shrink-0 mt-0.5`): "Demo: no se realiza ningún cobro real." Solo con Tarjeta se añade: " Tarjetas de prueba: 4242 4242 4242 4242 (aprobada) y 4000 0000 0000 0002 (rechazada)." Texto visible, sin `title`.
@@ -108,6 +148,7 @@ Footer            (igual que la landing)
 ### Términos
 
 - Checkbox `required` con "Acepto los Términos y condiciones y la Política de privacidad. *" (enlaces `INLINE_LINK`, pestaña nueva), debajo de "Método de pago" en todos los anchos.
+- Va directamente sobre el fondo gris, así que la casilla lleva `bg-background`: sin marcar se ve blanca; marcada, gana `data-checked:bg-primary` (azul con el check).
 
 ### Botón "Pagar"
 
@@ -128,8 +169,8 @@ Footer            (igual que la landing)
 ### Reglas específicas
 
 - Formulario: con Términos marcados, errores al enviar, revalidación al salir del campo tras el primer intento, foco al primer inválido ("Nombres" con el formulario vacío), `aria-invalid` + `aria-describedby`, error junto al campo (`FieldError`).
-- Orden de tabulación: Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible.
-- Estados (`not-found`, `sold-out`, `invalid-tickets`, `free`): patrón del 404 de evento (centrado, h1 + descripción + acciones `h-11`); siempre con salida.
+- Orden de tabulación: cabecera ("Volver a entradas" por debajo de `lg`, el logo desde `lg`) → Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible.
+- Estados (`not-found`, `sold-out`, `invalid-tickets`, `free`): patrón del 404 de evento (centrado, h1 + descripción + acciones `h-11`); siempre con salida. Van en `<PurchaseShell>` sin paso (cabecera solo con el logo, fondo gris).
 - Importes con el formato del MASTER (`S/ 910.00`).
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440; targets ≥ 44 px; solo tokens; sin emojis.
 - Metadata: `Finalizar compra | Mentec Tickets`.
@@ -143,8 +184,10 @@ URL `/checkout/confirmacion?orden=MT-XXXXXX` (a ella se llega con `router.replac
 ### Layout
 
 ```
-Header sticky     (igual que la landing; oculto al imprimir)
-Stepper           franja border-b, paso 3 "Confirmación" activo (oculto al imprimir)
+Cabecera de compra  PurchaseShell currentStep={3}, sin flecha (oculta al imprimir):
+                    logo · ① Entradas ✓ — ② Datos y pago ✓ — ③ Confirmación   (sin "Compra segura")
+                    (< lg: logo · "Paso 3 de 3" a la derecha + barra al 100 %)
+Fondo bg-muted
         (CircleCheck en círculo bg-accent)
         h1 "¡Compra confirmada!"
         Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas.
@@ -157,27 +200,27 @@ Stepper           franja border-b, paso 3 "Confirmación" activo (oculto al impr
 │        │ Zona | Entradas | Total pagado           ┆    [<] [>]    │   con asientos)
 └────────┴──────────────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
 [Ver mis entradas]  [Agregar al calendario]  [Descargar PDF]   (ocultos al imprimir)
-(h2 sr-only "Qué sigue")
+(h2 "Qué sigue": visible < md, sr-only en md+)
 [Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
-Footer            (igual que la landing; oculto al imprimir)
+(sin footer)
 ```
 
-- Stepper (`PurchaseStepper currentStep={3}`): la página lo pasa como prop `stepper` a `OrderConfirmation`, que lo pinta fuera del contenedor, a ancho completo y envuelto en `print:hidden`, solo cuando encuentra la orden.
+- Cabecera: `OrderConfirmation` (`{ code }`, sin prop `stepper`) envuelve cada estado en `PurchaseShell`: la orden confirmada, con `currentStep={3}` (sin `back`); cargando y no encontrada, sin paso (solo el logo). La página `app/(purchase)/checkout/confirmacion/page.tsx` solo valida `orden` y compone.
 - Contenedor `mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
-- Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full ring-1 ring-border` "Pedido N.º **MT-AB12CD**".
+- Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full bg-card ring-1 ring-border` "Pedido N.º **MT-AB12CD**" (blanco sobre el fondo gris).
 - **Correo del comprador** en el texto de la cabecera: "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
 
 ### Tarjeta-entrada (`ConfirmationTicketCard`)
 
-- `<article aria-labelledby>` apuntando al id del h2 (nombre accesible = título del evento), `rounded-2xl ring-1 ring-border overflow-hidden`, `flex-col md:flex-row`.
+- `<article aria-labelledby>` apuntando al id del h2 (nombre accesible = título del evento), `rounded-2xl bg-card ring-1 ring-border overflow-hidden`, `flex-col md:flex-row`.
 - Imagen `next/image` (`alt=""`, `object-cover`): móvil `h-32 w-full`, `md:w-48 md:h-auto`.
 - Cuerpo:
   1. Overline de categoría (`text-xs font-bold uppercase tracking-wider text-primary-strong`).
   2. h2 título.
   3. Línea de fecha y lugar (`text-muted-foreground`): `<time dateTime>` con la fecha larga **sin año ni hora** ("lunes 5 de octubre", minúsculas, America/Lima; `formatLongDayMonth`) + " · Lugar, Ciudad". Ejemplo: "lunes 5 de octubre · Costa Verde, Lima". La hora no se muestra aquí (sí va en el PDF y en el `.ics`).
   4. **Asientos compactos por zona:** debajo, una `<p className="text-sm text-muted-foreground">` por tipo de entrada con asientos: "{zona}: {asientos}", p. ej. "Tribuna Oriente: Fila L · 9 · Fila M · 8". Agrupados por fila: varios en la misma fila, "Fila L · 9, 10"; filas ordenadas por longitud y luego alfabéticamente (A…Z, AA…), números de menor a mayor (`formatCompactSeats`, mismo formato que el resumen del paso 2). Si el id de un asiento no se puede leer, se usa su etiqueta completa. Los tipos sin asientos no tienen línea; una compra sin asientos no tiene ninguna.
-  5. `<dl>` en `grid-cols-3`: "Zona" (nombres de las zonas unidos por ", ", p. ej. "General, VIP"), "Entradas", "Total pagado" (`S/ 310.00`). **Sin bloque "Asientos"**: los asientos solo aparecen en las líneas compactas.
-- **Talón navegable** (spec `docs/specs/tickets-ticket-pager.md`): separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-background ring-1 ring-border rounded-full`, `aria-hidden`). Contenedor `flex flex-col items-center justify-center gap-3 p-6`, `md:w-56` (224 px; no cambia). Recorre **todas** las entradas del pedido (`useState(0)`, empieza en la entrada 1) y muestra, en columna centrada, la entrada actual `tickets[index]`:
+  5. `<dl>` en `grid-cols-3`: "Zona" (nombres de las zonas unidos por ", ", p. ej. "General, VIP"), "Entradas", "Total pagado" (`S/ 310.00`). **Sin bloque "Asientos"**: los asientos solo aparecen en las líneas compactas. Por debajo de `md` (tarjeta vertical) el `<dt>` dice "Total": `Total<span className="max-md:hidden"> pagado</span>`.
+- **Talón navegable** (spec `docs/specs/tickets-ticket-pager.md`): separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-muted ring-1 ring-border rounded-full`, `aria-hidden`: del gris del fondo de la página). Contenedor `flex flex-col items-center justify-center gap-3 p-6`, `md:w-56` (224 px; no cambia). Recorre **todas** las entradas del pedido (`useState(0)`, empieza en la entrada 1) y muestra, en columna centrada, la entrada actual `tickets[index]`:
   1. `TicketQr` de la entrada actual (`size-40 md:size-32`).
   2. Bloque `flex w-full min-w-0 flex-col items-center gap-0.5 text-center`:
      - código `text-sm font-semibold tabular-nums` con prefijo `sr-only` "Código de entrada: " (p. ej. "MT-AB12CD-01");
@@ -198,27 +241,30 @@ Footer            (igual que la landing; oculto al imprimir)
 
 ### Qué sigue
 
-- `<section aria-labelledby>` con h2 "Qué sigue" **`sr-only`**: no se ve, pero nombra la sección para el lector y mantiene la jerarquía h1 → h2 sin saltos.
-- `<ol>` `grid gap-3 md:grid-cols-3` (en `md+` las 3 tarjetas en fila) de tarjetas `rounded-2xl ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`):
-  - "Revisa tu correo" — "Ahí llegan tus entradas y el comprobante de pago."
-  - "Muestra tu QR" — "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso."
-  - "Todo en Mis entradas" — "Entra con tu cuenta para ver y descargar tus entradas cuando quieras."
+- `<section aria-labelledby>` con h2 "Qué sigue" `text-lg font-bold md:sr-only`: **visible por debajo de `md`** (tarjetas apiladas) y `sr-only` en `md+`. Siempre nombra la sección para el lector y mantiene la jerarquía h1 → h2 sin saltos.
+- `<ol>` `grid gap-3 md:grid-cols-3` (en `md+` las 3 tarjetas en fila) de tarjetas `rounded-2xl bg-card ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`). Cada descripción tiene un texto corto (`<span className="md:hidden">`) y uno largo (`<span className="max-md:hidden">`); el oculto sale del árbol de accesibilidad:
+
+  | Tarjeta | Texto corto (< md) | Texto largo (md+) |
+  |---|---|---|
+  | "Revisa tu correo" | "Ahí llegan tus entradas y el comprobante." | "Ahí llegan tus entradas y el comprobante de pago." |
+  | "Muestra tu QR" | "Cada entrada tiene su QR. Muéstralo en el ingreso." | "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso." |
+  | "Todo en Mis entradas" | "Ingresa con tu cuenta para verlas cuando quieras." | "Entra con tu cuenta para ver y descargar tus entradas cuando quieras." |
 
 ### Impresión (Ctrl+P)
 
 Ningún botón imprime; las clases `print:` solo limpian la impresión manual del navegador.
 
-- Ocultos (`print:hidden`): header, footer, stepper, acciones y "Qué sigue".
+- Ocultos (`print:hidden`): la cabecera de compra (con el stepper), las acciones y "Qué sigue". No hay header ni footer del sitio.
 - Visibles: cabecera de confirmación y tarjeta-entrada. El paginador del talón va con `print:hidden`: se imprimen el QR, el código y el titular de la entrada visible. El documento para imprimir todas las entradas es el PDF.
 
 ### Estados
 
-- **Cargando** (primer render y rehidratación del store): `Spinner` + "Cargando tu compra…" (`role="status"`), sin stepper.
-- **No encontrada** (sin `orden`, formato inválido o código que no está en este navegador): `CheckoutStatusMessage variant="order-not-found"`: h1 "No encontramos tu compra", "El enlace no es válido o la compra se realizó en otro navegador." y "Volver al inicio"; sin stepper.
+- **Cargando** (primer render y rehidratación del store): `Spinner` + "Cargando tu compra…" (`role="status"`), en `<PurchaseShell>` sin paso: cabecera solo con el logo.
+- **No encontrada** (sin `orden`, formato inválido o código que no está en este navegador): `CheckoutStatusMessage variant="order-not-found"`: h1 "No encontramos tu compra", "El enlace no es válido o la compra se realizó en otro navegador." y "Volver al inicio"; en `<PurchaseShell>` sin paso (cabecera solo con el logo y fondo gris; sin stepper, barra ni "Compra segura").
 
 ### Reglas específicas
 
-- Un único h1 ("¡Compra confirmada!"). Jerarquía h1 → h2: título del evento en la tarjeta-entrada y "Qué sigue" (`sr-only`).
+- Un único h1 ("¡Compra confirmada!"). Jerarquía h1 → h2: título del evento en la tarjeta-entrada y "Qué sigue" (visible por debajo de `md`, `sr-only` en `md+`).
 - A 375 y 1440 px la pantalla sigue las capturas de "Confirmación".
 - El QR (`TicketQr`) es decorativo y determinista (`role="img"` con `aria-label` "Código QR de la entrada <código>"); no es legible por lectores.
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440; targets ≥ 44 px; solo tokens; sin emojis; `prefers-reduced-motion` respetado.

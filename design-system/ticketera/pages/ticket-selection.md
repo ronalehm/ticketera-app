@@ -1,15 +1,16 @@
 # Página: selección de entradas `/eventos/[slug]/entradas`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md` y `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md`, `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra).
 
-Paso 1 de 3 de la compra. Solo existe para los eventos con mapa del recinto (`hasVenueMap`); el resto da el 404 del evento ("No encontramos este evento").
+Paso 1 de 3 de la compra. Solo existe para los eventos con mapa del recinto (`hasVenueMap`); el resto da el 404 del evento ("No encontramos este evento"), que se muestra con el header y el footer del sitio (`app/(purchase)/eventos/[slug]/not-found.tsx` con `SiteShell`): quien llega a un evento inexistente no está comprando.
 
 ## Layout
 
 ```
-Header sticky     (igual que la landing)
-Stepper           franja border-b: ① Entradas — ② Datos y pago — ③ Confirmación · "Compra segura"
-                  (móvil: "Paso 1 de 3" + "Elige tus entradas" + barra de progreso al 33 %)
+Cabecera de compra  PurchaseShell currentStep={1}, flecha "Volver al evento":
+                    logo · ① Entradas — ② Datos y pago — ③ Confirmación · "Compra segura"
+                    (< lg: [←] "Paso 1 de 3" / "Elige tus entradas" · candado + barra al 33 %)
+Fondo bg-muted
 ← Volver al evento
 [mini] h1 Título del evento
        SÁB 14 NOV · 21:00 · Estadio Nacional, Lima
@@ -33,13 +34,15 @@ Sub-paso 2 (sustituye al mapa y las tarjetas dentro de la misma tarjeta):
 │ [plano de butacas]  ó  [panel Cantidad − n + / Subtotal] │
 
 Barra inferior (< lg)  Total · 0 entradas / S/ 0.00   [⌃ Ver resumen] [Continuar →]
-Footer            (igual que la landing)
+(sin footer)
 ```
 
-- Stepper (`components/shared/PurchaseStepper`) fuera del contenedor, a ancho completo, con su propio `max-w-7xl`. Marca "Entradas" durante los dos sub-pasos: "Paso n de 2" es un indicador **interno** del paso, no un segundo stepper.
-- Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 lg:pb-12`, `flex flex-col gap-6`. Sin padding inferior por debajo de `lg`: la barra móvil es el último elemento y llega al footer.
+- **Pantalla de compra:** la página vive en `app/(purchase)` y compone ``<PurchaseShell currentStep={1} back={{ href: `/eventos/${slug}`, label: "Volver al evento" }}>``, sin el header ni el footer del sitio, sobre fondo `bg-muted`. La cabecera de compra (logo, stepper y "Compra segura" en `lg`; por debajo de `lg`, la flecha "Volver al evento" de 44 px, "Paso 1 de 3" sobre "Elige tus entradas", el candado y la barra al 33 %) se describe en `checkout.md` ("Pantalla de compra"). Las tarjetas son `Card` (`bg-card`) y la barra móvil, `bg-background`: quedan blancas sobre el gris.
+- El stepper marca "Entradas" durante los dos sub-pasos: "Paso n de 2" es un indicador **interno** del paso, no un segundo stepper.
+- El enlace "← Volver al evento" de `EventPurchaseStrip` sigue en el contenido en todos los anchos; por debajo de `lg` la cabecera añade su flecha al mismo destino.
+- Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 lg:pb-12`, `flex flex-col gap-6`. Sin padding inferior por debajo de `lg`: la barra móvil es el último elemento y llega al final de la página.
 - Grilla `lg:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8`. Columna izquierda (`<section aria-labelledby>`, `min-w-0`): **una sola** `Card rounded-2xl gap-5` "Elige tus entradas". Columna derecha: "Tu compra", `hidden lg:flex lg:sticky lg:top-24 self-start`.
-- Barra inferior móvil `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), con `pb-[calc(0.75rem+env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo al desplazarse y no tapa el footer al final.
+- Barra inferior móvil `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), con `pb-[calc(0.75rem+env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo al desplazarse y llega al final de la página.
 - **Orden móvil = orden del DOM.** Por breakpoint solo se alternan el resumen (`lg+`) y la barra (`< lg`); `display:none` saca al oculto del árbol de accesibilidad, así que nunca hay duplicados para los lectores.
 - h1 único: título del evento (`text-2xl md:text-3xl font-bold tracking-tight`), junto a una miniatura decorativa `size-13 md:size-16 rounded-xl` (`alt=""`).
 - Tarjetas ("Elige tus entradas", "Tu compra"): `Card rounded-2xl ring-border`, h2 `text-xl font-bold tracking-tight`.
@@ -332,10 +335,10 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 ## Accesibilidad
 
 - Un solo `<h1>` (título del evento); h2 "Elige tus entradas" y "Tu compra" (en móvil, "Tu compra" es el `SheetTitle` de la hoja abierta); h3 de la zona en el sub-paso 2 y h3 "Tus asientos" en el plano.
-- Stepper: `<ol aria-label="Pasos de la compra">` siempre en el DOM (`sr-only` por debajo de `md`), paso actual con `aria-current="step"`; el bloque móvil visual es `aria-hidden`.
+- Cabecera de compra: un único `banner`. Stepper `<ol aria-label="Pasos de la compra">` siempre en el DOM (`sr-only` por debajo de `lg`), paso actual con `aria-current="step"`; el bloque móvil "Paso 1 de 3" es `aria-hidden`. El primer Tab enfoca "Volver al evento" por debajo de `lg` y el logo en `lg`.
 - Indicador de sub-paso con `aria-live="polite"`: el cambio de sub-paso se anuncia.
 - Mapa: `<svg role="group" aria-label="Mapa de zonas de <recinto>">`; cada zona es un `<path role="button" tabIndex={0}>` (sin `aria-pressed`) con `aria-label` "<nombre>, <precio>" o "<nombre>, agotado", más ", asientos numerados", ", últimas entradas" y ", 2 entradas elegidas" / ", 1 butaca elegida" cuando aplica. Se abre con clic, Enter o Espacio (con `preventDefault`, no desplaza la página). Las agotadas llevan `aria-disabled="true"`.
-- Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra". En el sub-paso 2: "Todas las zonas" y el stepper de cantidad (de pie), o "Todas las zonas", el grupo "Zoom del plano" (3 botones), el plano (una sola parada), "Mejores butacas" (stepper y botón) y los chips (numerada).
+- Tras la cabecera y "Volver al evento", Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra". En el sub-paso 2: "Todas las zonas" y el stepper de cantidad (de pie), o "Todas las zonas", el grupo "Zoom del plano" (3 botones), el plano (una sola parada), "Mejores butacas" (stepper y botón) y los chips (numerada).
 - Plano: `<svg role="group" aria-label="Plano de asientos de <zona>" aria-describedby>` con ayuda `sr-only` "Usa las flechas para moverte entre asientos y Espacio para elegir o quitar.". Cada asiento es un `<g role="checkbox" aria-checked>` con `aria-label` "Fila F, asiento 12, disponible, S/ 150.00", "Fila F, asiento 12, accesible para silla de ruedas, S/ 150.00" u "Fila F, asiento 12, ocupado" (este con `aria-disabled="true"`). Teclado: ver "Teclado".
 - Cantidades, subtotal, contador "n de m butacas", "n elegidas" de la leyenda, valor de "¿Cuántas butacas juntas?" y totales con `aria-live="polite"`; el tooltip de butaca es `aria-hidden` (el lector anuncia el `aria-label`); estados siempre con texto ("Últimas entradas", "Agotado"), nunca solo color.
 - Targets ≥ 44 px (`min-h-11`/`size-11`/`min-h-18`) en tarjetas, migas, steppers, zoom y el botón de la hoja, salvo los asientos (≥ 24 px con el plano entero a la vista en el festival y tras un "Acercar" en los planos grandes; con zoom crecen); foco visible en todo lo interactivo, iconos `aria-hidden`.
