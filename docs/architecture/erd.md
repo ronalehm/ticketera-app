@@ -12,7 +12,7 @@
 - Enums nativos de Postgres.
 - Todas las tablas tienen `created_at timestamptz NOT NULL DEFAULT now()`; las editables, `updated_at`.
 - Nombres en inglés, `snake_case`, tablas en plural.
-- 25 tablas.
+- 26 tablas.
 - Extensiones: `pgcrypto` (si la versión de Postgres no trae `gen_random_uuid()` nativo), `pg_trgm`, `unaccent`.
 
 ## Diagrama
@@ -24,9 +24,11 @@ erDiagram
   users ||--o{ orders : "compra"
   users ||--o{ event_staff : "escanea en"
   users ||--o{ consents : "otorga"
+  users ||--o{ saved_events : "guarda"
 
   organizers ||--o{ events : "organiza"
   organizers ||--o{ payouts : "recibe"
+  organizers |o--o{ venues : "propone"
 
   venues ||--o{ venue_sections : "tiene"
   venue_sections ||--o{ venue_seats : "tiene"
@@ -42,6 +44,7 @@ erDiagram
   events ||--o{ orders : "recibe"
   events ||--o{ check_in_scans : "registra"
   events ||--o| payouts : "liquida"
+  events ||--o{ saved_events : "guardado en"
 
   orders ||--o{ event_seats : "reserva"
   orders ||--o{ tickets : "emite"
@@ -77,6 +80,8 @@ erDiagram
     uuid id PK
     text name
     text city
+    venue_status status
+    uuid organizer_id FK
   }
   venue_sections {
     uuid id PK
@@ -97,6 +102,10 @@ erDiagram
     uuid venue_id FK
     event_status status
     timestamptz starts_at
+  }
+  saved_events {
+    uuid user_id PK,FK
+    uuid event_id PK,FK
   }
   ticket_types {
     uuid id PK
@@ -203,6 +212,7 @@ Tablas sin relaciones en el diagrama: `stripe_events`, `complaint_counters`.
 | `document_type` | `dni`, `ce`, `passport` |
 | `tax_id_type` | `ruc`, `dni` |
 | `seating_type` | `general`, `numbered` |
+| `venue_status` | `pending_review`, `approved` |
 | `event_status` | `draft`, `pending_review`, `published`, `cancelled`, `finished` |
 | `seat_status` | `available`, `held`, `sold` |
 | `order_status` | `pending`, `paid`, `expired`, `refunded`, `partially_refunded` |
@@ -268,7 +278,7 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 
 ### Recinto
 
-**`venues`**: recinto reutilizable. Lo gestiona admin.
+**`venues`**: recinto reutilizable: catálogo del admin + recintos propios de organizadores.
 
 | Columna | Tipo | Notas |
 |---|---|---|
@@ -280,7 +290,13 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 | `place_id` | text NULL | Google Maps. |
 | `map_view_box` | text NULL | `viewBox` del SVG del mapa (`0 0 W H`), como `venueLayoutSchema.viewBox` de `modules/seating`. |
 | `stage` | jsonb NULL | `{ label, path, labelPos: { x, y }, lights?: [{ x, y }] }` del escenario; `lights` son las luces decorativas (mapa curvo). |
-| `created_by` | uuid → `users.id` | |
+| `status` | `venue_status` | Default `approved`. El recinto propio de un organizador nace `pending_review`; un admin lo pasa a `approved` y entra en el catálogo. Si no se aprueba, sigue `pending_review` y el organizador lo corrige o elige otro. |
+| `organizer_id` | uuid NULL → `organizers.user_id` | Dueño si lo creó un organizador (lo conserva al aprobarse); `NULL` si es del catálogo del admin. |
+| `created_by` | uuid → `users.id` | Quién insertó la fila (el admin o el propio organizador). |
+
+Restricción: `CHECK venues_pending_has_owner_check (status = 'approved' OR organizer_id IS NOT NULL)`: solo un organizador propone recintos; el admin crea los suyos directamente `approved`.
+
+Un recinto propio se guarda con lo que ya existe: zonas generales → `venue_sections` `general` con `capacity`; zonas numeradas → `venue_sections` `numbered` + `venue_seats` en grilla (filas × asientos); `map_view_box NULL`.
 
 Sin geometría (`map_view_box NULL`), la UI usa la lista de zonas sin mapa.
 
@@ -334,13 +350,13 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `id` | uuid PK | |
 | `slug` | text UNIQUE | URL `/eventos/<slug>`. |
 | `organizer_id` | uuid → `organizers.user_id` | |
-| `venue_id` | uuid → `venues.id` | |
+| `venue_id` | uuid NULL → `venues.id` | Obligatoria fuera de `draft`. |
 | `category_id` | uuid → `categories.id` | |
 | `title` | text | |
-| `description` | text | |
-| `image_url` | text | Cloud Storage. |
-| `starts_at` | timestamptz | |
-| `doors_open_at` | timestamptz | |
+| `description` | text NULL | Obligatoria fuera de `draft`. |
+| `image_url` | text NULL | Cloud Storage. Obligatoria fuera de `draft`. |
+| `starts_at` | timestamptz NULL | Obligatoria fuera de `draft`. |
+| `doors_open_at` | timestamptz NULL | Obligatoria fuera de `draft`. |
 | `min_age` | integer | 0 = todo público. |
 | `featured` | boolean | Default `false`. |
 | `currency` | char(3) | Default `PEN`. |
@@ -352,6 +368,7 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `cancelled_at` | timestamptz NULL | |
 | `cancel_reason` | text NULL | |
 
+Restricción: `CHECK events_draft_complete_check (status = 'draft' OR (venue_id IS NOT NULL AND description IS NOT NULL AND image_url IS NOT NULL AND starts_at IS NOT NULL AND doors_open_at IS NOT NULL))`: un borrador solo exige título y categoría; al salir de `draft` exige las cinco. Que `description` no esté vacía y que `doors_open_at <= starts_at` lo valida el formulario al publicar.
 Índices: `(status, starts_at)`; GIN `(search_text gin_trgm_ops)`.
 
 **`ticket_types`**: zona en venta para un evento (precio por sección).
@@ -399,6 +416,16 @@ Disponibles de una zona: `status = 'available' OR (status = 'held' AND held_unti
 | `accepted_at` | timestamptz NULL | |
 
 Restricción: `UNIQUE (event_id, email)`.
+
+**`saved_events`**: favoritos de un usuario con sesión. Solo inserción y borrado (sin `updated_at`).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `user_id` | uuid PK → `users.id` | |
+| `event_id` | uuid PK → `events.id` | |
+
+PK compuesta `(user_id, event_id)`: un evento no se guarda dos veces; también sirve para "mis favoritos" (`WHERE user_id = $1`).
+Sincronización (F2): sin sesión, los favoritos siguen en `localStorage` (`mentec-saved`, por `slug`). Al iniciar sesión, los slugs se convierten en `event_id` y se insertan con `ON CONFLICT DO NOTHING`. "Eliminar mi cuenta" borra las filas del usuario (no son datos contables).
 
 ### Venta
 
@@ -659,10 +686,17 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Una solicitud abierta a la vez: índices únicos parciales en `organizer_applications`, `organizer_requests` y `refund_requests`.
 - Un correo invitado una vez por evento: `UNIQUE event_staff (event_id, email)`.
 - Zonas consistentes: CHECK `seating`/`capacity` en `venue_sections`.
+- Un evento fuera de `draft` está completo (fecha, apertura de puertas, recinto, imagen y descripción): CHECK `events_draft_complete_check`.
+- Un recinto `pending_review` siempre tiene dueño: CHECK `venues_pending_has_owner_check`.
+- Un favorito por usuario y evento: PK `saved_events (user_id, event_id)`.
 
 ## Reglas que garantiza la app (no la BD)
 
 - `ticket_types.section_id` pertenece al recinto del evento.
+- Un borrador sin recinto no tiene `ticket_types`.
+- Un evento solo pasa a `published` si su recinto es `approved`.
+- Un recinto `pending_review` solo lo ven su dueño (`organizer_id`) y los admins.
+- El catálogo de recintos que ve un organizador es `status = 'approved' OR organizer_id = <él>`.
 - `venue_seats` solo en secciones `numbered`; una sección `numbered` tiene asientos antes de publicar.
 - Permisos (`can()`), límites anti-abuso y cálculo de importes.
 - Siempre queda al menos un `super_admin`; nadie cambia su propio rol.

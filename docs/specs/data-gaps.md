@@ -1,7 +1,7 @@
 # Huecos del modelo de datos: favoritos, borradores incompletos y recintos de organizador
 
 - Módulo: data (transversal: `lib/db`, `events`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 El esquema de F1 (`data-foundation.md`) no puede guardar tres cosas que la app ya hace o hará en F2/F5:
@@ -256,10 +256,10 @@ Ninguno nuevo. Las firmas públicas de `events` y `seating` no cambian.
 ## Plan de tareas
 
 ### Fase 1 — Modelo de datos (≈ 12 archivos, una sesión)
-- [ ] T1 — Esquema (enum, `venues`, `events`, `saved_events`) y migración `0004` generada. Aplicarla en la rama Neon `dev` (`npm run db:migrate` dos veces, sin reset). Comprobar que un segundo `db:generate` no detecta cambios y que `SELECT count(*) FROM venues WHERE status <> 'approved'` = 0 · archivos: `lib/db/schema/enums.ts`, `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0004_data_gaps.sql`, `drizzle/meta/0004_snapshot.json`, `drizzle/meta/_journal.json` · depende de: — · secuencial (base: `lib/`)
-- [ ] T2 — Mappers de `events` con columnas nullable y sus guardas, con unit tests. `npx tsc --noEmit` sin errores · archivos: `modules/events/utils/eventRecords.ts`, `modules/events/utils/eventRecords.test.ts` (y `modules/events/services/events.service.ts` solo si `tsc` lo exige) · depende de: T1 · paralelo con T3 y T4
-- [ ] T3 — Tests de integración de las restricciones nuevas contra la rama `test` · archivos: `lib/db/constraints.test.ts` · depende de: T1 · paralelo con T2 y T4
-- [ ] T4 — Documentación de arquitectura (ERD y system-design) · archivos: `docs/architecture/erd.md`, `docs/architecture/system-design.md` · depende de: T1 (nombres finales de constraints) · paralelo con T2 y T3
+- [x] T1 — Esquema (enum, `venues`, `events`, `saved_events`) y migración `0004` generada. Aplicarla en la rama Neon `dev` (`npm run db:migrate` dos veces, sin reset). Comprobar que un segundo `db:generate` no detecta cambios y que `SELECT count(*) FROM venues WHERE status <> 'approved'` = 0 · archivos: `lib/db/schema/enums.ts`, `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0004_data_gaps.sql`, `drizzle/meta/0004_snapshot.json`, `drizzle/meta/_journal.json` · depende de: — · secuencial (base: `lib/`)
+- [x] T2 — Mappers de `events` con columnas nullable y sus guardas, con unit tests. `npx tsc --noEmit` sin errores · archivos: `modules/events/utils/eventRecords.ts`, `modules/events/utils/eventRecords.test.ts` (y `modules/events/services/events.service.ts` solo si `tsc` lo exige) · depende de: T1 · paralelo con T3 y T4
+- [x] T3 — Tests de integración de las restricciones nuevas contra la rama `test` · archivos: `lib/db/constraints.test.ts` · depende de: T1 · paralelo con T2 y T4
+- [x] T4 — Documentación de arquitectura (ERD y system-design) · archivos: `docs/architecture/erd.md`, `docs/architecture/system-design.md` · depende de: T1 (nombres finales de constraints) · paralelo con T2 y T3
 
 Cierre (reviewer): `npm run lint`, `npx tsc --noEmit`, `npx vitest run` con `DATABASE_URL_TEST` (1346 + nuevos) y `npm run build` contra `dev` migrada.
 
