@@ -64,11 +64,13 @@ const TOOLTIP_EDGE = 64;
 const TOOLTIP_MIN_TOP = 48;
 
 // Geometría del SVG en unidades del `seatViewBox` (≤ 400 de ancho). A 375 px el plano se pinta a ≥ ~0.78 px/unidad:
-// el escenario (20) queda en ≥ 15 px y las etiquetas de fila (24) en ≥ 18 px.
+// el escenario (20) queda en ≥ 15 px y las letras de fila (13, ≈ la mitad del diámetro de la butaca) en ≈ 10 px.
+// Las letras son decorativas (`aria-hidden`; la fila va en el `aria-label` y el tooltip), por eso se aceptan por
+// debajo de los 12 px de MASTER §3 y crecen al acercar (decisión 30 de la spec).
 const STAGE_TOP = 12;
 const STAGE_HEIGHT = 36;
 const STAGE_FONT_SIZE = 20;
-const ROW_LABEL_FONT_SIZE = 24;
+const ROW_LABEL_FONT_SIZE = 13;
 const SEAT_HIT_SIZE = 32;
 
 // La librería inyecta su CSS sin capa (`width/height: fit-content`), que gana a las utilidades de Tailwind: el

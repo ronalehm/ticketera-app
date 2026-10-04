@@ -189,7 +189,7 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 - `<svg class="group/plan block size-full select-none">` con `viewBox` = `seatViewBox` (≤ 400 de ancho). A 375 px el pitch de 32 unidades (área de toque transparente de 32 × 32) mide ≥ 24 px con el plano entero a la vista.
 - **En cuadrícula** (zona sin `planTransform`): escenario arriba, barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest`.
 - **En arco** (con `planTransform`, p. ej. las tribunas del festival): **sin** barra "ESCENARIO" (contradecía la orientación del sector). El fondo del estadio y el minimapa llegan en la Fase 5.
-- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 24 unidades, `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
+- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, ~18 px a 1440 y ~10 px a 375 con el plano entero a la vista: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
   - en cuadrícula, en los dos márgenes (`x = 20` y `x = ancho − 20`, a la altura de la fila);
   - en arco, siguiendo la curva: en `getRowEdgeLabelPoints(row).start` y `.end` (a 0.8 pitch por fuera de la primera y la última butaca).
 
