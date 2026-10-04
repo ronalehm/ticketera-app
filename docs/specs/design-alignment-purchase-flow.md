@@ -1,7 +1,7 @@
 # Alineación con Claude Design: pantalla de compra propia, textos del checkout y búsqueda en /eventos
 
 - Módulo: checkout · events (más `components/shared` y el route group `app/(purchase)`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Pedido del usuario: alinear con el diseño de Claude Design (artifact `NmeqG8Dta7F7zcSPmbQC8y`) las vistas **Búsqueda y listado**, **Checkout y pago** y **Confirmación de compra**. Tras el análisis de diferencias, el usuario eligió cuatro bloques:
