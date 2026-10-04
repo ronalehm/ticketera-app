@@ -1,4 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { getEventBySlug } from "@/modules/events";
 import type { VenueZone, ZoneTone } from "../types/seating.types";
 import { getZoneTones, ZONE_TONE_CLASSES } from "./zoneTone";
@@ -71,27 +73,29 @@ describe("getZoneTones", () => {
     expect(getZoneTones([])).toEqual({});
   });
 
-  it("noche-de-sintetizadores-lima: VIP → tier-1, Preferencial → tier-2, Tribuna Norte → tier-3 y General → tier-4", async () => {
-    expect(getZoneTones(await zonesOf("noche-de-sintetizadores-lima"))).toEqual({
-      vip: "tier-1",
-      preferencial: "tier-2",
-      norte: "tier-3",
-      general: "tier-4",
+  describeWithDb("con los tipos de entrada de la BD", () => {
+    it("noche-de-sintetizadores-lima: VIP → tier-1, Preferencial → tier-2, Tribuna Norte → tier-3 y General → tier-4", async () => {
+      expect(getZoneTones(await zonesOf("noche-de-sintetizadores-lima"))).toEqual({
+        vip: "tier-1",
+        preferencial: "tier-2",
+        norte: "tier-3",
+        general: "tier-4",
+      });
     });
-  });
 
-  it("festival-vive-latino-lima: un tono por precio, de Campo VIP (tier-1) a Tribuna Norte (tier-5)", async () => {
-    expect(getZoneTones(await zonesOf("festival-vive-latino-lima"))).toEqual({
-      "campo-vip": "tier-1",
-      "campo-general": "tier-2",
-      occidente: "tier-3",
-      oriente: "tier-4",
-      norte: "tier-5",
+    it("festival-vive-latino-lima: un tono por precio, de Campo VIP (tier-1) a Tribuna Norte (tier-5)", async () => {
+      expect(getZoneTones(await zonesOf("festival-vive-latino-lima"))).toEqual({
+        "campo-vip": "tier-1",
+        "campo-general": "tier-2",
+        occidente: "tier-3",
+        oriente: "tier-4",
+        norte: "tier-5",
+      });
     });
-  });
 
-  it("risas-sin-filtro: Mesa → sold-out", async () => {
-    expect(getZoneTones(await zonesOf("risas-sin-filtro"))).toMatchObject({ mesa: "sold-out" });
+    it("risas-sin-filtro: Mesa → sold-out", async () => {
+      expect(getZoneTones(await zonesOf("risas-sin-filtro"))).toMatchObject({ mesa: "sold-out" });
+    });
   });
 });
 

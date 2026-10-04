@@ -1,4 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import type { Order } from "@/modules/checkout/orders";
 import { getEventBySlug } from "@/modules/events";
 import { formatSeatLabel, getVenueMapBySlug, type NumberedVenueZone } from "@/modules/seating";
@@ -44,26 +46,6 @@ describe("DEMO_ORDERS", () => {
       expect(order.total).toBe(sum(order.items.map((item) => item.unitPrice * item.quantity)));
     });
 
-    it("copia del catálogo los datos del evento y sus tipos de entrada", async () => {
-      const event = await getEventBySlug(order.event.slug);
-      expect(event).not.toBeNull();
-      const { title, category, venue, city, imageUrl } = order.event;
-      expect({ title, category, venue, city, imageUrl }).toEqual({
-        title: event?.title,
-        category: event?.category,
-        venue: event?.venue,
-        city: event?.city,
-        imageUrl: event?.imageUrl,
-      });
-      if (upcoming.includes(order)) expect(order.event.startsAt).toBe(event?.startsAt);
-
-      for (const item of order.items) {
-        const ticketType = event?.ticketTypes.find((type) => type.id === item.ticketTypeId);
-        expect(ticketType, item.ticketTypeId).toBeDefined();
-        expect({ name: item.name, unitPrice: item.unitPrice }).toEqual({ name: ticketType?.name, unitPrice: ticketType?.price });
-      }
-    });
-
     it("cada entrada lleva el nombre de su ítem y, si tiene asiento, su etiqueta en el mismo orden", () => {
       const slots = ticketSlots(order);
       expect(slots).toHaveLength(order.tickets.length);
@@ -83,35 +65,59 @@ describe("DEMO_ORDERS", () => {
       }
     });
 
-    it("si el evento tiene mapa, cada asiento existe en la zona del ítem con la etiqueta del mapa", async () => {
-      const map = await getVenueMapBySlug(order.event.slug);
-      if (!map) return;
+    describeWithDb("con el catálogo de la BD", () => {
+      it("copia del catálogo los datos del evento y sus tipos de entrada", async () => {
+        const event = await getEventBySlug(order.event.slug);
+        expect(event).not.toBeNull();
+        const { title, category, venue, city, imageUrl } = order.event;
+        expect({ title, category, venue, city, imageUrl }).toEqual({
+          title: event?.title,
+          category: event?.category,
+          venue: event?.venue,
+          city: event?.city,
+          imageUrl: event?.imageUrl,
+        });
+        if (upcoming.includes(order)) expect(Date.parse(order.event.startsAt)).toBe(Date.parse(event?.startsAt ?? ""));
 
-      for (const item of order.items) {
-        if (!item.seats) continue;
-        const zone = map.zones.find(
-          (candidate): candidate is NumberedVenueZone =>
-            candidate.kind === "numbered" && candidate.ticketTypeId === item.ticketTypeId,
-        );
-        expect(zone, item.ticketTypeId).toBeDefined();
-
-        for (const { id, label } of item.seats) {
-          const seat = zone?.rows.flatMap((row) => row.seats).find((candidate) => candidate.id === id);
-          expect(seat, id).toBeDefined();
-          if (zone && seat) expect(label).toBe(formatSeatLabel(zone.name, seat.row, seat.number));
+        for (const item of order.items) {
+          const ticketType = event?.ticketTypes.find((type) => type.id === item.ticketTypeId);
+          expect(ticketType, item.ticketTypeId).toBeDefined();
+          expect({ name: item.name, unitPrice: item.unitPrice }).toEqual({ name: ticketType?.name, unitPrice: ticketType?.price });
         }
-      }
+      });
+
+      it("si el evento tiene mapa, cada asiento existe en la zona del ítem con la etiqueta del mapa", async () => {
+        const map = await getVenueMapBySlug(order.event.slug);
+        if (!map) return;
+
+        for (const item of order.items) {
+          if (!item.seats) continue;
+          const zone = map.zones.find(
+            (candidate): candidate is NumberedVenueZone =>
+              candidate.kind === "numbered" && candidate.ticketTypeId === item.ticketTypeId,
+          );
+          expect(zone, item.ticketTypeId).toBeDefined();
+
+          for (const { id, label } of item.seats) {
+            const seat = zone?.rows.flatMap((row) => row.seats).find((candidate) => candidate.id === id);
+            expect(seat, id).toBeDefined();
+            if (zone && seat) expect(label).toBe(formatSeatLabel(zone.name, seat.row, seat.number));
+          }
+        }
+      });
     });
   });
 
-  it("el pedido pasado de La casa de los espejos usa Platea S/ 180 y los asientos platea-F-7 / platea-F-8", async () => {
-    // Su evento tiene mapa, así que el test "si el evento tiene mapa…" sí valida sus asientos.
-    expect(await getVenueMapBySlug("la-casa-de-los-espejos")).not.toBeNull();
-    const order = orders.find((candidate) => candidate.code === "MT-9LM2TC");
-    expect(order?.event.slug).toBe("la-casa-de-los-espejos");
-    expect(order?.items).toEqual([
-      expect.objectContaining({ ticketTypeId: "platea", name: "Platea", unitPrice: 180, quantity: 2 }),
-    ]);
-    expect(order?.items[0].seats?.map((seat) => seat.id)).toEqual(["platea-F-7", "platea-F-8"]);
+  describeWithDb("con el catálogo de la BD", () => {
+    it("el pedido pasado de La casa de los espejos usa Platea S/ 180 y los asientos platea-F-7 / platea-F-8", async () => {
+      // Su evento tiene mapa, así que el test "si el evento tiene mapa…" sí valida sus asientos.
+      expect(await getVenueMapBySlug("la-casa-de-los-espejos")).not.toBeNull();
+      const order = orders.find((candidate) => candidate.code === "MT-9LM2TC");
+      expect(order?.event.slug).toBe("la-casa-de-los-espejos");
+      expect(order?.items).toEqual([
+        expect.objectContaining({ ticketTypeId: "platea", name: "Platea", unitPrice: 180, quantity: 2 }),
+      ]);
+      expect(order?.items[0].seats?.map((seat) => seat.id)).toEqual(["platea-F-7", "platea-F-8"]);
+    });
   });
 });

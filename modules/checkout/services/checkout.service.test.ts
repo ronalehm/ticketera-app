@@ -1,4 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { getEventBySlug } from "@/modules/events/catalog";
 import { getVenueMapBySlug, type Seat } from "@/modules/seating/seats";
 import { getCheckoutOrder, resolveCheckoutOrder } from "./checkout.service";
@@ -9,7 +11,7 @@ vi.mock("@/modules/events/catalog", async (importOriginal) => {
   return { ...actual, getEventBySlug: vi.fn(actual.getEventBySlug) };
 });
 
-describe("checkout.service", () => {
+describeWithDb("checkout.service", () => {
   describe("getCheckoutOrder", () => {
     it("pedido válido → ok con total 910", async () => {
       const result = await getCheckoutOrder({ evento: "noche-de-sintetizadores-lima", general: "2", vip: "1" });

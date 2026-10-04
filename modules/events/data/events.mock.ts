@@ -213,7 +213,7 @@ export const EVENTS_MOCK = [
     organizer: "Carcajada Producciones",
     ticketTypes: [
       { id: "general", name: "General", price: 85, status: "low-stock" },
-      { id: "preferencial", name: "Preferencial", price: 120, status: "low-stock" },
+      { id: "preferencial", name: "Preferencial", price: 120, status: "available" },
       { id: "mesa", name: "Mesa", description: "Mesa frente al escenario, precio por persona.", price: 160, status: "sold-out" },
     ],
   },

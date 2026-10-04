@@ -103,6 +103,7 @@ erDiagram
     uuid event_id FK
     uuid section_id FK
     int price_cents
+    int sort_order
   }
   event_seats {
     uuid id PK
@@ -278,7 +279,7 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 | `lat`, `lng` | double precision NULL | Google Maps. |
 | `place_id` | text NULL | Google Maps. |
 | `map_view_box` | text NULL | `viewBox` del SVG del mapa (`0 0 W H`), como `venueLayoutSchema.viewBox` de `modules/seating`. |
-| `stage` | jsonb NULL | `{ label, path, labelPos: { x, y } }` del escenario. |
+| `stage` | jsonb NULL | `{ label, path, labelPos: { x, y }, lights?: [{ x, y }] }` del escenario; `lights` son las luces decorativas (mapa curvo). |
 | `created_by` | uuid → `users.id` | |
 
 Sin geometría (`map_view_box NULL`), la UI usa la lista de zonas sin mapa.
@@ -297,6 +298,8 @@ Sin geometría (`map_view_box NULL`), la UI usa la lista de zonas sin mapa.
 | `map_path` | text NULL | Trazo SVG de la zona en el mapa. |
 | `label_x`, `label_y` | real NULL | Posición de la etiqueta. |
 | `seat_view_box` | text NULL | Solo `numbered`: `viewBox` del plano de asientos. |
+| `wrap_label` | boolean | Default `false`. Parte el nombre de la zona en 2 líneas en el mapa (`wrapLabel` de `modules/seating`). |
+| `plan_transform` | jsonb NULL | Solo `numbered` en arco: `{ scale, x, y }`, plano de asientos = coordenadas del mapa × `scale` + (`x`, `y`). |
 
 Restricciones: `UNIQUE (venue_id, name)`; `UNIQUE (venue_id, slug)`; `CHECK ((seating = 'general' AND capacity > 0) OR (seating = 'numbered' AND capacity IS NULL))`.
 
@@ -363,6 +366,7 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `description` | text NULL | |
 | `price_cents` | integer | CHECK `>= 0`. |
 | `max_per_order` | integer | Default 6. |
+| `sort_order` | integer | Default 0. Orden de los tipos de entrada en el evento (independiente de `venue_sections.sort_order`, que ordena las zonas del mapa). |
 
 Restricciones: `UNIQUE (event_id, section_id)`; `UNIQUE (event_id, slug)`.
 

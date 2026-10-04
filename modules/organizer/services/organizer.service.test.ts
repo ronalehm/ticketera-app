@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment node
+import { beforeEach, expect, it, vi } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { getEvents } from "@/modules/events";
 import { getDashboardKpis } from "../utils/organizerStats";
 import { getOrganizerEvents } from "./organizer.service";
@@ -8,7 +10,12 @@ vi.mock("@/modules/events", async (importOriginal) => {
   return { ...actual, getEvents: vi.fn(actual.getEvents) };
 });
 
-describe("getOrganizerEvents", () => {
+/** id (UUID de la BD) del evento con ese slug. */
+async function eventId(slug: string) {
+  return (await getEvents()).find((event) => event.slug === slug)?.id;
+}
+
+describeWithDb("getOrganizerEvents", () => {
   beforeEach(() => {
     vi.mocked(getEvents).mockClear();
   });
@@ -16,9 +23,9 @@ describe("getOrganizerEvents", () => {
   it("devuelve los 3 publicados en el orden de las ventas y después el borrador", async () => {
     const events = await getOrganizerEvents();
     expect(events.map((event) => [event.id, event.status])).toEqual([
-      ["evt-001", "published"],
-      ["evt-003", "published"],
-      ["evt-011", "published"],
+      [await eventId("noche-de-sintetizadores-lima"), "published"],
+      [await eventId("la-casa-de-los-espejos"), "published"],
+      [await eventId("el-circo-de-las-estrellas"), "published"],
       ["org-draft-001", "draft"],
     ]);
   });
@@ -26,10 +33,10 @@ describe("getOrganizerEvents", () => {
   it("el primero toma los datos del evento y las ventas mock", async () => {
     const [first] = await getOrganizerEvents();
     expect(first).toEqual({
-      id: "evt-001",
+      id: await eventId("noche-de-sintetizadores-lima"),
       title: "Noche de Sintetizadores: Gira Neón 2026",
       category: "conciertos",
-      startsAt: "2026-11-14T21:00:00-05:00",
+      startsAt: new Date("2026-11-14T21:00:00-05:00").toISOString(),
       venue: "Estadio Nacional",
       city: "Lima",
       imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80",
@@ -64,6 +71,10 @@ describe("getOrganizerEvents", () => {
     vi.mocked(getEvents).mockResolvedValueOnce(all.filter((event) => event.slug !== "la-casa-de-los-espejos"));
 
     const events = await getOrganizerEvents();
-    expect(events.map((event) => event.id)).toEqual(["evt-001", "evt-011", "org-draft-001"]);
+    expect(events.map((event) => event.id)).toEqual([
+      await eventId("noche-de-sintetizadores-lima"),
+      await eventId("el-circo-de-las-estrellas"),
+      "org-draft-001",
+    ]);
   });
 });

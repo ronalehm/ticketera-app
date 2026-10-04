@@ -1,0 +1,2 @@
+ALTER TABLE "venue_sections" DROP CONSTRAINT "venue_sections_seating_capacity_check";--> statement-breakpoint
+ALTER TABLE "venue_sections" ADD CONSTRAINT "venue_sections_seating_capacity_check" CHECK (("venue_sections"."seating" = 'general' AND "venue_sections"."capacity" IS NOT NULL AND "venue_sections"."capacity" > 0) OR ("venue_sections"."seating" = 'numbered' AND "venue_sections"."capacity" IS NULL));

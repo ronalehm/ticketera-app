@@ -1,6 +1,9 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { getEventBySlug } from "@/modules/events";
 import { STADIUM_CENTER, VENUE_LAYOUTS_MOCK, VIVE_LATINO_SECTORS } from "../data/venueMaps.mock";
+import { venueLayoutSchema } from "../schemas/seating.schema";
 import type { NumberedVenueZone, PlanTransform, VenueMap } from "../types/seating.types";
 import {
   type AnnularSector,
@@ -66,7 +69,23 @@ async function getNumberedZone(slug: string, zoneId: string): Promise<NumberedVe
 }
 
 describe("seating.service", () => {
-  describe("getVenueMapBySlug", () => {
+  describeWithDb("getVenueMapBySlug", () => {
+    it.each(MAP_SLUGS)("%s: devuelve el mismo mapa que construía el mock", async (slug) => {
+      const map = await getMap(slug);
+      const event = await getEventBySlug(slug);
+      const mockLayout = VENUE_LAYOUTS_MOCK.find((layout) => layout.eventSlug === slug);
+      const { zones, ...layout } = venueLayoutSchema.parse(mockLayout);
+
+      expect(map).toEqual({
+        ...layout,
+        venue: event?.venue,
+        zones: zones.map((zone) => {
+          const ticketType = event?.ticketTypes.find((type) => type.id === zone.ticketTypeId);
+          return { ...zone, name: ticketType?.name, price: ticketType?.price, status: ticketType?.status };
+        }),
+      });
+    });
+
     it("devuelve el mapa del Estadio Nacional con sus 4 zonas completadas desde el evento", async () => {
       const map = await getMap("noche-de-sintetizadores-lima");
       const event = await getEventBySlug("noche-de-sintetizadores-lima");
@@ -101,45 +120,14 @@ describe("seating.service", () => {
       expect(numberedIds(standUp)).toEqual(["mesa", "preferencial"]);
     });
 
-    it("devuelve null para un evento sin mapa o un slug inexistente", async () => {
+    it("devuelve null para un evento sin mapa, un slug inexistente o un borrador", async () => {
       expect(await getVenueMapBySlug("clasico-del-pacifico")).toBeNull();
       expect(await getVenueMapBySlug("no-existe")).toBeNull();
-    });
-
-    it("devuelve null si hay layout pero no existe el evento", async () => {
-      VENUE_LAYOUTS_MOCK.push({ ...VENUE_LAYOUTS_MOCK[0], eventSlug: "evento-borrado" });
-      try {
-        expect(await getVenueMapBySlug("evento-borrado")).toBeNull();
-      } finally {
-        VENUE_LAYOUTS_MOCK.pop();
-      }
-    });
-
-    it("lanza un error si una zona apunta a un tipo de entrada inexistente", async () => {
-      const original = VENUE_LAYOUTS_MOCK[0];
-      VENUE_LAYOUTS_MOCK[0] = {
-        ...original,
-        zones: original.zones.map((zone) => (zone.id === "vip" ? { ...zone, ticketTypeId: "palco" } : zone)),
-      };
-      try {
-        await expect(getVenueMapBySlug(original.eventSlug)).rejects.toThrow(/palco/);
-      } finally {
-        VENUE_LAYOUTS_MOCK[0] = original;
-      }
-    });
-
-    it("lanza un error si el layout no cumple el schema", async () => {
-      const original = VENUE_LAYOUTS_MOCK[0];
-      VENUE_LAYOUTS_MOCK[0] = { ...original, viewBox: "600 560" };
-      try {
-        await expect(getVenueMapBySlug(original.eventSlug)).rejects.toThrow();
-      } finally {
-        VENUE_LAYOUTS_MOCK[0] = original;
-      }
+      expect(await getVenueMapBySlug("feria-familiar-de-verano")).toBeNull();
     });
   });
 
-  describe("getVenueMapForEvent", () => {
+  describeWithDb("getVenueMapForEvent", () => {
     async function getEvent(slug: string) {
       const event = await getEventBySlug(slug);
       if (!event) throw new Error(`Sin evento: ${slug}`);
@@ -152,20 +140,6 @@ describe("seating.service", () => {
 
     it("devuelve null para un evento sin mapa", async () => {
       expect(await getVenueMapForEvent(await getEvent("clasico-del-pacifico"))).toBeNull();
-    });
-
-    it("lanza un error si una zona apunta a un tipo de entrada inexistente", async () => {
-      const original = VENUE_LAYOUTS_MOCK[0];
-      const event = await getEvent(original.eventSlug);
-      VENUE_LAYOUTS_MOCK[0] = {
-        ...original,
-        zones: original.zones.map((zone) => (zone.id === "vip" ? { ...zone, ticketTypeId: "palco" } : zone)),
-      };
-      try {
-        await expect(getVenueMapForEvent(event)).rejects.toThrow(/palco/);
-      } finally {
-        VENUE_LAYOUTS_MOCK[0] = original;
-      }
     });
   });
 
@@ -182,7 +156,7 @@ describe("seating.service", () => {
     });
   });
 
-  describe("getVenueMapBySlug del festival", () => {
+  describeWithDb("getVenueMapBySlug del festival", () => {
     it("devuelve el estadio de la Costa Verde con 5 zonas en el orden de los tipos y sus datos del evento", async () => {
       const map = await getMap(STADIUM_SLUG);
       const event = await getEventBySlug(STADIUM_SLUG);
@@ -228,7 +202,7 @@ describe("seating.service", () => {
     });
   });
 
-  describe.each(MAP_SLUGS)("invariantes del mapa %s", (slug) => {
+  describeWithDb.each(MAP_SLUGS)("invariantes del mapa %s", (slug) => {
     it("sus zonas corresponden 1:1 a los ticketTypes del evento", async () => {
       const map = await getMap(slug);
       const event = await getEventBySlug(slug);
@@ -261,7 +235,7 @@ describe("seating.service", () => {
     });
   });
 
-  describe.each(RECT_MAP_SLUGS)("invariantes del mapa rectangular %s", (slug) => {
+  describeWithDb.each(RECT_MAP_SLUGS)("invariantes del mapa rectangular %s", (slug) => {
     it("el labelPos del escenario y de cada zona es el centro de su forma", async () => {
       const map = await getMap(slug);
       expect(map.stage.labelPos, "stage").toEqual(rectCenter(map.stage.path));
@@ -278,16 +252,26 @@ describe("seating.service", () => {
     });
   });
 
-  describe("invariantes del mapa curvo festival-vive-latino-lima", () => {
-    const stageAndZones = Object.entries(VIVE_LATINO_SECTORS);
-    const zoneSectors = stageAndZones.filter(([id]) => id !== "stage");
+  const stageAndZones = Object.entries(VIVE_LATINO_SECTORS);
+  const zoneSectors = stageAndZones.filter(([id]) => id !== "stage");
 
+  describe("geometría de los sectores de festival-vive-latino-lima", () => {
     it("todos los sectores son concéntricos con el escenario", () => {
       for (const [id, sector] of stageAndZones) {
         expect({ cx: sector.cx, cy: sector.cy }, id).toEqual(STADIUM_CENTER);
       }
     });
 
+    it("ningún par de sectores (escenario incluido) se solapa", () => {
+      stageAndZones.forEach(([idA, a], index) => {
+        for (const [idB, b] of stageAndZones.slice(index + 1)) {
+          expect(doAnnularSectorsOverlap(a, b), `${idA} / ${idB}`).toBe(false);
+        }
+      });
+    });
+  });
+
+  describeWithDb("invariantes del mapa curvo festival-vive-latino-lima", () => {
     it("cada path es exactamente el de su sector", async () => {
       const map = await getMap(STADIUM_SLUG);
       expect(map.stage.path).toBe(getAnnularSectorPath(VIVE_LATINO_SECTORS.stage));
@@ -306,14 +290,6 @@ describe("seating.service", () => {
         expect(bounds.maxX, id).toBeLessThanOrEqual(width - ZONE_VIEWBOX_MARGIN);
         expect(bounds.maxY, id).toBeLessThanOrEqual(height - ZONE_VIEWBOX_MARGIN);
       }
-    });
-
-    it("ningún par de sectores (escenario incluido) se solapa", () => {
-      stageAndZones.forEach(([idA, a], index) => {
-        for (const [idB, b] of stageAndZones.slice(index + 1)) {
-          expect(doAnnularSectorsOverlap(a, b), `${idA} / ${idB}`).toBe(false);
-        }
-      });
     });
 
     it("el labelPos del escenario y de cada zona está dentro de su sector", async () => {
@@ -365,7 +341,7 @@ describe("seating.service", () => {
     });
   });
 
-  describe("escenario y reparto de la ocupación", () => {
+  describeWithDb("escenario y reparto de la ocupación", () => {
     it.each([
       ["noche-de-sintetizadores-lima", { x: 300, y: 38 }],
       ["la-casa-de-los-espejos", { x: 300, y: 40 }],
@@ -408,7 +384,7 @@ describe("seating.service", () => {
     });
   });
 
-  describe("tonos con los mapas reales", () => {
+  describeWithDb("tonos con los mapas reales", () => {
     it("noche-de-sintetizadores-lima: VIP tier-1, Preferencial tier-2, Tribuna Norte tier-3 y General tier-4", async () => {
       const map = await getMap("noche-de-sintetizadores-lima");
       expect(getZoneTones(map.zones)).toEqual({

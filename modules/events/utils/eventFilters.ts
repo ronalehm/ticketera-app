@@ -31,7 +31,7 @@ const chipDateFormatter = new Intl.DateTimeFormat("es-PE", {
   timeZone: "UTC",
 });
 
-function normalizeText(text: string): string {
+export function normalizeText(text: string): string {
   return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 

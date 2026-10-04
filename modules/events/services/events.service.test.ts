@@ -1,13 +1,26 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { describeWithDb } from "@/lib/db/testDb";
 import { EVENTS_MOCK } from "../data/events.mock";
 import { eventDetailSchema, eventSchema } from "../schemas/events.schema";
+import type { Event } from "../types/events.types";
 import { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./events.service";
 
-describe("events.service", () => {
-  it("getEvents devuelve todos los eventos válidos según el schema", async () => {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Igual al mock salvo `id` (UUID de la fila) y las fechas, que deben ser el mismo instante (Decisión 13). */
+function expectSameAsMock<T extends Event & { doorsOpenAt?: string }>(actual: T, expected: T) {
+  expect(actual.id).toMatch(UUID);
+  expect(Date.parse(actual.startsAt)).toBe(Date.parse(expected.startsAt));
+  expect(Date.parse(actual.doorsOpenAt ?? "")).toEqual(Date.parse(expected.doorsOpenAt ?? ""));
+  expect(actual).toEqual({ ...expected, id: actual.id, startsAt: actual.startsAt, doorsOpenAt: actual.doorsOpenAt });
+}
+
+describeWithDb("events.service (BD)", () => {
+  it("getEvents devuelve los eventos publicados del mock, en su orden", async () => {
     const events = await getEvents();
-    expect(events).toHaveLength(EVENTS_MOCK.length);
-    events.forEach((event) => expect(eventSchema.safeParse(event).success).toBe(true));
+    expect(events.map((event) => event.slug)).toEqual(EVENTS_MOCK.map((event) => event.slug));
+    events.forEach((event, index) => expectSameAsMock(event, eventSchema.parse(EVENTS_MOCK[index])));
   });
 
   it("getFeaturedEvents devuelve solo los destacados", async () => {
@@ -16,25 +29,18 @@ describe("events.service", () => {
     expect(featured.every((event) => event.featured)).toBe(true);
   });
 
-  it("falla si el mock tiene un evento inválido", async () => {
-    const original = EVENTS_MOCK[0];
-    EVENTS_MOCK[0] = { ...original, startsAt: "15/11/2026" };
-    try {
-      await expect(getEvents()).rejects.toThrow();
-    } finally {
-      EVENTS_MOCK[0] = original;
-    }
-  });
-
   describe("getEventBySlug", () => {
-    it("devuelve el detalle válido de un slug existente", async () => {
-      const event = await getEventBySlug("noche-de-sintetizadores-lima");
-      expect(event?.title).toBe("Noche de Sintetizadores: Gira Neón 2026");
-      expect(eventDetailSchema.safeParse(event).success).toBe(true);
-    });
+    it.each(EVENTS_MOCK.map((event) => [event.slug, event] as const))(
+      "%s es igual al detalle del mock",
+      async (slug, mock) => {
+        const event = await getEventBySlug(slug);
+        expect(event).not.toBeNull();
+        expectSameAsMock(event!, eventDetailSchema.parse(mock));
+      },
+    );
 
-    it("devuelve null para un slug inexistente", async () => {
-      expect(await getEventBySlug("no-existe")).toBeNull();
+    it.each(["feria-familiar-de-verano", "no-existe"])("devuelve null para %s (borrador o inexistente)", async (slug) => {
+      expect(await getEventBySlug(slug)).toBeNull();
     });
   });
 
@@ -61,28 +67,28 @@ describe("events.service", () => {
       expect(related.slug).toBe("festival-sol-de-verano");
     });
   });
+});
 
-  describe("invariantes del mock", () => {
-    const details = EVENTS_MOCK.map((event) => eventDetailSchema.parse(event));
+describe("invariantes del mock", () => {
+  const details = EVENTS_MOCK.map((event) => eventDetailSchema.parse(event));
 
-    it.each(details.map((event) => [event.slug, event] as const))("%s cumple las invariantes", (_, event) => {
-      const prices = event.ticketTypes.map((type) => type.price);
-      expect(event.priceFrom).toBe(Math.min(...prices));
-      if (event.status === "sold-out") {
-        expect(event.ticketTypes.every((type) => type.status === "sold-out")).toBe(true);
-      }
-      if (event.status === "low-stock") {
-        expect(event.ticketTypes.some((type) => type.status === "low-stock")).toBe(true);
-      }
-      if (event.priceFrom === 0) {
-        expect(event.ticketTypes).toEqual([{ id: "entrada-libre", name: "Entrada libre", price: 0, status: "available" }]);
-      } else {
-        expect(event.ticketTypes.length).toBeGreaterThanOrEqual(2);
-        expect(event.ticketTypes.length).toBeLessThanOrEqual(5);
-      }
-      event.ticketTypes.forEach((type) => expect(type.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/));
-      expect(Date.parse(event.doorsOpenAt)).toBeLessThan(Date.parse(event.startsAt));
-      expect(event.description.split("\n\n").length).toBeGreaterThanOrEqual(2);
-    });
+  it.each(details.map((event) => [event.slug, event] as const))("%s cumple las invariantes", (_, event) => {
+    const prices = event.ticketTypes.map((type) => type.price);
+    expect(event.priceFrom).toBe(Math.min(...prices));
+    if (event.status === "sold-out") {
+      expect(event.ticketTypes.every((type) => type.status === "sold-out")).toBe(true);
+    }
+    if (event.status === "low-stock") {
+      expect(event.ticketTypes.some((type) => type.status === "low-stock")).toBe(true);
+    }
+    if (event.priceFrom === 0) {
+      expect(event.ticketTypes).toEqual([{ id: "entrada-libre", name: "Entrada libre", price: 0, status: "available" }]);
+    } else {
+      expect(event.ticketTypes.length).toBeGreaterThanOrEqual(2);
+      expect(event.ticketTypes.length).toBeLessThanOrEqual(5);
+    }
+    event.ticketTypes.forEach((type) => expect(type.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/));
+    expect(Date.parse(event.doorsOpenAt)).toBeLessThan(Date.parse(event.startsAt));
+    expect(event.description.split("\n\n").length).toBeGreaterThanOrEqual(2);
   });
 });
