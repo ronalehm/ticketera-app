@@ -152,13 +152,9 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
     - **Verificación:**
       - **T2–T4, en paralelo:** ejecutan sus tests **sin BD**, con `DATABASE_URL_TEST= npx vitest run <rutas>`. La variable vacía anula la de `.env`, y los bloques con BD se omiten.
       - **Suite completa con BD, de uno en uno:** al terminar su tarea, cada developer ejecuta `npx vitest run` con `DATABASE_URL_TEST`, por turnos. El orquestador nunca lanza dos ejecuciones con BD a la vez. El reviewer la repite al final.
-      - **Antes de `npm run build` o de Playwright:** se vuelve a sembrar la BD de desarrollo (`DATABASE_URL`), porque el build prerenderiza las rutas `/eventos/<slug>/entradas` desde ella. Se vacían sus tablas de `public` (`TRUNCATE … CASCADE`, como hace `testGlobalSetup` con la de test), y después `npm run db:migrate && npm run db:seed`.
-    - **BD de la sesión de implementación:**
-      - `DATABASE_URL` y `DATABASE_URL_TEST` apuntan a un Postgres 16 local del sandbox (`127.0.0.1:5433`), con las bases `ticketera_dev` y `ticketera_test`.
-      - Se creó solo para estas pruebas y es desechable. No es la BD de Neon del usuario.
-      - Por eso el developer de T5 y el reviewer vacían y vuelven a sembrar `ticketera_dev` sin preguntar.
-      - Ningún agente toca la BD de Neon del usuario.
-    - **Tras el merge:** solo el usuario vuelve a sembrar su BD de Neon, en su máquina (vaciarla o recrear la rama `dev` de Neon, y después `npm run db:migrate && npm run db:seed`). Si no lo hace, verá los mapas rectangulares de antes. Vaciarla borra también los datos creados a mano en esa BD (órdenes, eventos de prueba).
+      - **Antes de `npm run build` o de Playwright:** se vuelve a sembrar la BD de desarrollo (`DATABASE_URL`), porque el build prerenderiza las rutas `/eventos/<slug>/entradas` desde ella. Se vacían sus tablas de `public` (`TRUNCATE … CASCADE`, como hace `testGlobalSetup` con la de test) o se recrea la rama `dev` de Neon, y después `npm run db:migrate && npm run db:seed`.
+    - **BD de la sesión de implementación (autorizado por el usuario, 2026-10-04):** en la sesión que implementa esta spec, `DATABASE_URL` y `DATABASE_URL_TEST` apuntan a un Postgres 16 local del entorno de pruebas (`127.0.0.1:5433`, bases `ticketera_dev` y `ticketera_test`), desechable y ajeno a la BD de Neon del usuario. El developer de T5 y el reviewer pueden vaciar y volver a sembrar `ticketera_dev` sin preguntar. La BD de Neon del usuario no se toca desde la sesión.
+    - **Tras el merge:** el usuario vuelve a sembrar la BD de desarrollo de su máquina de la misma forma (vaciar o recrear la rama `dev` de Neon y `npm run db:migrate && npm run db:seed`). Si no lo hace, verá los mapas rectangulares de antes. Vaciarla borra también los datos creados a mano en esa BD (órdenes, eventos de prueba).
 
 ## Requisitos
 
@@ -542,6 +538,4 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
   - Secuencial.
 
 ## Preguntas abiertas
-1. **¿Pueden los agentes vaciar la BD de desarrollo durante la sesión?** Vaciarla (T5 y reviewer, antes del build y de Playwright, decisión 11) borra también los datos creados a mano en ella.
-   - **Supuesto de la spec:** al aprobarla, el usuario autoriza que el developer de T5 y el reviewer vacíen las tablas de `public` de `DATABASE_URL` y la vuelvan a sembrar.
-   - **Alternativa:** que lo haga el usuario antes del build. En ese caso, el orquestador se detiene y se lo pide.
+Ninguna. La única (vaciar la BD de desarrollo durante la sesión) la resolvió el usuario: ver la decisión 11.
