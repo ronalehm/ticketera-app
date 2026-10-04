@@ -450,6 +450,6 @@ Coordinación con otras specs (ninguna está en curso sobre estos archivos al re
 - [ ] T5 — Eliminar `PurchaseStepper` y actualizar las páginas de diseño · archivos: `components/shared/PurchaseStepper.tsx` (eliminar), `design-system/ticketera/pages/checkout.md`, `design-system/ticketera/pages/ticket-selection.md` · depende de: T2, T3, T4 y `seating-curved-venues` T6 cerrada · secuencial
 
 ### Fase 2 — `/eventos`: buscador compacto y fila única (3 tareas, 7 archivos)
-- [ ] T1 — Buscador compacto por debajo de `md`, con el test ampliado · archivos: `modules/events/components/EventSearchBar.tsx`, `modules/events/components/EventSearchBar.test.tsx` · depende de: — · paralelo con T2
+- [x] T1 — Buscador compacto por debajo de `md`, con el test ampliado · archivos: `modules/events/components/EventSearchBar.tsx`, `modules/events/components/EventSearchBar.test.tsx` · depende de: — · paralelo con T2
 - [x] T2 — Fila única de contador, chips y orden en `lg` · archivos: `app/(site)/eventos/page.tsx`, `modules/events/components/EventsResults.tsx`, `modules/events/components/EventsSort.tsx` · depende de: — · paralelo con T1
 - [ ] T3 — `pages/events-list.md` (buscador compacto, fila única y tabulación) y la fila "Buscador" de MASTER §7 · archivos: `design-system/ticketera/pages/events-list.md`, `design-system/ticketera/MASTER.md` · depende de: T1, T2 · secuencial
