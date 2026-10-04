@@ -1,7 +1,7 @@
 # Autenticación real con Clerk
 
 - Módulo: auth (con cambios en checkout, organizer, tickets y en el seed de `lib/db`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 
@@ -244,9 +244,9 @@ export async function completeProfileAction(
 Las eliminaciones de archivos se listan aparte y no cuentan para el límite de ~15 archivos (no requieren desarrollo); `package-lock.json` tampoco (lo genera `npm`). La Fase 3 supera el límite (17) porque el reemplazo del store tiene que ser atómico: si la sesión simulada y Clerk convivieran, las vistas de cuenta se romperían entre fases, y 7 de esos archivos son tests que solo cambian el mock de sesión.
 
 ### Fase 1 — Base de Clerk (sin cambios visibles)
-- [ ] T1 — Ejecutar `clerk init --app app_3KDGpk2KSISnInJRlr81f9Y5j2Q` e instalar `@clerk/ui` y `@clerk/localizations`. Revisar y ajustar: `ClerkProvider` dentro de `<body>` con `theme: shadcn` y `esES`; `@import` del tema en `globals.css`; `proxy.ts` con `clerkMiddleware()`, sin proteger rutas y con el matcher del Requisito 1. Borrar las páginas de ejemplo si `clerk init` las crea y pasar `clerk doctor` · archivos: `package.json`, `package-lock.json`, `app/layout.tsx`, `app/globals.css`, `proxy.ts` · depende de: — · secuencial (base)
-- [ ] T2 — Variables de Clerk en `lib/env.ts` y valores inertes en Vitest · archivos: `lib/env.ts`, `lib/env.test.ts`, `vitest.config.mts` · depende de: T1 · secuencial (lib)
-- [ ] T3 — Hook `useSessionUser` y entrada `session.ts` (exporta `useSessionUser`; `useAuthStore` sigue hasta la Fase 3) · archivos: `modules/auth/hooks/useSessionUser.ts`, `modules/auth/hooks/useSessionUser.test.ts`, `modules/auth/session.ts`, `modules/auth/types/auth.types.ts` · depende de: T1 · secuencial (entrada del módulo)
+- [x] T1 — Ejecutar `clerk init --app app_3KDGpk2KSISnInJRlr81f9Y5j2Q` e instalar `@clerk/ui` y `@clerk/localizations`. Revisar y ajustar: `ClerkProvider` dentro de `<body>` con `theme: shadcn` y `esES`; `@import` del tema en `globals.css`; `proxy.ts` con `clerkMiddleware()`, sin proteger rutas y con el matcher del Requisito 1. Borrar las páginas de ejemplo si `clerk init` las crea y pasar `clerk doctor` · archivos: `package.json`, `package-lock.json`, `app/layout.tsx`, `app/globals.css`, `proxy.ts` · depende de: — · secuencial (base)
+- [x] T2 — Variables de Clerk en `lib/env.ts` y valores inertes en Vitest · archivos: `lib/env.ts`, `lib/env.test.ts`, `vitest.config.mts` · depende de: T1 · secuencial (lib)
+- [x] T3 — Hook `useSessionUser` y entrada `session.ts` (exporta `useSessionUser`; `useAuthStore` sigue hasta la Fase 3) · archivos: `modules/auth/hooks/useSessionUser.ts`, `modules/auth/hooks/useSessionUser.test.ts`, `modules/auth/session.ts`, `modules/auth/types/auth.types.ts` · depende de: T1 · secuencial (entrada del módulo)
 
 ### Fase 2 — Identidad y documentos legales en la BD (sin cambios visibles)
 - [ ] T1 — Documentos legales publicados en el seed · archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/seed.ts`, `lib/db/seed/buildSeedData.test.ts` · depende de: Fase 1 · secuencial (lib)

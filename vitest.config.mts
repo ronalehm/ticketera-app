@@ -15,6 +15,14 @@ if (testDatabaseUrl && [fileEnv.DATABASE_URL, fileEnv.DATABASE_URL_UNPOOLED].inc
 // Sin BD de test: URL inerte para que importar los services no falle al validar el entorno; esos tests se saltan.
 const INERT_DATABASE_URL = "postgres://unused@127.0.0.1:1/unused";
 
+// Valores inertes de Clerk: importar lib/env en los tests no necesita claves reales.
+const INERT_CLERK_ENV = {
+  CLERK_SECRET_KEY: "sk_test_unused",
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_unused",
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/login",
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/registro",
+};
+
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
@@ -23,8 +31,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     env: testDatabaseUrl
-      ? { DATABASE_URL: testDatabaseUrl, DATABASE_URL_TEST: testDatabaseUrl }
-      : { DATABASE_URL: INERT_DATABASE_URL },
+      ? { ...INERT_CLERK_ENV, DATABASE_URL: testDatabaseUrl, DATABASE_URL_TEST: testDatabaseUrl }
+      : { ...INERT_CLERK_ENV, DATABASE_URL: INERT_DATABASE_URL },
     globalSetup: testDatabaseUrl ? ["./lib/db/testGlobalSetup.ts"] : [],
   },
 });
