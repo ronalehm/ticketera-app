@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 
 import { useSeatSelection } from "../hooks/useSeatSelection";
-import type { VenueMap, VenueZone } from "../types/seating.types";
+import type { SeatSelection, VenueMap, VenueZone } from "../types/seating.types";
 import { resolveSeats } from "../utils/seatIds";
 import { parseViewBox } from "../utils/viewBox";
 import { getZoneTones } from "../utils/zoneTone";
@@ -23,6 +23,10 @@ import { ZoneStepHeader } from "./ZoneStepHeader";
 
 type TicketSelectionProps = {
   map: VenueMap;
+  /** Selección precargada (ya validada por `parseSeatingPreselection`). */
+  initialSelection?: SeatSelection;
+  /** Zona cuyo sub-paso 2 se abre al cargar (ya validada por `parseInitialZoneId`); no mueve el foco. */
+  initialZoneId?: string | null;
 };
 
 const STEP_ENTER_CLASS = "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300";
@@ -41,9 +45,10 @@ function getOriginStyle(zone: VenueZone, width: number, height: number): CSSProp
  * Paso "Entradas" de la compra: una tarjeta "Elige tus entradas" con dos sub-pasos (1: mapa + tarjetas de zona; 2:
  * cantidad de una zona de pie o plano de una numerada), con "Tu compra" sticky en `lg` y la barra inferior en móvil.
  * Orden móvil = orden del DOM; por breakpoint solo se alternan el resumen y la barra (nunca se duplican para lectores).
+ * No lee la URL: la precarga y la zona inicial llegan por props (`PreselectedTicketSelection`).
  */
-export function TicketSelection({ map }: TicketSelectionProps) {
-  const selection = useSeatSelection(map);
+export function TicketSelection({ map, initialSelection, initialZoneId }: TicketSelectionProps) {
+  const selection = useSeatSelection(map, { selection: initialSelection, zoneId: initialZoneId });
   const titleId = useId();
   const zoneHeadingId = useId();
   const [highlightedZoneId, setHighlightedZoneId] = useState<string | null>(null);
