@@ -1,7 +1,7 @@
 # Crear evento: modo de ubicación, datos completos de la landing y publicación real
 
 - Módulo: organizer (con cambios acotados en events, seating y lib)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Pedidos del usuario:
