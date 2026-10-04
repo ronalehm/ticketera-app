@@ -170,7 +170,8 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 1. **Ayuda:** "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
 2. **Barra sobre el lienzo** (solo por debajo de `sm`; `flex items-end justify-between gap-2`, desde `sm` pasa a `sm:contents`): minimapa a la izquierda (solo en arco) y pastilla de zoom a la derecha.
 3. **Lienzo:** `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`. Dentro: el plano con zoom y paneo, el tooltip y, desde `sm`, el minimapa (en arco) y la pastilla de zoom superpuestos.
-   - **Proporción:** la del `seatViewBox` de la zona (`aspect-(--plan-aspect)`, con la variable en línea). En arco, desde `sm`, apaisado `sm:aspect-[16/10]`: el plano queda centrado (`fitOnInit="contain"`) y el margen lateral aloja el minimapa y el zoom. Va por variable CSS porque un `aspect-ratio` en línea ganaría a la variante `sm:`.
+   - **Proporción:** la del `seatViewBox` de la zona (`aspect-(--plan-aspect)`, con la variable en línea). En arco, desde `sm`, apaisado `sm:aspect-[16/10]`: el plano queda centrado (`fitOnInit="contain"`) y el margen lateral aloja el minimapa y el zoom (con el lienzo estrecho, además, una franja inferior; ver "Controles de zoom"). Va por variable CSS porque un `aspect-ratio` en línea ganaría a la variante `sm:`.
+   - **Contenedor `@container`:** el bloque del lienzo (la barra y el lienzo, que miden lo mismo de ancho) es un contenedor de Tailwind. El minimapa y la franja del zoom en arco dependen del **ancho del lienzo** (umbral `@2xl`, 42rem = 672 px), no del de la ventana: a 1024 px, con dos columnas, el lienzo mide 516 px aunque la ventana sea ancha.
    - **Por debajo de `sm`** el lienzo mantiene la proporción del plano en las dos variantes, para no bajar de 24 px por butaca.
 4. **Leyenda** (`SeatLegend`) con el precio y "n elegidas".
 5. **Bandeja** `flex flex-col gap-4 border-t pt-4`: "Mejores butacas" (`BestSeatsPicker`), `<p role="status">` con el aviso del plano y "Tus asientos" (todas las zonas).
@@ -190,7 +191,12 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 - **Por debajo de `sm`:** en la barra sobre el lienzo (`flex items-end justify-between gap-2`), alineada a la derecha. A 375 px, superpuesta taparía butacas (p. ej. `oriente-J-10`, en la esquina inferior derecha).
 - **Desde `sm`:** la barra pasa a `sm:contents` y la pastilla se superpone al lienzo abajo a la derecha (`sm:absolute sm:bottom-3 sm:right-3 sm:z-10`), como en la captura. Con el plano entero a la vista no debe tapar ninguna butaca:
   - **en cuadrícula**, el contenido transformado reserva 64 px abajo (`pb-16` desde `sm`);
-  - **en arco**, sin franja: el lienzo 16:10 deja margen a los lados del plano (el `<svg>` mide lo mismo que el lienzo, que es lo que mide el minimapa para su recuadro). Holgura mínima medida entre la pastilla y la butaca más cercana: 13.5 px a 640, 32.8 px a 700, 49.5 px a 768 y 76.5 px a 1440 (Tribuna Oriente, `oriente-J-9`).
+  - **en arco**, según el ancho del lienzo:
+    - **lienzo estrecho (< 672 px**, p. ej. 576 a 640 de ventana o 516 a 1024): la misma franja de 64 px abajo (`sm:@max-2xl:pb-16`). El margen lateral del 16:10 no basta para la pastilla (a 516 px de lienzo la tocaba en `oriente-J-9`), y con la franja el plano queda siempre por encima de ella;
+    - **lienzo ancho (≥ 672 px):** sin franja; el margen lateral del 16:10 aloja la pastilla.
+    - El minimapa descuenta la franja de su recuadro (alto del lienzo − alto del `<svg>`, en `getVisiblePlanRect({ insetBottom })`).
+    - Holgura mínima medida entre la pastilla y la butaca o letra más cercana (barrido de 640 a 1440 cada 20 px y de 1024 a 1100 cada 4 px): 56 px a 640, 39.6 px a 1024, 49.2 px a 1060, 44.3 px a 1180 (justo en el umbral), 45.6 px a 740 y 76.5 px a 1440 (Tribuna Oriente). Mínimo global: 39.6 px.
+    - Coste: con la franja, el plano entero a la vista es más pequeño (butaca de 15.5 px a 1024 y 17.7 px a 640, frente a 19.3 y 21.5 sin ella); se acerca con el zoom.
   - Con zoom, el paneo saca las butacas de debajo.
 - Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
 
@@ -199,7 +205,7 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 - `<svg class="group/plan block size-full select-none">` con `viewBox` = `seatViewBox` (≤ 400 de ancho). A 375 px el pitch de 32 unidades (área de toque transparente de 32 × 32) mide ≥ 24 px con el plano entero a la vista.
 - **En cuadrícula** (zona sin `planTransform`): escenario arriba, barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest`.
 - **En arco** (con `planTransform`, p. ej. las tribunas del festival): **sin** barra "ESCENARIO" (contradecía la orientación del sector); el `<svg>` lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo.
-- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, con el plano entero a la vista ~16 px en arco (lienzo 16:10) y 18–22 px en cuadrícula a 1440, y ~10 px a 375: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
+- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, con el plano entero a la vista ~16 px en arco con el lienzo ancho (lienzo 16:10; ~8–11 px con el lienzo estrecho y su franja) y 18–22 px en cuadrícula a 1440, y ~10 px a 375: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
   - en cuadrícula, en los dos márgenes (`x = 20` y `x = ancho − 20`, a la altura de la fila);
   - en arco, siguiendo la curva: en `getRowEdgeLabelPoints(row).start` y `.end` (a 0.8 pitch por fuera de la primera y la última butaca).
 
@@ -216,10 +222,11 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 
 ### Minimapa (`SeatPlanMinimap`, solo en arco)
 
-- SVG `aria-hidden` (sin foco) con el `viewBox` del mapa: `h-auto w-24 md:w-28 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border`. Escenario `fill-brand-navy`, zonas `fill-secondary` y la zona abierta `fill-primary`.
-- **Recuadro de la vista:** `fill-none stroke-foreground`, 2 px no escalables. Con el plano entero a la vista rodea todo el sector; al acercar o pellizcar se reduce y sigue al paneo (lee la transformación con `useTransformEffect` y el tamaño del lienzo).
+- SVG `aria-hidden` (sin foco) con el `viewBox` del mapa: `h-auto w-24 @2xl:w-28 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border`. Escenario `fill-brand-navy`, zonas `fill-secondary` y la zona abierta `fill-primary`.
+- **Recuadro de la vista:** `fill-none stroke-foreground`, 2 px no escalables. Con el plano entero a la vista rodea todo el sector; al acercar o pellizcar se reduce y sigue al paneo (lee la transformación con `useTransformEffect`, el tamaño del lienzo y el alto del `<svg>`, para descontar la franja inferior cuando la hay). Medido frente a las esquinas del lienzo pasadas al plano: diferencia ≤ 0.2 unidades del mapa (< 0.05 px en el minimapa) con el plano entero, tras Acercar y tras panear, en todos los anchos.
 - **Posición:** envuelto en `<div class="pointer-events-none flex sm:absolute sm:top-3 sm:left-3 sm:z-10">`.
-  - Desde `sm`, superpuesto arriba a la izquierda del lienzo, en el margen lateral del 16:10. Holgura mínima medida con la butaca más cercana: 28.2 px a 640 (`occidente-J-9`) y ≥ 38 px desde 700.
+  - **Ancho según el lienzo** (`@2xl:w-28`, contenedor del lienzo): 96 px con el lienzo estrecho (< 672 px, también a 375 en la barra) y 112 px con el ancho. Con `md:w-28` (ventana) medía 112 px a 1024 sobre un lienzo de 516 y tapaba `occidente-J-8` y `occidente-J-9`.
+  - Desde `sm`, superpuesto arriba a la izquierda del lienzo, en el margen lateral del 16:10. Holgura mínima medida con la butaca o letra más cercana (mismo barrido): 54.8 px a 640, 40.7 px a 1024, 49.2 px a 1060, 34.9 px a 1180 (umbral, ya a 112 px), 35.9 px a 740 y 58.7 px a 1440 (Tribuna Occidente, `occidente-J-8`/`J-9`). Mínimo global: 34.9 px.
   - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
   - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 

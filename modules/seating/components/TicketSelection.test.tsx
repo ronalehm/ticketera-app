@@ -683,14 +683,20 @@ describe("TicketSelection · plano en arco", () => {
     expect(overlay.parentElement).toBe(zoomGroup().parentElement);
   });
 
-  it("el lienzo es apaisado desde sm, sin franja inferior, y conserva la proporción del plano en móvil", () => {
+  it("el lienzo es apaisado desde sm, con franja inferior solo si es estrecho y minimapa según su ancho, y conserva la proporción del plano en móvil", () => {
     openOriente();
 
     const svg = planGroup("Tribuna Oriente");
     const canvas = svg.closest<HTMLElement>(".touch-none")!;
     expect(canvas.className).toContain("sm:aspect-[16/10]");
     expect(canvas.style.getPropertyValue("--plan-aspect")).toBe(ARC_ZONE.seatViewBox.split(" ").slice(2).join(" / "));
-    expect(svg.parentElement!.className).not.toContain("sm:pb-16");
+    // Franja inferior para el zoom solo con el lienzo estrecho (< 42rem), nunca sin condición.
+    const strip = svg.parentElement!.classList;
+    expect(strip).toContain("sm:@max-2xl:pb-16");
+    expect(strip).not.toContain("sm:pb-16");
+    // El bloque del lienzo es el contenedor de las consultas `@`; el minimapa crece con su ancho.
+    expect(canvas.parentElement!.classList).toContain("@container");
+    expect(minimap(ARC_MAP)!.classList).toContain("@2xl:w-28");
   });
 
   it("pinta 2 letras por fila de 13 unidades en los puntos de getRowEdgeLabelPoints y sin barra 'ESCENARIO'", () => {
