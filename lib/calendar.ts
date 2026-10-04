@@ -13,7 +13,7 @@ type IcsEventInput = {
 
 const CRLF = "\r\n";
 const MAX_LINE_OCTETS = 75;
-const UID_DOMAIN = "mentectickets.pe";
+const UID_DOMAIN = "ticketera-mentec.dev";
 
 const encoder = new TextEncoder();
 

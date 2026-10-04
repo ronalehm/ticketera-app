@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Run: npx vitest run .claude/hooks
-import { test } from "vitest";
+import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync, execSync } from "node:child_process";
 import { appendFileSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -8,6 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const HOOK = join(import.meta.dirname, "spec-approval.mjs");
+
+// Cada test lanza varios procesos node: con la suite completa en paralelo superan los 5 s por defecto.
+vi.setConfig({ testTimeout: 30_000 });
 
 function project() {
   const dir = mkdtempSync(join(tmpdir(), "spec-approval-"));

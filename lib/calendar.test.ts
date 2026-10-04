@@ -57,7 +57,7 @@ describe("buildIcsEvent", () => {
   it("genera un UID estable para la misma entrada y distinto para otra", () => {
     const uid = getProperty(buildIcsEvent(baseInput), "UID");
 
-    expect(uid).toMatch(/^UID:[0-9a-f]{8}@mentectickets\.pe$/);
+    expect(uid).toMatch(/^UID:[0-9a-f]{8}@ticketera-mentec\.dev$/);
 
     vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
     expect(getProperty(buildIcsEvent({ ...baseInput, description: "Otra" }), "UID")).toBe(uid);
@@ -68,7 +68,7 @@ describe("buildIcsEvent", () => {
   });
 
   it("mantiene el UID fijado para la misma entrada", () => {
-    expect(getProperty(buildIcsEvent(baseInput), "UID")).toBe("UID:b9c9de17@mentectickets.pe");
+    expect(getProperty(buildIcsEvent(baseInput), "UID")).toBe("UID:b9c9de17@ticketera-mentec.dev");
   });
 
   it("escapa comas, punto y coma, barras invertidas y saltos de línea", () => {
