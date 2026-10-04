@@ -21,7 +21,7 @@ Footer navy          (layout del grupo (site))
 
 - `app/(site)/page.tsx` es un Server Component que solo compone, en este orden. `OrganizerBanner` y `TrustHighlights` no están en el diseño de referencia pero se conservan entre las dos secciones nuevas.
 - Un solo `<h1>` en `/` (el del hero). Las secciones nuevas usan `h2` y `h3`.
-- Ambas secciones: `<section>` sobre `bg-background`, contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8`, `py-12 md:py-16`.
+- Ambas secciones: `<section>` sobre `bg-background`, contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8`; "Cómo funciona" con `py-12 md:py-16` y el newsletter, más compacto, con `py-10 md:py-12`.
 
 ## "Cómo funciona" (`HowItWorks`)
 
@@ -96,54 +96,49 @@ Tres pasos y ya estás dentro.
 
 `NewsletterSignup` es Server Component (bloque y textos); solo `NewsletterForm` es cliente. Envío **simulado**: `subscribeToNewsletter` (service mock, 600 ms) no hace peticiones de red ni guarda el correo.
 
+Versión **minimalista**: sin tarjeta de color ni bloque grande. La sección va sobre `bg-background`; la separa de `TrustHighlights` (`bg-muted`) el propio cambio de fondo, sin `border-t` ni sombras. Sin colores nuevos.
+
 ### Escritorio (`lg+`, referencia 1440 px)
 
 ```
-┌─ rounded-3xl bg-accent ─────────────────────────────────────────────────────────┐
-│                                                                                 │
-│  No te pierdas ningún evento                  ┌─────────────────────┐ ┌────────────┐
-│  Suscríbete y recibe las novedades de tus     │ ✉ tu@email.com      │ │ Suscribirme│
-│  artistas y equipos favoritos.                └─────────────────────┘ └────────────┘
-│                                               ✓ ¡Listo! Te enviaremos las novedades a …
-└─────────────────────────────────────────────────────────────────────────────────┘
+TrustHighlights (bg-muted)
+──────────────────────────────────────────────────────────────────────────────────
+  No te pierdas ningún evento                          ┌─────────────────────────────────┐
+  Suscríbete y recibe las novedades de tus artistas…   │ ✉ tu@email.com    [Suscribirme] │
+                                                       └─────────────────────────────────┘
+                                                       ✓ ¡Listo! Te enviaremos las novedades a …
 Footer
 ```
 
-- `<section aria-labelledby="newsletter-title">`. Bloque `rounded-3xl bg-accent px-6 py-8 md:px-12 md:py-14 lg:px-16`.
-- `lg+`: `flex items-center justify-between gap-12`; textos a la izquierda (`max-w-xl`), formulario a la derecha.
+- `<section aria-labelledby="newsletter-title" class="bg-background">`. Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8` con `py-10 md:py-12` (menos que el resto de secciones).
+- `lg+`: fila compacta `flex items-start justify-between gap-12`; textos a la izquierda (`lg:pt-2` para alinear el título con el campo), formulario a la derecha (`max-w-md`).
 
-### Móvil (`< lg`, referencia 375 px)
+### Móvil y tablet (`< lg`, referencia 375 px)
 
 ```
-┌─ rounded-3xl bg-accent ─────┐
-│ No te pierdas ningún evento │
-│ Suscríbete y recibe las     │
-│ novedades de tus artistas…  │
-│ ┌─────────────────────────┐ │  input h-12, ancho completo
-│ │ ✉ tu@email.com          │ │
-│ └─────────────────────────┘ │
-│ ┌─────────────────────────┐ │  botón h-12, ancho completo
-│ │       Suscribirme       │ │
-│ └─────────────────────────┘ │
-└─────────────────────────────┘
+No te pierdas ningún evento
+Suscríbete y recibe las novedades de tus
+artistas y equipos favoritos.
+┌─────────────────────────────────┐
+│ ✉ tu@email.com    [Suscribirme] │   una sola pieza, h-13
+└─────────────────────────────────┘
 ```
 
-- `< lg`: columna con `gap-6`. Desde `sm` el input (`sm:w-80`, `lg:w-90`) y el botón (`sm:w-auto`) van en la misma fila.
-- Input y botón de 48 px de alto (≥ 44 px). Sin scroll horizontal.
+- `< lg`: columna con `gap-5`, alineada a la izquierda. El formulario ocupa el ancho completo y desde `sm` se limita a `max-w-md`.
+- Campo y botón siguen unidos también a 375 px (no se apilan): el input conserva ~197 px útiles. Sin scroll horizontal.
 
 ### Anatomía
 
 | Parte | Clases / comportamiento |
 |---|---|
-| h2 | `id="newsletter-title"` "No te pierdas ningún evento", `text-2xl font-bold tracking-tight md:text-3xl`. |
-| Párrafo | "Suscríbete y recibe las novedades de tus artistas y equipos favoritos.", `text-base leading-relaxed text-muted-foreground` (5.5:1 sobre `--accent`). |
-| Formulario | `<form noValidate>` con `useZodForm(newsletterSchema, { email: "" })`; `newsletterSchema = z.object({ email: emailField })`. |
-| Fila | `flex flex-col gap-3 sm:flex-row sm:items-start`: el error bajo el input no estira el botón. |
+| h2 | `id="newsletter-title"` "No te pierdas ningún evento", `text-xl font-semibold tracking-tight md:text-2xl`. |
+| Párrafo | "Suscríbete y recibe las novedades de tus artistas y equipos favoritos.", `mt-1 text-sm text-muted-foreground` (una línea desde `md`). |
+| Formulario | `<form noValidate class="w-full sm:max-w-md">` con `useZodForm(newsletterSchema, { email: "" })`; `newsletterSchema = z.object({ email: emailField })`. |
 | Label | `FieldLabel htmlFor="newsletter-email" className="sr-only"` "Correo electrónico" (visible solo para lectores de pantalla; el placeholder no sustituye al label). |
-| Input | `InputGroup` `h-12 bg-background` + `InputGroupAddon` con `Mail` (`aria-hidden`) + `InputGroupInput` `id="newsletter-email" type="email" autoComplete="email" placeholder="tu@email.com"`. |
-| Error | `FieldError id="newsletter-email-error"` (`role="alert"`). Vacío → "Ingresa tu correo electrónico"; formato → "Ingresa un correo electrónico válido". El input lleva `aria-invalid` y `aria-describedby="newsletter-email-error"` solo con error. |
-| Botón | `Button type="submit"` "Suscribirme", `h-12 px-6 font-semibold cursor-pointer duration-200 hover:bg-primary-strong`, `w-full sm:w-auto`. Durante el envío: `disabled`, `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Suscribiendo…". |
-| Estado | `<p role="status">` `mt-3 text-sm font-medium text-foreground`, **siempre en el DOM**, vacío hasta el éxito: `CircleCheck` (`aria-hidden`) + "¡Listo! Te enviaremos las novedades a {email}.". Se vacía al empezar otro envío o al editar el campo. |
+| Campo + botón | Una sola pieza: `InputGroup` `h-13 rounded-xl border-border bg-background` (borde sutil de 1 px; conserva los estados de foco `ring` e inválido `destructive` del `InputGroup`) con `InputGroupAddon` `Mail` (`aria-hidden`), `InputGroupInput` `id="newsletter-email" type="email" autoComplete="email" placeholder="tu@email.com"` y, a la derecha, `InputGroupAddon align="inline-end"` con el botón. |
+| Error | `FieldError id="newsletter-email-error"` (`role="alert"`) bajo la pieza. Vacío → "Ingresa tu correo electrónico"; formato → "Ingresa un correo electrónico válido". El input lleva `aria-invalid` y `aria-describedby="newsletter-email-error"` solo con error. |
+| Botón | `Button type="submit"` "Suscribirme" dentro del campo, `h-11 rounded-lg px-4 sm:px-5 font-semibold cursor-pointer duration-200 hover:bg-primary-strong` (44 px de alto, inset 4 px en la pieza de 52 px). Durante el envío: `disabled`, `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Suscribiendo…". |
+| Estado | `<p role="status">` `mt-2 text-sm font-medium text-foreground`, **siempre en el DOM**, vacío hasta el éxito: `CircleCheck` (`aria-hidden`) + "¡Listo! Te enviaremos las novedades a {email}.". Se vacía al empezar otro envío o al editar el campo. |
 
 ### Comportamiento
 

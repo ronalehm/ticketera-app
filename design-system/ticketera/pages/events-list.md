@@ -1,7 +1,7 @@
 # Página: listado de eventos `/eventos`
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
-> Spec: `docs/specs/events-ui-refresh.md` (Fases 1 y 4). Reemplaza el layout anterior (buscador completo, chips de categoría en todos los anchos y "N eventos encontrados"). La Fase 4 fija el h1 "Explora eventos", unifica el buscador píldora con la landing y rediseña `EventCard`.
+> Spec: `docs/specs/events-ui-refresh.md` (Fases 1 y 4). Reemplaza el layout anterior (buscador completo, chips de categoría en todos los anchos y "N eventos encontrados"). La Fase 4 fija el h1 "Explora eventos", unifica el buscador píldora con la landing y rediseña `EventCard`. La Fase 2 de `docs/specs/design-alignment-purchase-flow.md` compacta el buscador por debajo de `md` (lupa, texto y "Buscar" en una fila) y, en `lg`, junta el contador, los chips y "Ordenar por" en una sola fila.
 
 ## Layout
 
@@ -12,8 +12,8 @@ Header sticky   (igual que la landing)
 Título          h1 "Explora eventos" (fijo, con o sin filtros); único h1
 Buscador        EventSearchBar (píldora): [Qué quieres ver ________ │ Fecha ▾ │ Precio ▾  (⌕ Buscar)]
 ┌────────────── 288px ──────────────┬──────────────────────────────────────────────┐
-│ ⚙ Filtros                 Limpiar │                     Ordenar por [Fecha|Precio más bajo]
-│ ─────────────────────────────────│ 12 eventos   (Teatro ×) (Lima ×) (S/ 100 – S/ 200 ×)
+│ ⚙ Filtros                 Limpiar │ 12 eventos (Teatro ×) (Lima ×)    Ordenar por [Fecha|Precio más bajo]
+│ ─────────────────────────────────│   ↑ una sola fila; si los chips no caben, bajan de línea y el orden se queda arriba
 │ Categoría                         │ ┌──────┐ ┌──────┐ ┌──────┐
 │ ☐ Conciertos                    2 │ │ Card │ │ Card │ │ Card │   xl: 3 columnas
 │ …                                 │ └──────┘ └──────┘ └──────┘   lg: 2 columnas
@@ -29,14 +29,9 @@ Footer          (igual que la landing)
 
 ```
 Título "Explora eventos"
-┌ Qué quieres ver ────────────┐  buscador píldora: segmentos apilados (56 px)
-│ Artista, evento o ciudad    │  con divisores horizontales
-├ Fecha ──────────────────────┤
-│ Cualquier fecha           ▾ │
-├ Precio ─────────────────────┤
-│ Cualquier precio          ▾ │
-│ [        ⌕ Buscar         ] │  botón a todo el ancho
-└─────────────────────────────┘
+┌─────────────────────────────┐  buscador compacto (< md): una fila de 56 px con
+│ ⌕ Artista, evento… [Buscar] │  lupa, campo y "Buscar" (solo texto); Fecha y Precio
+└─────────────────────────────┘  se eligen en el panel de filtros. Desde md (tablet): la píldora de md+
 [⚙ Filtros (3)]                 [Fecha|Precio más bajo]   ← una sola fila a 375 px
 (Todas)(Conciertos)(Teatro)…  → pills con scroll horizontal propio
 12 eventos  (Lima ×)(Cusco ×)(Hasta S/ 50 ×)
@@ -54,19 +49,19 @@ Título "Explora eventos"
 - h1: "Explora eventos" siempre (también con una sola categoría filtrada: la categoría ya se ve en la casilla, el chip y la pill). `text-3xl md:text-5xl font-extrabold tracking-tight`, `pt-8 md:pt-12`.
 - Cuerpo: `grid gap-8 lg:grid-cols-[288px_minmax(0,1fr)] lg:items-start lg:gap-10`, `py-8 md:py-12`.
 - Columna de resultados: `<section aria-label="Resultados">` `flex min-w-0 flex-col gap-4 md:gap-6` (`min-w-0` evita que las pills empujen el ancho).
-- Fila Filtros + Orden: `flex flex-wrap items-center justify-between gap-2`; en `lg` solo queda el orden, alineado a la derecha (`lg:justify-end`). A 375 px ocupa ~337 px de los 343 disponibles (anchos de texto medidos con Creato Display); `flex-wrap` es solo red de seguridad.
+- Fila Filtros + Orden: `flex flex-wrap items-center justify-between gap-2 lg:hidden`, con `EventFiltersSheet` y `EventsSort` (sin clase de ancho). En `lg` desaparece entera: el orden pasa a la fila del contador (ver "Contador + chips"). A 375 px ocupa ~337 px de los 343 disponibles (anchos de texto medidos con Creato Display); `flex-wrap` es solo red de seguridad.
 
 ## Componentes
 
 | Bloque | Componente | Notas |
 |---|---|---|
-| Buscador | `EventSearchBar months={months} defaultValues={filters}` (server) | Barra píldora única, la misma que la landing (ver "Buscador píldora"). Conserva los filtros que no muestra (`categoria`, `ciudad`, `fecha`, `orden`) con `<input type="hidden">`. |
+| Buscador | `EventSearchBar months={months} defaultValues={filters}` (server) | Barra píldora única, la misma que la landing (ver "Buscador píldora"); compacta por debajo de `md`. Conserva los filtros que no muestra (`categoria`, `ciudad`, `fecha`, `orden`) con `<input type="hidden">`. |
 | Barra lateral | `EventFiltersSidebar` (server) | `<aside aria-labelledby>`, tarjeta `rounded-2xl bg-card p-6 ring-1 ring-border`, `hidden lg:block`. h2 "Filtros" con `SlidersHorizontal`. "Limpiar" solo si hay `categoria`, `ciudad`, `mes`, `fecha` o `precio`; conserva `q` y `orden`. |
 | Panel | `EventFiltersForm` (cliente) | `fieldset` + `legend`: "Categoría" (6 casillas), "Ciudad" (5 casillas), "Fecha" ("Cualquier fecha" + meses), "Precio desde" ("Cualquier precio" + 5 rangos). Opción = `<label>` `h-11`; input nativo `size-5 accent-primary cursor-pointer`. Conteo visible `tabular-nums text-muted-foreground` + texto `sr-only` → nombre accesible "Teatro, 2 eventos". |
 | Filtros móvil | `EventFiltersSheet` (cliente) | Botón outline `h-11` "Filtros" + contador `rounded-full bg-primary text-primary-foreground` (nº ciudades + mes + precio; nombre accesible "Filtros, n activos"). `Sheet` `side="right"` a pantalla completa: cabecera "Filtros" + cerrar `size-11` "Cerrar filtros"; cuerpo con scroll ("Ciudad", "Fecha", "Precio desde"); pie fijo "Limpiar" (outline, quita `ciudad`/`mes`/`precio`) + "Ver n eventos" (primario, cierra). |
 | Pills | `CategoryFilter` | Solo `< lg` (`lg:hidden`). Enlaces de selección única ("Todas" + 6), `aria-current="page"` en la activa, `h-11 rounded-full`, scroll horizontal propio sin barra. |
-| Orden | `EventsSort` (server) | `role="group"` "Ordenar por" (etiqueta visible desde `sm`, `sr-only` en móvil). Contenedor `rounded-xl ring-1 ring-border p-1`; enlaces `h-11`; el activo `aria-current="true"` + `bg-primary text-primary-foreground font-semibold`. |
-| Contador + chips | `EventsResults` | `<p aria-live="polite" aria-atomic="true">` "n eventos" / "1 evento" (`text-base font-bold`). Chips en `flex-wrap`: categorías → ciudades → mes → fecha → precio. Enlace a la URL sin ese valor, label + `X` (`aria-hidden`), `aria-label="Quitar filtro <label>"`, `h-11 rounded-full bg-accent text-accent-foreground ring-1 ring-primary/30`. Sin chip para `q` ni `orden`. |
+| Orden | `EventsSort` (server) | `role="group" aria-label="Ordenar por"`. El texto visible "Ordenar por" (`sr-only sm:not-sr-only`) es `aria-hidden` y no lleva `id`. Se pinta dos veces, una por ancho: en la fila Filtros + Orden (`lg:hidden`) y, en `lg`, al final de la fila del contador (`className="hidden shrink-0 lg:flex"`, por la prop `sort` de `EventsResults`). Con `display: none` solo uno está visible y en el árbol de accesibilidad en cada ancho, sin ids repetidos. Contenedor `rounded-xl ring-1 ring-border p-1`; enlaces `h-11`; el activo `aria-current="true"` + `bg-primary text-primary-foreground font-semibold`. |
+| Contador + chips | `EventsResults` (prop `sort?: ReactNode`) | Fila `flex items-start justify-between gap-4`: a la izquierda, bloque `flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 lg:min-h-13` (contador + chips); a la derecha, `{sort}`. `lg:min-h-13` (52 px) iguala el alto del grupo de orden (`p-1` + enlaces de 44 px), así que la primera línea de chips queda centrada con él; si los chips ocupan varias líneas, el orden se queda arriba a la derecha. Sin filtros: "N eventos" a la izquierda y el orden a la derecha. Orden del DOM = orden visual: contador, chips, orden. Contador: `<p aria-live="polite" aria-atomic="true">` "n eventos" / "1 evento" (`text-base font-bold`). Chips en `flex-wrap`: categorías → ciudades → mes → fecha → precio. Enlace a la URL sin ese valor, label + `X` (`aria-hidden`), `aria-label="Quitar filtro <label>"`, `h-11 rounded-full bg-accent text-accent-foreground ring-1 ring-primary/30`. Sin chip para `q` ni `orden`. |
 | Grilla | `EventsResults` + `EventCard layout="ticket"` | `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`, `gap-4 md:gap-6`. |
 | Tarjeta | `EventCard layout="ticket"` | `< sm` horizontal tipo entrada; desde `sm` idéntica a `grid`. Ver "Tarjeta de evento". |
 | Vacío | `EventsResults` | `rounded-2xl border-2 border-dashed border-border bg-card p-12 text-center`: icono `Search` en `size-14 rounded-2xl bg-accent text-primary-strong`, "No encontramos eventos con esos filtros" (`text-xl font-bold`), "Prueba quitando algún filtro o buscando otra ciudad." (`text-muted-foreground`) y botón primario `h-11` "Limpiar filtros" → `/eventos`. |
@@ -76,6 +71,11 @@ Título "Explora eventos"
 Server Component, el mismo en `/eventos` y en la landing (sin prop `variant`). Props: `{ months: MonthOption[]; defaultValues?: EventFilters; className?: string }`. `/eventos` pasa los `months` que ya calcula (los de la barra lateral) y `defaultValues={filters}`; la landing pasa `getEventMonths(events)` y nada más.
 
 ```
+< md  ┌──────────────────────────────────────┐
+      │ ⌕  Artista, evento o ciudad [Buscar] │  56 px: p-1.5 + controles de 44 px
+      └──────────────────────────────────────┘
+        lupa + campo (min-w-0 flex-1)  botón (shrink-0, solo texto)
+
 md+   ┌──────────────────────────────────────────────────────────────────────────┐
       │ Qué quieres ver            │ Fecha            │ Precio           │ (⌕ Buscar) │
       │ Artista, evento o ciudad   │ Cualquier fecha ▾│ Cualquier precio▾│             │
@@ -86,17 +86,19 @@ md+   ┌───────────────────────�
 | Parte | Clases / comportamiento |
 |---|---|
 | Contenedor | `<section aria-label="Buscar eventos">` con `mx-auto max-w-7xl px-4 md:px-6 lg:px-8`; `<form action="/eventos" method="get" role="search">`. |
-| Píldora | `rounded-2xl bg-card ring-1 ring-border shadow-lg shadow-foreground/5 p-2`. |
-| Segmento | Bloque `relative rounded-xl hover:bg-accent/60`. `<label htmlFor>` absoluto `top-2 left-4 pointer-events-none text-xs font-bold text-foreground`. El control ocupa todo el segmento: `h-14` (56 px), `rounded-xl`, sin borde ni sombra, `pt-5 px-4`, foco `focus-visible:ring-2 focus-visible:ring-ring`. |
-| "Qué quieres ver" | `Input type="search" name="q"`, placeholder "Artista, evento o ciudad". Sin icono (la lupa va en el botón). Busca en título, lugar y ciudad. |
+| Píldora | `rounded-2xl bg-card ring-1 ring-border shadow-lg shadow-foreground/5`. `< md`: `flex items-center gap-2 p-1.5` (56 px de alto); `md+`: la grilla con `md:gap-0 md:p-2`. |
+| Segmento | Bloque `relative rounded-xl hover:bg-accent/60`. `<label htmlFor>` absoluto `top-2 left-4 pointer-events-none text-xs font-bold text-foreground`, con `max-md:sr-only`: sigue en el DOM y da el nombre accesible en todos los anchos. En `md+` el control ocupa todo el segmento: `h-14` (56 px), `rounded-xl`, sin borde ni sombra, `pt-5 px-4`, foco `focus-visible:ring-2 focus-visible:ring-ring`. Los tres segmentos van en un bloque `min-w-0 flex-1` (`< md`) que en `md+` es `md:col-span-3 md:grid md:grid-cols-subgrid md:divide-x`. |
+| "Qué quieres ver" | `Input type="search" name="q"`, placeholder "Artista, evento o ciudad". Busca en título, lugar y ciudad. `< md`: lupa `Search` `size-5 text-muted-foreground` absoluta a la izquierda (`left-3`, centrada con `top-1/2 -translate-y-1/2`), `aria-hidden`, `pointer-events-none`, `md:hidden`; el `Input` mide `h-11` con `pl-10 pr-4`, sin hueco superior para la etiqueta. `md+`: sin icono (la lupa va en el botón), `md:h-14 md:pt-5 md:pl-4`. |
 | "Fecha" | `NativeSelect name="mes"`: "Cualquier fecha" (`value=""`) + los meses con eventos ("Noviembre 2026"…), los mismos que la barra lateral. `className` va al wrapper; el `<select>` se estiliza con `*:data-[slot=native-select]:…`. |
 | "Precio" | `NativeSelect name="precio"`: "Cualquier precio" (`value=""`) + los 5 rangos de `PRICE_RANGES`. |
-| Botón | `Button type="submit"` "Buscar" con `Search` (`aria-hidden`), `h-12 rounded-xl px-6 font-semibold hover:bg-primary-strong`. |
-| `< md` | Segmentos apilados a todo el ancho con `divide-y divide-border`; botón `mt-2 w-full` debajo. |
+| Fecha y Precio `< md` | Segmentos con `max-md:hidden`. Siguen en el `<form>` y se envían: un control con `display: none` viaja igual en un GET, así que buscar desde el móvil conserva `mes` y `precio` de la URL (sus `defaultValue`). En móvil se cambian en el panel de filtros (`EventFiltersSheet`). |
+| Botón | `Button type="submit"` "Buscar", `rounded-xl font-semibold hover:bg-primary-strong`. `< md`: `h-11 w-auto shrink-0 px-4`, solo texto (el icono lleva `max-md:hidden`). `md+`: `md:ml-2 md:h-12 md:px-6` con `Search` (`aria-hidden`). |
+| `< md` | Una fila compacta de 56 px: lupa + "Qué quieres ver" (`min-w-0 flex-1`) y "Buscar" a la derecha, dentro de la píldora. Sin etiqueta visible, Fecha ni Precio. |
 | `md+` | Una fila `grid-cols-[minmax(0,1fr)_minmax(0,11rem)_minmax(0,11rem)_auto] items-center` (`lg`: selects a `13rem`); divisores verticales `md:divide-x` solo entre los tres segmentos, no junto al botón; botón a la derecha dentro de la píldora. |
 
 - **Orden del DOM y de la query:** `q`, `mes`, `precio`, los ocultos y el botón. Ej.: desde `/eventos?categoria=deportes&orden=precio` → `/eventos?q=nacional&mes=2026-11&precio=50-100&categoria=deportes&orden=precio`.
 - **`<select>` nativo** (no el `Select` de Base UI): funciona sin JS, abre el selector nativo en móvil y se maneja con flechas.
+- En la landing móvil no se filtra por fecha ni por precio desde el buscador: se hace en `/eventos`, en el panel de filtros.
 - `fecha` y `ciudad` siguen admitidos en la URL (barra lateral, chips, enlaces antiguos), pero el buscador ya no los genera: la ciudad se busca escribiendo en "Qué quieres ver".
 
 ### Sincronización buscador ↔ panel
@@ -172,7 +174,9 @@ grid (y ticket desde sm)
 ### Accesibilidad
 
 - Un único h1 ("Explora eventos"); h2 "Filtros" en la barra lateral y h2 `sr-only` "Resultados".
-- Buscador: Tab "Qué quieres ver" → "Fecha" → "Precio" → "Buscar"; segmentos de 56 px y botón de 48 px. Tarjeta: se alcanzan el título y "Ver entradas" (44 px), no la imagen; el chip de fecha es decorativo y la fecha está en texto; el estado siempre con texto.
+- Buscador: en `md+`, Tab "Qué quieres ver" → "Fecha" → "Precio" → "Buscar", con segmentos de 56 px y botón de 48 px. En `< md`, Tab "Qué quieres ver" → "Buscar" (Fecha y Precio, con `display: none`, no reciben foco), con campo y botón de 44 px en una píldora de 56 px; la etiqueta `sr-only` mantiene el nombre "Qué quieres ver".
+- Orden: un solo grupo "Ordenar por" en el árbol de accesibilidad en cada ancho, con dos enlaces y el activo con `aria-current="true"`. En `lg`, tras la barra lateral, el Tab recorre los chips, después "Fecha" y "Precio más bajo", y después las tarjetas.
+- Tarjeta: se alcanzan el título y "Ver entradas" (44 px), no la imagen; el chip de fecha es decorativo y la fecha está en texto; el estado siempre con texto.
 - Todo control interactivo mide ≥ 44 px de alto (`h-11`) y tiene foco visible.
 - Nada se comunica solo con color: orden activo con `aria-current="true"`, pill activa con `aria-current="page"`, contador del botón con texto `sr-only`.
 - Sin scroll horizontal de página a 375 / 768 / 1024 / 1440 (las pills hacen scroll dentro de su `nav`; el pie de la tarjeta hace `flex-wrap` si el CTA no cabe, p. ej. en el carrusel de relacionados con `w-64`).

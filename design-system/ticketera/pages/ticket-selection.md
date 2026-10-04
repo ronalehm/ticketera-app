@@ -1,15 +1,16 @@
 # Página: selección de entradas `/eventos/[slug]/entradas`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md` y `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md`, `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra).
 
-Paso 1 de 3 de la compra. Solo existe para los eventos con mapa del recinto (`hasVenueMap`); el resto da el 404 del evento ("No encontramos este evento").
+Paso 1 de 3 de la compra. Solo existe para los eventos con mapa del recinto (`hasVenueMap`); el resto da el 404 del evento ("No encontramos este evento"), que se muestra con el header y el footer del sitio (`app/(purchase)/eventos/[slug]/not-found.tsx` con `SiteShell`): quien llega a un evento inexistente no está comprando.
 
 ## Layout
 
 ```
-Header sticky     (igual que la landing)
-Stepper           franja border-b: ① Entradas — ② Datos y pago — ③ Confirmación · "Compra segura"
-                  (móvil: "Paso 1 de 3" + "Elige tus entradas" + barra de progreso al 33 %)
+Cabecera de compra  PurchaseShell currentStep={1}, flecha "Volver al evento":
+                    logo · ① Entradas — ② Datos y pago — ③ Confirmación · "Compra segura"
+                    (< lg: [←] "Paso 1 de 3" / "Elige tus entradas" · candado + barra al 33 %)
+Fondo bg-muted
 ← Volver al evento
 [mini] h1 Título del evento
        SÁB 14 NOV · 21:00 · Estadio Nacional, Lima
@@ -33,13 +34,15 @@ Sub-paso 2 (sustituye al mapa y las tarjetas dentro de la misma tarjeta):
 │ [plano de butacas]  ó  [panel Cantidad − n + / Subtotal] │
 
 Barra inferior (< lg)  Total · 0 entradas / S/ 0.00   [⌃ Ver resumen] [Continuar →]
-Footer            (igual que la landing)
+(sin footer)
 ```
 
-- Stepper (`components/shared/PurchaseStepper`) fuera del contenedor, a ancho completo, con su propio `max-w-7xl`. Marca "Entradas" durante los dos sub-pasos: "Paso n de 2" es un indicador **interno** del paso, no un segundo stepper.
-- Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 lg:pb-12`, `flex flex-col gap-6`. Sin padding inferior por debajo de `lg`: la barra móvil es el último elemento y llega al footer.
+- **Pantalla de compra:** la página vive en `app/(purchase)` y compone ``<PurchaseShell currentStep={1} back={{ href: `/eventos/${slug}`, label: "Volver al evento" }}>``, sin el header ni el footer del sitio, sobre fondo `bg-muted`. La cabecera de compra (logo, stepper y "Compra segura" en `lg`; por debajo de `lg`, la flecha "Volver al evento" de 44 px, "Paso 1 de 3" sobre "Elige tus entradas", el candado y la barra al 33 %) se describe en `checkout.md` ("Pantalla de compra"). Las tarjetas son `Card` (`bg-card`) y la barra móvil, `bg-background`: quedan blancas sobre el gris.
+- El stepper marca "Entradas" durante los dos sub-pasos: "Paso n de 2" es un indicador **interno** del paso, no un segundo stepper.
+- El enlace "← Volver al evento" de `EventPurchaseStrip` sigue en el contenido en todos los anchos; por debajo de `lg` la cabecera añade su flecha al mismo destino.
+- Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 lg:pb-12`, `flex flex-col gap-6`. Sin padding inferior por debajo de `lg`: la barra móvil es el último elemento y llega al final de la página.
 - Grilla `lg:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8`. Columna izquierda (`<section aria-labelledby>`, `min-w-0`): **una sola** `Card rounded-2xl gap-5` "Elige tus entradas". Columna derecha: "Tu compra", `hidden lg:flex lg:sticky lg:top-24 self-start`.
-- Barra inferior móvil `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), con `pb-[calc(0.75rem+env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo al desplazarse y no tapa el footer al final.
+- Barra inferior móvil `sticky bottom-0 z-30 lg:hidden`, a ancho completo (`-mx-4 md:-mx-6`), con `pb-[calc(0.75rem+env(safe-area-inset-bottom))]`. Es `sticky`, no `fixed`: se queda pegada abajo al desplazarse y llega al final de la página.
 - **Orden móvil = orden del DOM.** Por breakpoint solo se alternan el resumen (`lg+`) y la barra (`< lg`); `display:none` saca al oculto del árbol de accesibilidad, así que nunca hay duplicados para los lectores.
 - h1 único: título del evento (`text-2xl md:text-3xl font-bold tracking-tight`), junto a una miniatura decorativa `size-13 md:size-16 rounded-xl` (`alt=""`).
 - Tarjetas ("Elige tus entradas", "Tu compra"): `Card rounded-2xl ring-border`, h2 `text-xl font-bold tracking-tight`.
@@ -52,7 +55,7 @@ Footer            (igual que la landing)
   - "Paso 2 de 2 · Elige tus butacas" (zona numerada abierta).
 - **Sub-paso 1** (`flex flex-col gap-5`): mapa y, debajo, tarjetas de zona.
 - **Sub-paso 2** (`flex flex-col gap-4`): cabecera de zona y, debajo, el panel de cantidad (de pie) o el plano de butacas (numerada). El mapa y las tarjetas no están en el DOM.
-- Los sub-pasos viven en estado de cliente, en la misma ruta: no cambian la URL ni el historial ("Atrás" del navegador sale de `/entradas`). La selección (cantidades y butacas) se conserva al cambiar de sub-paso y de zona.
+- Los sub-pasos viven en estado de cliente, en la misma ruta: no cambian la URL ni el historial ("Atrás" del navegador sale de `/entradas`). La selección (cantidades y butacas) se conserva al cambiar de sub-paso y de zona. La URL solo **inicializa** la pantalla (ver "Precarga y entrada por zona desde la URL"): la precarga fija la selección inicial y `?zona=` el sub-paso inicial; la pantalla nunca los escribe ni los borra.
 - **Abrir una zona:** clic, Enter o Espacio sobre su forma en el mapa o sobre su tarjeta. Las agotadas no abren nada.
 
 ### Foco entre sub-pasos
@@ -61,12 +64,13 @@ Footer            (igual que la landing)
 - "Todas las zonas" vuelve al sub-paso 1 y el foco pasa a la tarjeta de la zona que se cerró (`[data-zone-id]`); como cualquier foco en una tarjeta, la resalta.
 - Al quitar el último chip del plano, el foco vuelve al h3 de la zona.
 - El foco nunca se pierde al cambiar de sub-paso, y el cambio se anuncia por el `aria-live` del indicador.
+- Al cargar la página (con o sin precarga, con o sin `?zona=`) el foco no se mueve ni se anuncia nada: la página carga como cualquier otra navegación.
 
 ### Transición
 
 - El sub-paso 2 entra creciendo desde la zona: `motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300 motion-safe:ease-out`, con `transform-origin` en el `labelPos` de la zona (en % del `viewBox` del mapa).
 - Al volver, el sub-paso 1 entra "alejándose" desde la zona cerrada: `motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-105 motion-safe:duration-300`, con el mismo origen.
-- En el primer render no hay animación. Con `prefers-reduced-motion: reduce` no hay ninguna (`motion-safe:`). Sin librería de animación (`tw-animate-css`).
+- En el primer render del sub-paso 1 no hay animación. El sub-paso 2 entra siempre con su transición, también cuando es el primer render por `?zona=` (ver "Entrada por zona"). Con `prefers-reduced-motion: reduce` no hay ninguna (`motion-safe:`). Sin librería de animación (`tw-animate-css`).
 
 ## Tonos por precio (mapa y tarjetas)
 
@@ -320,6 +324,55 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 - El foco se mueve con `preventScroll`; si el plano tiene zoom y el asiento queda fuera de la vista, se centra manteniendo la escala.
 - Zoom solo con los botones (el teclado del plano no hace zoom).
 
+## Precarga y entrada por zona desde la URL
+
+Spec: `docs/specs/seating-stadium-map.md`, Fase 6 (decisiones 15 y 31–33, requisitos 32–39). La URL del paso 1 admite dos tipos de parámetros de **entrada**, que se pueden combinar y solo inicializan el estado: abrir o cerrar zonas, o elegir, no los escribe ni los borra.
+
+| Parámetro | Ejemplo | Efecto |
+|---|---|---|
+| `<ticketTypeId>=<n>` y `asientos=<id>,<id>` (contrato C sin `evento`) | `?campo-vip=2&oriente=2&asientos=oriente-C-3%2Coriente-C-4` | selección inicial (precarga) |
+| `zona=<zoneId>` | `?zona=vip` | sub-paso inicial (el 2 de esa zona) |
+
+`zona`, `asientos` y `evento` son nombres reservados de la URL del paso 1: ningún tipo de entrada puede llamarse así.
+
+### Prerenderizado (`Suspense`)
+
+- La ruta sigue prerenderizada (SSG con `generateStaticParams`, ● en el build) y la página **no lee `searchParams`**: leerlos la volvería dinámica.
+- La página compone, dentro del mismo `PurchaseShell` y tras `EventPurchaseStrip`:
+
+  ```tsx
+  <Suspense fallback={<TicketSelection map={map} />}>
+    <PreselectedTicketSelection map={map} />
+  </Suspense>
+  ```
+
+- `PreselectedTicketSelection` (cliente) lee `useSearchParams()`, lo convierte con `parseSeatingPreselection` (selección) y `parseInitialZoneId` (zona) y renderiza `TicketSelection` con `initialSelection` e `initialZoneId`. `TicketSelection` no lee la URL.
+- El HTML prerenderizado es el `fallback`: la pantalla sin selección en el sub-paso 1. En una carga completa, al hidratar se sustituye por la versión con la URL aplicada. Con navegación de cliente (p. ej. desde el aside del detalle), la URL ya está disponible al montar y se ve directamente el resultado. Sin JavaScript, cualquier enlace lleva a una pantalla útil (el sub-paso 1).
+- Sin parámetros, la pantalla es idéntica a la de antes de la Fase 6.
+
+### Precarga
+
+- **De dónde viene:** de "Cambiar entradas" (y "Volver a entradas") de `/checkout` (`buildChangeTicketsHref`, ver `checkout.md`): `/eventos/<slug>/entradas?<ticketTypeId>=<n>…&asientos=<id>,<id>`. `parseSeatingPreselection` es la inversa de `buildSeatingCheckoutHref` ("Continuar"): ir a checkout, volver y continuar sin cambios da el mismo pedido.
+- **Sub-paso inicial: el 1** (salvo que también venga `zona`). Desde el primer render, las cantidades se ven en las tarjetas ("2 entradas elegidas" / "2 butacas elegidas"), en las insignias del mapa, en "Tu compra" y en la barra móvil ("Total · 4 entradas"), y "Continuar" ya enlaza a checkout. Al abrir una zona numerada, sus butacas aparecen elegidas y se pueden quitar o cambiar como cualquier selección.
+- **Zonas de pie:** `<ticketTypeId>=<n>` con un solo valor entero de 1 a 10.
+- **Zonas numeradas:** su cantidad la dan las butacas válidas de `asientos` (un solo parámetro, ids separados por `,`), en el orden de la URL; su `<ticketTypeId>=<n>` se ignora.
+- **Tolerancia:** lo inválido se ignora uno a uno, **sin avisos ni errores**, y el resto se precarga: butacas ocupadas, inexistentes, repetidas o de otra zona; zonas agotadas; cantidades mal formadas (`abc`, `0`, `11`) o repetidas; `asientos` repetido.
+- **Límite:** nunca más de 10 entradas. Se recorren las zonas en el orden del mapa y se recorta lo que exceda (p. ej. `campo-vip=8&campo-general=5` → Campo VIP 8 y Campo General 2), con el estado de límite de siempre.
+
+### Entrada por zona (`?zona=`)
+
+- **De dónde viene:** de las filas de la tarjeta "Entradas" del aside del detalle (`ZonePricesCard`, ver `event-detail.md`): cada zona comprable enlaza a `/eventos/<slug>/entradas?zona=<zoneId>` (`buildZoneEntryHref`). El botón "Ver mapa de zonas" del aside, el CTA del hero y la barra móvil del detalle llevan a `/entradas` sin `zona` (sub-paso 1).
+- **Efecto:** abre directamente el **sub-paso 2** de esa zona, desde el primer render:
+  - zona de pie: "Paso 2 de 2 · Elige la cantidad", migas "Todas las zonas › <zona>", h3 con " · S/ X c/u" y `ZoneQuantityPanel`;
+  - zona numerada: "Paso 2 de 2 · Elige tus butacas", la cabecera con "0 de 10 butacas" y el plano en arco (fondo del estadio, minimapa y controles).
+  - El mapa y las tarjetas no están en el DOM. El stepper global sigue en "Entradas".
+- **Validación** (`parseInitialZoneId`): se usa solo si `zona` aparece **exactamente una vez** y su valor es, tal cual (sin cambiar mayúsculas ni recortar), el `id` de una zona del mapa **no agotada**. Si no (inexistente, agotada, vacía, en mayúsculas o repetida, p. ej. `?zona=xx`, `?zona=VIP`, `?zona=`, `?zona=vip&zona=general`), se ignora sin aviso y se abre el sub-paso 1.
+- **Cantidad inicial de una zona de pie: 0**, como al abrirla desde el mapa: "Subtotal S/ 0.00", "Tu compra" vacío y "Continuar" deshabilitado. `zona` nunca añade ni quita entradas: compartir, recargar o volver con "Atrás" a `?zona=vip` no mete nada en la compra.
+- **Con precarga a la vez** (`?zona=vip&vip=2`, `?zona=norte&norte=1&asientos=<id>`): no compiten. `zona` decide el sub-paso inicial y la selección sale solo de `<ticketTypeId>` y `asientos`: abre el panel de VIP con cantidad 2 (o el plano de Norte con esa butaca elegida y "1 de 10 butacas") y "Tu compra" muestra el resto. Si las demás zonas ya llenan el límite de 10, la zona abre igual con el estado de límite.
+- **Foco y desplazamiento:** no se mueven (no se enfoca el h3 ni se hace scroll) y el indicador `aria-live` no anuncia su valor inicial. El h3 de la zona y "Paso 2 de 2 · …" son lo primero de la tarjeta tras la franja del evento.
+- **Transición:** el sub-paso 2 entra con la de siempre (crece desde la zona, `motion-safe:`). En una recarga o URL pegada, el `fallback` muestra primero el sub-paso 1 sin selección y, al hidratar, lo sustituye el sub-paso 2 con esa transición, sin errores de hidratación. Es el coste aceptado de mantener la ruta estática.
+- **"Todas las zonas"** vuelve al sub-paso 1 como siempre (foco en la tarjeta de la zona y transición de vuelta). La URL conserva `zona`: recargar vuelve a abrir esa zona (aceptado). "Atrás" del navegador vuelve al detalle.
+
 ## Resumen "Tu compra" y barra móvil
 
 - Vacío: caja `border-2 border-dashed border-input rounded-xl p-5` "Todavía no elegiste entradas. Empieza eligiendo una zona.".
@@ -332,10 +385,10 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 ## Accesibilidad
 
 - Un solo `<h1>` (título del evento); h2 "Elige tus entradas" y "Tu compra" (en móvil, "Tu compra" es el `SheetTitle` de la hoja abierta); h3 de la zona en el sub-paso 2 y h3 "Tus asientos" en el plano.
-- Stepper: `<ol aria-label="Pasos de la compra">` siempre en el DOM (`sr-only` por debajo de `md`), paso actual con `aria-current="step"`; el bloque móvil visual es `aria-hidden`.
-- Indicador de sub-paso con `aria-live="polite"`: el cambio de sub-paso se anuncia.
+- Cabecera de compra: un único `banner`. Stepper `<ol aria-label="Pasos de la compra">` siempre en el DOM (`sr-only` por debajo de `lg`), paso actual con `aria-current="step"`; el bloque móvil "Paso 1 de 3" es `aria-hidden`. El primer Tab enfoca "Volver al evento" por debajo de `lg` y el logo en `lg`.
+- Indicador de sub-paso con `aria-live="polite"`: el cambio de sub-paso se anuncia. Su valor inicial ("Paso 1 de 2 · Elige una zona" o, con `?zona=`, "Paso 2 de 2 · Elige la cantidad" / "· Elige tus butacas") no se anuncia: la precarga y `zona` no mueven el foco ni anuncian nada.
 - Mapa: `<svg role="group" aria-label="Mapa de zonas de <recinto>">`; cada zona es un `<path role="button" tabIndex={0}>` (sin `aria-pressed`) con `aria-label` "<nombre>, <precio>" o "<nombre>, agotado", más ", asientos numerados", ", últimas entradas" y ", 2 entradas elegidas" / ", 1 butaca elegida" cuando aplica. Se abre con clic, Enter o Espacio (con `preventDefault`, no desplaza la página). Las agotadas llevan `aria-disabled="true"`.
-- Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra". En el sub-paso 2: "Todas las zonas" y el stepper de cantidad (de pie), o "Todas las zonas", el grupo "Zoom del plano" (3 botones), el plano (una sola parada), "Mejores butacas" (stepper y botón) y los chips (numerada).
+- Tras la cabecera y "Volver al evento", Tab recorre el mapa (zonas en el orden de los tipos), luego las tarjetas y luego "Tu compra". En el sub-paso 2: "Todas las zonas" y el stepper de cantidad (de pie), o "Todas las zonas", el grupo "Zoom del plano" (3 botones), el plano (una sola parada), "Mejores butacas" (stepper y botón) y los chips (numerada).
 - Plano: `<svg role="group" aria-label="Plano de asientos de <zona>" aria-describedby>` con ayuda `sr-only` "Usa las flechas para moverte entre asientos y Espacio para elegir o quitar.". Cada asiento es un `<g role="checkbox" aria-checked>` con `aria-label` "Fila F, asiento 12, disponible, S/ 150.00", "Fila F, asiento 12, accesible para silla de ruedas, S/ 150.00" u "Fila F, asiento 12, ocupado" (este con `aria-disabled="true"`). Teclado: ver "Teclado".
 - Cantidades, subtotal, contador "n de m butacas", "n elegidas" de la leyenda, valor de "¿Cuántas butacas juntas?" y totales con `aria-live="polite"`; el tooltip de butaca es `aria-hidden` (el lector anuncia el `aria-label`); estados siempre con texto ("Últimas entradas", "Agotado"), nunca solo color.
 - Targets ≥ 44 px (`min-h-11`/`size-11`/`min-h-18`) en tarjetas, migas, steppers, zoom y el botón de la hoja, salvo los asientos (≥ 24 px con el plano entero a la vista en el festival y tras un "Acercar" en los planos grandes; con zoom crecen); foco visible en todo lo interactivo, iconos `aria-hidden`.
@@ -346,4 +399,4 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 
 - Título: `Elige tus entradas: <Título del evento> | Mentec Tickets`.
 - Descripción: `Elige tu zona y tus entradas para <Título> en <Lugar>, <Ciudad>.`
-- Solo se generan estáticamente los eventos con mapa.
+- Solo se generan estáticamente los eventos con mapa. La ruta sigue siendo SSG con la precarga y `?zona=` (se leen en cliente, dentro de `Suspense`).

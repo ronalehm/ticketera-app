@@ -8,9 +8,19 @@ import type { GeneralVenueZone, NumberedVenueZone, VenueMap } from "../types/sea
 import { getAnnularSectorPath, type AnnularSector } from "../utils/annularSector";
 import { generateArcSeatRows, getRowEdgeLabelPoints } from "../utils/arcSeatRows";
 import { SEAT_PLAN_MARGIN } from "../utils/seatRows";
+import { PreselectedTicketSelection } from "./PreselectedTicketSelection";
 import { TicketSelection } from "./TicketSelection";
 
-const { zoomToElement } = vi.hoisted(() => ({ zoomToElement: vi.fn(() => Promise.resolve()) }));
+const { zoomToElement, searchParams } = vi.hoisted(() => ({
+  zoomToElement: vi.fn(() => Promise.resolve()),
+  searchParams: { current: "" },
+}));
+
+// La URL de `PreselectedTicketSelection` (requisito 35); cada test fija `searchParams.current`.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useSearchParams: () => new URLSearchParams(searchParams.current),
+}));
 
 // jsdom no tiene layout: el zoom se sustituye por contenedores que solo pintan sus hijos. El nivel de detalle
 // (`useTransformInit`/`useTransformEffect`) no se ejecuta; `zoomToElement` se espía para "Mejores butacas".
@@ -1008,5 +1018,115 @@ describe("TicketSelection · resumen móvil", () => {
     expect(within(sheet).getByRole("link", { name: "Continuar" }).getAttribute("href")).toBe(
       "/checkout?evento=evento-prueba&general=2",
     );
+  });
+});
+
+describe("TicketSelection · estado inicial (F6)", () => {
+  const PRESELECTION = { quantities: { vip: 2 }, seatIds: ["norte-A-1", "norte-B-1"] };
+  const PRESELECTED_HREF = "/checkout?evento=evento-prueba&vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1";
+
+  function expectPreselection() {
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
+    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
+    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toMatch(/, 2 butacas elegidas$/);
+    expect(mapZone("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
+    const aside = within(summary());
+    expect(aside.getByText("2 × VIP")).toBeTruthy();
+    expect(aside.getByText("2 × Tribuna Norte")).toBeTruthy();
+    expect(aside.getByText("(4 entradas)")).toBeTruthy();
+    expect(aside.getByText(formatEventPrice(1540))).toBeTruthy(); // total: 1100 + 440
+    expect(screen.getByText("Total · 4 entradas")).toBeTruthy();
+    expect(continueLinks()).toHaveLength(2);
+    for (const link of continueLinks()) expect(link.getAttribute("href")).toBe(PRESELECTED_HREF);
+  }
+
+  it("con initialSelection abre el sub-paso 1 con las tarjetas, el resumen y 'Continuar' precargados", () => {
+    render(<TicketSelection map={MAP} initialSelection={PRESELECTION} />);
+
+    expectPreselection();
+    expect(document.activeElement).toBe(document.body);
+
+    openNorte();
+    expect(checkedSeatIds()).toEqual(["norte-A-1", "norte-B-1"]);
+    expect(seatCounter().textContent).toBe("2 de 8 butacas");
+  });
+
+  it("con initialZoneId de una zona de pie abre su panel en 0 sin mover el foco; 'Todas las zonas' vuelve al sub-paso 1", () => {
+    render(<TicketSelection map={MAP} initialZoneId="vip" />);
+
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
+    expect(zoneHeading("VIP")).toBeTruthy();
+    expect(within(quantityGroup()).getByText("0")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(0));
+    expect(mapGroup()).toBeNull();
+    expect(zoneCardList()).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+    for (const button of continueButtons()) expect((button as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(add("VIP"));
+    expect(within(quantityGroup()).getByText("1")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(550));
+
+    fireEvent.click(backButton());
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
+    expect(document.activeElement).toBe(zoneCard("VIP"));
+    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 1 entrada elegida$/);
+  });
+
+  it("con initialZoneId de una zona numerada abre su plano con '0 de 10 butacas'", () => {
+    render(<TicketSelection map={MAP} initialZoneId="norte" />);
+
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige tus butacas");
+    expect(zoneHeading("Tribuna Norte")).toBeTruthy();
+    expect(seatCounter().textContent).toBe("0 de 10 butacas");
+    expect(planGroup()).toBeTruthy();
+    expect(mapGroup()).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("con initialZoneId e initialSelection de la misma zona de pie abre su panel con la cantidad precargada", () => {
+    render(<TicketSelection map={MAP} initialZoneId="vip" initialSelection={PRESELECTION} />);
+
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
+    expect(within(quantityGroup()).getByText("2")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(1100));
+    expect(within(summary()).getByText("2 × Tribuna Norte")).toBeTruthy();
+  });
+});
+
+describe("PreselectedTicketSelection", () => {
+  afterEach(() => {
+    searchParams.current = "";
+  });
+
+  it("precarga la selección de la URL en el sub-paso 1", () => {
+    searchParams.current = "vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1";
+    render(<PreselectedTicketSelection map={MAP} />);
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
+    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
+    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toMatch(/, 2 butacas elegidas$/);
+    for (const link of continueLinks()) {
+      expect(link.getAttribute("href")).toBe("/checkout?evento=evento-prueba&vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1");
+    }
+  });
+
+  it("con zona=<de pie> abre su panel, combinable con la precarga", () => {
+    searchParams.current = "zona=vip&vip=2";
+    render(<PreselectedTicketSelection map={MAP} />);
+
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
+    expect(zoneHeading("VIP")).toBeTruthy();
+    expect(within(quantityGroup()).getByText("2")).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it.each(["zona=mesa", "zona=xx"])("con %s (agotada o inexistente) abre el sub-paso 1", (query) => {
+    searchParams.current = query;
+    render(<PreselectedTicketSelection map={MAP} />);
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
+    expect(mapGroup()).toBeTruthy();
+    expect(zoneCardList()).toBeTruthy();
   });
 });

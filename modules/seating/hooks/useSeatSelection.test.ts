@@ -1,7 +1,9 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GeneralVenueZone, NumberedVenueZone, Seat, VenueMap } from "../types/seating.types";
+import type { GeneralVenueZone, NumberedVenueZone, Seat, SeatSelection, VenueMap } from "../types/seating.types";
 import { useSeatSelection } from "./useSeatSelection";
+
+type InitialProps = Parameters<typeof useSeatSelection>[1];
 
 function generalZone(id: string, name: string, price: number, status: GeneralVenueZone["status"]): GeneralVenueZone {
   return {
@@ -181,6 +183,91 @@ describe("useSeatSelection", () => {
       { zoneId: "campo", name: "Campo", quantity: 2, amount: 360, seatLabels: [] },
     ]);
     expect(result.current.checkoutHref).toBe("/checkout?evento=evento-prueba&vip-pass=1&campo-pass=2");
+  });
+
+  describe("estado inicial", () => {
+    const preselection: SeatSelection = { quantities: { campo: 2 }, seatIds: ["norte-B-3", "norte-A-2"] };
+
+    it.each([
+      ["sin initial", undefined],
+      ["con initial vacío", {}],
+      ["con selection undefined y zoneId null", { selection: undefined, zoneId: null }],
+    ])("%s empieza igual que hoy: sin zona activa ni entradas", (_, initial) => {
+      const { result } = renderHook(() => useSeatSelection(map, initial));
+      expect(result.current).toMatchObject({
+        activeZoneId: null,
+        quantities: {},
+        seatIds: [],
+        ticketCount: 0,
+        lines: [],
+        total: 0,
+        checkoutHref: null,
+        notice: null,
+      });
+    });
+
+    it("con initial.selection, la selección se refleja desde el primer render y no hay zona activa", () => {
+      const { result } = renderHook(() => useSeatSelection(map, { selection: preselection }));
+      expect(result.current).toMatchObject({
+        activeZoneId: null,
+        quantities: { campo: 2 },
+        seatIds: ["norte-B-3", "norte-A-2"],
+        ticketCount: 4,
+        atLimit: false,
+        total: 800,
+        notice: null,
+        checkoutHref: "/checkout?evento=evento-prueba&tribuna-norte=2&campo-pass=2&asientos=norte-B-3%2Cnorte-A-2",
+      });
+      expect(result.current.lines).toEqual([
+        {
+          zoneId: "norte",
+          name: "Tribuna Norte",
+          quantity: 2,
+          amount: 440,
+          seatLabels: ["Fila B · Asiento 3", "Fila A · Asiento 2"],
+        },
+        { zoneId: "campo", name: "Campo", quantity: 2, amount: 360, seatLabels: [] },
+      ]);
+    });
+
+    it.each(["campo", "norte"])("con initial.zoneId %s, la zona empieza abierta y la selección vacía", (zoneId) => {
+      const { result } = renderHook(() => useSeatSelection(map, { zoneId }));
+      expect(result.current).toMatchObject({ activeZoneId: zoneId, quantities: {}, seatIds: [], ticketCount: 0 });
+
+      act(() => result.current.closeZone());
+      expect(result.current.activeZoneId).toBeNull();
+    });
+
+    it("con los dos, abre la zona con la selección precargada y las acciones parten de ella", () => {
+      const { result } = renderHook(() => useSeatSelection(map, { selection: preselection, zoneId: "campo" }));
+      expect(result.current.activeZoneId).toBe("campo");
+      expect(result.current.quantities).toEqual({ campo: 2 });
+      expect(result.current.ticketCount).toBe(4);
+
+      act(() => result.current.changeQuantity("campo", 1));
+      expect(result.current.quantities).toEqual({ campo: 3 });
+      expect(result.current.seatIds).toEqual(["norte-B-3", "norte-A-2"]);
+    });
+
+    it("toggleSeat sobre una butaca precargada la quita", () => {
+      const { result } = renderHook(() => useSeatSelection(map, { selection: preselection, zoneId: "norte" }));
+      act(() => result.current.toggleSeat("norte-B-3"));
+      expect(result.current.seatIds).toEqual(["norte-A-2"]);
+      expect(result.current.ticketCount).toBe(3);
+      expect(result.current.notice).toBeNull();
+    });
+
+    it("solo se lee en el primer render: cambiar initial después no reinicia el estado", () => {
+      const { result, rerender } = renderHook(({ initial }) => useSeatSelection(map, initial), {
+        initialProps: { initial: { selection: preselection, zoneId: "norte" } as InitialProps },
+      });
+      act(() => result.current.closeZone());
+
+      rerender({ initial: { selection: { quantities: { vip: 1 }, seatIds: [] }, zoneId: "vip" } });
+      expect(result.current.activeZoneId).toBeNull();
+      expect(result.current.quantities).toEqual({ campo: 2 });
+      expect(result.current.seatIds).toEqual(["norte-B-3", "norte-A-2"]);
+    });
   });
 
   describe("asientos", () => {
