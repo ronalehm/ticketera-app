@@ -20,9 +20,19 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
   - decisión 1: centro, escenario y separaciones comunes;
   - decisión 3: plano de ≤ 622 de ancho y ≤ 12 filas, con butacas ≥ 16 px a 375 con el plano entero y ≥ 24 px tras un "Acercar";
   - decisión 5: butacas accesibles en la última fila;
-  - decisión 11: BD, seed y volver a sembrar;
+  - decisión 11: BD y seed. Su paso "vaciar y volver a sembrar" **queda sustituido** en esta spec por la decisión 7: migración aditiva y seed incremental, sin vaciar ningún entorno;
   - decisión 12: holgura de las etiquetas.
 - Ninguna de las dos specs se edita. Esta las amplía a los recintos nuevos.
+
+**Enmienda "datos no destructivos" (2026-10-04).** Pedido del usuario, antes de aprobar el PR de la Fase 1:
+
+> "Antes de aprobar el PR de mapas, ajusta el procedimiento de datos. No quiero que producción requiera vaciar Neon y volver a sembrarlo. Valida que: 1. npm run db:migrate sea no destructivo. 2. npm run db:seed sea idempotente. 3. Copa del Norte y Los ecos del sur se creen/actualicen por un identificador estable, sin borrar datos existentes ni depender de IDs generados previamente. 4. Ejecutar el seed dos veces no duplique eventos, zonas, tickets ni asientos. 5. Confirma que después de migrar/seedear ambos slugs funcionan sin 404. No hagas merge a main hasta que el reviewer confirme esto."
+
+Contrato del usuario:
+- `db:migrate` actualiza la estructura sin destruir datos;
+- `db:seed` crea los datos demo que faltan de forma idempotente, **no borra** información existente y puede ejecutarse varias veces sin duplicar registros.
+
+Lo cubre la **Fase 1b** (decisión 7 y requisitos 20–25), que va antes del merge de la Fase 1. Las Fases 2–4 siguen la misma regla.
 
 **Nota sobre los datos del pedido:** el pedido intercambia los tipos de entrada de dos eventos. Esta spec sigue `modules/events/data/events.mock.ts`:
 - `los-ecos-del-sur-arequipa` (conciertos) está **agotado**: General "Galería, sin numerar." y Platea "Butaca numerada en platea.";
@@ -33,7 +43,15 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
   - **Escenario de deportes:** `PITCH_STAGE` en `modules/seating/data/stadium.mock.ts`. Es el escenario compartido con la etiqueta "CANCHA" (decisión 3).
   - **7 recintos curvos nuevos**, un archivo de datos y un test por recinto en `modules/seating/data/`, registrados en el agregador `venueMaps.mock.ts`. Los valores están en los requisitos 5–11.
   - **Tests guiados por los datos.** Las invariantes de `seating.service.test.ts` y el recuento de butacas de `buildSeedData.test.ts` se calculan a partir de los mocks. Así las fases siguientes no tocan esos tests para cada recinto (requisitos 2 y 3).
-  - **Mapa propio por evento en la BD** (Fase 3): columnas `events.map_view_box` y `events.map_stage`, con su migración, el seed y el ERD.
+  - **Migración y seed no destructivos** (Fase 1b, decisión 7, requisitos 20–25):
+    - columna aditiva `event_seats.retired_at` (migración `0005`);
+    - seed con upsert por id determinista de las columnas de mapa e inventario demo que posee;
+    - retiro, sin borrar, del inventario demo obsoleto;
+    - los dos services que leen `event_seats` excluyen lo retirado;
+    - test de integración que parte del estado de producción (seed de `main` previo a la Fase 1);
+    - test que prohíbe sentencias destructivas en `drizzle/*.sql`;
+    - sección "Base de datos" del `README.md`.
+  - **Mapa propio por evento en la BD** (Fase 3): columnas `events.map_view_box` y `events.map_stage`, con su migración (`0006`), el seed y el ERD.
   - **Clásico del Pacífico** (Fase 4):
     - el service lee el mapa propio del evento;
     - el mapa del Clásico;
@@ -42,10 +60,17 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
 - No incluye:
   - **Mapa para `el-circo-de-las-estrellas` ni para `aventura-en-el-bosque-magico`** (decisión 1). Siguen con `TicketSelector`/`PreselectedTicketSelector`.
   - **Tarifas por zona** ("Niños" y "Adulto" dentro de cada zona). Es otro modelo de catálogo y de checkout, para otra spec si se quiere.
-  - **Cambios en `modules/events`:** `events.mock.ts`, nombres, precios, estados y orden de los `ticketTypes`, componentes y tests. Las descripciones de los tipos tampoco cambian.
+  - **Cambios en `modules/events`:** `events.mock.ts`, nombres, precios, estados y orden de los `ticketTypes`, componentes y tests. Las descripciones de los tipos tampoco cambian. La única excepción es el filtro de lugares retirados de `events.service.ts` y su test (Fase 1b, requisito 23).
   - **Cambios en componentes, hooks, utils o schema de `seating`:**
     - `VenueMapView`, `ZoneCards`, `SeatPlan`, `SeatPlanMinimap`, `ZonePricesCard`, `MobileBuyBar`, `TicketSelection`, `generateArcSeatRows`, `getAnnularSectorPath` y `venueLayoutSchema` se usan tal cual;
-    - el único código de producción que cambia es `seating.service.ts` (Fase 4) y el seed (Fase 3).
+    - el código de producción que cambia es:
+      - `seating.service.ts`: filtro de retirados (Fase 1b) y mapa por evento (Fase 4);
+      - `events.service.ts`: filtro de retirados (Fase 1b);
+      - el seed (Fases 1b y 3);
+      - el esquema y las migraciones (Fases 1b y 3).
+  - **Vaciar la BD en cualquier entorno** (Neon, desarrollo o producción), o un script para hacerlo: el procedimiento es solo `npm run db:migrate && npm run db:seed` (decisión 7). La única excepción es el Postgres desechable local de la verificación (`127.0.0.1:5433`, `ticketera_dev`), para reproducir el estado de producción.
+  - **`DELETE` o `TRUNCATE` en el seed o en las migraciones.**
+  - **Que el seed actualice datos de negocio o de ventas reales:** usuarios (salvo el rol del super admin, como hoy), organizadores, categorías, título, fechas o estado de los eventos, nombres, precios y descripciones de los tipos, y pedidos o lugares de ventas reales (decisión 7).
   - **Cambios en `app/`:**
     - el detalle `/eventos/[slug]` ya elige el aside según haya mapa o no;
     - `/eventos/[slug]/entradas` ya prerenderiza todo slug con layout.
@@ -55,7 +80,6 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
 
     Esta spec no los toca. Solo comparte con ellas `pages/ticket-selection.md`: ver "Coordinación" en el plan.
   - **Rehacer los 4 mapas actuales:** no cambian sus valores ni sus tests específicos.
-  - **Un script para vaciar la BD de desarrollo:** volver a sembrarla es un paso manual (decisión 7).
   - **Abrir el plano ya acercado en móvil** o cambiar el paso de "Acercar".
 
 ## Decisiones
@@ -165,20 +189,88 @@ Es sobre todo un cambio de **datos mock**: un archivo por recinto y su test. Nin
    - **Que la etiqueta sea la del mapa.** `formatSeatLabel` usa el nombre del tipo, que es "Occidente", no "Tribuna Occidente".
 
    Cambian 3 textos de `demoOrders.ts`: el id, la etiqueta del ítem y el `seatLabel` de la entrada. También cambian 2 aserciones de `TicketCard.test.tsx`, que usa esa orden. El resto de la orden (código, ítem "Occidente", S/ 220, comprador) no cambia, y `MT-9LM2TC` (`platea-F-7`/`F-8`) tampoco.
-7. **Base de datos y seed** (decisión 11 de la spec de recintos curvos, que sigue vigente):
-   - **Lectura del mapa:** `getVenueMapBySlug` lee de Postgres y el seed copia `VENUE_LAYOUTS_MOCK` con `onConflictDoNothing`. En una BD ya sembrada, las secciones de los eventos que hoy no tienen mapa siguen como `general` de 200, sin `map_path`, y no se actualizan. Hay que **vaciar y volver a sembrar**.
-   - **Sin volver a sembrar,** `hasVenueMap`, que lee el mock, da `true` y el CTA del detalle apunta a `/entradas`, pero `getVenueMapBySlug` da `null` y `/entradas` responde 404. Por eso la BD de desarrollo se vuelve a sembrar antes de `npm run build` y de Playwright, y el resumen de cierre de cada fase lo recuerda al usuario.
-   - **Verificación en paralelo:** los developers de recinto ejecutan sus tests **sin BD** (`DATABASE_URL_TEST= npx vitest run <rutas>`). Los bloques `describeWithDb` se omiten.
-   - **Suite completa con BD** (`npx vitest run` con el `DATABASE_URL_TEST` de `.env`): de uno en uno, nunca dos ejecuciones con BD a la vez, porque `testGlobalSetup` vacía y vuelve a sembrar la BD de test.
-   - **BD local autorizada:** solo el Postgres desechable del entorno de pruebas (`127.0.0.1:5433`, bases `ticketera_dev` y `ticketera_test`). El developer de cada tarea de cierre y el reviewer pueden:
-     - vaciar las tablas de `public` de `ticketera_dev` (`TRUNCATE … CASCADE`);
-     - ejecutar `npm run db:migrate && npm run db:seed`.
+7. **Base de datos y seed: migración aditiva y seed incremental, sin vaciar** (enmienda de 2026-10-04; sustituye el "vaciar y volver a sembrar" de la decisión 11 de la spec de recintos curvos).
+   - **Procedimiento en cualquier entorno** (Neon de producción o de desarrollo, y local), tras el merge de cada fase: `npm run db:migrate && npm run db:seed`. Nada más: no se vacía ni se recrea ninguna BD.
+   - **Problema que resuelve:**
+     - `getVenueMapBySlug` lee de Postgres;
+     - el seed actual (`lib/db/seed/seed.ts`) inserta con `onConflictDoNothing()` sobre ids deterministas (`seedUuid`). Es idempotente y no destructivo, pero **no actualiza** filas existentes;
+     - producción se sembró con `main` antes de la Fase 1 (`b90d48a`). Tras `db:migrate && db:seed` con el seed actual, Copa y Ecos quedarían sin geometría, `getVenueMapBySlug` daría `null` y `/entradas` respondería 404. Mientras tanto, el detalle, que usa `hasVenueMap` del mock, enlazaría ahí.
+   - **Diagnóstico: `buildSeedData` en `b90d48a` frente a `3968610`, calculado con los dos commits.**
+     - `buildSeedData.ts`, `seed.ts`, `events.mock.ts` y las migraciones no cambian entre los dos commits. Solo cambia `VENUE_LAYOUTS_MOCK` (+ Copa y Ecos). Por eso "pre-F1" es exactamente el seed actual sin esos dos layouts: comprobado byte a byte. El test de integración usa esta equivalencia (requisito 24).
+     - Todos los ids son los mismos para las filas que existen en los dos estados: son claves naturales (`event:<slug>`, `venue:<nombre>:<ciudad>`, `venue-section:<recinto>:<zona>`, `ticket-type:<slug>:<tipo>`, `venue-seat:<recinto>:<butaca>`, `event-seat:<slug>:<tipo>:<clave>` y `order:<slug>`).
 
-     La BD de Neon del usuario no se toca desde la sesión. Si la sesión no usa ese Postgres local, se pregunta al usuario antes de vaciar nada.
-   - **Tras el merge de cada fase,** el usuario vuelve a sembrar su BD de desarrollo: vacía la BD o recrea la rama `dev` de Neon, y ejecuta `npm run db:migrate && npm run db:seed`. Desde la Fase 3 hay además una migración nueva (`0005`), que aplica `db:migrate`.
+     | Tabla | pre-F1 → F1 | Cambios en filas existentes | Filas nuevas | Filas que sobran |
+     |---|---|---|---|---|
+     | `users`, `organizers`, `categories` | 13, 13, 6 → igual | — | — | — |
+     | `venues` | 13 → 13 | Estadio Mansiche y Teatro Municipal de Arequipa: `map_view_box` y `stage` pasan de `NULL` a los del layout ("CANCHA" y "ESCENARIO"). Cada uno solo lo usa su evento: no son compartidos. | — | — |
+     | `venue_sections` | 37 → 37 | Copa `popular` (capacidad 200 → 2000) y `oriente` (200 → 800); Ecos `general` (200 → 300): ganan `map_path`, `label_x/y` y `wrap_label`. Copa `occidente` y Ecos `platea`: `seating` `general` → `numbered`, `capacity` 200 → `NULL`, más `map_path`, `label_x/y`, `seat_view_box` y `plan_transform`. `sort_order` y `name` no cambian. | — | — |
+     | `venue_seats` | 456 → 556 | — | 39 de Occidente y 61 de Platea | — |
+     | `events` | 14 → 14 | — | — | — |
+     | `ticket_types` | 37 → 37 | ninguna: `section_id` es el mismo id y el estado no es columna (se deriva de `event_seats`) | — | — |
+     | `orders` (demo) | 7 → 8 | `TK-DEMO-002` (Ecos): importes 4 900 000 / 490 000 / 4 410 000 → 3 765 000 / 376 500 / 3 388 500 céntimos | `TK-DEMO-006` (Copa: 17 butacas de Occidente vendidas) | — |
+     | `event_seats` | 38 956 → 41 156 | ninguna: los lugares generales que coinciden (índices 0–199) tienen el mismo estado | 2600: Copa `popular` +1800 y `oriente` +600 (libres), Copa `occidente` 39 numeradas (22 libres, 17 vendidas), Ecos `general` +100 y `platea` 61 numeradas (vendidas) | 400: Copa `occidente` 200 generales libres y Ecos `platea` 200 generales vendidas a `TK-DEMO-002`, todas con `venue_seat_id NULL` |
+
+     Las 400 filas que sobran no rompen el mapa: `loadLayout` solo lee lugares con `venue_seat_id`. Pero sí falsean los conteos de `events.service.ts`: Occidente tendría 239 lugares y 222 libres, cuando el plano tiene 39.
+   - **Migraciones (`drizzle/0000`–`0004`), auditadas:**
+     - `0000`: `CREATE EXTENSION IF NOT EXISTS`;
+     - `0001`: esquema inicial (`CREATE TYPE/TABLE`, FKs `ON DELETE no action`, índices);
+     - `0002`: `DROP CONSTRAINT` + `ADD CONSTRAINT` del mismo CHECK de capacidad (lo redefine; no toca filas);
+     - `0003`: 2 `ADD COLUMN` (una con `DEFAULT`);
+     - `0004`: `CREATE TABLE`, `ADD COLUMN … DEFAULT`, `DROP NOT NULL` (relaja), FKs y CHECKs.
+
+     Ninguna tiene `DROP TABLE/COLUMN`, `TRUNCATE`, `DELETE`, `UPDATE` ni cambios de tipo. Producción ya las tiene (son de `main`), y la Fase 1 no añade ninguna. `drizzle-kit migrate` solo aplica las pendientes de `drizzle.__drizzle_migrations`, cada una en su transacción.
+   - **Regla para toda migración nueva**, incluidas la `0005` de la Fase 1b y la `0006` de la Fase 3 (requisito 20):
+     - es **aditiva**: `CREATE`, `ADD COLUMN` nula o con `DEFAULT`, `ADD CONSTRAINT`, índices, `DROP NOT NULL`, y `DROP CONSTRAINT` solo si se vuelve a crear en la misma migración;
+     - no lleva `DROP TABLE/COLUMN/TYPE/SCHEMA/EXTENSION/SEQUENCE/VIEW`, `TRUNCATE`, `DELETE`, `UPDATE`, `RENAME` ni `ALTER COLUMN … TYPE`;
+     - se genera con `npm run db:generate -- --name <nombre>`, y las ya publicadas en `main` no se editan;
+     - si una restricción nueva no la cumplieran los datos existentes, la migración falla entera (transacción) y no destruye nada.
+   - **Filas obsoletas: se retiran, no se borran.** Columna nueva `event_seats.retired_at timestamptz NULL`, migración `0005`, aditiva y sin reescritura de la tabla. `NULL` = en inventario. Con fecha = fuera del inventario: no se vende, no cuenta y no se pinta. Alternativas descartadas:
+     - `DELETE`: prohibido por el pedido;
+     - reutilizar los ids de las filas generales para las butacas numeradas: los ids dejarían de depender solo de la clave natural, distinto en una BD nueva y en una antigua, y sobrarían 161 y 139 filas igualmente;
+     - dejarlas `sold` o `held`: siguen contando en `totalSeats`, y `held` exige un pedido (`event_seats_status_order_check`);
+     - un valor nuevo `retired` en `seat_status`: el CHECK `(status = 'available') = (order_id IS NULL)` obliga a redefinirlo, cambia todos los lectores de `status` y pierde el estado de venta de la fila demo;
+     - mover las filas a otro tipo de entrada: inventa un tipo que se vería en el catálogo.
+
+     La fila retirada conserva `status`, `order_id` y sus FKs (`tickets`, `orders`). Los lectores la excluyen (requisito 23).
+   - **Qué posee el seed (upsert `ON CONFLICT (id) DO UPDATE`).** Solo los datos de referencia demo que definen el mapa y su inventario. Una fila se reescribe solo si alguna columna poseída cambia (`IS DISTINCT FROM`), con `updated_at = now()`. Así, una segunda ejecución no escribe nada. Los ids del seed son UUID v8 (`seedUuid`), y las filas reales usan `gen_random_uuid()` (v4): no pueden coincidir.
+
+     | Tabla | Columnas poseídas (se actualizan) | Por qué | No se tocan, y por qué |
+     |---|---|---|---|
+     | `venues` | `map_view_box`, `stage` | Son la geometría del mapa: sin ellas, 404. | `name`, `city` (forman el id), `address`, `lat/lng`, `place_id`, `status`, `organizer_id`: datos del recinto que gestiona un admin. |
+     | `venue_sections` | `sort_order`, `seating`, `capacity`, `map_path`, `label_x`, `label_y`, `seat_view_box`, `wrap_label`, `plan_transform` | Forma, tipo (de pie o numerada), orden y aforo de la zona en el mapa. `seating` y `capacity` van juntas por `venue_sections_seating_capacity_check`. | `name` (único por recinto y visible; el mapa usa el nombre del tipo), `slug` y `venue_id` (forman el id). |
+     | `venue_seats` | `x`, `y`, `accessible` | Posición y accesibilidad base de la butaca en el plano. | `row_label`, `number` y `section_id`: forman el id. |
+     | `ticket_types` | `section_id`, `sort_order` | Vinculan el tipo con su zona y su orden en el mapa y en el aside. Hoy no cambian; si no se igualan, una BD antigua podría desalinear zonas y tipos. | `name`, `description`, `price_cents`, `max_per_order`: catálogo de negocio que un organizador puede editar. El estado no es columna. |
+     | `orders` (solo las demo, id `order:<slug>`) | `subtotal_cents`, `platform_fee_cents`, `organizer_amount_cents` | Deben cuadrar con los lugares demo vendidos (`orders_amounts_check`), p. ej. `TK-DEMO-002`. | `code`, comprador, `status`, fechas. Los pedidos reales nunca tienen un id del seed. |
+     | `event_seats` | `status`, `order_id`, `retired_at` (a `NULL`) | Estado demo del inventario y reactivación de un lugar retirado que vuelve al layout. | `ticket_type_id`, `venue_seat_id`, `event_id` (forman el id), `held_until`. **Guarda de ventas reales:** solo se actualiza si la fila no está `held` y su `order_id` es `NULL` o un pedido demo (`seedUuid("order:<slug>")` de cualquier evento del seed). Una fila vendida o retenida por un pedido real no se toca nunca. |
+     | `users`, `organizers`, `categories` | — (solo se insertan las que faltan) | Identidad y negocio. El super admin conserva el comportamiento de hoy: se busca por correo y se le asigna `super_admin` solo si no lo tiene. | Todo lo demás. |
+     | `events` | — en la Fase 1b. Desde la Fase 3: `map_view_box`, `map_stage` | Configuración del mapa propia del evento (requisito 14). | Título, descripción, imagen, fechas, `status`, `featured`, `min_age`, `search_text`: los gestiona el organizador o el admin. |
+   - **Retiro del inventario demo obsoleto** (después de los upserts, en la misma transacción): `UPDATE event_seats SET retired_at = now(), updated_at = now()` de las filas que cumplen todo esto:
+     - su `ticket_type_id` es un tipo del seed;
+     - `retired_at IS NULL`;
+     - su `id` **no** está entre los `event_seats` que genera `buildSeedData`;
+     - no están `held`;
+     - su `order_id` es `NULL` o un pedido demo.
+
+     Cubre:
+     - zonas que pasan a numeradas (Copa `occidente`, Ecos `platea`; en F2, Mesa y Preferencial de Sueños; en F4, Oriente y Occidente del Clásico);
+     - zonas de pie cuyo aforo baja (F4: Palco del Clásico 200 → 120);
+     - butacas que desaparecen de un plano.
+
+     Las obsoletas con venta real no se retiran: el seed las cuenta y lo informa. Nunca hay `DELETE`.
+   - **Idempotencia y convergencia:**
+     - en una BD vacía, el resultado es igual al de hoy (sin retiradas);
+     - desde cualquier estado sembrado por una versión anterior, sin ventas reales, las filas activas quedan **iguales a `buildSeedData`**, y las sobrantes quedan retiradas;
+     - una segunda ejecución escribe 0 filas y retira 0. El seed devuelve un informe por tabla, que `run.ts` imprime (requisito 22).
+   - **Verificación local** (developers y reviewer):
+     - **en paralelo,** los developers de recinto ejecutan sus tests **sin BD** (`DATABASE_URL_TEST= npx vitest run <rutas>`);
+     - **con BD**, de uno en uno: nunca dos ejecuciones de vitest con BD a la vez, porque `testGlobalSetup` vacía y vuelve a sembrar la BD de test;
+     - **BD local autorizada:** solo el Postgres desechable del entorno de pruebas (`127.0.0.1:5433`, `ticketera_dev` y `ticketera_test`). La BD de Neon del usuario no se toca desde la sesión. Si la sesión no usa ese Postgres local, se pregunta al usuario antes de tocar nada;
+     - **BD de desarrollo para build y Playwright:** `ticketera_dev`, **migrada y sembrada sin vaciar** (`npm run db:migrate && npm run db:seed`).
+     - **Reproducción de producción** (cierre de la Fase 1b y reviewer, requisito 25): es lo único que vacía una BD, y solo `ticketera_dev`, para recrear el estado de producción antes de actualizarlo.
+   - **Tras el merge de cada fase,** el usuario ejecuta en su BD de Neon `npm run db:migrate && npm run db:seed`, **sin vaciar**. El resumen de cierre de cada fase lo recuerda con ese texto exacto.
 8. **Detalle `/eventos/[slug]` de los 7 eventos.** Con mapa, el aside pasa a ser `ZonePricesCard` y aparece `MobileBuyBar`, sin cambiar código (`page.tsx` decide con `getVenueMapBySlug`).
    - **Ecos del Sur, agotado:**
-     - `ZonePricesCard` lista Galería y Platea con "Agotado" y muestra "Entradas agotadas" en lugar del botón;
+     - `ZonePricesCard` lista General (Galería) y Platea con «Agotado», y muestra "Entradas agotadas" en lugar del botón. La zona se llama "General", el nombre del `ticketType`; "Galería, sin numerar." es su descripción, que `ZonePricesCard` no muestra;
      - no hay `MobileBuyBar` (`event.status !== "sold-out"`), y el CTA del hero no es enlace;
      - `/eventos/los-ecos-del-sur-arequipa/entradas` existe y muestra el mapa con las dos zonas grises "Agotado", que no se abren.
 
@@ -357,7 +449,7 @@ Holguras previstas de las etiquetas, en px: "sin selección / con insignia", la 
       - `mapViewBox: text("map_view_box")`;
       - `mapStage: jsonb("map_stage").$type<MapStage>()`, con el comentario "Configuración del mapa propia del evento (p. ej. fútbol en un estadio cuyo mapa es de concierto); `NULL` = la del recinto";
       - `check("events_map_override_check", sql\`(${t.mapViewBox} IS NULL) = (${t.mapStage} IS NULL)\`)`.
-    - **Migración** `drizzle/0005_event_map_override.sql`, generada con `npm run db:generate -- --name event_map_override`, junto con `drizzle/meta/0005_snapshot.json` y `_journal.json`. Solo añade las 2 columnas nulas y el CHECK: los datos existentes no cambian.
+    - **Migración** `drizzle/0006_event_map_override.sql`, generada con `npm run db:generate -- --name event_map_override`, junto con `drizzle/meta/0006_snapshot.json` y `_journal.json`. Es la `0006` porque la `0005` es la de la Fase 1b. Solo añade las 2 columnas nulas y el CHECK: los datos existentes no cambian. Cumple la regla aditiva (decisión 7), y `lib/db/migrations.test.ts` lo comprueba (requisito 20).
     - **`lib/db/constraints.test.ts`** (con BD), en el grupo de los CHECK de `events`:
       - un evento con solo `map_view_box` (o solo `map_stage`) incumple `events_map_override_check` (23514);
       - con los dos, se acepta.
@@ -368,7 +460,8 @@ Holguras previstas de las etiquetas, en px: "sin selección / con insignia", la 
       - el recinto toma `mapViewBox`/`stage` del primer layout que lo usa, como hoy;
       - el evento recibe `mapViewBox`/`mapStage` = los de su layout si son distintos de los del recinto (`isDeepStrictEqual` en `stage`), y `null` si son iguales o no tiene layout.
     - **`sectionId(...)`:** si la sección ya existe y **las dos** filas tienen `mapPath`, compara `mapPath`, `labelX`, `labelY`, `seating`, `capacity`, `seatViewBox`, `wrapLabel` y `planTransform`. Si difieren, lanza `Sección "<slug>" con geometría distinta en <venueKey>`. La comprobación del nombre no cambia.
-    - El resto del seed (asientos, inventario, estados, órdenes demo) no cambia.
+    - El resto de `buildSeedData` (asientos, inventario, estados, órdenes demo) no cambia.
+    - **`lib/db/seed/seed.ts`:** `SEED_OWNED_COLUMNS.events` pasa de vacío a `["mapViewBox", "mapStage"]` (decisión 7). Así el Clásico recibe su mapa propio en una BD ya sembrada, sin vaciarla. El test de convergencia del requisito 24 sigue pasando sin cambios.
 15. **`lib/db/seed/buildSeedData.test.ts`** (sin BD), con layouts sintéticos. Usan `aventura-en-el-bosque-magico`, que nunca tendrá layout, para que los tests sigan valiendo tras la Fase 4. Se mutan `EVENTS_MOCK` y `VENUE_LAYOUTS_MOCK`, y el `afterEach` existente los restaura.
     - **Nuevo, "un evento cuyo layout difiere del de su recinto guarda su viewBox y su escenario; el recinto conserva los del primero":**
       - aventura pasa al Estadio Nacional de Lima, con un layout de `viewBox` `"0 0 600 300"`, `stage` `PITCH_STAGE` y una zona general `entrada-libre` de capacidad 50 (cualquier sector válido);
