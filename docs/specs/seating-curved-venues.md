@@ -1,7 +1,7 @@
 # Recintos curvos en todos los mapas ("Elige tus entradas" como estadio)
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Que el sub-paso 1 de "Elige tus entradas" (`/eventos/<slug>/entradas`) se vea como un estadio en **todos** los eventos con mapa, igual que el de "Festival Vive Latino Lima" (captura objetivo `images/20.png`): escenario semicircular navy con luces, zonas en anillos o sectores concéntricos separados en blanco y etiquetas con nombre y precio. Hoy los otros 3 recintos (`images/19.png`: "La casa de los espejos" con Escenario, Platea y Mezanine como rectángulos) usan rectángulos, y sus zonas numeradas abren un plano en cuadrícula sin fondo ni minimapa.
@@ -20,12 +20,22 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
 
 **Enmienda (2026-10-04), tras el PR #6 (`docs/specs/data-foundation.md`):** los mapas ya no se leen de los mocks, sino de Postgres, y el seed los copia desde los mocks. Esta enmienda añade la tarea T1b (test del seed independiente de la geometría), la verificación con y sin BD y el paso de volver a sembrar la BD (decisión 11). T1 ya está hecha. El resto de la spec no cambia.
 
+**Enmienda 2 (2026-10-04), anillos de la arena.** T1–T5 están hechas (Fase 1). El usuario pidió **ajustar los anillos de la arena** (`noche-de-sintetizadores-lima`) porque Playwright mostró dos fallos:
+- a 375 px, el nombre y el precio de VIP, Preferencial y General pisan el borde de su banda;
+- desde 768 px, la píldora "Últimas entradas" de VIP se sale hacia Preferencial (a 1024, casi entera).
+
+Esta enmienda:
+- rehace el requisito 3 con anillos más anchos, una Tribuna Norte más estrecha (con las mismas 80 butacas) y un `viewBox` más alto (decisión 12);
+- añade la Fase 2 con la tarea T6 y sus criterios de aceptación.
+
+Los recintos de teatro, comedia y festival no cambian.
+
 ## Alcance
 - Incluye:
   - **Datos compartidos del estadio:** centro común y escenario (sector, `path`, `labelPos` y 7 luces) idénticos a los del festival, usados por los 4 recintos.
   - **Un archivo de datos por recinto**, más un agregador que mantiene `VENUE_LAYOUTS_MOCK` con el mismo orden y contenido para el service. Así cada recinto se puede rehacer en paralelo.
   - **Geometría curva para los 3 recintos**, con las mismas butacas por zona que hoy (valores concretos en los requisitos 3–5):
-    - arena `noche-de-sintetizadores-lima`: VIP, Preferencial y General de pie en anillos de 112°, y Tribuna Norte numerada al fondo (66°);
+    - arena `noche-de-sintetizadores-lima`: VIP, Preferencial y General de pie en anillos de 88°, y Tribuna Norte numerada al fondo (40°). T2 los hizo de 112° y 66°; T6 los cambia (decisión 12);
     - teatro `la-casa-de-los-espejos`: Platea y Mezanine numeradas, en abanico de 84° frente al escenario;
     - comedia `risas-sin-filtro`: Mesa (agotada) y Preferencial numeradas, y General de pie, las tres en media luna de 98°.
   - Las zonas numeradas de los 3 recintos pasan a plano **en arco** (`generateArcSeatRows`, con `planTransform`). Heredan el fondo del estadio, el lienzo apaisado desde `sm` y el minimapa, que ya implementa `SeatPlan` (requisitos 28–30 de la spec del estadio).
@@ -36,7 +46,11 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
   - **Compatibilidad:** se conservan los ids de zona y de `ticketTypeId`, el orden de las zonas, las capacidades de pie, las butacas por zona numerada, la ocupación por zona y las butacas que usan las órdenes demo (`platea-F-7` y `platea-F-8`).
   - Actualización del diseño de página `design-system/ticketera/pages/ticket-selection.md`.
   - **Test del seed independiente de la geometría** (T1b, requisito 11): `lib/db/seed/buildSeedData.test.ts` deriva de los mocks el `mapViewBox` de cada recinto y qué secciones tienen `planTransform`, en lugar de fijarlos. Así T2–T4 no lo tocan (decisión 11).
+  - **Anillos de la arena con sitio para sus etiquetas** (Fase 2, T6, decisión 12):
+    - VIP, Preferencial y General más anchos, para que nombre y precio quepan con margen a 375 px y la píldora "Últimas entradas" quepa entera en VIP desde 768 px;
+    - Tribuna Norte más estrecha, con las mismas 80 butacas, y `viewBox` de 600 × 640.
 - No incluye:
+  - Cambios en `VenueMapView` (tamaño del texto, ocultar la píldora o la insignia) para que las etiquetas quepan: el arreglo de la arena es solo de datos (decisión 12).
   - Cambios en `lib/db`, salvo el test de T1b. `buildSeedData.ts`, `seed.ts`, `testGlobalSetup.ts`, el esquema y las migraciones no cambian: el seed ya copia los mocks.
   - Un script para vaciar la BD de desarrollo. Volver a sembrarla es un paso manual (decisión 11).
   - Cambios en componentes, hooks, utils, schema o service de `seating`. `VenueMapView`, `ZoneCards`, `SeatPlan`, `SeatPlanMinimap`, `generateArcSeatRows`, `getAnnularSectorPath` y `venueLayoutSchema` se usan tal cual.
@@ -63,13 +77,15 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
 
    | Recinto | Zonas | Barrido |
    |---|---|---|
-   | Arena | de pie (VIP, Preferencial, General) | 112° (34°–146°), como el festival |
-   | Arena | Tribuna Norte | 66° (57°–123°) |
+   | Arena | de pie (VIP, Preferencial, General) | 88° (46°–134°); T2: 112° (34°–146°) |
+   | Arena | Tribuna Norte | 40° (70°–110°); T2: 66° (57°–123°) |
    | Teatro | Platea y Mezanine | 84° (48°–132°) |
    | Comedia | las tres zonas | 98° (41°–139°) |
 
+   Los barridos de la arena son los de la decisión 12 (T6): sus anillos de pie se ensanchan para alojar las etiquetas, y eso deja menos sitio a la Tribuna Norte.
+
    Los ~120° del festival no caben en las numeradas:
-   - **Tribuna Norte:** es un anillo exterior, lejos del centro, así que sus filas son largas. Con más barrido, su plano supera los 622 de ancho, o el mapa supera ~600 de alto.
+   - **Tribuna Norte:** es un anillo exterior, lejos del centro, así que sus filas son largas. Con más barrido, su plano supera los 622 de ancho, o el mapa supera ~600 de alto (con T6, ~640: decisión 12).
    - **Teatro y comedia:** con más barrido, el anillo exterior se sale del ancho 600 del mapa.
 3. **Excepción de tamaño para los 3 recintos, por decisión del usuario.**
    - **Qué conserva:** el usuario prefiere conservar las butacas por zona de hoy antes que el tamaño mínimo con el plano entero.
@@ -77,7 +93,7 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
      - el límite de ≤ 10 butacas por fila y de `seatViewBox` de ≤ 400 de ancho, que el requisito 8 de la spec del estadio hereda del requisito 7 de la spec base;
      - el mínimo de 24 px por butaca a 375 px con el plano entero (decisión 10 de la spec base, WCAG 2.5.8).
    - **Cómo se elige en móvil:**
-     - Con el plano entero a la vista, a 375 px, las butacas miden ~16–17 px (área de toque de 32 unidades) y sirven para ver el plano.
+     - Con el plano entero a la vista, a 375 px, las butacas miden ~16–18 px (área de toque de 32 unidades) y sirven para ver el plano.
      - Para elegir, se acerca con el control "Acercar" o pellizcando, que ya existen.
      - "Acercar" sube la escala en 0.5 (`react-zoom-pan-pinch` 4.2.0: de 1 a 1.5), así que tras **un** "Acercar" el área de toque mide 1.5 × 32 × 311 / ancho del plano. Por eso el ancho máximo es 622: así queda en ≥ 24 px.
    - **Qué se mantiene:** ≤ 12 filas por zona.
@@ -88,7 +104,7 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
 
      | Zona | Hoy (cuadrícula) | Con arco |
      |---|---|---|
-     | `norte` (arena) | A–H × 10 = 80 | A–F: 10, 12, 13, 14, 15, 16 = 80 |
+     | `norte` (arena) | A–H × 10 = 80 | A–F: 12, 12, 13, 14, 14, 15 = 80 (T6; T2: 10, 12, 13, 14, 15, 16) |
      | `platea` (teatro) | A–J: 8, 8, 9, 9, 10×6 = 94 | A–H: 7, 8, 10, 11, 12, 14, 15, 17 = 94 |
      | `mezanine` (teatro) | A–F × 10 = 60 | A–D: 13, 14, 16, 17 = 60 |
      | `mesa` (comedia, agotada) | A–C × 8 = 24 | A–C: 6, 8, 10 = 24 |
@@ -129,6 +145,8 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
      | `preferencial` (comedia) | 33.3 / 14.6 | 52.2 / 22.2 | 16.2 / −7.8 | 66.4 / 36.9 |
 
      Los valores negativos (640 y 1024) son los que resuelve el arreglo. A 375 px los controles van en una barra sobre el lienzo y no se superponen.
+
+     La fila `norte` es de la geometría de T2. Con la de T6 (decisión 12), el plano de Norte y el minimapa cambian de tamaño. T6 vuelve a medir con Playwright.
    - La verificación final la hace Playwright.
 8. **Numeración en arco:** la de la spec del estadio (decisión 7). En los sectores que abren hacia abajo, la butaca 1 de cada fila es la del extremo derecho del mapa (ángulo menor) y la fila A es la más cercana al escenario.
 9. **Un archivo por recinto para trabajar en paralelo.**
@@ -142,6 +160,9 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
     - Dentro de la fase: T1, T1b, T2–T4 en paralelo y T5.
     - Va después de cerrar la **Fase 5** de la spec del estadio (fondo, lienzo apaisado y minimapa en `SeatPlan`) y el **arreglo de controles** de la decisión 7.
     - No se ejecuta en la misma sesión que ninguna fase de la spec del estadio. Su Fase 6 T4 toca `ticket-selection.md`, igual que T5.
+    - **Fase 2 (T6):** va en otra sesión, después de cerrar el arreglo de `SeatPlan` de la decisión 7, por dos motivos:
+      - los dos tocan `ticket-selection.md`;
+      - el criterio de 0 solapes con el minimapa depende de ese arreglo.
 11. **Base de datos y seed (PR #6, `docs/specs/data-foundation.md`).**
     - **Contexto:**
       - `getVenueMapBySlug` lee de Postgres. `lib/db/seed/buildSeedData.ts` siembra recintos, secciones y butacas desde `VENUE_LAYOUTS_MOCK`: los layouts nuevos llegan a la BD sin tocar el seed.
@@ -155,6 +176,74 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
       - **Antes de `npm run build` o de Playwright:** se vuelve a sembrar la BD de desarrollo (`DATABASE_URL`), porque el build prerenderiza las rutas `/eventos/<slug>/entradas` desde ella. Se vacían sus tablas de `public` (`TRUNCATE … CASCADE`, como hace `testGlobalSetup` con la de test) o se recrea la rama `dev` de Neon, y después `npm run db:migrate && npm run db:seed`.
     - **BD de la sesión de implementación (autorizado por el usuario, 2026-10-04):** en la sesión que implementa esta spec, `DATABASE_URL` y `DATABASE_URL_TEST` apuntan a un Postgres 16 local del entorno de pruebas (`127.0.0.1:5433`, bases `ticketera_dev` y `ticketera_test`), desechable y ajeno a la BD de Neon del usuario. El developer de T5 y el reviewer pueden vaciar y volver a sembrar `ticketera_dev` sin preguntar. La BD de Neon del usuario no se toca desde la sesión.
     - **Tras el merge:** el usuario vuelve a sembrar la BD de desarrollo de su máquina de la misma forma (vaciar o recrear la rama `dev` de Neon y `npm run db:migrate && npm run db:seed`). Si no lo hace, verá los mapas rectangulares de antes. Vaciarla borra también los datos creados a mano en esa BD (órdenes, eventos de prueba).
+12. **Anillos de la arena con sitio para sus etiquetas (enmienda 2, T6).**
+    - **Problema** (Playwright tras T5, geometría de T2):
+      - **A 375 px:** el mapa mide 287 px de ancho (0.478 px por unidad). Nombre y precio (`text-xs`, 2 líneas de 16 px) miden 32 px, es decir, 66.9 unidades. No caben en las bandas de 62–64: se ven de ~30 px.
+      - **Desde `md`:** la etiqueta de VIP con la píldora mide 64 px de alto: nombre 20 + precio 20 + `mt-1` 4 + píldora 20, con la píldora de 108.1 px de ancho. A 1024 el mapa mide solo 484 px (0.807 px por unidad), porque lo limita su columna, así que la etiqueta ocupa 79.3 unidades. La estimación de "~53 unidades" del requisito 3 no contaba ese ancho.
+    - **Medidas reales** de `VenueMapView` (Playwright, deviceScaleFactor 1). Son px fijos, no escalan con el mapa:
+
+      | Pieza | < `md` (`text-xs`) | ≥ `md` (`text-sm`) |
+      |---|---|---|
+      | Nombre (alto · ancho VIP / Preferencial / General) | 16 · 19.3 / 65.8 / 42.9 | 20 · 22.5 / 76.7 / 50 |
+      | Precio | 16 · 51.3–53.8 | 20 · 59.8–62.7 |
+      | Precio con la insignia de selección (`h-5`, "✓ 2") | 20 · 88.2–90.7 | 20 · 96.8–99.7 |
+      | Píldora "Últimas entradas" (solo VIP, `low-stock`) | oculta | 20 · 108.1, a 4 px del precio |
+
+      **Ancho del mapa** con `viewBox` 600 × 640: lo fija `max-width: calc(min(64svh, 600px) * w / h)` o su columna.
+
+      | Ventana | Ancho del mapa | px por unidad | Antes (600 × 580) |
+      |---|---|---|---|
+      | 375 × 812 | 287 | 0.478 | 287 |
+      | 640 × 900 | 540 | 0.9 | 552 |
+      | 768 × 1024 | 563 | 0.938 | 621 |
+      | 1024 × 768 | 461 | 0.768 | 484 |
+      | 1440 × 900 | 540 | 0.9 | 596 |
+    - **Holgura de una etiqueta:** la menor distancia, en px, entre la caja de cada pieza (nombre, fila del precio y píldora) y el borde visible de su banda. El trazo blanco `stroke-3` mide 3 unidades y la mitad cae dentro de la banda. El cálculo:
+      - se toman las 4 esquinas y el punto medio del borde superior de cada caja;
+      - se pasan a unidades del mapa con la escala del `<svg>`;
+      - se calcula su radio r desde el centro (300, 54);
+      - la holgura es mín(r − (radio interior + 1.5), (radio exterior − 1.5) − r) × px por unidad.
+
+      En los anillos que abren hacia abajo, el borde interior manda en el centro del borde superior y el exterior en las esquinas inferiores, que es por donde sube el arco.
+    - **Objetivo:**
+      - **Sin selección:** holgura ≥ 3 px en todos los anchos, píldora incluida desde `md`.
+      - **Con la insignia de selección** (tras elegir entradas de pie y volver a "Todas las zonas"): ≥ 0.5 px, es decir, la insignia no toca el trazo. A 375 la fila del precio crece a ~91 px de ancho y es la que más se acerca al borde exterior.
+    - **Valores** (requisito 3): bandas de pie de 112, 98 y 94 unidades, barrido 46°–134°, Norte de 430 a 578 a 70°–110°, `viewBox` 600 × 640. Los `labelPos` maximizan la menor holgura de los dos objetivos.
+
+      Holgura medida en la página real, con estos valores aplicados al DOM. Formato "sin selección / con insignia", en px:
+
+      | Zona | 375 | 640 | 768 | 1024 | 1440 |
+      |---|---|---|---|---|---|
+      | VIP (con píldora desde 768) | 6.2 / 1.1 | 25.8 / 23.8 | 11.6 / 11.6 | 3.7 / 3.7 | 9.8 / 9.8 |
+      | Preferencial | 3.4 / 1.1 | 20.4 / 18.4 | 18.0 / 18.0 | 11.1 / 11.1 | 16.4 / 16.4 |
+      | General | 3.4 / 1.2 | 20.4 / 18.4 | 18.0 / 18.0 | 11.1 / 11.1 | 16.4 / 16.4 |
+
+      Coinciden con el modelo de la holgura (±0.1 px).
+    - **Por qué se estrecha Norte y crece el `viewBox`:**
+      - **Los anillos necesitan ~116 unidades más de radio.** General acaba en 422 (antes, 306). Para quedar dentro del ancho 600 con ≥ 4 de margen, su barrido baja a 88° (46°–134°): 300 − 422 · cos 46° = 6.8.
+      - **Norte tiene menos banda radial.** Para conservar 80 butacas con un plano de ≤ 622 de ancho y ≤ 12 filas, necesita 6 filas, así que el plano debe ampliar más la banda (`scale` mayor). Eso solo cabe con un barrido menor, para que el ancho del plano (`scale` × cuerda exterior + 48) no pase de 622.
+      - **Alternativas evaluadas** con `generateArcSeatRows` real (80 butacas, ≤ 622, letras con ≥ 12 de margen):
+
+        | Alternativa | Resultado |
+        |---|---|
+        | `viewBox` de 580 o 590 de alto | no hay solución |
+        | 600 de alto | Norte ≤ 30° |
+        | **640 de alto (elegida)** | Norte de 40° |
+        | 680 de alto | Norte de 46°, pero el mapa se reduce otro ~6 % en escritorio y el minimapa crece |
+        | margen sin selección de 4 px, a 640 de alto | Norte de 38° |
+        | sin contar la insignia, a 640 de alto | Norte de 42°, pero con selección la insignia se sale ~2 px del borde a 375 |
+    - **Efectos:**
+      - **Mapa:** más alto (600 × 640). A 375 mide 287 × 306 px (antes 287 × 277). En escritorio es más estrecho (tabla de anchos de arriba).
+      - **Tribuna Norte:**
+        - 40° de barrido, filas A–F con 12, 12, 13, 14, 14 y 15 butacas (80), `scale` 1.305 (las válidas van de 1.298 a 1.314; se toma el centro);
+        - sigue con 53 disponibles, 25 ocupadas y las accesibles `norte-F-1` y `norte-F-15`, que ahora son los dos extremos de la fila F;
+        - `norte-A-1` sigue disponible. La mejor butaca libre pasa a `norte-A-7` de 12, que no es un extremo;
+        - máximo de ocupadas por fila: 38.5 % (fila C, 5 de 13).
+      - **Ids:** dejan de existir `norte-E-15` y `norte-F-16`, y aparecen `norte-A-11` y `norte-A-12`. Ninguna orden demo ni test usa los que desaparecen. El resto conserva su estado (decisión 4).
+      - **Plano de Norte:** `seatViewBox` 564 × 275 (antes 590 × 293), con proporción parecida (2.05 frente a 2.01). Área de toque a 375: 17.6 px con el plano entero y 26.5 px tras un "Acercar" (antes 16.9 y 25.3).
+      - **Minimapa:** su alto sigue la proporción del mapa. Pasa a 96 × 102 px y 112 × 119 px (antes 96 × 93 y 112 × 108). El arreglo de `SeatPlan` de la decisión 7 debe dejar 0 solapes también con este alto, y T6 lo comprueba con Playwright.
+      - **Sin cambios:** ids de zona, `ticketTypeId`, capacidades, orden, `occupiedRatio` y escenario.
+      - **Seed:** su test deriva el `viewBox` (T1b), así que no cambia. Hay que volver a sembrar la BD de desarrollo (decisión 11).
 
 ## Requisitos
 
@@ -199,23 +288,32 @@ Convenciones:
 
 Los valores son definitivos: están verificados con el `generateArcSeatRows` real contra todas las invariantes. Si la verificación visual exigiera cambiarlos, primero se actualiza esta spec.
 
-3. **Arena `noche-de-sintetizadores-lima`** (T2), `viewBox` `"0 0 600 580"`:
+3. **Arena `noche-de-sintetizadores-lima`** (T2; valores de T6, decisión 12), `viewBox` `"0 0 600 640"`:
 
    | Zona | Tipo | Sector (radios · ángulos) | `labelPos` |
    |---|---|---|---|
-   | `vip` | general (1500) | 102–166 · 34°…146° | (300, 188) |
-   | `preferencial` | general (4000) | 174–236 · 34°…146° | (300, 259) |
-   | `general` | general (12000) | 244–306 · 34°…146° | (300, 329) |
-   | `norte` | numbered | 314–518 · 57°…123° | (300, 470) |
+   | `vip` | general (1500) | 102–214 · 46°…134° | (300, 204) |
+   | `preferencial` | general (4000) | 222–320 · 46°…134° | (300, 318) |
+   | `general` | general (12000) | 328–422 · 46°…134° | (300, 424) |
+   | `norte` | numbered | 430–578 · 70°…110° | (300, 558) |
 
-   - **Plano de `norte`:** `generateArcSeatRows({ scale: 0.96, rowLabels: A–F, occupiedRatio: 0.3, accessibleSeats: ["norte-F-1","norte-F-15"] })`.
-     - Filas: 10, 12, 13, 14, 15 y 16 butacas (80).
-     - `seatViewBox` `"0 0 590 293"`; `planTransform` ≈ { 0.96, 6.84, −280.65 }.
-     - Área de toque a 375 px: 16.9 px con el plano entero y 25.3 px tras un "Acercar".
-   - VIP es `low-stock`: su banda de 64 aloja la píldora "Últimas entradas" desde `md` (~53 unidades a 768 px).
-   - Las bandas de 62–64 alojan nombre y precio a 375 px (~58 unidades).
-   - El margen mínimo con el `viewBox` es 8 (Norte abajo).
-   - Norte tiene 53 butacas disponibles, 25 ocupadas y 2 accesibles. Ninguna fila supera el 38 % de ocupadas.
+   - **Separaciones:** las de la decisión 1, es decir, 12 entre el escenario y VIP y 8 entre anillos. Los tres anillos de pie comparten el barrido.
+   - **Plano de `norte`:** `generateArcSeatRows({ scale: 1.305, rowLabels: A–F, occupiedRatio: 0.3, accessibleSeats: ["norte-F-1","norte-F-15"] })`.
+     - Filas: 12, 12, 13, 14, 14 y 15 butacas (80).
+     - `seatViewBox` `"0 0 564 275"`; `planTransform` ≈ { 1.305, −109.52, −573.78 }.
+     - Área de toque a 375 px: 17.6 px con el plano entero y 26.5 px tras un "Acercar".
+   - **Etiquetas** (decisión 12):
+     - sin selección: nombre y precio de VIP, Preferencial y General, y la píldora "Últimas entradas" de VIP (`low-stock`) desde `md`, quedan a ≥ 3 px del borde visible de su banda en todos los anchos (mínimo medido: 3.4 px a 375 y 3.7 px a 1024);
+     - con la insignia de selección, a ≥ 0.5 px (mínimo medido: 1.1 px a 375).
+   - **Márgenes con el `viewBox`:** el mínimo es 6.8 (General, a los lados), y abajo queda 8 (Norte).
+   - **Ocupación de Norte:**
+     - 53 butacas disponibles, 25 ocupadas y 2 accesibles (los extremos de la fila F);
+     - ninguna fila supera el 38.5 % de ocupadas;
+     - `norte-A-1` está disponible, y la mejor butaca libre es `norte-A-7`.
+   - **Geometría anterior (T2, la sustituye T6):**
+     - `viewBox` 580;
+     - VIP 102–166, Preferencial 174–236 y General 244–306, a 34°–146°;
+     - Norte 314–518 a 57°–123°, con `scale` 0.96, filas de 10, 12, 13, 14, 15 y 16, y `seatViewBox` 590 × 293.
 4. **Teatro `la-casa-de-los-espejos`** (T3), `viewBox` `"0 0 600 484"`:
 
    | Zona | Tipo | Sector | `labelPos` |
@@ -292,9 +390,9 @@ Los valores son definitivos: están verificados con el `generateArcSeatRows` rea
 
      `venueLayoutRecords.test.ts` recorre `VENUE_LAYOUTS_MOCK` sin fijar valores, y no cambia.
    - **Tests de `seating.service.test.ts` que siguen valiendo con los datos nuevos:**
-     - "ninguna fila de norte/platea supera el 70 %": máximos 38 % y 50 %;
+     - "ninguna fila de norte/platea supera el 70 %": máximos 38.5 % y 50 %;
      - "norte/platea/preferencial conservan ≥ 1 accesible";
-     - "Tribuna Norte: el mejor asiento está en la fila A y no en un extremo": `norte-A-5` de 10.
+     - "Tribuna Norte: el mejor asiento está en la fila A y no en un extremo": `norte-A-7` de 12 con la geometría de T6 (con la de T2 era `norte-A-5` de 10).
    - **Ids que dejan de existir** (filas o números fuera del plano nuevo, p. ej. `platea-J-1`, `mezanine-F-1` o `norte-H-10`): un enlace antiguo con ellos se trata como hoy cualquier butaca inexistente:
      - el checkout responde `invalid-tickets` ("No pudimos preparar tu compra");
      - la precarga de la Fase 6 de la spec del estadio los ignora.
@@ -332,8 +430,19 @@ Los valores son definitivos: están verificados con el `generateArcSeatRows` rea
     - El resto del archivo no cambia, incluido "siembra 6 categorías, 13 eventos publicados, 1 borrador y 456 asientos de recinto".
     - El test no contiene literales de `viewBox` ni listas de slugs de secciones con `planTransform`.
 
+### Anillos de la arena (Fase 2, T6)
+12. **Datos y diseño de página de la arena con la geometría de la decisión 12:**
+    - **`nocheDeSintetizadores.mock.ts`:** los sectores, el `viewBox`, los `labelPos` y la `scale` de Norte del requisito 3. No cambia nada más: ids, `ticketTypeId`, `kind`, capacidades, orden, `rowLabels`, `occupiedRatio` ni accesibles.
+    - **`nocheDeSintetizadores.mock.test.ts`:** los mismos casos de T2, con los valores nuevos (sección "Tests").
+    - **`design-system/ticketera/pages/ticket-selection.md`:**
+      - en la tabla de barridos de "Mapa de zonas", la arena pasa a "VIP, Preferencial y General de pie · 88° (46°–134°)" y "Tribuna Norte (numerada) · 40° (70°–110°)";
+      - en "Etiquetas en HTML", una nota: en la arena, las bandas de pie miden 94–112 unidades para que nombre y precio (y la píldora de VIP desde `md`) queden a ≥ 3 px del borde, y la insignia de selección a ≥ 0.5 px. Se anotan las holguras mínimas medidas por T6 en cada ancho;
+      - en "Planos grandes", el área de toque medida de Norte tras "Acercar" (26.5 px) y el rango "~16–18 px" con el plano entero;
+      - las holguras de la pastilla de zoom y del minimapa que citan butacas o letras de `norte` se sustituyen por las que mida T6 con Playwright.
+    - **Otros archivos:** no cambia ninguno. `seating.service.test.ts` y `buildSeedData.test.ts` no fijan valores de la geometría de la arena y siguen pasando.
+
 ## Criterios de aceptación
-Todos son de la Fase 1.
+Son de la Fase 1 salvo los de "Fase 2: anillos de la arena", al final de esta sección. El criterio de la arena de la Fase 1 se cumplió con la geometría de T2. Tras T6 lo sustituye el de la Fase 2.
 
 ### Datos (unit tests)
 - [ ] Dado T1, cuando se compara `JSON.stringify(VENUE_LAYOUTS_MOCK)` antes y después, entonces es idéntico, y `npx vitest run modules/seating modules/checkout modules/tickets` pasa sin cambiar ningún test fuera de `seating.service.test.ts`.
@@ -346,8 +455,8 @@ Todos son de la Fase 1.
   - tiene los 4 slugs con mapa y cada uno cumple todas las invariantes del requisito 6;
   - las zonas numeradas de arena, teatro y comedia tienen `seatViewBox` de ≤ 622 de ancho y ≤ 12 filas;
   - las del festival siguen con ≤ 10 butacas por fila y ≤ 400 de ancho.
-- [ ] Dado `getVenueMapBySlug("noche-de-sintetizadores-lima")`, entonces:
-  - `viewBox` es `"0 0 600 580"` y los sectores, los `labelPos` y las capacidades son los del requisito 3;
+- [ ] Dado `getVenueMapBySlug("noche-de-sintetizadores-lima")` tras T2 (geometría de T2; lo sustituye el primer criterio de la Fase 2), entonces:
+  - `viewBox` es `"0 0 600 580"` y los sectores, los `labelPos` y las capacidades son los de T2 (requisito 3, "Geometría anterior");
   - las zonas siguen siendo `vip`, `preferencial`, `general` (de pie) y `norte` (numerada);
   - Norte tiene las filas A–F con 10, 12, 13, 14, 15 y 16 butacas (80), `seatViewBox` `"0 0 590 293"` y `planTransform.scale` 0.96;
   - sus accesibles son exactamente `norte-F-1` y `norte-F-15`;
@@ -401,6 +510,43 @@ Se usa un script en el scratchpad del reviewer, con el Chromium de `/opt/pw-brow
   - `/checkout?evento=risas-sin-filtro&preferencial=1&asientos=preferencial-A-5`.
 - [ ] Dada `/checkout?evento=la-casa-de-los-espejos&platea=2&asientos=platea-F-7,platea-F-8`, entonces muestra "No pudimos preparar tu compra", igual que hoy: `platea-F-7` está ocupada (decisión 4).
 
+### Fase 2: anillos de la arena (T6)
+
+**Datos (unit tests y verificación):**
+- [ ] Dado `SINTETIZADORES_VENUE` tras T6, entonces `nocheDeSintetizadores.mock.test.ts`, sin BD, comprueba:
+  - `viewBox` `"0 0 600 640"` y el escenario compartido;
+  - los sectores exactos del requisito 3 (102–214, 222–320 y 328–422 a 46°–134°, y Norte 430–578 a 70°–110°), con el `path` de cada zona igual a `getAnnularSectorPath` de su sector;
+  - los `labelPos` (300, 204), (300, 318), (300, 424) y (300, 558);
+  - los mismos ids, `ticketTypeId`, tipos y capacidades (1500, 4000 y 12000);
+  - Norte: filas A–F con 12, 12, 13, 14, 14 y 15 butacas (80), `seatViewBox` `"0 0 564 275"` y `planTransform.scale` 1.305;
+  - accesibles exactamente `norte-F-1` y `norte-F-15`, 53 disponibles y 25 ocupadas, y `norte-A-1` disponible.
+- [ ] Dado `getVenueMapBySlug("noche-de-sintetizadores-lima")` con BD, entonces coincide con el layout del mock y `resolveSeats(map, ["norte-A-1"])` da "Tribuna Norte · Fila A · Asiento 1".
+- [ ] Dado T6, entonces modifica solo sus 3 archivos. No toca `seating.service.test.ts` ni `lib/db/seed/buildSeedData.test.ts`, y los dos pasan. Siguen pasando, en particular:
+  - las invariantes del mapa curvo (requisito 6);
+  - "ninguna fila de norte supera el 70 %" (máximo 38.5 %);
+  - "Tribuna Norte: el mejor asiento… en la fila A y no en un extremo" (`norte-A-7`).
+- [ ] Dado `npx vitest run` sin BD (`DATABASE_URL_TEST=`) y con BD (una sola ejecución con BD a la vez), entonces pasa en los dos casos, incluidos `modules/checkout` (butacas de Norte del mapa real) y `modules/tickets`.
+- [ ] Dada la BD de desarrollo vaciada y vuelta a sembrar (decisión 11), cuando se ejecutan `npm run lint` y `npm run build`, entonces pasan sin errores. `/eventos/noche-de-sintetizadores-lima/entradas` sigue prerenderizada y muestra los anillos nuevos.
+- [ ] Dado el cierre de la Fase 2, entonces el resumen final al usuario recuerda volver a sembrar la BD de desarrollo de su máquina tras el merge (decisión 11).
+
+**Verificación visual (Playwright, developer de T6 y reviewer).** Mismo entorno que la verificación de la Fase 1: build y start, con la BD vuelta a sembrar. Sub-paso 1 de `noche-de-sintetizadores-lima` a 375 × 812, 640 × 900, 768 × 1024, 1024 × 768 y 1440 × 900. Antes de medir, el mapa se desplaza a la vista (`scrollIntoView`), para que la cabecera fija no tape las etiquetas.
+- [ ] Dado el mapa sin selección, entonces:
+  - en VIP, Preferencial y General, la holgura de la decisión 12 es ≥ 3 px en cada ancho. Se mide sobre cada pieza visible de la etiqueta: nombre, precio y, desde 768, la píldora de VIP;
+  - `document.elementFromPoint` en las 4 esquinas de cada pieza, a 1 px hacia dentro, devuelve la forma de su propia zona.
+- [ ] Dado el mapa desde 768 px (768, 1024 y 1440), entonces la píldora "Últimas entradas" de VIP es visible y su caja entera queda dentro de la banda de VIP, a ≥ 3 px de su borde. No se cruza con Preferencial (mínimo previsto: 3.7 px a 1024).
+- [ ] Dadas 2 entradas en VIP, Preferencial y General (con "Agregar una entrada de…" en cada zona y volviendo con "Todas las zonas"), entonces en cada ancho:
+  - la insignia "✓ 2" se ve tras el precio de las tres;
+  - la holgura de cada etiqueta, insignia incluida, es ≥ 0.5 px (mínimo previsto: 1.1 px a 375).
+- [ ] Dado el mapa, con y sin selección, entonces:
+  - la etiqueta de Tribuna Norte queda dentro de su zona (`elementFromPoint` en su centro);
+  - ninguna caja de etiqueta se cruza con otra ni con "ESCENARIO";
+  - no hay scroll horizontal.
+- [ ] Dado el plano de Norte, entonces:
+  - a 375 con el plano entero, cada `[data-seat-id]` mide ≥ 16 px (previsto 17.6), y ≥ 24 px tras un "Acercar" (previsto 26.5);
+  - a 640, 768, 1024 y 1440, sin zoom, la caja de ningún `[data-seat-id]` se cruza con la del grupo "Zoom del plano" ni con la del minimapa (depende del arreglo de la decisión 7). Se anotan las holguras para el requisito 12.
+- [ ] Dada `/checkout?evento=noche-de-sintetizadores-lima&norte=1&asientos=norte-A-1`, entonces muestra el formulario de pago con la butaca en el resumen.
+- [ ] Se adjuntan capturas del mapa a 375 (sin selección y con selección), 768, 1024 y 1440, y del plano de Norte a 375 y 1440.
+
 ## Diseño técnico
 - **Rutas (`app/`):** sin cambios.
 - **Componentes:** ninguno nuevo ni modificado por esta spec. Se usan los existentes:
@@ -437,7 +583,8 @@ Se usa un script en el scratchpad del reviewer, con el Chromium de `/opt/pw-brow
   ```
 
   `VenueLayout`, `VenueMap`, el contrato B (`getVenueMapBySlug`, `resolveSeats`, ids `<zona>-<FILA>-<n>`) y el C (`asientos=`) no cambian.
-- **Diseño:** `design-system/ticketera/pages/ticket-selection.md` (requisito 10). MASTER no cambia.
+- **Diseño:** `design-system/ticketera/pages/ticket-selection.md` (requisitos 10 y 12). MASTER no cambia.
+- **Fase 2 (T6):** solo cambian los valores de `nocheDeSintetizadores.mock.ts` y de su test, más el diseño de página (requisito 12). No hay componentes, utils, schema, service ni contrato nuevos. Las etiquetas caben por geometría, no por cambios en `VenueMapView` (decisión 12).
 
 ## Reutilización
 - **Del festival (spec del estadio, Fase 1):**
@@ -475,11 +622,13 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
   - **Con BD** (`describeWithDb`), con `getVenueMapBySlug`: el mapa coincide con el layout del mock, y `resolveSeats` da las etiquetas o el `null` esperados (necesita los nombres de zona del evento).
 
   Los casos de cada recinto son:
-- **`modules/seating/data/nocheDeSintetizadores.mock.test.ts`** (nuevo, T2):
-  - `viewBox`;
+- **`modules/seating/data/nocheDeSintetizadores.mock.test.ts`** (nuevo en T2; T6 actualiza sus valores a los del requisito 3):
+  - `viewBox` (`"0 0 600 640"`) y el escenario compartido;
   - los sectores exactos de `SINTETIZADORES_VENUE.sectors` (requisito 3) y los `labelPos`;
-  - Norte: filas, butacas por fila (total 80), `seatViewBox`, `planTransform.scale` y accesibles exactas;
-  - `resolveSeats` de `norte-A-1` con su etiqueta.
+  - Norte: filas, butacas por fila (12, 12, 13, 14, 14 y 15, total 80), `seatViewBox` (`"0 0 564 275"`), `planTransform.scale` (1.305), accesibles exactas, 53 disponibles y 25 ocupadas, y `norte-A-1` disponible;
+  - `resolveSeats` de `norte-A-1` con su etiqueta (con BD).
+  - Los títulos de los `it` que citan valores (barridos, filas, `seatViewBox`, escala) se actualizan con ellos.
+  - El ajuste de las etiquetas depende del tamaño del texto en el navegador y no se puede probar en jsdom: lo verifica Playwright (criterios de la Fase 2).
 - **`modules/seating/data/laCasaDeLosEspejos.mock.test.ts`** (nuevo, T3):
   - `viewBox`, sectores y `labelPos`;
   - Platea (94) y Mezanine (60): filas, butacas por fila, `seatViewBox`, escala y accesibles exactas;
@@ -506,36 +655,53 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
 - **Reviewer, al final:**
   - vuelve a sembrar la BD de desarrollo;
   - ejecuta la verificación completa y el script de Playwright.
+- **Fase 2 (T6), en otra sesión:**
+  - empieza cuando esté cerrado el arreglo de `SeatPlan` de la decisión 7 (decisión 10);
+  - una sola tarea, secuencial, sin developers en paralelo;
+  - **BD local:** la autorización de la decisión 11 nombra al developer de T5 y al reviewer. Esta enmienda la extiende al developer de T6 y al reviewer de la Fase 2, en las mismas condiciones: Postgres 16 local desechable (`127.0.0.1:5433`, `ticketera_dev`), sin tocar la BD de Neon del usuario. Queda autorizado al aprobar esta spec. Si la sesión no usa ese Postgres local, se pregunta al usuario antes de vaciar nada.
 
-### Fase 1. Recintos curvos (6 tareas, 12 archivos; T1 ya hecha: quedan 5 tareas sobre 11 archivos)
+### Fase 1. Recintos curvos (6 tareas, 12 archivos; hechas)
 - [x] T1. Datos compartidos del estadio y reparto del mock en un archivo por recinto, sin cambio de datos; invariantes de `seating.service.test.ts` guiadas por los datos, con el límite de tamaño por mapa (requisitos 1, 2 y 6; tests de T1).
   - Archivos: `modules/seating/data/stadium.mock.ts` (nuevo), `modules/seating/data/festivalViveLatino.mock.ts` (nuevo), `modules/seating/data/nocheDeSintetizadores.mock.ts` (nuevo, layout rectangular de hoy), `modules/seating/data/laCasaDeLosEspejos.mock.ts` (nuevo, ídem), `modules/seating/data/risasSinFiltro.mock.ts` (nuevo, ídem), `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`.
   - Depende de: —.
   - Secuencial (base: toca el agregador y el test compartido).
   - Verificar `npx vitest run modules/seating modules/checkout modules/tickets` y el `JSON.stringify` idéntico.
-- [ ] T1b. Test del seed independiente de la geometría (requisito 11, decisión 11).
+- [x] T1b. Test del seed independiente de la geometría (requisito 11, decisión 11).
   - Archivos: `lib/db/seed/buildSeedData.test.ts`.
   - Depende de: T1.
   - Secuencial (archivo compartido de `lib/`; va antes de T2–T4).
   - Verificar `DATABASE_URL_TEST= npx vitest run lib/db/seed/buildSeedData.test.ts` y `npx eslint lib/db/seed/buildSeedData.test.ts`.
-- [ ] T2. Arena curva (requisito 3), con su test.
+- [x] T2. Arena curva (requisito 3, geometría anterior), con su test.
   - Archivos: `modules/seating/data/nocheDeSintetizadores.mock.ts`, `modules/seating/data/nocheDeSintetizadores.mock.test.ts` (nuevo).
   - Depende de: T1b.
   - En paralelo con T3 y T4, sin BD.
   - En la ejecución con BD, por turnos, comprobar también `modules/checkout` (Norte del mapa real).
-- [ ] T3. Teatro curvo (requisito 4), con su test.
+- [x] T3. Teatro curvo (requisito 4), con su test.
   - Archivos: `modules/seating/data/laCasaDeLosEspejos.mock.ts`, `modules/seating/data/laCasaDeLosEspejos.mock.test.ts` (nuevo).
   - Depende de: T1b.
   - En paralelo con T2 y T4, sin BD.
   - En la ejecución con BD, por turnos, comprobar también `modules/tickets` (órdenes demo).
-- [ ] T4. Comedia curva (requisito 5), con su test.
+- [x] T4. Comedia curva (requisito 5), con su test.
   - Archivos: `modules/seating/data/risasSinFiltro.mock.ts`, `modules/seating/data/risasSinFiltro.mock.test.ts` (nuevo).
   - Depende de: T1b.
   - En paralelo con T2 y T3, sin BD.
-- [ ] T5. Cierre: `sectors` obligatorio, tests sin rama rectangular y diseño de página (requisitos 9 y 10). Las holguras medidas del requisito 10 las aporta la verificación Playwright: el developer la ejecuta con el script del criterio, y el reviewer la repite. Antes del build y de Playwright, el developer vuelve a sembrar la BD de desarrollo (decisión 11).
+- [x] T5. Cierre: `sectors` obligatorio, tests sin rama rectangular y diseño de página (requisitos 9 y 10). Las holguras medidas del requisito 10 las aporta la verificación Playwright: el developer la ejecuta con el script del criterio, y el reviewer la repite. Antes del build y de Playwright, el developer vuelve a sembrar la BD de desarrollo (decisión 11).
   - Archivos: `modules/seating/data/stadium.mock.ts`, `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2, T3 y T4.
   - Secuencial.
+
+### Fase 2. Anillos de la arena (1 tarea, 3 archivos)
+Va en una fase propia porque la Fase 1 ya tiene 6 tareas y está cerrada. Es entregable por sí sola: la arena sigue funcionando y solo cambia su geometría.
+- [ ] T6. Anillos de la arena con sitio para sus etiquetas: geometría del requisito 3 (decisión 12), su test y el diseño de página (requisito 12).
+  - Archivos: `modules/seating/data/nocheDeSintetizadores.mock.ts`, `modules/seating/data/nocheDeSintetizadores.mock.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
+  - Depende de: T5 y del arreglo de `SeatPlan` de la decisión 7, ya cerrado (comparte `ticket-selection.md`, y el criterio de 0 solapes depende de él).
+  - Secuencial.
+  - Verificación, en este orden:
+    1. **Sin BD:** `DATABASE_URL_TEST= npx vitest run modules/seating lib/db/seed`, y `npx eslint modules/seating/data/nocheDeSintetizadores.mock.ts modules/seating/data/nocheDeSintetizadores.mock.test.ts`.
+    2. **Suite completa con BD:** `npx vitest run` con el `DATABASE_URL_TEST` de `.env`, una sola ejecución con BD a la vez. Incluye `modules/checkout` y `modules/tickets`.
+    3. **BD de desarrollo** (decisión 11): se vacían las tablas de `public` de `ticketera_dev` (`TRUNCATE … CASCADE`) y se ejecuta `npm run db:migrate && npm run db:seed`.
+    4. `npm run lint` y `npm run build`.
+    5. **Playwright** de los criterios de la Fase 2, contra `npm run start`. El developer lo ejecuta para anotar las holguras en `ticket-selection.md`, y el reviewer lo repite.
 
 ## Preguntas abiertas
 Ninguna. La única (vaciar la BD de desarrollo durante la sesión) la resolvió el usuario: ver la decisión 11.
