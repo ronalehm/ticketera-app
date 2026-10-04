@@ -1,6 +1,10 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { and, eq, inArray } from "drizzle-orm";
+import { describe, expect, it, vi } from "vitest";
+import { eventSeats, events } from "@/lib/db/schema/events";
+import { venueSeats, venueSections } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events";
 import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
 import { PITCH_STAGE, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
@@ -18,6 +22,9 @@ import { getRowEdgeLabelPoints } from "../utils/arcSeatRows";
 import { findBestAvailableSeats } from "../utils/bestSeats";
 import { getZoneTones } from "../utils/zoneTone";
 import { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./seating.service";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const STADIUM_SLUG = "festival-vive-latino-lima";
 /** Eventos con mapa: uno por layout mock. */
@@ -129,6 +136,36 @@ describe("seating.service", () => {
       expect(await getVenueMapBySlug("el-circo-de-las-estrellas")).toBeNull();
       expect(await getVenueMapBySlug("no-existe")).toBeNull();
       expect(await getVenueMapBySlug("feria-familiar-de-verano")).toBeNull();
+    });
+  });
+
+  describeWithDb("getVenueMapBySlug con butacas retiradas", () => {
+    const slug = "copa-del-norte-trujillo";
+    const seatIds = async () =>
+      (await getNumberedZone(slug, "occidente")).rows.flatMap((row) => row.seats.map((seat) => seat.id));
+
+    it("no pinta las butacas retiradas", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        expect(await seatIds()).toHaveLength(39);
+        expect(await seatIds()).toContain("occidente-A-2");
+
+        const seatA2 = tx
+          .select({ id: venueSeats.id })
+          .from(venueSeats)
+          .innerJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
+          .where(and(eq(venueSections.slug, "occidente"), eq(venueSeats.rowLabel, "A"), eq(venueSeats.number, 2)));
+        const copa = tx.select({ id: events.id }).from(events).where(eq(events.slug, slug));
+        const retired = await tx
+          .update(eventSeats)
+          .set({ retiredAt: new Date() })
+          .where(and(inArray(eventSeats.eventId, copa), inArray(eventSeats.venueSeatId, seatA2)))
+          .returning({ id: eventSeats.id });
+
+        expect(retired).toHaveLength(1);
+        const ids = await seatIds();
+        expect(ids).toHaveLength(38);
+        expect(ids).not.toContain("occidente-A-2");
+      });
     });
   });
 
