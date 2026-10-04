@@ -16,7 +16,7 @@ import { buildTicketPdfInput } from "../utils/ticketPdfInput";
 import { CheckoutStatusMessage } from "./CheckoutStatusMessage";
 import { ConfirmationTicketCard } from "./ConfirmationTicketCard";
 
-const CONTAINER_CLASS = "mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 py-8 md:px-6 md:py-12";
+const CONTAINER_CLASS = "mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 py-8 md:px-6 md:py-12";
 const ACTION_CLASS = "h-11 cursor-pointer gap-2 px-4 font-semibold sm:px-6 duration-200 [&_svg:not([class*='size-'])]:size-5";
 const OUTLINE_ACTION_CLASS = cn(
   ACTION_CLASS,
