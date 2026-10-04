@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { organizerEventSchema } from "../schemas/organizer.schema";
 import type { OrganizerEventFormValues, TicketTypeRow } from "../types/organizer.types";
 import {
+  applySeatingMode,
   buildStartsAt,
   createTicketTypeRow,
   formatSeatGridSummary,
   formatTicketCount,
+  getCoverImageError,
   getMinTicketPrice,
+  getNewRowKind,
   getRowCapacity,
   getSeatGridSize,
   getTicketCapacity,
@@ -15,28 +18,149 @@ import {
   toOrganizerEvent,
 } from "./organizerEventForm";
 
+const ROW_DEFAULTS = { description: "", maxPerOrder: "10" };
+
 function row(price: string, quantity: string, name = "General"): TicketTypeRow {
-  return { id: `row-${price}-${quantity}`, name, price, kind: "general", quantity, rows: "", seatsPerRow: "" };
+  return { ...ROW_DEFAULTS, id: `row-${price}-${quantity}`, name, price, kind: "general", quantity, rows: "", seatsPerRow: "" };
 }
 
 function numbered(rows: string, seatsPerRow: string, price = "120", name = "Platea"): TicketTypeRow {
-  return { id: `row-${rows}-${seatsPerRow}`, name, price, kind: "numbered", quantity: "", rows, seatsPerRow };
+  return { ...ROW_DEFAULTS, id: `row-${rows}-${seatsPerRow}`, name, price, kind: "numbered", quantity: "", rows, seatsPerRow };
 }
 
 describe("createTicketTypeRow", () => {
-  it("crea una fila general vacía con un id único", () => {
+  it("crea una fila general vacía con un id único, sin descripción y con máximo por compra 10", () => {
     const first = createTicketTypeRow();
     const second = createTicketTypeRow();
     expect(first).toEqual({
       id: expect.any(String),
       name: "",
       price: "",
+      description: "",
+      maxPerOrder: "10",
       kind: "general",
       quantity: "",
       rows: "",
       seatsPerRow: "",
     });
     expect(first.id).not.toBe(second.id);
+  });
+
+  it("crea una fila del tipo indicado", () => {
+    expect(createTicketTypeRow("numbered").kind).toBe("numbered");
+    expect(createTicketTypeRow("general").kind).toBe("general");
+  });
+});
+
+describe("getNewRowKind", () => {
+  it.each([
+    ["numbered", "numbered"],
+    ["general", "general"],
+    ["mixed", "general"],
+    ["", "general"],
+  ] as const)("%j → %s", (mode, expected) => {
+    expect(getNewRowKind(mode)).toBe(expected);
+  });
+});
+
+describe("applySeatingMode", () => {
+  const general = { ...row("50", "100"), rows: "5", seatsPerRow: "8" };
+  const seated = { ...numbered("10", "20"), quantity: "30" };
+
+  it.each(["general", "numbered"] as const)("%s fuerza el tipo y conserva cantidad, filas y asientos", (mode) => {
+    expect(applySeatingMode([general, seated], mode)).toEqual([
+      { ...general, kind: mode },
+      { ...seated, kind: mode },
+    ]);
+  });
+
+  it("mixed no cambia nada", () => {
+    expect(applySeatingMode([general, seated], "mixed")).toEqual([general, seated]);
+  });
+
+  it.each(["general", "numbered", "mixed"] as const)("%s devuelve objetos nuevos sin mutar los originales", (mode) => {
+    const rows = [general, seated];
+    const result = applySeatingMode(rows, mode);
+    expect(result).not.toBe(rows);
+    result.forEach((value, index) => expect(value).not.toBe(rows[index]));
+    expect(rows).toEqual([general, { ...numbered("10", "20"), quantity: "30" }]);
+  });
+
+  it("ir y volver de modo no pierde la cantidad", () => {
+    const back = applySeatingMode(applySeatingMode([general], "numbered"), "general");
+    expect(back).toEqual([general]);
+  });
+});
+
+describe("getCoverImageError", () => {
+  const close = vi.fn();
+
+  function mockBitmap(width: number, height: number) {
+    const createImageBitmap = vi.fn().mockResolvedValue({ width, height, close });
+    vi.stubGlobal("createImageBitmap", createImageBitmap);
+    return createImageBitmap;
+  }
+
+  /** Archivo del tipo y peso indicados (el contenido no importa: el tamaño en píxeles lo da el mock). */
+  function image(type: string, bytes = 1024) {
+    return new File([new Uint8Array(bytes)], "portada", { type });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    close.mockClear();
+  });
+
+  it.each(["image/png", "image/jpeg"])("%s de 1920 × 1080 → null y cierra el bitmap", async (type) => {
+    const createImageBitmap = mockBitmap(1920, 1080);
+    const file = image(type);
+    await expect(getCoverImageError(file)).resolves.toBeNull();
+    expect(createImageBitmap).toHaveBeenCalledWith(file);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("acepta exactamente 1200 × 675 y 5 MB", async () => {
+    mockBitmap(1200, 675);
+    await expect(getCoverImageError(image("image/jpeg", 5 * 1024 * 1024))).resolves.toBeNull();
+  });
+
+  it.each(["image/gif", "image/webp", "application/pdf"])("%s → error de formato sin leer la imagen", async (type) => {
+    const createImageBitmap = mockBitmap(1920, 1080);
+    await expect(getCoverImageError(image(type))).resolves.toBe("Sube una imagen en formato JPG o PNG.");
+    expect(createImageBitmap).not.toHaveBeenCalled();
+  });
+
+  it("el formato tiene prioridad sobre el peso", async () => {
+    mockBitmap(1920, 1080);
+    await expect(getCoverImageError(image("image/gif", 6 * 1024 * 1024))).resolves.toBe(
+      "Sube una imagen en formato JPG o PNG.",
+    );
+  });
+
+  it("un JPG de 6 MB → error de peso sin leer la imagen", async () => {
+    const createImageBitmap = mockBitmap(1920, 1080);
+    await expect(getCoverImageError(image("image/jpeg", 6 * 1024 * 1024))).resolves.toBe(
+      "La imagen pesa más de 5 MB. Sube una más liviana.",
+    );
+    expect(createImageBitmap).not.toHaveBeenCalled();
+  });
+
+  it("una imagen que no se puede leer → error de lectura", async () => {
+    vi.stubGlobal("createImageBitmap", vi.fn().mockRejectedValue(new DOMException("bad", "InvalidStateError")));
+    await expect(getCoverImageError(image("image/png"))).resolves.toBe(
+      "No se pudo leer la imagen. Prueba con otro archivo.",
+    );
+  });
+
+  it.each([
+    [800, 600],
+    [1199, 1080],
+    [1920, 674],
+    [675, 1200],
+  ])("%i × %i → error de tamaño y cierra el bitmap", async (width, height) => {
+    mockBitmap(width, height);
+    await expect(getCoverImageError(image("image/png"))).resolves.toBe("La imagen debe medir al menos 1200 × 675 px.");
+    expect(close).toHaveBeenCalledOnce();
   });
 });
 
@@ -185,6 +309,22 @@ describe("getTicketTypeErrors", () => {
       },
     ]);
   });
+
+  it("devuelve los mensajes de máximo por compra y descripción", () => {
+    const rows = [
+      { ...row("50", "100"), maxPerOrder: "" },
+      { ...numbered("10", "20"), maxPerOrder: "11", description: "x".repeat(151) },
+      { ...row("50", "100"), maxPerOrder: "1", description: "Campo de pie, sin ubicación asignada." },
+    ];
+    expect(getTicketTypeErrors(rows)).toEqual([
+      { maxPerOrder: "Ingresa el máximo por compra" },
+      {
+        description: "La descripción debe tener como máximo 150 caracteres",
+        maxPerOrder: "El máximo por compra debe ser un número entero entre 1 y 10",
+      },
+      {},
+    ]);
+  });
 });
 
 describe("toOrganizerEvent", () => {
@@ -201,6 +341,8 @@ describe("toOrganizerEvent", () => {
     venue: " Estadio Nacional ",
     city: " Lima ",
     address: "",
+    seatingMode: "general",
+    hasCoverImage: true,
     ticketTypes: [row("50", "100"), row("80", "50", "VIP")],
   };
 
@@ -260,6 +402,7 @@ describe("toOrganizerEvent", () => {
   });
 });
 
+// Se elimina junto con `isAcceptedCoverImage` cuando `OrganizerEventForm` pase a `getCoverImageError` (T3).
 describe("isAcceptedCoverImage", () => {
   it.each([
     ["image/png", true],

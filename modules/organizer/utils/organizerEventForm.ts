@@ -1,10 +1,12 @@
 import { formatEventPrice } from "@/modules/events/format";
 import { getSeatRowLabels } from "@/modules/seating/preview";
-import { formDateSchema, formTimeSchema, ticketTypeFormSchema } from "../schemas/organizer.schema";
+import { COVER_IMAGE_RULES, formDateSchema, formTimeSchema, ticketTypeFormSchema } from "../schemas/organizer.schema";
 import type {
   OrganizerEvent,
   OrganizerEventFormValues,
   SeatGridSize,
+  SeatingMode,
+  TicketTypeKind,
   TicketTypeRow,
   TicketTypeRowErrors,
 } from "../types/organizer.types";
@@ -18,8 +20,32 @@ const [generalRowSchema, numberedRowSchema] = ticketTypeFormSchema.options;
 const { price: priceSchema, quantity: quantitySchema } = generalRowSchema.shape;
 const { rows: rowsSchema, seatsPerRow: seatsPerRowSchema } = numberedRowSchema.shape;
 
-export function createTicketTypeRow(): TicketTypeRow {
-  return { id: crypto.randomUUID(), name: "", price: "", kind: "general", quantity: "", rows: "", seatsPerRow: "" };
+/** Fila vacía del tipo indicado, con el máximo por compra en 10 (decisión 7). */
+export function createTicketTypeRow(kind: TicketTypeKind = "general"): TicketTypeRow {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    price: "",
+    description: "",
+    maxPerOrder: "10",
+    kind,
+    quantity: "",
+    rows: "",
+    seatsPerRow: "",
+  };
+}
+
+/** Tipo de una fila nueva: numerada solo en "Con mapa de asientos"; general en los demás modos y sin modo. */
+export function getNewRowKind(mode: SeatingMode | ""): TicketTypeKind {
+  return mode === "numbered" ? "numbered" : "general";
+}
+
+/**
+ * Filas según el modo de ubicación (decisión 3): "general" y "numbered" fuerzan el `kind` de todas; "mixed" lo deja.
+ * Solo cambia `kind`: los valores del otro tipo se conservan, así que volver atrás no pierde datos.
+ */
+export function applySeatingMode(rows: TicketTypeRow[], mode: SeatingMode): TicketTypeRow[] {
+  return rows.map((row) => ({ ...row, kind: mode === "mixed" ? row.kind : mode }));
 }
 
 /** Filas y asientos por fila de una zona numerada si ambos son enteros dentro de los límites; si no, `null`. */
@@ -111,7 +137,37 @@ export function toOrganizerEvent(values: OrganizerEventFormValues, id: string): 
 
 const ACCEPTED_COVER_IMAGE_TYPES = ["image/png", "image/jpeg"];
 
-/** Solo se aceptan portadas PNG o JPEG (las mismas que filtra el `accept` del input). */
+/**
+ * @deprecated Lo sustituye `getCoverImageError`. Se mantiene solo mientras `OrganizerEventForm` lo importe
+ * (lo cambia la tarea T3 de la Fase 1); después se elimina junto con su test.
+ */
 export function isAcceptedCoverImage(file: File): boolean {
   return ACCEPTED_COVER_IMAGE_TYPES.includes(file.type);
+}
+
+const MAX_COVER_MEGABYTES = COVER_IMAGE_RULES.maxBytes / (1024 * 1024);
+
+/**
+ * Primer error de una portada, en orden: tipo (JPG o PNG), peso, lectura y tamaño mínimo. `null` si es válida.
+ * El tamaño se lee con `createImageBitmap`, que se cierra tras leerlo.
+ */
+export async function getCoverImageError(file: File): Promise<string | null> {
+  if (!ACCEPTED_COVER_IMAGE_TYPES.includes(file.type)) return "Sube una imagen en formato JPG o PNG.";
+  if (file.size > COVER_IMAGE_RULES.maxBytes) {
+    return `La imagen pesa más de ${MAX_COVER_MEGABYTES} MB. Sube una más liviana.`;
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return "No se pudo leer la imagen. Prueba con otro archivo.";
+  }
+  const { width, height } = bitmap;
+  bitmap.close();
+
+  if (width < COVER_IMAGE_RULES.minWidth || height < COVER_IMAGE_RULES.minHeight) {
+    return `La imagen debe medir al menos ${COVER_IMAGE_RULES.minWidth} × ${COVER_IMAGE_RULES.minHeight} px.`;
+  }
+  return null;
 }
