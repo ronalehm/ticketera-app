@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 
-import { PurchaseStepper } from "@/components/shared/PurchaseStepper";
+import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { CheckoutStatusMessage, OrderConfirmation, parseOrderCode } from "@/modules/checkout";
 
 export const metadata: Metadata = { title: "Confirmación de compra | Mentec Tickets" };
 
 export default async function CheckoutConfirmationPage({ searchParams }: PageProps<"/checkout/confirmacion">) {
   const code = parseOrderCode((await searchParams).orden);
-  if (!code) return <CheckoutStatusMessage variant="order-not-found" />;
+  if (!code) {
+    return (
+      <PurchaseShell>
+        <CheckoutStatusMessage variant="order-not-found" />
+      </PurchaseShell>
+    );
+  }
 
-  return <OrderConfirmation code={code} stepper={<PurchaseStepper currentStep={3} />} />;
+  return <OrderConfirmation code={code} />;
 }

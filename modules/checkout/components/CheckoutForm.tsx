@@ -215,7 +215,9 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
           <CardHeader>
             <h2 className="text-xl font-bold">Datos del comprador</h2>
             <CardDescription className="text-base">
-              Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios.
+              <span className="sm:hidden">Enviaremos tus entradas a este correo.</span>
+              <span className="max-sm:hidden">Enviaremos tus entradas al correo que indiques.</span> Los campos con *
+              son obligatorios.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2 sm:gap-4">
@@ -226,7 +228,12 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
                   <RequiredMark />
                 </span>
               </FieldLabel>
-              <Input {...textProps("firstName")} autoComplete="given-name" className="h-11" />
+              <Input
+                {...textProps("firstName")}
+                autoComplete="given-name"
+                placeholder="Como figura en tu documento"
+                className="h-11"
+              />
               {fieldError("firstName")}
             </Field>
             <Field data-invalid={!!errors.lastName}>
@@ -236,7 +243,12 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
                   <RequiredMark />
                 </span>
               </FieldLabel>
-              <Input {...textProps("lastName")} autoComplete="family-name" className="h-11" />
+              <Input
+                {...textProps("lastName")}
+                autoComplete="family-name"
+                placeholder="Como figura en tu documento"
+                className="h-11"
+              />
               {fieldError("lastName")}
             </Field>
             <Field data-invalid={!!errors.email} className="sm:col-span-2">
@@ -246,7 +258,13 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
                   <RequiredMark />
                 </span>
               </FieldLabel>
-              <Input {...textProps("email")} type="email" autoComplete="email" className="h-11" />
+              <Input
+                {...textProps("email")}
+                type="email"
+                autoComplete="email"
+                placeholder="tu@email.com"
+                className="h-11"
+              />
               {fieldError("email")}
             </Field>
             <Field data-invalid={!!errors.phone}>
@@ -266,6 +284,7 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
                   inputMode="numeric"
                   autoComplete="tel-national"
                   maxLength={9}
+                  placeholder="Número de celular"
                   className="h-full"
                 />
               </InputGroup>
@@ -313,6 +332,7 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
                   {...textProps("documentNumber")}
                   inputMode={isDni ? "numeric" : undefined}
                   maxLength={isDni ? 8 : undefined}
+                  placeholder="Número"
                   className="h-11 min-w-0 flex-1"
                 />
               </div>
@@ -354,6 +374,7 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
             ref={termsRef}
             id="checkout-acceptTerms"
             required
+            className="bg-background"
             checked={values.acceptTerms}
             onCheckedChange={(checked) => {
               setValue("acceptTerms", checked);

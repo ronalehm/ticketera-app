@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 
@@ -47,16 +48,27 @@ function EmptyResults() {
   );
 }
 
-// Server Component: contador + chips de filtros activos, grilla (ticket en móvil) y estado vacío.
-export function EventsResults({ events, chips }: { events: Event[]; chips: FilterChip[] }) {
+type EventsResultsProps = {
+  events: Event[];
+  chips: FilterChip[];
+  /** Orden alineado a la derecha de la fila del contador (en `/eventos`, solo en `lg`). */
+  sort?: ReactNode;
+};
+
+// Server Component: contador + chips de filtros activos (+ orden), grilla (ticket en móvil) y estado vacío.
+export function EventsResults({ events, chips, sort }: EventsResultsProps) {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <h2 className="sr-only">Resultados</h2>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p aria-live="polite" aria-atomic="true" className="text-base font-bold">
-          {events.length === 1 ? "1 evento" : `${events.length} eventos`}
-        </p>
-        <ActiveFilterChips chips={chips} />
+      <div className="flex items-start justify-between gap-4">
+        {/* lg:min-h-13 (52 px) = alto del grupo de orden: la primera línea de chips queda centrada con él. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 lg:min-h-13">
+          <p aria-live="polite" aria-atomic="true" className="text-base font-bold">
+            {events.length === 1 ? "1 evento" : `${events.length} eventos`}
+          </p>
+          <ActiveFilterChips chips={chips} />
+        </div>
+        {sort}
       </div>
       {events.length > 0 ? (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">

@@ -66,15 +66,19 @@ const ORDER: Order = {
   ],
 };
 
-const STEPPER = <p>Stepper de prueba</p>;
-
 function saveOrder(order: Order) {
   localStorage.setItem("mentec-orders", JSON.stringify({ state: { orders: [order] }, version: 0 }));
 }
 
 function renderConfirmation(code = CODE) {
-  return render(<OrderConfirmation code={code} stepper={STEPPER} />);
+  return render(<OrderConfirmation code={code} />);
 }
+
+const getSteps = () => screen.queryByRole("list", { name: "Pasos de la compra" });
+
+/** Elemento cuyo texto completo (incluidos los `span` por ancho) es `text`. */
+const byFullText = (tagName: string, text: string) => (_: string, element: Element | null) =>
+  element?.tagName === tagName && element.textContent === text;
 
 const findConfirmed = () => screen.findByRole("heading", { level: 1, name: "¡Compra confirmada!" });
 
@@ -91,11 +95,13 @@ afterEach(() => {
 });
 
 describe("OrderConfirmation", () => {
-  it("muestra Cargando tu compra… antes de leer la orden", async () => {
+  it("muestra Cargando tu compra… con la cabecera de compra solo con el logo antes de leer la orden", async () => {
     saveOrder(ORDER);
     renderConfirmation();
 
     expect(screen.getByRole("status").textContent).toContain("Cargando tu compra…");
+    expect(screen.getByRole("link", { name: "Mentec Tickets" }).getAttribute("href")).toBe("/");
+    expect(getSteps()).toBeNull();
     await findConfirmed();
     expect(screen.queryByText("Cargando tu compra…")).toBeNull();
   });
@@ -106,20 +112,62 @@ describe("OrderConfirmation", () => {
 
     await findConfirmed();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(screen.getByText("Stepper de prueba")).toBeTruthy();
-    expect(screen.getByText(/Pedido N\.º/).textContent).toBe(`Pedido N.º${CODE}`);
+    expect(screen.getAllByRole("banner")).toHaveLength(1);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+
+    const steps = getSteps();
+    expect(steps).not.toBeNull();
+    const current = within(steps!).getAllByRole("listitem").find((item) => item.getAttribute("aria-current"));
+    expect(current?.getAttribute("aria-current")).toBe("step");
+    expect(current?.textContent).toContain("Confirmación");
+    expect(screen.queryByText("Compra segura")).toBeNull();
+
+    const orderChip = screen.getByText(/Pedido N\.º/);
+    expect(orderChip.textContent).toBe(`Pedido N.º${CODE}`);
+    expect(orderChip.className).toContain("bg-card");
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).getByText("Conciertos")).toBeTruthy();
     expect(within(card).getByRole("heading", { name: "Noche de Sintetizadores" })).toBeTruthy();
     expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
     expect(within(card).getByText("Entradas").nextElementSibling?.textContent).toBe("3");
-    expect(within(card).getByText("Total pagado").nextElementSibling?.textContent).toBe("S/ 910.00");
+    const total = within(card).getByText(byFullText("DT", "Total pagado"));
+    expect(total.nextElementSibling?.textContent).toBe("S/ 910.00");
+    expect(within(total).getByText("pagado").className).toContain("max-md:hidden");
     expect(within(card).getByRole("img", { name: `Código QR de la entrada ${CODE}-01` })).toBeTruthy();
     expect(within(card).getByText("Entrada 1 de 3")).toBeTruthy();
 
     expect(screen.getByRole("link", { name: "Ver mis entradas" }).getAttribute("href")).toBe("/mis-entradas");
-    expect(screen.getByRole("heading", { level: 2, name: "Qué sigue" }).className).toContain("sr-only");
+  });
+
+  it("Qué sigue tiene el h2 visible solo por debajo de md y cada tarjeta con el texto corto y el largo por ancho", async () => {
+    saveOrder(ORDER);
+    renderConfirmation();
+    await findConfirmed();
+
+    const heading = screen.getByRole("heading", { level: 2, name: "Qué sigue" });
+    expect(heading.classList.contains("md:sr-only")).toBe(true);
+    expect(heading.classList.contains("sr-only")).toBe(false);
+
+    const section = screen.getByRole("region", { name: "Qué sigue" });
+    const steps = within(section).getAllByRole("listitem");
+    const texts = [
+      ["Ahí llegan tus entradas y el comprobante.", "Ahí llegan tus entradas y el comprobante de pago."],
+      [
+        "Cada entrada tiene su QR. Muéstralo en el ingreso.",
+        "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso.",
+      ],
+      [
+        "Ingresa con tu cuenta para verlas cuando quieras.",
+        "Entra con tu cuenta para ver y descargar tus entradas cuando quieras.",
+      ],
+    ];
+    expect(steps).toHaveLength(texts.length);
+    steps.forEach((step, index) => {
+      const [shortText, longText] = texts[index];
+      expect(within(step).getByText(shortText).className).toBe("md:hidden");
+      expect(within(step).getByText(longText).className).toBe("max-md:hidden");
+    });
   });
 
   it("muestra el correo del comprador en negrita en la cabecera", async () => {
@@ -277,13 +325,15 @@ describe("OrderConfirmation", () => {
     expect(screen.queryByText("Tus entradas")).toBeNull();
   });
 
-  it("con un código que no está en el navegador muestra No encontramos tu compra sin stepper", async () => {
+  it("con un código que no está en el navegador muestra No encontramos tu compra con la cabecera solo con el logo", async () => {
     saveOrder(ORDER);
     renderConfirmation("MT-ZZZZZZ");
 
     expect(await screen.findByRole("heading", { level: 1, name: "No encontramos tu compra" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Volver al inicio" }).getAttribute("href")).toBe("/");
-    expect(screen.queryByText("Stepper de prueba")).toBeNull();
+    expect(screen.getByRole("link", { name: "Mentec Tickets" }).getAttribute("href")).toBe("/");
+    expect(getSteps()).toBeNull();
+    expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.queryByRole("article")).toBeNull();
   });
 });

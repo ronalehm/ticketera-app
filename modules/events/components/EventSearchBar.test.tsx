@@ -112,4 +112,42 @@ describe("EventSearchBar", () => {
     const names = [...form.elements].map((element) => (element as HTMLInputElement).name || element.textContent);
     expect(names).toEqual(["q", "mes", "precio", "Buscar"]);
   });
+
+  describe("compacto por debajo de md", () => {
+    it("oculta los segmentos 'Fecha' y 'Precio' con max-md:hidden, pero sus select siguen dentro del form", () => {
+      renderBar({ mes: "2026-11", precio: "100-200" });
+
+      const form = screen.getByRole("search") as HTMLFormElement;
+      for (const [label, name] of [
+        ["Fecha", "mes"],
+        ["Precio", "precio"],
+      ]) {
+        // El segmento es el padre de la etiqueta y contiene el select.
+        const segment = screen.getByText(label, { selector: "label" }).parentElement as HTMLElement;
+        expect(segment.classList.contains("max-md:hidden")).toBe(true);
+        const select = within(segment).getByRole("combobox", { name: label }) as HTMLSelectElement;
+        expect(select.name).toBe(name);
+        expect(select.form).toBe(form);
+      }
+      expect(new FormData(form).get("mes")).toBe("2026-11");
+      expect(new FormData(form).get("precio")).toBe("100-200");
+    });
+
+    it("la etiqueta 'Qué quieres ver' tiene max-md:sr-only y sigue nombrando el campo", () => {
+      renderBar();
+
+      expect(screen.getByText("Qué quieres ver").classList.contains("max-md:sr-only")).toBe(true);
+      expect((screen.getByLabelText("Qué quieres ver") as HTMLInputElement).name).toBe("q");
+    });
+
+    it("el segmento de texto contiene una lupa svg con aria-hidden", () => {
+      renderBar();
+
+      const segment = screen.getByLabelText("Qué quieres ver").parentElement as HTMLElement;
+      const icon = segment.querySelector("svg");
+      expect(icon).not.toBeNull();
+      expect(icon?.getAttribute("aria-hidden")).toBe("true");
+      expect(icon?.classList.contains("md:hidden")).toBe(true);
+    });
+  });
 });

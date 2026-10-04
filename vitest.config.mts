@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Lee `.env` sin mutar process.env. Los tests de integración usan la rama `test` como DATABASE_URL.
 const fileEnv = loadEnv("test", process.cwd(), "");
@@ -30,6 +30,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Los worktrees de agentes (`.claude/worktrees/`) son copias del repo: no se ejecutan sus tests.
+    exclude: [...configDefaults.exclude, ".claude/worktrees/**"],
     env: testDatabaseUrl
       ? { ...INERT_CLERK_ENV, DATABASE_URL: testDatabaseUrl, DATABASE_URL_TEST: testDatabaseUrl }
       : { ...INERT_CLERK_ENV, DATABASE_URL: INERT_DATABASE_URL },

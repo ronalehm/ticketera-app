@@ -1,5 +1,6 @@
 export { EventPurchaseStrip } from "./components/EventPurchaseStrip";
 export { MobileBuyBar } from "./components/MobileBuyBar";
+export { PreselectedTicketSelection } from "./components/PreselectedTicketSelection";
 export { TicketSelection } from "./components/TicketSelection";
 export { ZonePricesCard } from "./components/ZonePricesCard";
 export { getVenueMapBySlug, hasVenueMap } from "./services/seating.service";

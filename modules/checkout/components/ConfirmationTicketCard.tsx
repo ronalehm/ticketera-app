@@ -12,7 +12,7 @@ type ConfirmationTicketCardProps = {
   order: Order;
 };
 
-const NOTCH_CLASS = "absolute size-6 rounded-full bg-background ring-1 ring-border";
+const NOTCH_CLASS = "absolute size-6 rounded-full bg-muted ring-1 ring-border";
 
 /**
  * Tarjeta-entrada de la confirmación: vertical en móvil y horizontal con el talón a la derecha desde `md`.
@@ -61,7 +61,9 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
             <dd className="font-semibold tabular-nums">{ticketCount}</dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">Total pagado</dt>
+            <dt className="text-xs text-muted-foreground">
+              Total<span className="max-md:hidden"> pagado</span>
+            </dt>
             <dd className="font-semibold tabular-nums">{formatEventPrice(total)}</dd>
           </div>
         </dl>

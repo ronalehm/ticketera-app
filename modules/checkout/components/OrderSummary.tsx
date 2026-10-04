@@ -31,10 +31,10 @@ export function OrderSummary({ order, changeHref, footer }: OrderSummaryProps) {
             width={64}
             height={64}
             sizes="64px"
-            className="size-16 shrink-0 rounded-xl object-cover"
+            className="size-16 shrink-0 rounded-xl object-cover max-lg:hidden"
           />
           <div className="flex min-w-0 flex-col gap-1">
-            <p className="line-clamp-2 leading-snug font-bold">{event.title}</p>
+            <p className="line-clamp-2 leading-snug font-bold max-lg:hidden">{event.title}</p>
             <p className="text-sm text-muted-foreground">
               <time dateTime={event.startsAt}>{formatShortDayMonth(event.startsAt)}</time> · {event.venue}, {event.city}
             </p>

@@ -130,7 +130,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Botones | `Button` (variants default / outline / ghost / secondary) | `components/ui` |
 | Tarjeta de evento | `Card` + `Badge` + `next/image` | `modules/events/components/EventCard.tsx` |
 | Hero slider y rails | `Carousel` (Embla) + `embla-carousel-autoplay` (solo hero) | `components/ui` / `modules/events` |
-| Buscador | `Input` + `NativeSelect` + `Button` (barra píldora única para la landing y `/eventos`; `<select>` nativo, funciona sin JS) | `modules/events/components/EventSearchBar.tsx` |
+| Buscador | `Input` + `NativeSelect` + `Button` (barra píldora única para la landing y `/eventos`; `<select>` nativo, funciona sin JS). En móvil (`< md`), solo el campo de texto con lupa y "Buscar" en una fila de 56 px; Fecha y Precio, en el panel de filtros de `/eventos` | `modules/events/components/EventSearchBar.tsx` |
 | Filtro por categoría | Landing (Próximos eventos, filtro local): `ToggleGroup` (chips). `/eventos`: chips-enlace que cambian `?categoria=` (ver `pages/events-list.md`) | `modules/events` |
 | Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
 | Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |

@@ -92,29 +92,39 @@ Footer
 
 ## Aside con mapa (`ZonePricesCard`)
 
-Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver `ticket-selection.md`); el aside solo resume precios y enlaza allí. Misma celda (`id="entradas"`, columna derecha de 380px en `lg`) y mismo sticky que el selector (`lg:sticky lg:top-24`). En móvil va justo debajo del hero, antes de la información.
+Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver `ticket-selection.md`); el aside resume precios y enlaza allí: cada zona comprable abre directamente su sub-paso 2 y el botón abre el mapa con todas las zonas (sub-paso 1). Misma celda (`id="entradas"`, columna derecha de 380px en `lg`) y mismo sticky que el selector (`lg:sticky lg:top-24`). En móvil va justo debajo del hero, antes de la información. Las filas como enlaces y el botón "Ver mapa de zonas" vienen de `docs/specs/seating-stadium-map.md` (Fase 6, decisión 31, requisito 38); la tarjeta sigue siendo Server Component y no cambian sus props.
 
 ```
 ┌──────────────────────────────┐
 │ Entradas                     │  h2 text-xl font-bold
 │ Entradas desde               │  text-sm text-muted-foreground
 │ S/ 180.00                    │  text-3xl font-bold tabular-nums
+├──────────────────────────────┤  ul aria-label="Zonas", divide-y, border-y
+│ ■ VIP [Últimas]  S/ 550.00 › │  enlace → …/entradas?zona=vip
+│ ■ Preferencial   S/ 320.00 › │  enlace → …/entradas?zona=preferencial
+│ ■ General        S/ 180.00 › │  enlace → …/entradas?zona=general
+│ ■ Tribuna Norte  S/ 220.00 › │  enlace → …/entradas?zona=norte
+│ ■ Mesa            Agotado    │  zona agotada (ejemplo): texto, sin enlace
 ├──────────────────────────────┤
-│ ■ VIP [Últimas]    S/ 550.00 │  lista divide-y, border-y
-│ ■ Preferencial     S/ 320.00 │
-│ ■ General          S/ 180.00 │
-│ ■ Tribuna Norte    S/ 220.00 │
-├──────────────────────────────┤
-│ [ Elegir entradas → ]        │  primario h-11 w-full
+│ [ Ver mapa de zonas → ]      │  primario h-11 w-full → …/entradas
 │ (Lock) Pago seguro · Entr…   │  text-sm text-muted-foreground
 └──────────────────────────────┘
 ```
 
 - `Card rounded-2xl`, h2 "Entradas"; "Entradas desde" + `priceFrom`.
-- Una fila por zona (`min-h-14`) en el orden del mapa: muestra de tono (`size-3.5 rounded-sm`, `aria-hidden`, mismos tonos por precio que el mapa), nombre (`text-base font-medium`), `Badge` "Últimas entradas" (`bg-warning text-warning-foreground`) si la zona es `low-stock`, y a la derecha el precio (`font-bold tabular-nums`) o "Agotado" (`text-sm font-bold text-muted-foreground`).
-- CTA "Elegir entradas" + `ArrowRight`: enlace primario `h-11 w-full font-semibold hover:bg-primary-strong` a `/eventos/<slug>/entradas` (el mismo destino que el CTA del hero, `purchaseHref`).
-- Evento agotado: "Entradas agotadas" (`rounded-lg bg-muted p-3 text-center font-bold`) en lugar del CTA.
+- Lista `ul aria-label="Zonas"` (`divide-y divide-border border-y`), una fila por zona (`min-h-14`) en el orden del mapa. Contenido de la fila: muestra de tono (`size-3.5 rounded-sm`, `aria-hidden`, mismos tonos por precio que el mapa), nombre (`text-base font-medium`), `Badge` "Últimas entradas" (`bg-warning text-warning-foreground`) si la zona es `low-stock`, y a la derecha el precio (`text-base font-bold tabular-nums`) o "Agotado" (`text-sm font-bold text-muted-foreground`).
+- **Zona comprable** (zona no agotada y evento no agotado): la fila es un enlace (`Link`, un `<a href>`: funciona sin JavaScript y se puede abrir en otra pestaña).
+  - Destino: `/eventos/<slug>/entradas?zona=<zoneId>` (`buildZoneEntryHref`), que abre directamente el sub-paso 2 de esa zona (cantidad en las de pie, plano en las numeradas; ver `ticket-selection.md`).
+  - A la derecha del precio, `ChevronRight` (`size-5 text-muted-foreground`, `aria-hidden`) que pasa a `text-foreground` con el puntero sobre la fila (`group-hover`); precio y chevron en `flex items-center gap-1`.
+  - Hover: fondo `bg-accent/40` (el de las tarjetas de zona de `/entradas`), `transition-colors duration-200`, `cursor-pointer`. Foco: `focus-visible:ring-3 focus-visible:ring-ring/50` (sin outline).
+  - El fondo sobresale 8 px a cada lado (`-mx-2 px-2 rounded-lg`), así que la muestra y el nombre no se mueven respecto de una fila de texto. Alto `min-h-14` (56 px, target ≥ 44 px).
+  - Nombre accesible (`aria-label`): "Elegir entradas de <nombre>, <precio>" y, si es `low-stock`, ", últimas entradas" (p. ej. "Elegir entradas de VIP, S/ 550.00, últimas entradas"). Empieza por la acción y contiene el nombre visible de la zona (WCAG 2.5.3).
+- **Zona no comprable** (agotada, o cualquier zona con el evento agotado): la fila sigue siendo texto, sin enlace, sin chevron y sin hover; no recibe foco y se lee "<nombre> Agotado" en la lista. Muestra "Agotado" o, si el evento está agotado y la zona no, su precio. El texto de la derecha lleva `mr-6` (el ancho del chevron más su separación) para alinearse con los precios de las filas enlace.
+- **Botón "Ver mapa de zonas"** + `ArrowRight`: enlace primario `h-11 w-full font-semibold hover:bg-primary-strong` a `/eventos/<slug>/entradas` (sub-paso 1, el mismo destino que el CTA del hero, `purchaseHref`). Las filas eligen zona; el botón abre el mapa con todas. Ningún enlace del aside se llama solo "Elegir entradas".
+- Orden de Tab: las filas comprables (en el orden del mapa) y luego "Ver mapa de zonas". Enter en una fila navega como el clic.
+- Evento agotado: ninguna fila es enlace y "Entradas agotadas" (`rounded-lg bg-muted p-3 text-center font-bold`) sustituye al botón.
 - Nota final con `Lock` (`aria-hidden`): "Pago seguro · Entrada digital con QR".
+- No cambian con las filas enlace: el CTA del hero ("Comprar entradas · desde S/ X") ni la barra inferior móvil ("Comprar entradas"); siguen siendo el CTA principal de compra (llevan al sub-paso 1, igual que en los eventos sin mapa).
 
 ## Barra inferior móvil (`MobileBuyBar`)
 

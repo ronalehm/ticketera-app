@@ -38,6 +38,9 @@ const METHOD_INFO: Partial<Record<PaymentMethod, string>> = {
   pagoefectivo: "Generaremos un código de pago para que pagues en agentes, bodegas o tu banca móvil.",
 };
 
+// Etiqueta larga solo por debajo de sm, donde los métodos van apilados a todo el ancho.
+const MOBILE_LABEL_SUFFIX: Partial<Record<PaymentMethod, string>> = { card: " de crédito o débito" };
+
 const onlyDigits = (value: string) => value.replace(/\D/g, "");
 
 export function PaymentMethodFields({ values, errors, onChange, onBlur, labelledBy }: PaymentMethodFieldsProps) {
@@ -79,6 +82,7 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
           {PAYMENT_METHODS.map((option) => {
             const Icon = METHOD_ICONS[option];
             const id = `checkout-paymentMethod-${option}`;
+            const mobileSuffix = MOBILE_LABEL_SUFFIX[option];
             return (
               <FieldLabel
                 key={option}
@@ -88,7 +92,13 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
                 <Field orientation="horizontal">
                   <RadioGroupItem value={option} id={id} />
                   <Icon aria-hidden className="size-5 shrink-0" />
-                  <FieldTitle className="text-base font-semibold">{PAYMENT_METHOD_LABELS[option]}</FieldTitle>
+                  <FieldTitle className="text-base font-semibold">
+                    {/* Un solo nodo de texto en línea: FieldTitle es flex con gap y separaría el sufijo. */}
+                    <span>
+                      {PAYMENT_METHOD_LABELS[option]}
+                      {mobileSuffix && <span className="sm:hidden">{mobileSuffix}</span>}
+                    </span>
+                  </FieldTitle>
                 </Field>
               </FieldLabel>
             );
