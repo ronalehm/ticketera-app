@@ -1576,23 +1576,23 @@ No hay API: son datos mock.
 - **Paralelismo:** T1 ∥ T2 (base); después T3 ∥ T4; T5 al final (puede solaparse con T3, sus archivos son disjuntos). Ninguna tarea toca `package.json`, `lib/`, `components/ui/` ni `components/shared/`. El único archivo compartido del módulo, `index.ts`, va en T5, secuencial, porque exporta un componente que crea T4 (exportarlo antes rompería la compilación de las tareas en paralelo).
 - Los developers verifican con `npx vitest run <sus archivos>` y `npx eslint <sus archivos>`. El reviewer ejecuta al final `npx vitest run`, `npm run lint`, `npm run build` (comprueba ● en `/eventos/[slug]/entradas`) y el Playwright de los criterios de F6 a 375 y 1440 contra `npm run start`.
 
-- [ ] T1. Lectura y enlaces de la URL (puras), con tests: `parseSeatingPreselection` (requisito 32, ida y vuelta con `buildSeatingCheckoutHref`) y `buildZoneEntryHref` + `parseInitialZoneId` (requisito 39, ida y vuelta).
+- [x] T1. Lectura y enlaces de la URL (puras), con tests: `parseSeatingPreselection` (requisito 32, ida y vuelta con `buildSeatingCheckoutHref`) y `buildZoneEntryHref` + `parseInitialZoneId` (requisito 39, ida y vuelta).
   - Archivos: `modules/seating/utils/selectionSummary.ts`, `modules/seating/utils/selectionSummary.test.ts`, `modules/seating/utils/zoneParam.ts` (nuevo), `modules/seating/utils/zoneParam.test.ts` (nuevo).
   - Depende de: Fase 3 y Fase 1 de `design-alignment-purchase-flow.md` cerrada.
   - Secuencial respecto a T3–T5 (es su base); en paralelo con T2.
-- [ ] T2. Estado inicial en `useSeatSelection` (`initial.selection` e `initial.zoneId`), con tests (requisito 33).
+- [x] T2. Estado inicial en `useSeatSelection` (`initial.selection` e `initial.zoneId`), con tests (requisito 33).
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 3.
   - En paralelo con T1.
-- [ ] T3. `ZonePricesCard` con filas enlace por zona y botón "Ver mapa de zonas", con su test nuevo; "Aside con mapa" de la página de diseño del detalle (requisito 38, decisión 31).
+- [x] T3. `ZonePricesCard` con filas enlace por zona y botón "Ver mapa de zonas", con su test nuevo; "Aside con mapa" de la página de diseño del detalle (requisito 38, decisión 31).
   - Archivos: `modules/seating/components/ZonePricesCard.tsx`, `modules/seating/components/ZonePricesCard.test.tsx` (nuevo), `design-system/ticketera/pages/event-detail.md`.
   - Depende de: T1 (`buildZoneEntryHref`).
   - En paralelo con T4 y T5.
-- [ ] T4. `TicketSelection` con `initialSelection` e `initialZoneId`, y `PreselectedTicketSelection` nuevo, con tests (requisitos 34 y 35).
+- [x] T4. `TicketSelection` con `initialSelection` e `initialZoneId`, y `PreselectedTicketSelection` nuevo, con tests (requisitos 34 y 35).
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `modules/seating/components/PreselectedTicketSelection.tsx` (nuevo).
   - Depende de: T1 y T2.
   - En paralelo con T3.
-- [ ] T5. Barrel, página con `Suspense` y página de diseño de la selección (secciones "Precarga" y "Entrada por zona") (requisitos 36 y 37).
+- [x] T5. Barrel, página con `Suspense` y página de diseño de la selección (secciones "Precarga" y "Entrada por zona") (requisitos 36 y 37).
   - Archivos: `modules/seating/index.ts`, `app/(purchase)/eventos/[slug]/entradas/page.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T4.
   - Secuencial (archivo compartido `index.ts`); puede coincidir con T3 (archivos disjuntos). El reviewer verifica en `npm run build` que las 4 rutas siguen prerenderizadas (●).
