@@ -692,7 +692,7 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
 
 ### Fase 2. Anillos de la arena (1 tarea, 3 archivos)
 Va en una fase propia porque la Fase 1 ya tiene 6 tareas y está cerrada. Es entregable por sí sola: la arena sigue funcionando y solo cambia su geometría.
-- [ ] T6. Anillos de la arena con sitio para sus etiquetas: geometría del requisito 3 (decisión 12), su test y el diseño de página (requisito 12).
+- [x] T6. Anillos de la arena con sitio para sus etiquetas: geometría del requisito 3 (decisión 12), su test y el diseño de página (requisito 12).
   - Archivos: `modules/seating/data/nocheDeSintetizadores.mock.ts`, `modules/seating/data/nocheDeSintetizadores.mock.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T5 y del arreglo de `SeatPlan` de la decisión 7, ya cerrado (comparte `ticket-selection.md`, y el criterio de 0 solapes depende de él).
   - Secuencial.
