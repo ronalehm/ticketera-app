@@ -4,6 +4,7 @@ import { expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
@@ -26,6 +27,7 @@ const TABLES = {
   ticketTypes,
   orders,
   eventSeats,
+  legalDocuments,
 };
 
 async function countRows() {
