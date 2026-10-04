@@ -18,6 +18,8 @@ Es una continuación de `docs/specs/seating-stadium-map.md` ("spec del estadio",
 
 También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: su requisito 7 (≤ 10 butacas por fila, ≤ 12 filas y `seatViewBox` de ≤ 400 de ancho) y su decisión 10 (butacas ≥ 24 px a 375 px con el plano entero), salvo la misma excepción.
 
+**Enmienda (2026-10-04), tras el PR #6 (`docs/specs/data-foundation.md`):** los mapas ya no se leen de los mocks, sino de Postgres, y el seed los copia desde los mocks. Esta enmienda añade la tarea T1b (test del seed independiente de la geometría), la verificación con y sin BD y el paso de volver a sembrar la BD (decisión 11). T1 ya está hecha. El resto de la spec no cambia.
+
 ## Alcance
 - Incluye:
   - **Datos compartidos del estadio:** centro común y escenario (sector, `path`, `labelPos` y 7 luces) idénticos a los del festival, usados por los 4 recintos.
@@ -33,7 +35,10 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
   - **Invariantes del mapa curvo** (requisito 8 de la spec del estadio) generalizadas a los 4 mapas, más tests por recinto con los valores exactos.
   - **Compatibilidad:** se conservan los ids de zona y de `ticketTypeId`, el orden de las zonas, las capacidades de pie, las butacas por zona numerada, la ocupación por zona y las butacas que usan las órdenes demo (`platea-F-7` y `platea-F-8`).
   - Actualización del diseño de página `design-system/ticketera/pages/ticket-selection.md`.
+  - **Test del seed independiente de la geometría** (T1b, requisito 11): `lib/db/seed/buildSeedData.test.ts` deriva de los mocks el `mapViewBox` de cada recinto y qué secciones tienen `planTransform`, en lugar de fijarlos. Así T2–T4 no lo tocan (decisión 11).
 - No incluye:
+  - Cambios en `lib/db`, salvo el test de T1b. `buildSeedData.ts`, `seed.ts`, `testGlobalSetup.ts`, el esquema y las migraciones no cambian: el seed ya copia los mocks.
+  - Un script para vaciar la BD de desarrollo. Volver a sembrarla es un paso manual (decisión 11).
   - Cambios en componentes, hooks, utils, schema o service de `seating`. `VenueMapView`, `ZoneCards`, `SeatPlan`, `SeatPlanMinimap`, `generateArcSeatRows`, `getAnnularSectorPath` y `venueLayoutSchema` se usan tal cual.
     - El arreglo de `SeatPlan` que dimensiona la pastilla de zoom y el minimapa según el ancho del lienzo (decisión 7) es de otro trabajo, ya en curso. Esta spec depende de él.
   - Cambiar de librería o añadir dependencias.
@@ -130,11 +135,26 @@ También sigue vigente la spec base, `docs/specs/seating-ticket-selection.md`: s
    - **T1** reparte el mock actual en 5 archivos sin cambiar ningún dato, más un agregador. También deja los tests de invariantes listos para que T2–T4 no los toquen:
      - las invariantes del mapa curvo se aplican a cada recinto que exporta `sectors`, y las del rectángulo a los que no;
      - el límite de tamaño se lee de un único conjunto de slugs exceptuados.
+   - **T1b** hace lo mismo con el test del seed (decisión 11).
    - **T2–T4** rehacen cada uno solo su archivo y su test.
    - **T5** cierra: hace obligatorio `sectors`, borra la rama rectangular de los tests y actualiza el diseño de página.
 10. **Orden de implementación:**
+    - Dentro de la fase: T1, T1b, T2–T4 en paralelo y T5.
     - Va después de cerrar la **Fase 5** de la spec del estadio (fondo, lienzo apaisado y minimapa en `SeatPlan`) y el **arreglo de controles** de la decisión 7.
     - No se ejecuta en la misma sesión que ninguna fase de la spec del estadio. Su Fase 6 T4 toca `ticket-selection.md`, igual que T5.
+11. **Base de datos y seed (PR #6, `docs/specs/data-foundation.md`).**
+    - **Contexto:**
+      - `getVenueMapBySlug` lee de Postgres. `lib/db/seed/buildSeedData.ts` siembra recintos, secciones y butacas desde `VENUE_LAYOUTS_MOCK`: los layouts nuevos llegan a la BD sin tocar el seed.
+      - Los tests que leen el mapa (`seating.service.test.ts`, `checkout.service.test.ts`, `demoOrders.test.ts`, y la parte con BD de los tests por recinto) usan `describeWithDb`: sin `DATABASE_URL_TEST` se omiten.
+      - Con `DATABASE_URL_TEST`, `lib/db/testGlobalSetup.ts` vacía y vuelve a sembrar la BD de test en cada `vitest run`. Dos ejecuciones simultáneas chocan.
+      - El seed usa `onConflictDoNothing`. En una BD ya sembrada no actualiza las secciones (`mapPath`, `planTransform`, `seatViewBox`) ni las butacas existentes, y no borra las que desaparecen (p. ej. `norte-H-*`). Por eso, para ver los recintos curvos, hay que **vaciar la BD** y volver a sembrarla.
+    - **Por qué T1b:** `buildSeedData.test.ts` fija datos que T2–T4 cambian. Espera `mapViewBox: "0 0 600 560"` para el Estadio Nacional, y T2 lo pasa a `"0 0 600 580"`. También espera que solo `occidente` y `oriente` tengan `planTransform` y que ninguna sección fuera de la Costa Verde tenga `planTransform` ni `wrapLabel`. Si cada tarea lo arreglara, T2–T4 tocarían el mismo archivo y no podrían ir en paralelo. T1b lo hace independiente de la geometría antes de T2–T4 (requisito 11). Está en `lib/` (archivo compartido), así que va en secuencia. El total de 456 butacas de recinto se mantiene, porque cada zona conserva sus butacas (decisión 4).
+    - **Verificación:**
+      - **T2–T4, en paralelo:** ejecutan sus tests **sin BD**, con `DATABASE_URL_TEST= npx vitest run <rutas>`. La variable vacía anula la de `.env`, y los bloques con BD se omiten.
+      - **Suite completa con BD, de uno en uno:** al terminar su tarea, cada developer ejecuta `npx vitest run` con `DATABASE_URL_TEST`, por turnos. El orquestador nunca lanza dos ejecuciones con BD a la vez. El reviewer la repite al final.
+      - **Antes de `npm run build` o de Playwright:** se vuelve a sembrar la BD de desarrollo (`DATABASE_URL`), porque el build prerenderiza las rutas `/eventos/<slug>/entradas` desde ella. Se vacían sus tablas de `public` (`TRUNCATE … CASCADE`, como hace `testGlobalSetup` con la de test) o se recrea la rama `dev` de Neon, y después `npm run db:migrate && npm run db:seed`.
+    - **BD de la sesión de implementación (autorizado por el usuario, 2026-10-04):** en la sesión que implementa esta spec, `DATABASE_URL` y `DATABASE_URL_TEST` apuntan a un Postgres 16 local del entorno de pruebas (`127.0.0.1:5433`, bases `ticketera_dev` y `ticketera_test`), desechable y ajeno a la BD de Neon del usuario. El developer de T5 y el reviewer pueden vaciar y volver a sembrar `ticketera_dev` sin preguntar. La BD de Neon del usuario no se toca desde la sesión.
+    - **Tras el merge:** el usuario vuelve a sembrar la BD de desarrollo de su máquina de la misma forma (vaciar o recrear la rama `dev` de Neon y `npm run db:migrate && npm run db:seed`). Si no lo hace, verá los mapas rectangulares de antes. Vaciarla borra también los datos creados a mano en esa BD (órdenes, eventos de prueba).
 
 ## Requisitos
 
@@ -265,6 +285,12 @@ Los valores son definitivos: están verificados con el `generateArcSeatRows` rea
      - No se modifica ningún archivo de `modules/checkout`.
    - **Otros tests de seating** (`useSeatSelection`, `seatIds`, `seatNavigation`, `bestSeats`, `selectionSummary`, `arcSeatRows`, `seating.schema` y `TicketSelection`): usan fixtures propios y no cambian.
    - **`events.service.test.ts`:** no cita butacas ni formas, y no cambia.
+   - **Seed** (`lib/db/seed`): `buildSeedData.ts` no cambia. Su test solo cambia en T1b (requisito 11). Siguen valiendo, entre otros:
+     - las 456 butacas de recinto;
+     - las 8 secciones del Estadio Nacional, en su orden;
+     - los estados por evento y por tipo de entrada.
+
+     `venueLayoutRecords.test.ts` recorre `VENUE_LAYOUTS_MOCK` sin fijar valores, y no cambia.
    - **Tests de `seating.service.test.ts` que siguen valiendo con los datos nuevos:**
      - "ninguna fila de norte/platea supera el 70 %": máximos 38 % y 50 %;
      - "norte/platea/preferencial conservan ≥ 1 accesible";
@@ -287,11 +313,35 @@ Los valores son definitivos: están verificados con el `generateArcSeatRows` rea
     - **"Mapa de zonas":** los mapas comparten el centro y el escenario semicircular con 7 luces; las zonas son sectores concéntricos, con los barridos de la decisión 2.
     - **Holguras:** se sustituyen las holguras medidas (zoom y minimapa) por las que mida Playwright en esta spec (la menor por ancho, con la butaca).
 
+### Test del seed (T1b)
+11. **`lib/db/seed/buildSeedData.test.ts` sin geometría fija** (decisión 11). Solo cambia este archivo, y sigue sin BD:
+    - **"un solo Estadio Nacional con geometría y 8 secciones en su orden":** el `mapViewBox` esperado es el `viewBox` del layout de `noche-de-sintetizadores-lima` en `VENUE_LAYOUTS_MOCK`, no el literal `"0 0 600 560"`. Lo demás se mantiene: ciudad, `createdBy`, "ESCENARIO", las 8 secciones con su orden y `seating`, y qué secciones tienen `mapPath` y capacidad demo.
+    - **Nuevo test, "cada recinto con layout guarda el viewBox y el escenario de su layout":** para cada layout de `VENUE_LAYOUTS_MOCK`, el recinto de su evento (`eventBySlug(layout.eventSlug).venueId`) tiene `mapViewBox` igual a `layout.viewBox` y `stage` igual a `layout.stage`.
+    - **El test de la Costa Verde:**
+      - conserva el escenario igual al del layout, con sus 7 luces;
+      - la comparación de `wrapLabel` y `planTransform` de cada zona con su sección pasa a aplicarse a todos los layouts, no solo al del festival;
+      - la lista fija `["occidente", "oriente"]` y la aserción "ninguna sección fuera de la Costa Verde tiene `wrapLabel` ni `planTransform`" se sustituyen por aserciones derivadas de los datos.
+
+      Puede partirse en dos tests: uno del escenario de la Costa Verde y otro de `wrapLabel` y `planTransform` en todos los recintos.
+    - **Las aserciones derivadas:**
+      - **Cada zona y su sección:** para cada layout y cada zona, la sección del recinto de su evento con `slug === zone.id` tiene `wrapLabel` igual a `zone.wrapLabel ?? false`, y `planTransform` igual al de la zona (o `null`).
+      - **Secciones sin zona:** las que no corresponden a ninguna zona de ningún layout (p. ej. `popular` o `palco` del Estadio Nacional, o las de los recintos sin mapa) no tienen `wrapLabel` ni `planTransform`.
+      - **Qué secciones tienen `planTransform`:** son exactamente las zonas numeradas de los recintos de `VENUE_SECTORS_MOCK`. Se comparan como conjunto de pares (id del recinto, slug).
+      - Con los datos de T1, eso es `occidente` y `oriente` de la Costa Verde.
+      - Tras cada tarea de T2–T4, se añaden las numeradas de su recinto, sin tocar el test.
+    - El resto del archivo no cambia, incluido "siembra 6 categorías, 13 eventos publicados, 1 borrador y 456 asientos de recinto".
+    - El test no contiene literales de `viewBox` ni listas de slugs de secciones con `planTransform`.
+
 ## Criterios de aceptación
 Todos son de la Fase 1.
 
 ### Datos (unit tests)
 - [ ] Dado T1, cuando se compara `JSON.stringify(VENUE_LAYOUTS_MOCK)` antes y después, entonces es idéntico, y `npx vitest run modules/seating modules/checkout modules/tickets` pasa sin cambiar ningún test fuera de `seating.service.test.ts`.
+- [ ] Dado T1b, entonces:
+  - `DATABASE_URL_TEST= npx vitest run lib/db/seed/buildSeedData.test.ts` pasa con los datos de T1;
+  - el test no contiene `"0 0 600 560"` ni la lista `["occidente", "oriente"]`, y cumple el requisito 11;
+  - mantiene la aserción de 456 butacas de recinto.
+- [ ] Dados T2, T3 y T4, entonces ninguno modifica `lib/db/seed/buildSeedData.test.ts`, y ese test sigue pasando tras cada tarea y al final.
 - [ ] Dado `VENUE_SECTORS_MOCK` tras T5, entonces:
   - tiene los 4 slugs con mapa y cada uno cumple todas las invariantes del requisito 6;
   - las zonas numeradas de arena, teatro y comedia tienen `seatViewBox` de ≤ 622 de ancho y ≤ 12 filas;
@@ -318,10 +368,12 @@ Todos son de la Fase 1.
   - `resolveSeats(map, ["preferencial-A-5"])` resuelve.
 - [ ] Dado el festival, entonces su layout y sus tests específicos ("devuelve el estadio…", filas 4, 4, 5, 6, 7, 7, 8, 9, 9, 10, `"0 0 399 401"`, 7 luces, `wrapLabel` en las tribunas) no cambian.
 - [ ] Dado el pedido demo `MT-9LM2TC`, entonces `demoOrders.test.ts` pasa sin cambios.
-- [ ] Dado `npx vitest run`, `npm run lint` y `npm run build`, entonces pasan sin errores, y las 4 rutas `/eventos/<slug>/entradas` siguen prerenderizadas.
+- [ ] Dado `npx vitest run` sin BD (`DATABASE_URL_TEST=`) y con BD (`DATABASE_URL_TEST` de `.env`, una sola ejecución a la vez), entonces pasa en los dos casos. Con BD no se omite ningún bloque `describeWithDb`.
+- [ ] Dada la BD de desarrollo vaciada y vuelta a sembrar (decisión 11), cuando se ejecutan `npm run lint` y `npm run build`, entonces pasan sin errores. Las 4 rutas `/eventos/<slug>/entradas` siguen prerenderizadas y muestran los mapas curvos.
+- [ ] Dado el cierre de la fase, entonces el resumen final al usuario indica que, tras el merge, debe volver a sembrar la BD de desarrollo de su máquina: vaciarla o recrear la rama `dev` de Neon, y ejecutar `npm run db:migrate && npm run db:seed`. Sin ese paso seguirá viendo los mapas rectangulares (decisión 11).
 
 ### Verificación visual (Playwright, reviewer)
-Se usa un script en el scratchpad del reviewer, con el Chromium de `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`) o `npx -y playwright install chromium`, contra `npm run build && npm run start`. Se recorren los 4 eventos con mapa a 375 × 812, 640 × 900, 768 × 1024, 1024 × 768 y 1440 × 900.
+Se usa un script en el scratchpad del reviewer, con el Chromium de `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`) o `npx -y playwright install chromium`, contra `npm run build && npm run start`, con la BD de desarrollo ya vuelta a sembrar (decisión 11). Se recorren los 4 eventos con mapa a 375 × 812, 640 × 900, 768 × 1024, 1024 × 768 y 1440 × 900.
 - [ ] Dado el sub-paso 1 de cada evento, entonces el mapa es curvo como `images/20.png`:
   - el `<svg role="group" aria-label="Mapa de zonas de …">` tiene una forma por zona cuyo `d` contiene arcos (`A`) y ningún rectángulo (`H`/`V`);
   - el escenario es la forma navy semicircular con 7 luces;
@@ -368,6 +420,7 @@ Se usa un script en el scratchpad del reviewer, con el Chromium de `/opt/pw-brow
   - `generateArcSeatRows` (`utils/arcSeatRows.ts`);
   - `venueLayoutSchema` (`schemas/seating.schema.ts`);
   - `getVenueMapBySlug` (`services/seating.service.ts`).
+- **Seed y BD** (`lib/db`): sin cambios de código ni migraciones. Solo cambia el test `lib/db/seed/buildSeedData.test.ts` (T1b, requisito 11). Los datos nuevos llegan a la BD al volver a sembrarla (decisión 11).
 - **Contrato** (interno del mock; sin API):
 
   ```ts
@@ -416,7 +469,13 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
     - Se borra el test "%s: el texto del escenario está centrado en su forma", con sus valores (300, 38) y (300, 40). Lo cubren "labelPos en el centro del rectángulo" (rectangulares) y "el escenario es el compartido" (curvos).
     - Los tests específicos del festival, los de `getVenueMapBySlug`/`hasVenueMap`, "reparto de la ocupación" y "tonos" no cambian.
   - **T5:** se borran el grupo rectangular, `RECT_PATH`, `rectCenter` y `RECT_MAP_SLUGS` (requisito 9).
-- **`modules/seating/data/nocheDeSintetizadores.mock.test.ts`** (nuevo, T2), con `getVenueMapBySlug`:
+- **`lib/db/seed/buildSeedData.test.ts`** (T1b): los casos del requisito 11.
+- **Tests por recinto (T2–T4), en dos partes**, para que se puedan verificar sin BD en paralelo (decisión 11):
+  - **Sin BD** (`describe`), sobre `<X>_VENUE.layout` validado con `venueLayoutSchema.parse`: `viewBox`, sectores, `labelPos`, filas, butacas por fila, `seatViewBox`, escala, accesibles exactas y estado de las butacas citadas (p. ej. `platea-F-7` `occupied`, `platea-F-8` `available`).
+  - **Con BD** (`describeWithDb`), con `getVenueMapBySlug`: el mapa coincide con el layout del mock, y `resolveSeats` da las etiquetas o el `null` esperados (necesita los nombres de zona del evento).
+
+  Los casos de cada recinto son:
+- **`modules/seating/data/nocheDeSintetizadores.mock.test.ts`** (nuevo, T2):
   - `viewBox`;
   - los sectores exactos de `SINTETIZADORES_VENUE.sectors` (requisito 3) y los `labelPos`;
   - Norte: filas, butacas por fila (total 80), `seatViewBox`, `planTransform.scale` y accesibles exactas;
@@ -431,36 +490,52 @@ Según `docs/SETUP.md` §3, los datos mock no son una unidad con lógica propia.
   - Preferencial (60): filas, butacas, `seatViewBox`, escala y accesibles exactas;
   - `preferencial-A-5` resuelve;
   - General de pie con su capacidad.
-- **Sin cambios** (requisito 7): `TicketSelection.test.tsx`, `useSeatSelection.test.ts`, `seatIds.test.ts`, `seatNavigation.test.ts`, `bestSeats.test.ts`, `selectionSummary.test.ts`, `arcSeatRows.test.ts`, `seating.schema.test.ts`, `zoneTone.test.ts`, `events.service.test.ts`, `checkout.service.test.ts` (y el resto de `modules/checkout`) y `demoOrders.test.ts`.
+- **Sin cambios** (requisito 7): `venueLayoutRecords.test.ts`, `TicketSelection.test.tsx`, `useSeatSelection.test.ts`, `seatIds.test.ts`, `seatNavigation.test.ts`, `bestSeats.test.ts`, `selectionSummary.test.ts`, `arcSeatRows.test.ts`, `seating.schema.test.ts`, `zoneTone.test.ts`, `events.service.test.ts`, `checkout.service.test.ts` (y el resto de `modules/checkout`) y `demoOrders.test.ts`.
 - **Verificación final** del reviewer:
-  - `npx vitest run`, `npm run lint` y `npm run build`;
+  - `npx vitest run` sin BD y con BD (una sola ejecución con BD a la vez);
+  - BD de desarrollo vuelta a sembrar, y después `npm run lint` y `npm run build`;
   - el script Playwright de "Verificación visual".
 
 ## Plan de tareas
 **Coordinación:**
 - Empieza cuando estén cerrados la Fase 5 de `docs/specs/seating-stadium-map.md` y el arreglo de `SeatPlan` de la decisión 7. No se ejecuta en la misma sesión que ninguna fase de la spec del estadio (decisión 10).
-- Los developers en paralelo verifican con `npx vitest run modules/seating` y `npx eslint <sus archivos>`, y no ejecutan `build`.
-- El reviewer ejecuta al final la verificación completa y el script de Playwright.
+- **Developers de T2–T4, en paralelo:**
+  - verifican sin BD: `DATABASE_URL_TEST= npx vitest run modules/seating lib/db/seed` y `npx eslint <sus archivos>`;
+  - no ejecutan `build`.
+- **Suite completa con BD (`npx vitest run`), de uno en uno:** cada developer de T2–T4 la ejecuta al terminar, por turnos (decisión 11). El orquestador no lanza dos a la vez.
+- **Reviewer, al final:**
+  - vuelve a sembrar la BD de desarrollo;
+  - ejecuta la verificación completa y el script de Playwright.
 
-### Fase 1. Recintos curvos (5 tareas, 11 archivos)
-- [ ] T1. Datos compartidos del estadio y reparto del mock en un archivo por recinto, sin cambio de datos; invariantes de `seating.service.test.ts` guiadas por los datos, con el límite de tamaño por mapa (requisitos 1, 2 y 6; tests de T1).
+### Fase 1. Recintos curvos (6 tareas, 12 archivos; T1 ya hecha: quedan 5 tareas sobre 11 archivos)
+- [x] T1. Datos compartidos del estadio y reparto del mock en un archivo por recinto, sin cambio de datos; invariantes de `seating.service.test.ts` guiadas por los datos, con el límite de tamaño por mapa (requisitos 1, 2 y 6; tests de T1).
   - Archivos: `modules/seating/data/stadium.mock.ts` (nuevo), `modules/seating/data/festivalViveLatino.mock.ts` (nuevo), `modules/seating/data/nocheDeSintetizadores.mock.ts` (nuevo, layout rectangular de hoy), `modules/seating/data/laCasaDeLosEspejos.mock.ts` (nuevo, ídem), `modules/seating/data/risasSinFiltro.mock.ts` (nuevo, ídem), `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`.
   - Depende de: —.
   - Secuencial (base: toca el agregador y el test compartido).
   - Verificar `npx vitest run modules/seating modules/checkout modules/tickets` y el `JSON.stringify` idéntico.
+- [ ] T1b. Test del seed independiente de la geometría (requisito 11, decisión 11).
+  - Archivos: `lib/db/seed/buildSeedData.test.ts`.
+  - Depende de: T1.
+  - Secuencial (archivo compartido de `lib/`; va antes de T2–T4).
+  - Verificar `DATABASE_URL_TEST= npx vitest run lib/db/seed/buildSeedData.test.ts` y `npx eslint lib/db/seed/buildSeedData.test.ts`.
 - [ ] T2. Arena curva (requisito 3), con su test.
   - Archivos: `modules/seating/data/nocheDeSintetizadores.mock.ts`, `modules/seating/data/nocheDeSintetizadores.mock.test.ts` (nuevo).
-  - Depende de: T1.
-  - En paralelo con T3 y T4. Verificar también `npx vitest run modules/checkout` (Norte del mapa real).
+  - Depende de: T1b.
+  - En paralelo con T3 y T4, sin BD.
+  - En la ejecución con BD, por turnos, comprobar también `modules/checkout` (Norte del mapa real).
 - [ ] T3. Teatro curvo (requisito 4), con su test.
   - Archivos: `modules/seating/data/laCasaDeLosEspejos.mock.ts`, `modules/seating/data/laCasaDeLosEspejos.mock.test.ts` (nuevo).
-  - Depende de: T1.
-  - En paralelo con T2 y T4. Verificar también `npx vitest run modules/tickets` (órdenes demo).
+  - Depende de: T1b.
+  - En paralelo con T2 y T4, sin BD.
+  - En la ejecución con BD, por turnos, comprobar también `modules/tickets` (órdenes demo).
 - [ ] T4. Comedia curva (requisito 5), con su test.
   - Archivos: `modules/seating/data/risasSinFiltro.mock.ts`, `modules/seating/data/risasSinFiltro.mock.test.ts` (nuevo).
-  - Depende de: T1.
-  - En paralelo con T2 y T3.
-- [ ] T5. Cierre: `sectors` obligatorio, tests sin rama rectangular y diseño de página (requisitos 9 y 10). Las holguras medidas del requisito 10 las aporta la verificación Playwright: el developer la ejecuta con el script del criterio, y el reviewer la repite.
+  - Depende de: T1b.
+  - En paralelo con T2 y T3, sin BD.
+- [ ] T5. Cierre: `sectors` obligatorio, tests sin rama rectangular y diseño de página (requisitos 9 y 10). Las holguras medidas del requisito 10 las aporta la verificación Playwright: el developer la ejecuta con el script del criterio, y el reviewer la repite. Antes del build y de Playwright, el developer vuelve a sembrar la BD de desarrollo (decisión 11).
   - Archivos: `modules/seating/data/stadium.mock.ts`, `modules/seating/data/venueMaps.mock.ts`, `modules/seating/services/seating.service.test.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2, T3 y T4.
   - Secuencial.
+
+## Preguntas abiertas
+Ninguna. La única (vaciar la BD de desarrollo durante la sesión) la resolvió el usuario: ver la decisión 11.
