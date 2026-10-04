@@ -386,6 +386,66 @@ describe("CheckoutForm", () => {
     expect(within(panel).getByText(TERMS_HINT)).toBeTruthy();
   });
 
+  it("los campos del comprador muestran sus placeholders", () => {
+    renderForm();
+    const placeholders = {
+      "checkout-firstName": "Como figura en tu documento",
+      "checkout-lastName": "Como figura en tu documento",
+      "checkout-email": "tu@email.com",
+      "checkout-phone": "Número de celular",
+      "checkout-documentNumber": "Número",
+    };
+    for (const [id, placeholder] of Object.entries(placeholders)) {
+      expect(document.getElementById(id)?.getAttribute("placeholder")).toBe(placeholder);
+    }
+  });
+
+  it("el método Tarjeta añade ' de crédito o débito' solo por debajo de sm", () => {
+    renderForm();
+    const card = screen.getByRole("radio", { name: "Tarjeta de crédito o débito" });
+    expect(card).toBeTruthy();
+    const suffix = screen.getByText((_, element) => element?.textContent === " de crédito o débito");
+    expect(suffix.tagName).toBe("SPAN");
+    expect(suffix.className).toContain("sm:hidden");
+    expect(screen.getByRole("radio", { name: "Yape" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "PagoEfectivo" })).toBeTruthy();
+  });
+
+  it("el subtítulo del comprador cambia por ancho y conserva la leyenda de los *", () => {
+    renderForm();
+    const short = screen.getByText("Enviaremos tus entradas a este correo.");
+    const long = screen.getByText("Enviaremos tus entradas al correo que indiques.");
+    expect(short.tagName).toBe("SPAN");
+    expect(short.className.split(" ")).toContain("sm:hidden");
+    expect(long.tagName).toBe("SPAN");
+    expect(long.className.split(" ")).toContain("max-sm:hidden");
+    const description = short.parentElement!;
+    expect(description).toBe(long.parentElement);
+    expect(description.textContent).toContain("Los campos con * son obligatorios.");
+  });
+
+  it("la casilla de Términos es blanca (bg-background) sobre el fondo gris", () => {
+    renderForm();
+    expect(termsCheckbox().className.split(" ")).toContain("bg-background");
+  });
+
+  it("en la tarjeta del resumen, la miniatura y el título se ocultan por debajo de lg y la fecha corta no", () => {
+    const { container } = renderForm();
+    const card = screen.getByRole("heading", { name: "Resumen del pedido", hidden: true }).closest("[data-slot=card]")!;
+    expect(card).toBeTruthy();
+    const image = card.querySelector("img")!;
+    expect(image.className.split(" ")).toContain("max-lg:hidden");
+    const title = within(card as HTMLElement).getByText(ORDER.event.title);
+    expect(title.className.split(" ")).toContain("max-lg:hidden");
+    const date = within(card as HTMLElement).getByText(/sáb 14 nov/).closest("p")!;
+    expect(date.className).not.toContain("hidden");
+    // El botón plegable sigue mostrando la miniatura y el título en móvil.
+    const toggle = screen.getByRole("button", { name: /Resumen del pedido:/ });
+    expect(toggle.textContent).toContain(ORDER.event.title);
+    expect(toggle.querySelector("img")).toBeTruthy();
+    expect(container.querySelectorAll("[data-slot=card] img")).toHaveLength(1);
+  });
+
   it("con 1 entrada con asientos el resumen dice 'Total (1 entrada)' y muestra los asientos compactos", () => {
     renderForm({
       ...ORDER,

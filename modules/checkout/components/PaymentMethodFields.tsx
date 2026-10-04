@@ -93,8 +93,11 @@ export function PaymentMethodFields({ values, errors, onChange, onBlur, labelled
                   <RadioGroupItem value={option} id={id} />
                   <Icon aria-hidden className="size-5 shrink-0" />
                   <FieldTitle className="text-base font-semibold">
-                    {PAYMENT_METHOD_LABELS[option]}
-                    {mobileSuffix && <span className="sm:hidden">{mobileSuffix}</span>}
+                    {/* Un solo nodo de texto en línea: FieldTitle es flex con gap y separaría el sufijo. */}
+                    <span>
+                      {PAYMENT_METHOD_LABELS[option]}
+                      {mobileSuffix && <span className="sm:hidden">{mobileSuffix}</span>}
+                    </span>
                   </FieldTitle>
                 </Field>
               </FieldLabel>
