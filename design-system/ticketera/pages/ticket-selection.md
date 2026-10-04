@@ -165,10 +165,11 @@ Dos variantes según la zona (los datos lo deciden):
 
 ```
 Toca una butaca para elegirla. Acerca el plano…            (ayuda)
-[minimapa]                              [ + | − | ⤢ ]      (< sm: barra sobre el lienzo; minimapa solo en arco)
+[minimapa]                              [ + | − | ⤢ ]      (< sm: barra sobre el lienzo; minimapa solo en arco
+                                                            y, desde sm, aquí si no cabe superpuesto)
 ┌──────────────────────────────────────────────────┐
 │ [minimapa]     A  B  C  D …                       │      lienzo (relative): plano + tooltip
-│ ▓▓▓▓      A ○ ○ ✕ ○ ●✓ ○ …     (letras en los     │      (≥ sm: minimapa arriba a la izquierda, solo en arco;
+│ ▓▓▓▓      A ○ ○ ✕ ○ ●✓ ○ …     (letras en los     │      (≥ sm: minimapa arriba a la izquierda si cabe, solo en arco;
 │ ▓▓ escenario  B ○ ✕ ○ ○ ○ …      dos extremos)    │       fondo del estadio alrededor del sector, solo en arco)
 │                                   [ + | − | ⤢ ]   │      (≥ sm: pastilla abajo a la derecha)
 └──────────────────────────────────────────────────┘
@@ -180,9 +181,9 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 ```
 
 1. **Ayuda:** "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
-2. **Barra sobre el lienzo** (solo por debajo de `sm`; `flex items-end justify-between gap-2`, desde `sm` pasa a `sm:contents`): minimapa a la izquierda (solo en arco) y pastilla de zoom a la derecha.
+2. **Barra sobre el lienzo** (`flex items-end justify-between gap-2`): minimapa a la izquierda (solo en arco) y pastilla de zoom a la derecha. Desde `sm` pasa a `sm:contents` y los dos se superponen al lienzo, salvo cuando el minimapa no cabe superpuesto (ver "Minimapa"): entonces la barra se queda, solo con el minimapa, y la pastilla se superpone igual.
 3. **Lienzo:** `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`. Dentro: el plano con zoom y paneo, el tooltip y, desde `sm`, el minimapa (en arco) y la pastilla de zoom superpuestos.
-   - **Proporción:** la del `seatViewBox` de la zona (`aspect-(--plan-aspect)`, con la variable en línea). En arco, desde `sm`, apaisado `sm:aspect-[16/10]`: el plano queda centrado (`fitOnInit="contain"`) y el margen lateral aloja el minimapa y el zoom (con el lienzo estrecho, además, una franja inferior; ver "Controles de zoom"). Va por variable CSS porque un `aspect-ratio` en línea ganaría a la variante `sm:`.
+   - **Proporción:** la del `seatViewBox` de la zona (`aspect-(--plan-aspect)`, con la variable en línea). En arco, desde `sm`, apaisado `sm:aspect-[16/10]`: el plano queda centrado (`fitOnInit="contain"`) y el margen lateral aloja el zoom (con el lienzo estrecho, además, una franja inferior; ver "Controles de zoom") y, cuando hay sitio, el minimapa (ver "Minimapa"). Va por variable CSS porque un `aspect-ratio` en línea ganaría a la variante `sm:`.
    - **Contenedor `@container`:** el bloque del lienzo (la barra y el lienzo, que miden lo mismo de ancho) es un contenedor de Tailwind. El minimapa y la franja del zoom en arco dependen del **ancho del lienzo** (umbral `@2xl`, 42rem = 672 px), no del de la ventana: a 1024 px, con dos columnas, el lienzo mide 516 px aunque la ventana sea ancha.
    - **Por debajo de `sm`** el lienzo mantiene la proporción del plano en las dos variantes, para no bajar de 24 px por butaca (en los planos grandes, tras un "Acercar"; ver arriba).
 4. **Leyenda** (`SeatLegend`) con el precio y "n elegidas".
@@ -235,11 +236,15 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 ### Minimapa (`SeatPlanMinimap`, solo en arco)
 
 - SVG `aria-hidden` (sin foco) con el `viewBox` del mapa: `h-auto w-24 @2xl:w-28 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border`. Escenario `fill-brand-navy`, zonas `fill-secondary` y la zona abierta `fill-primary`.
-- **Recuadro de la vista:** `fill-none stroke-foreground`, 2 px no escalables. Con el plano entero a la vista rodea todo el sector; al acercar o pellizcar se reduce y sigue al paneo (lee la transformación con `useTransformEffect`, el tamaño del lienzo y el alto del `<svg>`, para descontar la franja inferior cuando la hay). Medido frente a las esquinas del lienzo pasadas al plano: diferencia ≤ 0.2 unidades del mapa (< 0.05 px en el minimapa) con el plano entero, tras Acercar y tras panear, en todos los anchos.
-- **Posición:** envuelto en `<div class="pointer-events-none flex sm:absolute sm:top-3 sm:left-3 sm:z-10">`.
+- **Recuadro de la vista:** `fill-none stroke-foreground`, 2 px no escalables. Con el plano entero a la vista rodea todo el sector; al acercar o pellizcar se reduce y sigue al paneo (lee la transformación con `useTransformEffect`, el tamaño del lienzo y el alto del `<svg>`, para descontar la franja inferior cuando la hay). Esas medidas se leen con decimales del estilo calculado (`getComputedStyle`), no con `clientWidth`/`clientHeight`: el redondeo a píxeles enteros desviaba el recuadro hasta 1.2 unidades del mapa tras Acercar en los planos que encajan casi justo a lo ancho y a lo alto (Norte a 375, Platea a 1024). Medido frente a las esquinas del lienzo pasadas al plano, en las 6 zonas numeradas abribles, a 375 y de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100): diferencia ≤ 0.001 unidades del mapa con el plano entero, tras Acercar y tras panear.
+- **Posición:** envuelto en `<div class="pointer-events-none flex">` con `data-placement` (`overlay` o `bar`).
   - **Ancho según el lienzo** (`@2xl:w-28`, contenedor del lienzo): 96 px con el lienzo estrecho (< 672 px, también a 375 en la barra) y 112 px con el ancho. Con `md:w-28` (ventana) medía 112 px a 1024 sobre un lienzo de 516 y tapaba `occidente-J-8` y `occidente-J-9`.
-  - Desde `sm`, superpuesto arriba a la izquierda del lienzo, en el margen lateral del 16:10. Holgura mínima medida con la caja de la butaca más cercana, con el plano entero a la vista, en las 6 zonas numeradas de los 4 mapas: 27.8 px a 375 (en la barra; Platea), **−10.8 px a 640** (`norte-C-13`), 4.4 px a 768 (`norte-B-12`), **−23.9 px a 1024** (`norte-C-13`) y 23.4 px a 1440 (`norte-B-12`). Con las letras de fila: 25.7, −14.3 (Mezanine, letra A), −5.9, −26.9 y 9.7 px.
-    - **Pendiente:** los valores negativos son solapes. Con el lienzo estrecho (< 672 px: 576 a 640 y 516 a 1024), el minimapa de 96 px tapa la esquina superior izquierda de los planos grandes (Norte, Mezanine y Preferencial, filas A–C) y, a 768, las letras de Norte. En el festival no tapa nada (mínimo 34.4 px, `occidente-J-9` a 768). Lo resuelve un cambio de `SeatPlan`, fuera de los datos.
+  - **Desde `sm`, superpuesto arriba a la izquierda solo si cabe** (`data-placement="overlay"`, con `sm:absolute sm:top-3 sm:left-3 sm:z-10`): cabe si el `seatViewBox` encajado en el `<svg>` (como `xMidYMid meet`, con `getPlanFit`) empieza a la derecha del minimapa (margen izquierdo ≥ 12 px + su ancho) o por debajo de él (margen superior ≥ 12 px + su alto). Las butacas y las letras van dentro del `seatViewBox`, así que superpuesto no tapa nada **por construcción**, sea cual sea el plano o el ancho.
+    - **Si no cabe** (`data-placement="bar"`), sigue en la barra sobre el lienzo, como por debajo de `sm`, y la pastilla de zoom sigue superpuesta abajo a la derecha. Mover el minimapa no cambia el tamaño del lienzo.
+    - `SeatPlan` lo decide antes de pintar (`useLayoutEffect`, sin salto al abrir la zona) y en cada cambio de tamaño del lienzo (`ResizeObserver`), que también cambia el ancho del minimapa y la franja inferior. Sin medidas (jsdom), superpuesto.
+    - **Por qué:** el margen lateral del 16:10 no basta en los planos apaisados. Con el minimapa siempre superpuesto, tapaba la esquina superior izquierda de Norte, Mezanine y Preferencial (filas A–C): butacas hasta −23.9 px (`norte-C-13`) y letras hasta −26.9 px a 1024; a 640, −10.8 / −13.7 px; también las letras de Norte de 740 a 800 y de 1180 a 1220 px.
+    - **Resultado:** el festival (Oriente y Occidente, planos casi cuadrados) lo lleva superpuesto en todos los anchos, igual que antes; Norte, Platea, Mezanine y Preferencial, en la barra desde `sm` (su plano llega a la esquina, aunque en Platea las butacas no la tocaran).
+    - Holgura mínima medida con el plano entero a la vista, de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100), frente a la caja de la butaca más cercana (área de toque de 32 × 32) y a la de las letras de fila: superpuesto, 30.7 px (`occidente-J-9` a 1180) y 46.1 px con letras; en la barra queda fuera del lienzo (≥ 47.3 px). Sin solapes en ningún ancho. La pastilla no cambia (mínimo 16.9 px, `platea-H-4` a 1180).
   - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
   - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 

@@ -25,6 +25,17 @@ type SeatPlanMinimapProps = {
 };
 
 /**
+ * Ancho y alto de layout (px) con decimales: ni el zoom ni la animación de entrada del sub-paso los escalan (a diferencia
+ * de `getBoundingClientRect`), y no se redondean (a diferencia de `clientWidth`, que desviaba el recuadro hasta ~1 unidad
+ * del mapa en planos que encajan casi justo a lo ancho y a lo alto). Sin elemento, 0 × 0.
+ */
+function getLayoutSize(element: Element | null): { width: number; height: number } {
+  if (!element) return { width: 0, height: 0 };
+  const style = getComputedStyle(element);
+  return { width: parseFloat(style.width) || 0, height: parseFloat(style.height) || 0 };
+}
+
+/**
  * Minimapa del plano en arco (requisito 30): el estadio en miniatura con la zona abierta resaltada y un recuadro con la
  * parte del plano que se ve. Decorativo (`aria-hidden`). Va dentro de `TransformWrapper` para leer su transformación.
  */
@@ -43,20 +54,19 @@ export function SeatPlanMinimap({
 
   const syncVisibleRect = useCallback(
     ({ instance, state }: ReactZoomPanPinchContextState) => {
-      const wrapper = instance.wrapperComponent;
-      const viewportHeight = wrapper?.clientHeight ?? 0;
+      const viewport = getLayoutSize(instance.wrapperComponent);
       // Medidas de layout (sin escalar): el plano ocupa el lienzo menos la franja inferior reservada (`sm:pb-16`).
-      const svgHeight = planRef.current?.clientHeight ?? viewportHeight;
+      const svgHeight = planRef.current ? getLayoutSize(planRef.current).height : viewport.height;
       setVisiblePlanRect(
         getVisiblePlanRect({
           planWidth,
           planHeight,
-          viewportWidth: wrapper?.clientWidth ?? 0,
-          viewportHeight,
+          viewportWidth: viewport.width,
+          viewportHeight: viewport.height,
           scale: state.scale,
           positionX: state.positionX,
           positionY: state.positionY,
-          insetBottom: viewportHeight - svgHeight,
+          insetBottom: viewport.height - svgHeight,
         }),
       );
     },
