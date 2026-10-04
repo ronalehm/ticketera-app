@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EVENT_CATEGORIES } from "@/modules/events";
-import { CITIES } from "@/modules/events/format";
+import { CITIES, EVENT_CATEGORIES } from "@/modules/events/format";
 import type { OrganizerEventFormValues } from "../types/organizer.types";
 import {
   COVER_IMAGE_RULES,

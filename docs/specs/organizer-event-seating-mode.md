@@ -573,7 +573,7 @@ Coordinación:
 - Nadie hace commits ni ejecuta `npm run build` en paralelo: el build lo corre el reviewer al cerrar cada fase.
 
 ### Fase 1. Modo de ubicación y datos obligatorios (13 archivos)
-- [ ] T1. Reexportar `CITIES`; schema (`seatingModeSchema`, `seatingMode`, `hasCoverImage`, `description`, `maxPerOrder`, reglas de publicación), tipos y utils (`createTicketTypeRow(kind)`, `getNewRowKind`, `applySeatingMode`, `getCoverImageError` en lugar de `isAcceptedCoverImage`, errores por fila), con tests.
+- [x] T1. Reexportar `CITIES`; schema (`seatingModeSchema`, `seatingMode`, `hasCoverImage`, `description`, `maxPerOrder`, reglas de publicación), tipos y utils (`createTicketTypeRow(kind)`, `getNewRowKind`, `applySeatingMode`, `getCoverImageError` en lugar de `isAcceptedCoverImage`, errores por fila), con tests.
   - Archivos: `modules/events/format.ts`, `modules/organizer/schemas/organizer.schema.ts`, `modules/organizer/schemas/organizer.schema.test.ts`, `modules/organizer/types/organizer.types.ts`, `modules/organizer/utils/organizerEventForm.ts`, `modules/organizer/utils/organizerEventForm.test.ts`, `modules/organizer/utils/eventPreview.test.ts` (solo si deja de compilar).
   - Depende de: —.
   - Secuencial (base: entrada pública de `events`).
