@@ -1,6 +1,10 @@
-import { buildCheckoutHref } from "@/modules/events/purchase";
+import { buildCheckoutHref, MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import type { SeatSelection, SelectionLine, VenueMap, VenueZone } from "../types/seating.types";
-import { formatSeatShortLabel, parseSeatId } from "./seatIds";
+import { formatSeatShortLabel, parseSeatId, resolveSeats } from "./seatIds";
+
+/** Parámetro de los asientos en la URL (contrato C). */
+const SEATS_PARAM = "asientos";
+const QUANTITY_PATTERN = /^\d+$/;
 
 /** Asientos elegidos de una zona, en el orden de selección (la zona se toma del id). */
 function getZoneSeatIds(zoneId: string, seatIds: string[]): string[] {
@@ -58,7 +62,53 @@ export function buildSeatingCheckoutHref(slug: string, map: VenueMap, selection:
 
   const href = buildCheckoutHref(slug, toCheckoutQuantities(map, selection));
   if (selection.seatIds.length === 0) return href;
-  return `${href}&${new URLSearchParams({ asientos: selection.seatIds.join(",") })}`;
+  return `${href}&${new URLSearchParams({ [SEATS_PARAM]: selection.seatIds.join(",") })}`;
+}
+
+/** Valor de un parámetro que aparece exactamente una vez; `null` si falta o está repetido. */
+function getSingleParam(params: Pick<URLSearchParams, "getAll">, name: string): string | null {
+  const values = params.getAll(name);
+  return values.length === 1 ? values[0] : null;
+}
+
+/** Cantidad entera entre 1 y `MAX_TICKETS_PER_ORDER`; `null` si no lo es. */
+function parseQuantity(raw: string | null): number | null {
+  if (raw === null || !QUANTITY_PATTERN.test(raw)) return null;
+  const quantity = Number(raw);
+  return quantity >= 1 && quantity <= MAX_TICKETS_PER_ORDER ? quantity : null;
+}
+
+/**
+ * Inversa de `buildSeatingCheckoutHref` (sin `evento`): `<ticketTypeId>=<qty>` por zona de pie y
+ * `asientos=<id>,<id>` para las numeradas. Lo inválido se ignora uno a uno; las zonas se recorren en el
+ * orden de `map.zones` y se recorta lo que exceda `MAX_TICKETS_PER_ORDER`.
+ */
+export function parseSeatingPreselection(map: VenueMap, params: Pick<URLSearchParams, "getAll">): SeatSelection {
+  const rawSeatIds = getSingleParam(params, SEATS_PARAM);
+  const urlSeatIds = rawSeatIds === null ? [] : [...new Set(rawSeatIds.split(","))];
+  const quantities: Record<string, number> = {};
+  const seatIds: string[] = [];
+  let remaining = MAX_TICKETS_PER_ORDER;
+
+  for (const zone of map.zones) {
+    if (zone.status === "sold-out" || remaining === 0) continue;
+
+    if (zone.kind === "numbered") {
+      const zoneSeatIds = urlSeatIds
+        .filter((id) => parseSeatId(id)?.zoneId === zone.id && resolveSeats(map, [id]) !== null)
+        .slice(0, remaining);
+      seatIds.push(...zoneSeatIds);
+      remaining -= zoneSeatIds.length;
+      continue;
+    }
+
+    const quantity = parseQuantity(getSingleParam(params, zone.ticketTypeId));
+    if (quantity === null) continue;
+    quantities[zone.id] = Math.min(quantity, remaining);
+    remaining -= quantities[zone.id];
+  }
+
+  return { quantities, seatIds };
 }
 
 /** "1 entrada" / "3 entradas". */
