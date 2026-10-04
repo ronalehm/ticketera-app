@@ -638,7 +638,7 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 - [x] T3. Los Ecos del Sur, agotado (requisito 6), con su test.
   - Archivos: `modules/seating/data/losEcosDelSur.mock.ts` (nuevo), `modules/seating/data/losEcosDelSur.mock.test.ts` (nuevo).
   - Depende de: T1. En paralelo con T2.
-- [ ] T4. Cierre: registro en el agregador, verificación con BD, build, Playwright de la Fase 1 y diseño de página (requisito 19).
+- [x] T4. Cierre: registro en el agregador, verificación con BD, build, Playwright de la Fase 1 y diseño de página (requisito 19).
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T2 y T3. Secuencial.
 
