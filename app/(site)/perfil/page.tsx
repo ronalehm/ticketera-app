@@ -9,6 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const user = await requireUser();
+  const user = await requireUser({ returnTo: "/perfil" });
   return <UserProfile user={user} />;
 }

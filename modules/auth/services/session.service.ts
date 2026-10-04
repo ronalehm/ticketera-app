@@ -4,6 +4,7 @@ import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import type { SessionUser } from "../types/auth.types";
 import { isMfaPending } from "../utils/can";
+import { isProfileComplete } from "../utils/isProfileComplete";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
 /**
@@ -44,11 +45,21 @@ async function findOrCreateUser(userId: string) {
 
 /**
  * Usuario de la sesión para páginas y layouts privados (Decisión 10): sin sesión redirige a `/login`; un rol con MFA
- * sin segundo factor en la sesión, a `/perfil/seguridad`.
+ * sin segundo factor en la sesión, a `/perfil/seguridad`; con el perfil incompleto (sin celular o documento), a
+ * `/perfil/completar?redirect_url=<returnTo>`, salvo con `allowIncompleteProfile` (la propia página de completar).
  */
-export async function requireUser(): Promise<SessionUser> {
+export async function requireUser(
+  options: { returnTo?: string; allowIncompleteProfile?: boolean } = {},
+): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (isMfaPending(user)) redirect("/perfil/seguridad");
+  if (!isProfileComplete(user) && !options.allowIncompleteProfile) {
+    redirect(
+      options.returnTo
+        ? `/perfil/completar?${new URLSearchParams({ redirect_url: options.returnTo })}`
+        : "/perfil/completar",
+    );
+  }
   return user;
 }

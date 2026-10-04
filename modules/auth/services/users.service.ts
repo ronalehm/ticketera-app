@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/identity";
-import type { ClerkIdentity, SessionUser } from "../types/auth.types";
+import { consents, legalDocuments } from "@/lib/db/schema/legal";
+import type { ClerkIdentity, CompleteProfileInput, SessionUser } from "../types/auth.types";
 import { getAccountLinkAction } from "../utils/getAccountLinkAction";
 
 /** El usuario de Clerk no se puede enlazar con la fila que ya tiene su correo. No se escribe nada. */
@@ -80,5 +81,46 @@ export async function ensureUser(identity: ClerkIdentity, database = db): Promis
     const concurrent = await findUserByClerkId(identity.clerkId, tx);
     if (!concurrent) throw new AccountLinkError("El correo ya pertenece a otra cuenta");
     return concurrent;
+  });
+}
+
+/** Documentos que acepta "Completa tu perfil" (Decisión 12): `acceptTerms` cubre los tres primeros. */
+const PROFILE_CONSENT_KINDS = ["terms", "privacy", "international_transfer", "marketing"] as const;
+
+/**
+ * Guarda celular y documento en `users` y una fila de `consents` por cada `PROFILE_CONSENT_KINDS`, ligada a la versión
+ * vigente (la última `published` por `published_at`). Todo en una transacción: si falta una versión, no escribe nada.
+ */
+export async function completeProfile(
+  userId: string,
+  input: CompleteProfileInput,
+  meta: { ip: string | null; userAgent: string | null },
+  database: Pick<typeof db, "transaction"> = db,
+): Promise<void> {
+  await database.transaction(async (tx) => {
+    const current = await tx
+      .selectDistinctOn([legalDocuments.kind], { id: legalDocuments.id, kind: legalDocuments.kind })
+      .from(legalDocuments)
+      .where(and(eq(legalDocuments.status, "published"), inArray(legalDocuments.kind, PROFILE_CONSENT_KINDS)))
+      .orderBy(legalDocuments.kind, sql`${legalDocuments.publishedAt} desc nulls last`);
+    const versionIds = new Map(current.map((document) => [document.kind, document.id]));
+
+    const rows = PROFILE_CONSENT_KINDS.map((kind) => {
+      const legalDocumentId = versionIds.get(kind);
+      if (!legalDocumentId) throw new Error(`No hay una versión publicada de "${kind}"`);
+      return {
+        legalDocumentId,
+        userId,
+        accepted: kind === "marketing" ? input.marketingOptIn : true,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      };
+    });
+
+    await tx
+      .update(users)
+      .set({ phone: input.phone, documentType: input.documentType, documentNumber: input.documentNumber })
+      .where(eq(users.id, userId));
+    await tx.insert(consents).values(rows);
   });
 }

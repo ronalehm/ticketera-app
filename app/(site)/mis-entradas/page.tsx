@@ -9,6 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function MyTicketsPage() {
-  await requireUser();
+  await requireUser({ returnTo: "/mis-entradas" });
   return <MyTickets />;
 }

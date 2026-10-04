@@ -3,6 +3,7 @@ import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "../types/auth.types";
+import { isMfaPending } from "../utils/can";
 import { getSessionUser, requireUser } from "./session.service";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
@@ -12,6 +13,11 @@ vi.mock("next/navigation", () => ({
     throw new Error(`NEXT_REDIRECT ${url}`);
   }),
 }));
+// `isMfaPending` real (MFA diferido) salvo en el test que fuerza la regla 2.
+vi.mock("../utils/can", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../utils/can")>();
+  return { ...original, isMfaPending: vi.fn(original.isMfaPending) };
+});
 vi.mock("./users.service", () => ({
   AccountLinkError: class AccountLinkError extends Error {},
   ensureUser: vi.fn(),
@@ -20,15 +26,15 @@ vi.mock("./users.service", () => ({
 
 const updateUserMetadata = vi.fn();
 
-/** Fila de `users` que devuelve `users.service` (sin `mfaVerified`, que sale de la sesión). */
+/** Fila de `users` (perfil completo) que devuelve `users.service`, sin `mfaVerified` (sale de la sesión). */
 const USER: Omit<SessionUser, "mfaVerified"> = {
   id: "00000000-0000-8000-8000-000000000001",
   email: "ana@example.com",
   firstName: "Ana",
   lastName: "Pérez",
-  phone: null,
-  documentType: null,
-  documentNumber: null,
+  phone: "912345678",
+  documentType: "dni",
+  documentNumber: "12345678",
   role: "customer",
   createdAt: new Date("2026-10-01T00:00:00Z"),
 };
@@ -175,5 +181,42 @@ describe("requireUser", () => {
     vi.mocked(findUserByClerkId).mockResolvedValue(USER);
     expect(await requireUser()).toMatchObject({ role: "customer", mfaVerified: false });
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("con MFA pendiente redirige a /perfil/seguridad (regla 2, aunque el MFA esté diferido)", async () => {
+    mockSession("user_1", [0, -1]);
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "admin" });
+    vi.mocked(isMfaPending).mockReturnValueOnce(true);
+    await expect(requireUser({ returnTo: "/perfil" })).rejects.toThrow("NEXT_REDIRECT /perfil/seguridad");
+    expect(redirect).toHaveBeenCalledWith("/perfil/seguridad");
+  });
+
+  describe("perfil incompleto", () => {
+    it.each([
+      { phone: null },
+      { documentType: null },
+      { documentNumber: null },
+    ])("sin %o redirige a /perfil/completar con redirect_url", async (missing) => {
+      mockSession("user_1");
+      vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, ...missing });
+      await expect(requireUser({ returnTo: "/mis-entradas" })).rejects.toThrow("NEXT_REDIRECT");
+      expect(redirect).toHaveBeenCalledWith("/perfil/completar?redirect_url=%2Fmis-entradas");
+    });
+
+    it("sin returnTo redirige a /perfil/completar sin redirect_url", async () => {
+      mockSession("user_1");
+      vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, phone: null });
+      await expect(requireUser()).rejects.toThrow("NEXT_REDIRECT /perfil/completar");
+      expect(redirect).toHaveBeenCalledWith("/perfil/completar");
+    });
+
+    it("con allowIncompleteProfile devuelve el usuario sin redirigir", async () => {
+      mockSession("user_1");
+      vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, phone: null, documentType: null, documentNumber: null });
+      expect(
+        await requireUser({ returnTo: "/perfil/completar", allowIncompleteProfile: true }),
+      ).toMatchObject({ phone: null });
+      expect(redirect).not.toHaveBeenCalled();
+    });
   });
 });

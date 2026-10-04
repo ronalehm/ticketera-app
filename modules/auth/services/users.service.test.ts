@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
-import { afterAll, expect, it } from "vitest";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { afterAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/identity";
+import { consents, legalDocuments } from "@/lib/db/schema/legal";
 import { describeWithDb } from "@/lib/db/testDb";
-import type { ClerkIdentity } from "../types/auth.types";
-import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
+import type { ClerkIdentity, CompleteProfileInput } from "../types/auth.types";
+import { AccountLinkError, completeProfile, ensureUser, findUserByClerkId } from "./users.service";
 
 /** Correos de este archivo, para limpiarlos al final sin depender del seed. */
 const emails: string[] = [];
@@ -40,6 +41,8 @@ const rowByEmail = async (email: string) => (await db.select().from(users).where
 
 describeWithDb("users.service (Postgres)", () => {
   afterAll(async () => {
+    const ids = db.select({ id: users.id }).from(users).where(inArray(users.email, emails));
+    await db.delete(consents).where(inArray(consents.userId, ids));
     await db.delete(users).where(inArray(users.email, emails));
   });
 
@@ -91,5 +94,97 @@ describeWithDb("users.service (Postgres)", () => {
 
   it("findUserByClerkId devuelve null si no hay fila", async () => {
     expect(await findUserByClerkId(`user_test_${randomUUID()}`)).toBeNull();
+  });
+
+  describe("completeProfile", () => {
+    const PROFILE: CompleteProfileInput = {
+      phone: "912345678",
+      documentType: "ce",
+      documentNumber: "001234567",
+      acceptTerms: true,
+      marketingOptIn: false,
+    };
+    const META = { ip: "203.0.113.7", userAgent: "vitest" };
+    const consentsOf = (userId: string) =>
+      db
+        .select({
+          kind: legalDocuments.kind,
+          legalDocumentId: consents.legalDocumentId,
+          accepted: consents.accepted,
+          ip: consents.ip,
+          userAgent: consents.userAgent,
+        })
+        .from(consents)
+        .innerJoin(legalDocuments, eq(consents.legalDocumentId, legalDocuments.id))
+        .where(eq(consents.userId, userId));
+
+    /** Versión vigente de un `kind`: la última publicada. */
+    async function currentVersionId(kind: (typeof legalDocuments.kind.enumValues)[number]) {
+      const [document] = await db
+        .select({ id: legalDocuments.id })
+        .from(legalDocuments)
+        .where(and(eq(legalDocuments.kind, kind), eq(legalDocuments.status, "published")))
+        .orderBy(desc(legalDocuments.publishedAt))
+        .limit(1);
+      return document.id;
+    }
+
+    it("guarda celular y documento y las 4 filas de consents con la versión vigente de cada kind", async () => {
+      const user = await insertUser({ email: uniqueEmail(), clerkId: null, role: "customer" });
+
+      await completeProfile(user.id, { ...PROFILE, marketingOptIn: true }, META);
+
+      expect(await rowByEmail(user.email)).toMatchObject({
+        phone: "912345678",
+        documentType: "ce",
+        documentNumber: "001234567",
+      });
+      const rows = await consentsOf(user.id);
+      expect(rows).toHaveLength(4);
+      for (const kind of ["terms", "privacy", "international_transfer", "marketing"] as const) {
+        expect(rows.find((row) => row.kind === kind)).toEqual({
+          kind,
+          legalDocumentId: await currentVersionId(kind),
+          accepted: true,
+          ip: "203.0.113.7",
+          userAgent: "vitest",
+        });
+      }
+    });
+
+    it("guarda marketing con accepted = false si no se eligió la publicidad", async () => {
+      const user = await insertUser({ email: uniqueEmail(), clerkId: null, role: "customer" });
+
+      await completeProfile(user.id, PROFILE, { ip: null, userAgent: null });
+
+      const rows = await consentsOf(user.id);
+      expect(rows.find((row) => row.kind === "marketing")).toMatchObject({ accepted: false, ip: null });
+      expect(rows.filter((row) => row.accepted)).toHaveLength(3);
+    });
+
+    it("si falla la escritura no guarda nada (transacción)", async () => {
+      const user = await insertUser({ email: uniqueEmail(), clerkId: null, role: "customer" });
+
+      // `ip` no es un inet válido: el insert de consents falla después del update de users.
+      await expect(completeProfile(user.id, PROFILE, { ip: "no-es-ip", userAgent: null })).rejects.toThrow();
+
+      expect(await rowByEmail(user.email)).toEqual(user);
+      expect(await consentsOf(user.id)).toHaveLength(0);
+    });
+
+    it("si falta una versión publicada lanza un error y no escribe nada", async () => {
+      const user = await insertUser({ email: uniqueEmail(), clerkId: null, role: "customer" });
+
+      // Despublica marketing dentro de una transacción que se revierte al fallar (no afecta a otros tests).
+      await expect(
+        db.transaction(async (tx) => {
+          await tx.update(legalDocuments).set({ status: "draft" }).where(eq(legalDocuments.kind, "marketing"));
+          await completeProfile(user.id, PROFILE, META, tx);
+        }),
+      ).rejects.toThrow('No hay una versión publicada de "marketing"');
+
+      expect(await rowByEmail(user.email)).toEqual(user);
+      expect(await consentsOf(user.id)).toHaveLength(0);
+    });
   });
 });

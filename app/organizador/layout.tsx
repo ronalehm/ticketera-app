@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 export default async function OrganizerLayout({ children }: LayoutProps<"/organizador">) {
-  await requireUser();
+  await requireUser({ returnTo: "/organizador" });
   return (
     <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <OrganizerSidebar />
