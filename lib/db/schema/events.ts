@@ -6,6 +6,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   unique,
   uuid,
@@ -31,17 +32,16 @@ export const events = pgTable(
     organizerId: uuid("organizer_id")
       .notNull()
       .references(() => organizers.userId),
-    venueId: uuid("venue_id")
-      .notNull()
-      .references(() => venues.id),
+    venueId: uuid("venue_id").references(() => venues.id),
     categoryId: uuid("category_id")
       .notNull()
       .references(() => categories.id),
     title: text("title").notNull(),
-    description: text("description").notNull(),
-    imageUrl: text("image_url").notNull(),
-    startsAt: timestamptz("starts_at").notNull(),
-    doorsOpenAt: timestamptz("doors_open_at").notNull(),
+    // Nullable en borrador; obligatorias fuera de `draft` (events_draft_complete_check).
+    description: text("description"),
+    imageUrl: text("image_url"),
+    startsAt: timestamptz("starts_at"),
+    doorsOpenAt: timestamptz("doors_open_at"),
     minAge: integer("min_age").notNull(),
     featured: boolean("featured").notNull().default(false),
     currency: char("currency", { length: 3 }).notNull().default("PEN"),
@@ -58,6 +58,10 @@ export const events = pgTable(
   (t) => [
     index("events_status_starts_at_idx").on(t.status, t.startsAt),
     index("events_search_text_trgm_idx").using("gin", t.searchText.op("gin_trgm_ops")),
+    check(
+      "events_draft_complete_check",
+      sql`${t.status} = 'draft' OR (${t.venueId} IS NOT NULL AND ${t.description} IS NOT NULL AND ${t.imageUrl} IS NOT NULL AND ${t.startsAt} IS NOT NULL AND ${t.doorsOpenAt} IS NOT NULL)`,
+    ),
   ],
 );
 
@@ -132,4 +136,18 @@ export const eventStaff = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [unique("event_staff_event_id_email_unique").on(t.eventId, t.email)],
+);
+
+export const savedEvents = pgTable(
+  "saved_events",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.eventId] })],
 );

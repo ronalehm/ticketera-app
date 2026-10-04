@@ -11,30 +11,41 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import { createdAt, seatingTypeEnum, updatedAt } from "./enums";
-import { users } from "./identity";
+import { createdAt, seatingTypeEnum, updatedAt, venueStatusEnum } from "./enums";
+import { organizers, users } from "./identity";
 
-export const venues = pgTable("venues", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  address: text("address").notNull(),
-  city: text("city").notNull(),
-  lat: doublePrecision("lat"),
-  lng: doublePrecision("lng"),
-  placeId: text("place_id"),
-  mapViewBox: text("map_view_box"),
-  stage: jsonb("stage").$type<{
-    label: string;
-    path: string;
-    labelPos: { x: number; y: number };
-    lights?: { x: number; y: number }[];
-  }>(),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const venues = pgTable(
+  "venues",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    address: text("address").notNull(),
+    city: text("city").notNull(),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    placeId: text("place_id"),
+    mapViewBox: text("map_view_box"),
+    stage: jsonb("stage").$type<{
+      label: string;
+      path: string;
+      labelPos: { x: number; y: number };
+      lights?: { x: number; y: number }[];
+    }>(),
+    status: venueStatusEnum("status").notNull().default("approved"),
+    organizerId: uuid("organizer_id").references(() => organizers.userId),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check(
+      "venues_pending_has_owner_check",
+      sql`${t.status} = 'approved' OR ${t.organizerId} IS NOT NULL`,
+    ),
+  ],
+);
 
 export const venueSections = pgTable(
   "venue_sections",

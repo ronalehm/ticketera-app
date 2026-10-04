@@ -139,7 +139,8 @@ describe("buildSeedData", () => {
     const expected = VENUE_LAYOUTS_MOCK.filter((layout) => layout.eventSlug in VENUE_SECTORS_MOCK).flatMap((layout) =>
       layout.zones
         .filter((zone) => zone.kind === "numbered")
-        .map((zone) => ({ venueId: eventBySlug(layout.eventSlug).venueId, slug: zone.id })),
+        // Los eventos publicados del seed siempre tienen recinto (events_draft_complete_check).
+        .map((zone) => ({ venueId: eventBySlug(layout.eventSlug).venueId!, slug: zone.id })),
     );
     expect(expected.length).toBeGreaterThan(0);
     expect(sectionKeySet(data.venueSections.filter((section) => section.planTransform))).toEqual(

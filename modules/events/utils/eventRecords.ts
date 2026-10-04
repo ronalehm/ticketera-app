@@ -8,10 +8,10 @@ export type EventRecord = {
   slug: string;
   title: string;
   category: string;
-  startsAt: Date;
+  startsAt: Date | null;
   venue: string;
   city: string;
-  imageUrl: string;
+  imageUrl: string | null;
   featured: boolean;
   priceFromCents: number;
   totalSeats: number;
@@ -19,9 +19,9 @@ export type EventRecord = {
 };
 
 export type EventDetailRecord = EventRecord & {
-  description: string;
+  description: string | null;
   address: string;
-  doorsOpenAt: Date;
+  doorsOpenAt: Date | null;
   minAge: number;
   organizer: string;
 };
@@ -37,6 +37,12 @@ export type TicketTypeRecord = {
 
 const toSoles = (cents: number) => cents / 100;
 
+/** Columnas nullable solo en `draft` (CHECK `events_draft_complete_check`): en un publicado nunca llegan `null`. */
+function required<T>(value: T | null, slug: string): T {
+  if (value === null) throw new Error(`Evento publicado incompleto: ${slug}`);
+  return value;
+}
+
 /** Sin validar: el service pasa la salida por `eventSchema`. */
 export function toEvent(record: EventRecord): z.input<typeof eventSchema> {
   return {
@@ -44,10 +50,10 @@ export function toEvent(record: EventRecord): z.input<typeof eventSchema> {
     slug: record.slug,
     title: record.title,
     category: record.category as z.input<typeof eventSchema>["category"],
-    startsAt: record.startsAt.toISOString(),
+    startsAt: required(record.startsAt, record.slug).toISOString(),
     venue: record.venue,
     city: record.city,
-    imageUrl: record.imageUrl,
+    imageUrl: required(record.imageUrl, record.slug),
     priceFrom: toSoles(record.priceFromCents),
     status: getAvailabilityStatus(record.availableSeats, record.totalSeats),
     featured: record.featured,
@@ -61,9 +67,9 @@ export function toEventDetail(
 ): z.input<typeof eventDetailSchema> {
   return {
     ...toEvent(record),
-    description: record.description,
+    description: required(record.description, record.slug),
     address: record.address,
-    doorsOpenAt: record.doorsOpenAt.toISOString(),
+    doorsOpenAt: required(record.doorsOpenAt, record.slug).toISOString(),
     minAge: record.minAge,
     organizer: record.organizer,
     ticketTypes: ticketTypes.map((ticketType) => ({
