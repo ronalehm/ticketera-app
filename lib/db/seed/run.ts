@@ -2,7 +2,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
-import { seed } from "./seed";
+import { seed, type SeedReport } from "./seed";
 
 async function main() {
   const superAdminEmail = env.SUPER_ADMIN_EMAIL;
@@ -10,12 +10,21 @@ async function main() {
 
   // Conexión directa: el seed es una transacción larga, mejor sin el pooler.
   const pool = new Pool({ connectionString: env.DATABASE_URL_UNPOOLED ?? env.DATABASE_URL });
+  let report: SeedReport;
   try {
-    await seed(drizzle({ client: pool }), { superAdminEmail });
+    report = await seed(drizzle({ client: pool }), { superAdminEmail });
   } finally {
     await pool.end();
   }
   console.log("Seed completado");
+  for (const [table, written] of Object.entries(report.written)) console.log(`  ${table}: ${written} escritas`);
+  console.log(`  eventSeats retirados: ${report.retiredEventSeats}`);
+  console.log(`  eventSeats obsoletos con venta real: ${report.obsoleteWithSales}`);
+  if (report.obsoleteWithSales > 0) {
+    console.warn(
+      `Aviso: ${report.obsoleteWithSales} lugares obsoletos tienen una venta o retención real; no se retiran ni se tocan.`,
+    );
+  }
 }
 
 main().catch((error: unknown) => {
