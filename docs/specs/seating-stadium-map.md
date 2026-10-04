@@ -41,7 +41,13 @@ Diseño de referencia: capturas de "Elige tus entradas" (sub-paso 1: mapa y tarj
   - Fase 3: sub-paso 1 con el diseño de la captura, sub-paso 2 funcional y resumen móvil.
   - Fase 4: plano de butacas renovado.
   - Fase 5: plano curvo con contexto y minimapa (la antigua Fase 3).
-  - Fase 6: precarga desde la URL (la antigua Fase 4, con el mismo alcance).
+  - Fase 6: precarga desde la URL (la antigua Fase 4), ampliada con la entrada directa por zona desde el detalle (pedido 5, enmienda del 2026-10-04).
+
+**Enmienda del 2026-10-04 (Fase 6 ampliada y registro de la Fase 5).**
+- **Pedido del usuario (5):** "para mejorar la fricción del usuario, desde aquí al seleccionar: VIP, Preferencial, General o Tribuna Norte, deben convertirse en botones para que me lleven a la siguiente pantalla donde se eligen las entradas y se muestren de forma específica la entrada que seleccione, esto elimina un paso para el usuario para que elija las entradas directamente desde esta ventana". "Aquí" es la tarjeta "Entradas" del aside del detalle `/eventos/[slug]` (`ZonePricesCard`). Se resuelve en la Fase 6 (decisiones 31–33): cada zona no agotada del aside enlaza a `/eventos/<slug>/entradas?zona=<zoneId>`, que abre directamente el sub-paso 2 de esa zona.
+- **Decisión del usuario (con el pedido 5):** el botón "Elegir entradas →" del aside pasa a llamarse **"Ver mapa de zonas"** (con la flecha): las filas ya eligen zona y el botón abre el mapa del recinto (sub-paso 1) con todas las zonas. El CTA del hero ("Comprar entradas · desde S/ X") y la barra móvil del detalle ("Comprar entradas") no cambian (decisión 31).
+- **Fase 5:** se registran en los requisitos 29–31, la decisión 12, los tests y la lista de archivos de F5 T3 las desviaciones implementadas y aprobadas por el reviewer (minimapa superpuesto solo si cabe, ancho y franja según el lienzo con container queries, `insetBottom` y medidas del minimapa).
+- **Ruta del paso 1:** `docs/specs/design-alignment-purchase-flow.md` (aprobada, en implementación) mueve la página a `app/(purchase)/eventos/[slug]/entradas/page.tsx` y sustituye `PurchaseStepper` por `components/shared/PurchaseShell.tsx`. La Fase 6 usa esa ruta y depende de que su Fase 1 esté cerrada.
 
 ## Investigación y diagnóstico
 
@@ -158,15 +164,19 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
   - **Fase 5. Plano curvo con contexto y minimapa** (la antigua Fase 3, adaptada a la captura del paso 2):
     - sector delineado en azul sobre un fondo lila claro, el resto del estadio en gris, el escenario navy y las luces;
     - lienzo apaisado desde `sm`, con el estadio visible alrededor;
-    - minimapa superpuesto arriba a la izquierda (desde `sm`) o en la barra superior (móvil);
-    - utilidad de "vista visible".
-  - **Fase 6. Precarga de la selección desde la URL** (la antigua Fase 4, mismo alcance; resuelve la pregunta abierta 5 de `checkout-mock-payment.md`):
+    - minimapa superpuesto arriba a la izquierda desde `sm` **solo si cabe** sin tapar el plano; si no, y en móvil, en la barra sobre el lienzo (enmienda del 2026-10-04);
+    - ancho del minimapa y franja de la pastilla de zoom según el ancho del lienzo (container queries);
+    - utilidad de "vista visible", con la franja inferior reservada (`insetBottom`).
+  - **Fase 6. Precarga de la selección y entrada por zona desde la URL** (la antigua Fase 4, ampliada con el pedido 5; resuelve la pregunta abierta 5 de `checkout-mock-payment.md`):
     - al volver desde "Cambiar entradas" de `/checkout` (`/eventos/<slug>/entradas?<ticketTypeId>=<qty>…&asientos=<ids>`, que construye la Fase 7 de checkout), la pantalla abre con esas cantidades y butacas ya elegidas;
+    - **entrada por zona:** en el aside del detalle (`ZonePricesCard`), cada zona no agotada es un enlace a `/eventos/<slug>/entradas?zona=<zoneId>`, con hover, foco, chevron y nombre accesible propio; las agotadas siguen como texto. El botón del aside pasa a "Ver mapa de zonas" y sigue abriendo el sub-paso 1;
+    - `?zona=<zoneId>` abre directamente el sub-paso 2 de esa zona (panel de cantidad en 0 o plano de butacas). Una zona inexistente, agotada o mal formada se ignora y se abre el sub-paso 1;
     - se ignora lo que no sea válido (butacas ocupadas o inexistentes, zonas agotadas, valores mal formados);
-    - función pura de lectura, estado inicial en el hook, envoltorio cliente con `useSearchParams` y `Suspense` en la página.
+    - funciones puras de lectura (selección y zona) y de enlace por zona, estado inicial en el hook, envoltorio cliente con `useSearchParams` y `Suspense` en la página (sigue prerenderizada);
+    - páginas de diseño `ticket-selection.md` (precarga y entrada por zona) y `event-detail.md` (aside con enlaces por zona).
 - No incluye:
-  - Cambios en `PurchaseStepper` (contrato A). La compra sigue teniendo 3 pasos.
-  - Sub-pasos en la URL ni en el historial del navegador. "Atrás" del navegador sale de `/entradas`, como hoy.
+  - Cambios en el stepper de la compra (contrato A). La compra sigue teniendo 3 pasos. `PurchaseStepper` ya no existe: lo sustituye `components/shared/PurchaseShell.tsx` (`design-alignment-purchase-flow.md`), que esta spec tampoco cambia; la página lo compone con `currentStep={1}`.
+  - Sub-pasos en la URL ni en el historial del navegador. "Atrás" del navegador sale de `/entradas`, como hoy. `?zona=` (F6) es solo un parámetro de **entrada**: fija el sub-paso inicial y la pantalla no lo escribe ni lo borra (decisión 33).
   - Mapas curvos para los otros 3 eventos con mapa. Conservan sus formas rectangulares (decisión 3).
   - Rotar el plano para que el escenario quede arriba. El sector se dibuja con la orientación que tiene en el estadio, como en el diseño.
   - Cambiar los `aria-label` de los asientos, las etiquetas "Fila F · Asiento 12" del resumen y de los chips, los textos de los avisos existentes ni el contrato C. `SeatShape` sí cambia de aspecto en la Fase 4 (decisión 10).
@@ -177,14 +187,16 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
   - El arco punteado decorativo exterior de la captura del paso 1: necesitaría un dato nuevo en el layout (Preguntas abiertas 14).
   - Filtros o slider de precio, temporizador de reserva, vista desde el asiento y la regla de no dejar butacas sueltas (ver "Investigación y diagnóstico" y Preguntas abiertas).
   - Dependencias nuevas o librerías/servicios de mapas de butacas (decisión 22). La integración SaaS de la decisión 29 queda **fuera de las Fases 2–6**.
-  - Cambios en el detalle `/eventos/[slug]`, en `ZonePricesCard`/`MobileBuyBar`, en `/checkout` o en otros módulos, salvo `modules/events/data/events.mock.ts` y `modules/events/services/events.service.test.ts` (F1).
+  - Cambios en el detalle `/eventos/[slug]`, en `MobileBuyBar`, en `/checkout` o en otros módulos, salvo `modules/events/data/events.mock.ts` y `modules/events/services/events.service.test.ts` (F1). **Excepción (F6):** `ZonePricesCard` (filas como enlaces por zona y botón "Ver mapa de zonas", decisión 31), su test nuevo y `design-system/ticketera/pages/event-detail.md`. La página del detalle (`app/(site)/eventos/[slug]/page.tsx`), `MobileBuyBar`, `EventDetailHeader` (CTA del hero) y las props de `ZonePricesCard` no cambian.
   - Reserva real de butacas, backend y persistencia (igual que la spec base).
-  - (F6) Reflejar en la URL los cambios hechos en la pantalla, recordar la selección en el navegador o abrir directamente el sub-paso 2 de una zona: la precarga solo inicializa el estado y la pantalla abre en el sub-paso 1.
+  - (F6) Reflejar en la URL los cambios hechos en la pantalla (abrir o cerrar zonas no toca `zona`, elegir no toca las cantidades) o recordar la selección en el navegador: la precarga y `zona` solo inicializan el estado.
+  - (F6) Enlaces por zona en otros sitios (hero, barra móvil del detalle, tarjetas de evento) o en eventos sin mapa: su aside es `TicketSelector`, que no tiene sub-pasos.
+  - (F6) Mover el foco o desplazar la página al abrir `/entradas?zona=`: la página carga como cualquier otra (decisión 32).
   - (F6) Cambios en `modules/checkout/**` o en el enlace "Cambiar entradas": son de `checkout-mock-payment.md` (Fase 7).
 
 ## Decisiones
 1. **La compra sigue en 3 pasos** (aclaración del usuario).
-   - El `PurchaseStepper` global queda en "Entradas" (`currentStep={1}`) durante los dos sub-pasos.
+   - El stepper global queda en "Entradas" (`currentStep={1}`) durante los dos sub-pasos. Antes lo dibujaba `PurchaseStepper`; desde `design-alignment-purchase-flow.md`, la cabecera de `PurchaseShell`.
    - "Paso 1 de 2 · Elige una zona" y "Paso 2 de 2 · Elige tus butacas" (o "· Elige la cantidad") son un indicador **interno** del paso "Entradas". Va a la derecha de la cabecera de la tarjeta "Elige tus entradas".
    - No es un segundo stepper: es un texto (`<p aria-live="polite">`) que cambia con el sub-paso.
 2. **Sub-pasos en la misma ruta, en estado de cliente.**
@@ -192,6 +204,7 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
    - Sub-paso 2: hay zona abierta. Muestra el panel de cantidad si la zona es de pie, o el plano si es numerada.
    - Elegir una zona (en el mapa o en su tarjeta) abre directamente el sub-paso 2. "Todas las zonas" vuelve al sub-paso 1.
    - La selección (cantidades y butacas) se conserva al cambiar de sub-paso y de zona.
+   - **Estado inicial (F6):** sub-paso 1, salvo que la URL traiga una `zona` válida, que abre su sub-paso 2 (decisión 32). Después, el sub-paso sigue siendo estado de cliente: la URL no cambia.
 3. **Un solo layout para todos los mapas** (decisión pedida por el usuario). Los 4 eventos con mapa usan la tarjeta "Elige tus entradas", las tarjetas de zona y los sub-pasos.
    - La forma del mapa sale de los datos: los 3 eventos existentes conservan sus rectángulos, y el festival usa sectores anulares.
    - Las zonas numeradas sin `planTransform` (teatro y stand-up) conservan su plano en cuadrícula, sin fondo de estadio ni minimapa.
@@ -245,10 +258,15 @@ Rendimiento con SVG: ~120 nodos por zona, con los eventos delegados en un solo `
     - sin nada elegido: "0 de 10 butacas".
     - Se mantiene el límite de **10 en total** de la spec base (decisión 5). El "de 6" de la captura corresponde a un límite "6 por zona" que no aplica (ver Preguntas abiertas).
 12. **Minimapa y zoom superpuestos desde `sm`; en una barra en móvil** (rediseño; sustituye a la versión anterior, que los sacaba siempre del lienzo):
-    - **Desde `sm` (≥ 640 px)** van superpuestos al lienzo, como en la captura del paso 2: los controles de zoom abajo a la derecha (F4) y el minimapa arriba a la izquierda (F5).
+    - **Desde `sm` (≥ 640 px)** van superpuestos al lienzo, como en la captura del paso 2: los controles de zoom abajo a la derecha (F4) y el minimapa arriba a la izquierda (F5), **este solo si cabe** (ver abajo).
       - Con el plano entero a la vista no deben tapar butacas: el contenido transformado reserva su espacio con padding y, en F5, el lienzo apaisado deja margen lateral.
       - Con zoom, el paneo permite sacar las butacas de debajo.
     - **Por debajo de `sm`** el lienzo mide lo mismo que el plano, para mantener ≥ 24 px por butaca. Superpuestos taparían butacas (p. ej. `oriente-J-10`, en la esquina inferior derecha), así que van en una barra justo encima del lienzo: minimapa a la izquierda y zoom a la derecha.
+    - *Enmienda F5 (implementada y aprobada por el reviewer; registrada el 2026-10-04):*
+      - **Minimapa superpuesto solo si cabe.** Desde `sm`, `SeatPlan` lo superpone solo si el `seatViewBox` encajado en el `<svg>` (`xMidYMid meet`, con `getPlanFit`) empieza a la derecha del minimapa o por debajo de él (`canOverlayMinimap`: margen ≥ 12 px + su ancho o su alto). Si no, el minimapa sigue en la barra sobre el lienzo (como en móvil) y la pastilla de zoom sigue superpuesta. Las butacas y las letras van dentro del `seatViewBox`, así que superpuesto no tapa nada por construcción. Motivo: en los planos apaisados (Norte, Platea, Mezanine, Preferencial) el margen lateral del 16:10 no bastaba y el minimapa tapaba las filas A–C de la esquina superior izquierda.
+      - Se decide antes de pintar (`useLayoutEffect`, sin salto al abrir la zona) y en cada cambio de tamaño del lienzo (`ResizeObserver`). El envoltorio del minimapa lleva `data-placement="overlay" | "bar"`. Sin medidas (jsdom), superpuesto.
+      - **Tamaños según el lienzo, no la ventana:** el bloque del lienzo es `@container` y el umbral es `@2xl` (42rem = 672 px de lienzo). A 1024 px, con dos columnas, el lienzo mide ~516 px: con `md:` (ventana) el minimapa medía 112 px y tapaba `occidente-J-8`/`J-9`.
+      - Se descarta el `MiniMap` de `react-zoom-pan-pinch` (sin cambios):
     - Se descarta el `MiniMap` de `react-zoom-pan-pinch`:
       - reproduce el contenido transformado (el plano del sector), no el estadio entero;
       - su marco se estiliza con colores en string, no con tokens.
