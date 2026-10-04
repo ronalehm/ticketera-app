@@ -103,7 +103,7 @@ export function TicketSelection({ map }: TicketSelectionProps) {
         ) : (
           <SeatPlan
             zone={zone}
-            stageLabel={map.stage.label}
+            venue={map}
             selectedSeatIds={selection.seatIds}
             selectedSeats={selectedSeats}
             notice={selection.notice}

@@ -144,15 +144,20 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
 
 Sub-paso 2 de una zona numerada, debajo de `ZoneStepHeader` (que pone el nombre, el precio y el contador). No es una `Card` propia ni tiene h2. Cambiar de zona conserva los asientos de las demás. Objetivo visual: la captura del paso 2 ("Tribuna Oriente"), con tokens Mentec.
 
+Dos variantes según la zona (los datos lo deciden):
+
+- **En arco** (con `planTransform`; las tribunas del festival): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
+- **En cuadrícula** (sin `planTransform`; teatro, stand-up y los rectángulos de los demás mapas): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
+
 ### Estructura (de arriba abajo)
 
 ```
 Toca una butaca para elegirla. Acerca el plano…            (ayuda)
-                                        [ + | − | ⤢ ]      (< sm: barra sobre el lienzo, a la derecha)
+[minimapa]                              [ + | − | ⤢ ]      (< sm: barra sobre el lienzo; minimapa solo en arco)
 ┌──────────────────────────────────────────────────┐
-│        A  B  C  D …                               │      lienzo (relative): plano + tooltip
-│     A ○ ○ ✕ ○ ●✓ ○ …            (letras en los    │
-│     B ○ ✕ ○ ○ ○ ○ …               dos extremos)   │
+│ [minimapa]     A  B  C  D …                       │      lienzo (relative): plano + tooltip
+│ ▓▓▓▓      A ○ ○ ✕ ○ ●✓ ○ …     (letras en los     │      (≥ sm: minimapa arriba a la izquierda, solo en arco;
+│ ▓▓ escenario  B ○ ✕ ○ ○ ○ …      dos extremos)    │       fondo del estadio alrededor del sector, solo en arco)
 │                                   [ + | − | ⤢ ]   │      (≥ sm: pastilla abajo a la derecha)
 └──────────────────────────────────────────────────┘
 ○ Disponible · S/ 155.00  ● Elegida  ✕ Ocupada  ▣ Accesible        2 elegidas
@@ -163,8 +168,10 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 ```
 
 1. **Ayuda:** "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." (`text-sm text-muted-foreground`).
-2. **Pastilla de zoom** (ver "Controles de zoom"): por debajo de `sm`, en una barra justo encima del lienzo.
-3. **Lienzo:** `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`, con el `aspect-ratio` del `seatViewBox` de la zona. Dentro: el plano con zoom y paneo, el tooltip y, desde `sm`, la pastilla de zoom superpuesta.
+2. **Barra sobre el lienzo** (solo por debajo de `sm`; `flex items-end justify-between gap-2`, desde `sm` pasa a `sm:contents`): minimapa a la izquierda (solo en arco) y pastilla de zoom a la derecha.
+3. **Lienzo:** `relative w-full max-h-[70vh] touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border`. Dentro: el plano con zoom y paneo, el tooltip y, desde `sm`, el minimapa (en arco) y la pastilla de zoom superpuestos.
+   - **Proporción:** la del `seatViewBox` de la zona (`aspect-(--plan-aspect)`, con la variable en línea). En arco, desde `sm`, apaisado `sm:aspect-[16/10]`: el plano queda centrado (`fitOnInit="contain"`) y el margen lateral aloja el minimapa y el zoom. Va por variable CSS porque un `aspect-ratio` en línea ganaría a la variante `sm:`.
+   - **Por debajo de `sm`** el lienzo mantiene la proporción del plano en las dos variantes, para no bajar de 24 px por butaca.
 4. **Leyenda** (`SeatLegend`) con el precio y "n elegidas".
 5. **Bandeja** `flex flex-col gap-4 border-t pt-4`: "Mejores butacas" (`BestSeatsPicker`), `<p role="status">` con el aviso del plano y "Tus asientos" (todas las zonas).
 
@@ -181,17 +188,40 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 
 - **Una sola pastilla** `role="group" aria-label="Zoom del plano"`: `inline-flex gap-1 rounded-xl bg-background p-1 shadow-sm ring-1 ring-border`, con tres `Button variant="ghost" size="icon" class="size-11 cursor-pointer"`: `Plus` "Acercar", `Minus` "Alejar" y `Maximize` "Ver todo el plano" (`aria-label`; iconos `size-5 aria-hidden`).
 - **Por debajo de `sm`:** en la barra sobre el lienzo (`flex items-end justify-between gap-2`), alineada a la derecha. A 375 px, superpuesta taparía butacas (p. ej. `oriente-J-10`, en la esquina inferior derecha).
-- **Desde `sm`:** la barra pasa a `sm:contents` y la pastilla se superpone al lienzo abajo a la derecha (`sm:absolute sm:bottom-3 sm:right-3 sm:z-10`), como en la captura. Con el plano entero a la vista no debe tapar ninguna butaca: el contenido transformado reserva 64 px abajo (`pb-16` desde `sm`). Con zoom, el paneo saca las butacas de debajo.
+- **Desde `sm`:** la barra pasa a `sm:contents` y la pastilla se superpone al lienzo abajo a la derecha (`sm:absolute sm:bottom-3 sm:right-3 sm:z-10`), como en la captura. Con el plano entero a la vista no debe tapar ninguna butaca:
+  - **en cuadrícula**, el contenido transformado reserva 64 px abajo (`pb-16` desde `sm`);
+  - **en arco**, sin franja: el lienzo 16:10 deja margen a los lados del plano (el `<svg>` mide lo mismo que el lienzo, que es lo que mide el minimapa para su recuadro). Holgura mínima medida entre la pastilla y la butaca más cercana: 13.5 px a 640, 32.8 px a 700, 49.5 px a 768 y 76.5 px a 1440 (Tribuna Oriente, `oriente-J-9`).
+  - Con zoom, el paneo saca las butacas de debajo.
 - Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
 
 ### Plano (SVG)
 
 - `<svg class="group/plan block size-full select-none">` con `viewBox` = `seatViewBox` (≤ 400 de ancho). A 375 px el pitch de 32 unidades (área de toque transparente de 32 × 32) mide ≥ 24 px con el plano entero a la vista.
 - **En cuadrícula** (zona sin `planTransform`): escenario arriba, barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest`.
-- **En arco** (con `planTransform`, p. ej. las tribunas del festival): **sin** barra "ESCENARIO" (contradecía la orientación del sector). El fondo del estadio y el minimapa llegan en la Fase 5.
-- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, ~18 px a 1440 y ~10 px a 375 con el plano entero a la vista: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
+- **En arco** (con `planTransform`, p. ej. las tribunas del festival): **sin** barra "ESCENARIO" (contradecía la orientación del sector); el `<svg>` lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo.
+- **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, con el plano entero a la vista ~16 px en arco (lienzo 16:10) y 18–22 px en cuadrícula a 1440, y ~10 px a 375: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
   - en cuadrícula, en los dos márgenes (`x = 20` y `x = ancho − 20`, a la altura de la fila);
   - en arco, siguiendo la curva: en `getRowEdgeLabelPoints(row).start` y `.end` (a 0.8 pitch por fuera de la primera y la última butaca).
+
+### Fondo del estadio (solo en arco)
+
+El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como en la captura del paso 2:
+
+- `<g aria-hidden class="pointer-events-none" transform="translate(x y) scale(s)">` con el `planTransform` de la zona (plano = estadio × s + (x, y)): coincide con el mapa del sub-paso 1 y con el minimapa. Es el primer hijo del `<svg>`, antes de las letras y de las butacas.
+- **Escenario:** `fill-brand-navy`, con sus luces `fill-highlight` (r = 5 unidades del mapa, como en `VenueMapView`).
+- **Demás zonas:** `fill-secondary stroke-background`, 2 px (separación blanca).
+- **Zona abierta:** `fill-accent stroke-primary`, 2 px (el "lila con borde azul" de la captura), dibujada la última para que su borde quede encima.
+- Los trazos llevan `vector-effect="non-scaling-stroke"`: miden 2 px a cualquier zoom.
+- Sin textos del mapa. Al no recibir eventos, el teclado, el tooltip, "Mejores butacas" y el paneo funcionan igual sobre él.
+
+### Minimapa (`SeatPlanMinimap`, solo en arco)
+
+- SVG `aria-hidden` (sin foco) con el `viewBox` del mapa: `h-auto w-24 md:w-28 rounded-lg bg-background/90 p-1 shadow-sm ring-1 ring-border`. Escenario `fill-brand-navy`, zonas `fill-secondary` y la zona abierta `fill-primary`.
+- **Recuadro de la vista:** `fill-none stroke-foreground`, 2 px no escalables. Con el plano entero a la vista rodea todo el sector; al acercar o pellizcar se reduce y sigue al paneo (lee la transformación con `useTransformEffect` y el tamaño del lienzo).
+- **Posición:** envuelto en `<div class="pointer-events-none flex sm:absolute sm:top-3 sm:left-3 sm:z-10">`.
+  - Desde `sm`, superpuesto arriba a la izquierda del lienzo, en el margen lateral del 16:10. Holgura mínima medida con la butaca más cercana: 28.2 px a 640 (`occidente-J-9`) y ≥ 38 px desde 700.
+  - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
+  - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 
 ### Estados de butaca (forma y color, no solo color)
 
