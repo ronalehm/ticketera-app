@@ -402,8 +402,11 @@ describe("CheckoutForm", () => {
 
   it("el método Tarjeta añade ' de crédito o débito' solo por debajo de sm", () => {
     renderForm();
-    const card = screen.getByRole("radio", { name: "Tarjeta de crédito o débito" });
-    expect(card).toBeTruthy();
+    // dom-accessibility-api recorta el texto de cada elemento hijo y pierde el espacio inicial del sufijo
+    // ("Tarjetade…"); el navegador sí lo conserva. Por eso el nombre se comprueba en la etiqueta que lo da.
+    const card = screen.getByRole("radio", { name: /^Tarjeta/ });
+    const label = document.getElementById(card.getAttribute("aria-labelledby")!);
+    expect(label?.textContent).toBe("Tarjeta de crédito o débito");
     const suffix = screen.getByText((_, element) => element?.textContent === " de crédito o débito");
     expect(suffix.tagName).toBe("SPAN");
     expect(suffix.className).toContain("sm:hidden");
