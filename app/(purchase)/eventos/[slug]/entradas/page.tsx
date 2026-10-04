@@ -38,7 +38,7 @@ export default async function TicketSelectionPage({ params }: PageProps<"/evento
   // Sin padding inferior en móvil: la barra sticky de TicketSelection es el último elemento y llega al final de la página.
   return (
     <PurchaseShell currentStep={1} back={{ href: `/eventos/${event.slug}`, label: "Volver al evento" }}>
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 md:px-6 md:pt-8 lg:px-8 lg:pb-12">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pt-6 md:px-6 md:pt-8 lg:px-8 lg:pb-12">
         <EventPurchaseStrip
           slug={event.slug}
           title={event.title}

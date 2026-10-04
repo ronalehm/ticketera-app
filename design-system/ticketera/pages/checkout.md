@@ -1,22 +1,22 @@
 # Página: checkout `/checkout` y `/checkout/confirmacion`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra y textos).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra y textos; Fase 3: ancho de los contenedores).
 
 Pasos 2 ("Datos y pago", `/checkout`) y 3 ("Confirmación", `/checkout/confirmacion`) de la compra. El pago es **simulado**: no hay pasarela ni se envían datos a ningún servicio; los datos de tarjeta solo existen en el estado del formulario. La orden aprobada se guarda solo en el navegador (`localStorage`).
 
 ## Pantalla de compra (`PurchaseShell`)
 
-> Spec: `docs/specs/design-alignment-purchase-flow.md` Fase 1 (Requisito 6, decisiones 1–5 y 10).
+> Spec: `docs/specs/design-alignment-purchase-flow.md` Fase 1 (Requisito 6, decisiones 1–5 y 10) y Fase 3 (Decisión 14).
 
 Los tres pasos de la compra (`/eventos/[slug]/entradas`, `/checkout` y `/checkout/confirmacion`) viven en el route group `app/(purchase)`, **sin el header ni el footer del sitio** (sin `SiteShell`) y sin `layout.tsx` propio: cada página compone `components/shared/PurchaseShell`, porque solo ella conoce su paso. Las URL no cambian.
 
 ```
-Escritorio (lg+, 76 px, h-19):
+Escritorio (lg+, 77 px: fila h-19 de 76 px + 1 px de borde):
 [logo Mentec]      ① Entradas ── ② Datos y pago ── ③ Confirmación      [candado] Compra segura
   grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]: logo a la izquierda, stepper centrado y
   "Compra segura" a la derecha (pasos 1 y 2; en el paso 3 no hay)
 
-Móvil y tablet (< lg: fila de 60 px + barra de 4 px):
+Móvil y tablet (< lg, 65 px: fila de 60 px + barra de 4 px + 1 px de borde):
 Pasos 1 y 2:  [←]  Paso 2 de 3                                [candado]
                    Datos y pago
               ████████████████████████████░░░░░░░░░░░░░░  barra al 66 % (33 % en el paso 1)
@@ -26,6 +26,7 @@ Errores y carga (todos los anchos):  [logo Mentec]   (sin pasos, candado, barra 
 ```
 
 - **Raíz:** `<div className="flex flex-1 flex-col bg-muted">` con `<header>` y un único `<main className="flex flex-1 flex-col">`. El fondo de la página es el gris `--muted`; las tarjetas (`Card`, tarjeta-entrada, "Qué sigue") quedan blancas encima.
+- **Contenedores de los pasos con `w-full`** (spec `design-alignment-purchase-flow` Decisión 14): el `<main>` es flex en columna (su `flex-1` estira la página hasta abajo), y dentro de él un hijo `mx-auto max-w-*` sin `w-full` toma el ancho de su contenido. Por eso el contenedor de cada paso lleva `w-full`: paso 1 (`max-w-7xl`, 1280 px a 1440 alineado con el logo, también tras elegir una zona), paso 2 (`max-w-7xl`) y la confirmación (`CONTAINER_CLASS` de `OrderConfirmation`, `max-w-4xl`: 896 px centrado a 1440 y todo el ancho a 375).
 - **`<header>`** (único `banner`): `sticky top-0 z-40 border-b bg-background print:hidden`. Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8` con una fila `flex h-15 items-center gap-1` que en `lg` pasa a `lg:grid lg:h-19 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-6`. Un único DOM para todos los anchos; la variante cambia en `lg` (en una fila, logo + stepper + "Compra segura" no caben a 768 px).
 - **Elementos, en orden del DOM:**
   1. **Flecha de vuelta** (pasos 1 y 2, prop `back`): `Link` `lg:hidden size-11 rounded-xl -ml-2` con `ArrowLeft` `size-5` (`aria-hidden`), `aria-label` "Volver al evento" (paso 1, a `/eventos/<slug>`) o "Volver a entradas" (paso 2, al mismo `href` que "Cambiar entradas"); hover `bg-accent` y foco visible. Por debajo de `lg` es el primer Tab.
@@ -35,7 +36,7 @@ Errores y carga (todos los anchos):  [logo Mentec]   (sin pasos, candado, barra 
   5. **"Compra segura"** (pasos 1 y 2): `Lock` (`size-5 lg:size-4`, `aria-hidden`) + texto `max-lg:sr-only`, `text-sm text-muted-foreground`, `lg:justify-self-end`. En móvil se ve solo el candado y el lector anuncia "Compra segura".
 - **Barra de progreso** (`< lg`, con paso): fuera del contenedor, a todo el ancho, `h-1 bg-secondary` con relleno `bg-primary` al 33 %, 66 % o 100 %; `aria-hidden`.
 - **Sin paso** (errores y carga): la fila solo tiene el logo.
-- **Sticky:** la cabecera mide 76 px en `lg` y 64 px por debajo; los `lg:sticky lg:top-24` del resumen y de "Tu compra" quedan 20 px por debajo de ella.
+- **Sticky:** la cabecera mide 77 px en `lg` (fila `h-19` de 76 px + 1 px del `border-b`) y 65 px por debajo (60 px de fila + 4 px de barra + 1 px de borde); los `lg:sticky lg:top-24` del resumen y de "Tu compra" quedan 19 px por debajo de ella.
 - **Impresión:** la cabecera es `print:hidden`.
 
 ## Paso 2: `/checkout`
@@ -76,7 +77,7 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 ```
 
 - Página `app/(purchase)/checkout/page.tsx`: `<PurchaseShell currentStep={2} back={{ href: changeHref, label: "Volver a entradas" }}>` (ver "Pantalla de compra"). La flecha usa el mismo `href` que "Cambiar entradas" (`buildChangeTicketsHref`).
-- Contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 pb-8 md:pb-12`, `flex flex-col gap-6`: h1 y `CheckoutForm` (banner + formulario).
+- Contenedor `mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8 pt-6 md:pt-8 pb-8 md:pb-12`, `flex flex-col gap-6`: h1 y `CheckoutForm` (banner + formulario).
 - **Sin título visible:** bajo la cabecera solo se ve el banner del temporizador. El h1 "Finalizar compra" va con `sr-only`: sigue siendo el único h1 y el primer encabezado que anuncia el lector. Los estados de error (`CheckoutStatusMessage`) sustituyen el contenido con su propio h1 visible, dentro de `<PurchaseShell>` sin paso: fondo gris y cabecera solo con el logo (sin stepper, "Compra segura", barra ni flecha).
 - Formulario `<form noValidate>` en grilla `grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-12`, sin ancestros con `overflow` distinto de `visible` (para los `sticky`). Columna izquierda con posición explícita: comprador (`row-start-1`), método de pago (`row-start-2`), Términos (`row-start-3`, debajo de "Método de pago" en todos los anchos, nunca dentro del resumen). Columna derecha: `CheckoutSummaryPanel` (`lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:sticky lg:top-24 lg:self-start`).
 - Secciones en `Card rounded-2xl`, h2 `text-xl font-bold`. Campos `h-11`.
@@ -206,7 +207,7 @@ Fondo bg-muted
 ```
 
 - Cabecera: `OrderConfirmation` (`{ code }`, sin prop `stepper`) envuelve cada estado en `PurchaseShell`: la orden confirmada, con `currentStep={3}` (sin `back`); cargando y no encontrada, sin paso (solo el logo). La página `app/(purchase)/checkout/confirmacion/page.tsx` solo valida `orden` y compone.
-- Contenedor `mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
+- Contenedor (`CONTAINER_CLASS`, en "cargando" y "encontrada"; "no encontrada" usa `CheckoutStatusMessage`, centrado) `mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
 - Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full bg-card ring-1 ring-border` "Pedido N.º **MT-AB12CD**" (blanco sobre el fondo gris).
 - **Correo del comprador** en el texto de la cabecera: "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
 
