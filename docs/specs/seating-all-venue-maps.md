@@ -1,7 +1,7 @@
 # Mapas de recinto para todos los eventos posibles
 
 - Módulo: seating
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 **Pedido del usuario:** "En lo posible todos deben tener mapas o zonas como conciertos."
