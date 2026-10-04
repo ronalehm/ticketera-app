@@ -1423,20 +1423,20 @@ No hay API: son datos mock.
   - Secuencial. El reviewer comprueba con capturas a 768 y 1440 que los controles superpuestos no tapan butacas.
 
 ### Fase 5. Plano curvo con contexto y minimapa (4 tareas, 6 archivos; T0 y T3 comparten 2)
-- [ ] T0. Letras de fila a 13 unidades (requisito 25 enmendado, decisión 30): `ROW_LABEL_FONT_SIZE = 13` y el comentario de geometría de `SeatPlan.tsx` (13 unidades ≈ 10 px a 375 px); sección "Plano (SVG)" del diseño de página (24 → 13 unidades).
+- [x] T0. Letras de fila a 13 unidades (requisito 25 enmendado, decisión 30): `ROW_LABEL_FONT_SIZE = 13` y el comentario de geometría de `SeatPlan.tsx` (13 unidades ≈ 10 px a 375 px); sección "Plano (SVG)" del diseño de página (24 → 13 unidades).
   - Archivos: `modules/seating/components/SeatPlan.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - No se modifican (posiciones sin cambios, decisión 30): `modules/seating/utils/arcSeatRows.ts`, `modules/seating/utils/arcSeatRows.test.ts` (el desplazamiento de 0.8 pitch se mantiene) ni `modules/seating/components/TicketSelection.test.tsx` (ningún test depende del tamaño de letra).
   - Depende de: Fase 4.
   - En paralelo con T1 (archivos disjuntos). Verificar `npx vitest run modules/seating` y `npx eslint modules/seating/components/SeatPlan.tsx`.
-- [ ] T1. `getVisiblePlanRect` y `toVenueRect`, con test (requisito 31).
+- [x] T1. `getVisiblePlanRect` y `toVenueRect`, con test (requisito 31).
   - Archivos: `modules/seating/utils/planViewport.ts`, `modules/seating/utils/planViewport.test.ts`.
   - Depende de: Fase 4.
   - Secuencial respecto a T2 (es su base); en paralelo con T0.
-- [ ] T2. Minimapa (requisito 30).
+- [x] T2. Minimapa (requisito 30).
   - Archivos: `modules/seating/components/SeatPlanMinimap.tsx`.
   - Depende de: T1.
   - Secuencial.
-- [ ] T3. Fondo del estadio, lienzo apaisado desde `sm` y minimapa superpuesto o en la barra en `SeatPlan`; test ampliado; diseño de página (requisitos 28 y 29).
+- [x] T3. Fondo del estadio, lienzo apaisado desde `sm` y minimapa superpuesto o en la barra en `SeatPlan`; test ampliado; diseño de página (requisitos 28 y 29).
   - Archivos: `modules/seating/components/SeatPlan.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T0 (comparte `SeatPlan.tsx` y `ticket-selection.md`) y T2.
   - Secuencial.
