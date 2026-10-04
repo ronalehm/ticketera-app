@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { getEventBySlug, getEvents } from "@/modules/events";
-import { EventPurchaseStrip, getVenueMapBySlug, hasVenueMap, TicketSelection } from "@/modules/seating";
+import {
+  EventPurchaseStrip,
+  getVenueMapBySlug,
+  hasVenueMap,
+  PreselectedTicketSelection,
+  TicketSelection,
+} from "@/modules/seating";
 
 // El generateStaticParams de /eventos/[slug] está en su page (no en un layout), así que no se hereda aquí.
 export async function generateStaticParams() {
@@ -40,7 +47,10 @@ export default async function TicketSelectionPage({ params }: PageProps<"/evento
           venue={event.venue}
           city={event.city}
         />
-        <TicketSelection map={map} />
+        {/* La precarga y `?zona=` se leen en cliente: el fallback prerenderiza la pantalla sin selección (SSG). */}
+        <Suspense fallback={<TicketSelection map={map} />}>
+          <PreselectedTicketSelection map={map} />
+        </Suspense>
       </div>
     </PurchaseShell>
   );
