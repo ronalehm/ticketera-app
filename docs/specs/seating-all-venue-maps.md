@@ -627,7 +627,7 @@ Los datos mock no son una unidad con lógica propia, pero sus invariantes se pru
 - **BD local** (decisión 7): solo `127.0.0.1:5433` (`ticketera_dev`/`ticketera_test`). Nunca la de Neon del usuario.
 
 ### Fase 1. Base, Copa del Norte y Los Ecos del Sur (4 tareas, 9 archivos)
-- [ ] T1. Base guiada por los datos: `PITCH_STAGE`, `seating.service.test.ts` sin listas fijas y `buildSeedData.test.ts` sin el literal 456 (requisitos 1–3).
+- [x] T1. Base guiada por los datos: `PITCH_STAGE`, `seating.service.test.ts` sin listas fijas y `buildSeedData.test.ts` sin el literal 456 (requisitos 1–3).
   - Archivos: `modules/seating/data/stadium.mock.ts`, `modules/seating/services/seating.service.test.ts`, `lib/db/seed/buildSeedData.test.ts`.
   - Depende de: —.
   - Secuencial (base: test compartido y `lib/`).

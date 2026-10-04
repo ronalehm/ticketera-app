@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
 import { getEventBySlug } from "@/modules/events";
 import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
-import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
+import { PITCH_STAGE, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "../data/venueMaps.mock";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import type { NumberedVenueZone, PlanTransform, VenueMap } from "../types/seating.types";
@@ -19,15 +19,17 @@ import { findBestAvailableSeats } from "../utils/bestSeats";
 import { getZoneTones } from "../utils/zoneTone";
 import { getVenueMapBySlug, getVenueMapForEvent, hasVenueMap } from "./seating.service";
 
-/**
- * Recintos cuyas zonas numeradas se eligen tras un "Acercar" en móvil (decisión 3 de
- * `seating-curved-venues`): sin límite de butacas por fila, ≤ 12 filas y plano de ≤ 622 de ancho,
- * para que tras un "Acercar" (×1.5) a 375 px el área de toque mida ≥ 24 px.
- */
-const ZOOM_TO_PICK_SLUGS = ["noche-de-sintetizadores-lima", "la-casa-de-los-espejos", "risas-sin-filtro"];
-const MAX_ZOOM_TO_PICK_PLAN_WIDTH = 622;
 const STADIUM_SLUG = "festival-vive-latino-lima";
-const MAP_SLUGS = [...ZOOM_TO_PICK_SLUGS, STADIUM_SLUG];
+/** Eventos con mapa: uno por layout mock. */
+const MAP_SLUGS = VENUE_LAYOUTS_MOCK.map((layout) => layout.eventSlug);
+/**
+ * Todos los mapas: ≤ 12 filas y plano de ≤ 622 de ancho, para que tras un "Acercar" (×1.5) a 375 px
+ * el área de toque mida ≥ 24 px (decisión 3 de `seating-curved-venues`, ampliada por
+ * `seating-all-venue-maps`). El festival mantiene además ≤ 10 butacas por fila y ≤ 400 de ancho.
+ */
+const STRICT_PLAN_SLUGS = [STADIUM_SLUG];
+/** Eventos publicados que no llevan mapa (decisión 1 de `seating-all-venue-maps`). */
+const NO_MAP_SLUGS = ["el-circo-de-las-estrellas", "aventura-en-el-bosque-magico"];
 /** Mapas con geometría curva: todos los mock (cada recinto exporta sus `sectors`). */
 const CURVED_SLUGS = Object.keys(VENUE_SECTORS_MOCK);
 
@@ -59,7 +61,8 @@ function toPlanSector(sector: AnnularSector, { scale, x, y }: PlanTransform): An
 
 const MAX_SEATS_PER_ROW = 10;
 const MAX_ROWS = 12;
-const MAX_PLAN_WIDTH = 400;
+const MAX_PLAN_WIDTH = 622;
+const MAX_STRICT_PLAN_WIDTH = 400;
 const SEAT_RADIUS = 12;
 const ZONE_VIEWBOX_MARGIN = 4;
 const ROW_LABEL_MARGIN = 12;
@@ -123,7 +126,7 @@ describe("seating.service", () => {
     });
 
     it("devuelve null para un evento sin mapa, un slug inexistente o un borrador", async () => {
-      expect(await getVenueMapBySlug("clasico-del-pacifico")).toBeNull();
+      expect(await getVenueMapBySlug("el-circo-de-las-estrellas")).toBeNull();
       expect(await getVenueMapBySlug("no-existe")).toBeNull();
       expect(await getVenueMapBySlug("feria-familiar-de-verano")).toBeNull();
     });
@@ -141,20 +144,19 @@ describe("seating.service", () => {
     });
 
     it("devuelve null para un evento sin mapa", async () => {
-      expect(await getVenueMapForEvent(await getEvent("clasico-del-pacifico"))).toBeNull();
+      expect(await getVenueMapForEvent(await getEvent("el-circo-de-las-estrellas"))).toBeNull();
     });
   });
 
   describe("hasVenueMap", () => {
-    it("es true solo para los 4 eventos con mapa", () => {
-      for (const slug of MAP_SLUGS) expect(hasVenueMap(slug)).toBe(true);
-      expect(hasVenueMap("clasico-del-pacifico")).toBe(false);
-      expect(hasVenueMap("los-ecos-del-sur-arequipa")).toBe(false);
+    it("es true para cada evento con layout y false para los que no lo tienen", () => {
+      for (const slug of MAP_SLUGS) expect(hasVenueMap(slug), slug).toBe(true);
+      for (const slug of NO_MAP_SLUGS) expect(hasVenueMap(slug), slug).toBe(false);
       expect(hasVenueMap("no-existe")).toBe(false);
     });
 
-    it("coincide con los layouts mock", () => {
-      expect(VENUE_LAYOUTS_MOCK.map((layout) => layout.eventSlug).sort()).toEqual([...MAP_SLUGS].sort());
+    it("cada layout es de un evento distinto", () => {
+      expect(new Set(MAP_SLUGS).size).toBe(MAP_SLUGS.length);
     });
   });
 
@@ -227,25 +229,23 @@ describe("seating.service", () => {
 
     it("tiene ≤ 12 filas por zona y anchos de viewBox dentro del límite de su mapa", async () => {
       const map = await getMap(slug);
-      const zoomToPick = ZOOM_TO_PICK_SLUGS.includes(slug);
+      const strictPlan = STRICT_PLAN_SLUGS.includes(slug);
       expect(viewBoxWidth(map.viewBox)).toBeLessThanOrEqual(600);
       for (const zone of map.zones) {
         if (zone.kind !== "numbered") continue;
         expect(zone.rows.length, zone.id).toBeLessThanOrEqual(MAX_ROWS);
-        if (zoomToPick) {
-          expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_ZOOM_TO_PICK_PLAN_WIDTH);
-        } else {
-          for (const row of zone.rows) {
-            expect(row.seats.length, `${zone.id}-${row.label}`).toBeLessThanOrEqual(MAX_SEATS_PER_ROW);
-          }
-          expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_PLAN_WIDTH);
+        expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_PLAN_WIDTH);
+        if (!strictPlan) continue;
+        for (const row of zone.rows) {
+          expect(row.seats.length, `${zone.id}-${row.label}`).toBeLessThanOrEqual(MAX_SEATS_PER_ROW);
         }
+        expect(viewBoxWidth(zone.seatViewBox), zone.id).toBeLessThanOrEqual(MAX_STRICT_PLAN_WIDTH);
       }
     });
   });
 
   describe("VENUE_SECTORS_MOCK", () => {
-    it("tiene los 4 mapas mock, incluido el festival con sus sectores", () => {
+    it("tiene un sector por cada mapa mock, incluido el festival", () => {
       expect([...CURVED_SLUGS].sort()).toEqual([...MAP_SLUGS].sort());
       expect(VENUE_SECTORS_MOCK[STADIUM_SLUG]).toBe(VIVE_LATINO_SECTORS);
     });
@@ -289,7 +289,8 @@ describe("seating.service", () => {
 
     it("el escenario es el compartido, con sus 7 luces dentro de su sector", async () => {
       const { stage } = await getMap(slug);
-      expect(stage).toEqual(STADIUM_STAGE);
+      const event = await getEventBySlug(slug);
+      expect(stage).toEqual(event?.category === "deportes" ? PITCH_STAGE : STADIUM_STAGE);
       expect(stage.lights).toHaveLength(7);
       for (const light of stage.lights ?? []) expect(isPointInAnnularSector(light, sectors.stage)).toBe(true);
     });

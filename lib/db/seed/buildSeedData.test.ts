@@ -49,7 +49,7 @@ describe("buildSeedData", () => {
     expect(buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toEqual(data);
   });
 
-  it("siembra 6 categorías, 13 eventos publicados, 1 borrador y 456 asientos de recinto", () => {
+  it("siembra 6 categorías, 13 eventos publicados, 1 borrador y un asiento de recinto por butaca de los layouts", () => {
     expect(data.categories).toHaveLength(6);
     expect(data.events.filter((event) => event.status === "published")).toHaveLength(13);
     expect(data.events.filter((event) => event.status === "draft").map((event) => event.slug)).toEqual([
@@ -58,7 +58,7 @@ describe("buildSeedData", () => {
     const layoutSeats = VENUE_LAYOUTS_MOCK.flatMap((layout) =>
       layout.zones.flatMap((zone) => (zone.kind === "numbered" ? zone.rows.flatMap((row) => row.seats) : [])),
     );
-    expect(data.venueSeats).toHaveLength(456);
+    expect(layoutSeats.length).toBeGreaterThan(0);
     expect(data.venueSeats).toHaveLength(layoutSeats.length);
   });
 
