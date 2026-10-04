@@ -24,6 +24,6 @@ export const STADIUM_STAGE: z.input<typeof venueLayoutSchema>["stage"] = {
 
 export type MockVenue = {
   layout: z.input<typeof venueLayoutSchema>;
-  /** `stage` + un sector por id de zona, en coordenadas del mapa. Obligatorio desde T5. */
-  sectors?: Record<string, AnnularSector>;
+  /** `stage` + un sector por id de zona, en coordenadas del mapa. */
+  sectors: Record<string, AnnularSector>;
 };

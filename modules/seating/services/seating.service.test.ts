@@ -28,10 +28,8 @@ const ZOOM_TO_PICK_SLUGS = ["noche-de-sintetizadores-lima", "la-casa-de-los-espe
 const MAX_ZOOM_TO_PICK_PLAN_WIDTH = 622;
 const STADIUM_SLUG = "festival-vive-latino-lima";
 const MAP_SLUGS = [...ZOOM_TO_PICK_SLUGS, STADIUM_SLUG];
-/** Mapas con geometría curva: los que exportan `sectors`. */
+/** Mapas con geometría curva: todos los mock (cada recinto exporta sus `sectors`). */
 const CURVED_SLUGS = Object.keys(VENUE_SECTORS_MOCK);
-/** Mapas con formas rectangulares (spec base). */
-const RECT_MAP_SLUGS = MAP_SLUGS.filter((slug) => !(slug in VENUE_SECTORS_MOCK));
 
 async function getMap(slug: string): Promise<VenueMap> {
   const map = await getVenueMapBySlug(slug);
@@ -65,16 +63,6 @@ const MAX_PLAN_WIDTH = 400;
 const SEAT_RADIUS = 12;
 const ZONE_VIEWBOX_MARGIN = 4;
 const ROW_LABEL_MARGIN = 12;
-
-const RECT_PATH = /^M(\d+) (\d+) H(\d+) V(\d+) H\d+ Z$/;
-
-/** Centro de un rectángulo `M x1 y1 H x2 V y2 H x1 Z`. */
-function rectCenter(path: string): { x: number; y: number } {
-  const match = RECT_PATH.exec(path);
-  if (!match) throw new Error(`La forma no es un rectángulo: ${path}`);
-  const [x1, y1, x2, y2] = match.slice(1).map(Number);
-  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
-}
 
 async function getNumberedZone(slug: string, zoneId: string): Promise<NumberedVenueZone> {
   const zone = (await getMap(slug)).zones.find((candidate) => candidate.id === zoneId);
@@ -256,26 +244,9 @@ describe("seating.service", () => {
     });
   });
 
-  describeWithDb.each(RECT_MAP_SLUGS)("invariantes del mapa rectangular %s", (slug) => {
-    it("el labelPos del escenario y de cada zona es el centro de su forma", async () => {
-      const map = await getMap(slug);
-      expect(map.stage.labelPos, "stage").toEqual(rectCenter(map.stage.path));
-      for (const zone of map.zones) expect(zone.labelPos, zone.id).toEqual(rectCenter(zone.path));
-    });
-
-    it("no usa los campos del mapa curvo (luces, etiquetas en 2 líneas ni planTransform)", async () => {
-      const map = await getMap(slug);
-      expect(map.stage.lights).toBeUndefined();
-      for (const zone of map.zones) {
-        expect(zone.wrapLabel, zone.id).toBeUndefined();
-        if (zone.kind === "numbered") expect(zone.planTransform, zone.id).toBeUndefined();
-      }
-    });
-  });
-
   describe("VENUE_SECTORS_MOCK", () => {
-    it("solo tiene mapas mock, incluido el festival con sus sectores", () => {
-      for (const slug of CURVED_SLUGS) expect(MAP_SLUGS, slug).toContain(slug);
+    it("tiene los 4 mapas mock, incluido el festival con sus sectores", () => {
+      expect([...CURVED_SLUGS].sort()).toEqual([...MAP_SLUGS].sort());
       expect(VENUE_SECTORS_MOCK[STADIUM_SLUG]).toBe(VIVE_LATINO_SECTORS);
     });
   });

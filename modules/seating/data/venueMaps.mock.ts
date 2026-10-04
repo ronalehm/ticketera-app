@@ -10,7 +10,7 @@ const MOCK_VENUES = [SINTETIZADORES_VENUE, ESPEJOS_VENUE, RISAS_VENUE, VIVE_LATI
 /** Layouts de los recintos. Nombre, precio y estado de cada zona salen del `ticketType` del evento (service). */
 export const VENUE_LAYOUTS_MOCK = MOCK_VENUES.map((venue) => venue.layout);
 
-/** Sectores (`stage` + uno por zona) por `eventSlug`, solo de los recintos con geometría curva. */
+/** Sectores (`stage` + uno por zona) de cada recinto, por `eventSlug`. */
 export const VENUE_SECTORS_MOCK: Record<string, Record<string, AnnularSector>> = Object.fromEntries(
-  MOCK_VENUES.flatMap(({ layout, sectors }) => (sectors ? [[layout.eventSlug, sectors]] : [])),
+  MOCK_VENUES.map(({ layout, sectors }) => [layout.eventSlug, sectors]),
 );
