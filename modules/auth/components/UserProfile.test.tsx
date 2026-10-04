@@ -14,6 +14,7 @@ const demo: SessionUser = {
   documentNumber: "45781236",
   role: "customer",
   createdAt: new Date("2025-03-14T15:00:00.000Z"),
+  mfaVerified: false,
 };
 
 afterEach(cleanup);

@@ -65,6 +65,16 @@ describeWithDb("users.service (Postgres)", () => {
     expect(await rowByEmail(seeded.email)).toMatchObject({ id: seeded.id, clerkId: input.clerkId, role: "super_admin" });
   });
 
+  it("al vincular guarda el nombre y el apellido de Clerk; si Clerk trae uno vacío conserva el de la fila", async () => {
+    const full = await insertUser({ email: uniqueEmail(), clerkId: null, role: "super_admin" });
+    expect(await ensureUser(identity({ email: full.email }))).toMatchObject({ firstName: "Ana", lastName: "Pérez" });
+    expect(await rowByEmail(full.email)).toMatchObject({ firstName: "Ana", lastName: "Pérez" });
+
+    const partial = await insertUser({ email: uniqueEmail(), clerkId: null, role: "super_admin" });
+    await ensureUser(identity({ email: partial.email, firstName: "Ana", lastName: "" }));
+    expect(await rowByEmail(partial.email)).toMatchObject({ firstName: "Ana", lastName: "Admin" });
+  });
+
   it("no vincula si el correo no está verificado: lanza AccountLinkError y la fila no cambia", async () => {
     const seeded = await insertUser({ email: uniqueEmail(), clerkId: null, role: "super_admin" });
 

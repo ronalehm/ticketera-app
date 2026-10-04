@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { UserProfile } from "@/modules/auth";
-import { getSessionUser } from "@/modules/auth/server";
+import { requireUser } from "@/modules/auth/server";
 
 export const metadata: Metadata = {
   title: "Mi perfil | Mentec Tickets",
@@ -10,8 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  // El proxy ya exige sesión; `null` solo llega si la sesión desaparece entre medias.
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
+  const user = await requireUser();
   return <UserProfile user={user} />;
 }

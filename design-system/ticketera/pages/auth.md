@@ -1,34 +1,32 @@
-# Página: acceso `/login` y `/registro`
+# Página: acceso `/login`, `/registro`, `/perfil/completar` y `/perfil/seguridad`
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER.
-> Spec: `docs/specs/layout-fullscreen-shells.md` (Fase 2). Reemplaza el layout de `docs/specs/events-ui-refresh.md` (Fase 3) y los títulos, subtítulos y enlaces del pie de `docs/specs/auth-login-register.md`. Los campos, validaciones, botones y el flujo de los formularios siguen siendo los de esa spec.
-> Acceso con Google (maqueta), separador "o" y placeholder del correo: `docs/specs/design-alignment-account-views.md` (Fase 1). Prevalece sobre la spec de layout en esos puntos; el resto del layout no cambia.
-> Referencia: capturas del usuario y Claude Design `Auth.dc.html` / `AuthMobile.dc.html`. Se toman estructura, textos y patrones; la identidad visual es la de Mentec (nunca índigo, Poppins ni la marca "Ticketera" del diseño).
+> Layout de pantalla completa: `docs/specs/layout-fullscreen-shells.md` (Fase 2).
+> Acceso con Clerk, "Completa tu perfil" y página de seguridad: `docs/specs/auth-clerk.md` (Fases 3, 4 y 5). Sustituye a los formularios propios de `docs/specs/auth-login-register.md` y al acceso con Google simulado de `docs/specs/design-alignment-account-views.md` (Fase 1), que ya no existen.
+> Referencia: capturas del usuario y Claude Design `Auth.dc.html` / `AuthMobile.dc.html`. Se toman estructura y patrones; la identidad visual es la de Mentec (nunca índigo, Poppins ni la marca "Ticketera" del diseño).
 
 ## Layout
 
-**Pantalla completa:** sin header ni footer del sitio. Las rutas viven en el route group `app/(auth)`, fuera de `app/(site)`, así que no usan `SiteShell`. Solo se ve el acceso.
+**Pantalla completa:** sin header ni footer del sitio. `/login`, `/registro` y `/perfil/completar` viven en el route group `app/(auth)`, fuera de `app/(site)`, así que no usan `SiteShell`. Solo se ve el acceso. `/perfil/seguridad` es la excepción: vive en `app/(site)` (ver "Seguridad de la cuenta").
 
 ### Escritorio (`lg+`)
 
 ```
 ┌──────── 5fr · bg-brand-navy · sticky h-dvh ────────┬──────────── 7fr · bg-background (blanco) ────────────┐
 │ [logo blanco] → /                                  │                                                      │
-│                                                    │        ┌ Iniciar sesión │ Crear cuenta ┐  max-w-md     │
-│     foto a sangre (fill, cover)                    │        └──────────────────────────────┘               │
-│     + degradado navy/70 → navy/30 → navy/90        │        h1 Hola de nuevo                               │
-│                                                    │        Ingresa para ver tus entradas…                 │
-│                                                    │        [G  Continuar con Google]                      │
-│                                                    │        Al continuar con Google, aceptas…              │
-│                                                    │        ─────────────── o ───────────────              │
-│                                                    │        formulario (sin Card)                          │
-│ Tus entradas, siempre a mano.                      │        ¿No tienes cuenta? Crea una gratis             │
+│                                                    │        ┌─ <SignIn/> / <SignUp/> de Clerk ─┐  max-w-md │
+│     foto a sangre (fill, cover)                    │        │ título y subtítulo (esES)        │           │
+│     + degradado navy/70 → navy/30 → navy/90        │        │ [G  Continuar con Google]        │           │
+│                                                    │        │ ─────────── o ───────────        │           │
+│                                                    │        │ campos y botón                   │           │
+│                                                    │        │ pie: enlace a la otra página     │           │
+│ Tus entradas, siempre a mano.                      │        └──────────────────────────────────┘           │
 │ Compra en minutos y lleva tu QR en el celular.     │                                                      │
 └────────────────────────────────────────────────────┴──────────────────────────────────────────────────────┘
 ```
 
-- El panel ocupa toda la altura de la ventana (`lg:sticky lg:top-0 lg:h-dvh lg:self-start`) y no se mueve aunque el registro haga scroll: nunca quedan franjas blancas debajo.
-- La columna del formulario va centrada en vertical y en horizontal sobre blanco.
+- El panel ocupa toda la altura de la ventana (`lg:sticky lg:top-0 lg:h-dvh lg:self-start`) y no se mueve aunque la columna derecha haga scroll: nunca quedan franjas blancas debajo.
+- La columna derecha va centrada en vertical y en horizontal sobre blanco.
 
 ### Móvil (`< lg`)
 
@@ -40,12 +38,8 @@
 │ siempre a mano.            │                 │
 │ Compra en minutos y…       │                 │
 └──────────────────────────────────────────────┘
-[ Iniciar sesión | Crear cuenta ]                 bg-background, px-4 pt-8 pb-12 (md:pt-12)
-h1 + subtítulo
-[G  Continuar con Google] + aviso
-──── o ────
-formulario
-pie
+<SignIn/> / <SignUp/> de Clerk                    bg-background, px-4 pt-8 pb-12 (md:pt-12)
+(o el formulario "Completa tu perfil")
 ```
 
 ### Clases
@@ -59,8 +53,8 @@ pie
     </main>
   </div>
   ```
-  El fondo es el de `body` (`bg-background`); ya no hay `bg-muted`. El layout aporta el único `<main>` de la página (el root layout no lo tiene).
-- Cada página compone pestañas + formulario en `flex w-full max-w-md flex-col gap-6`. Login y registro miden lo mismo (`max-w-md`, ~440 px como el diseño), así las pestañas no cambian de ancho al pasar de una a otra.
+  El fondo es el de `body` (`bg-background`). El layout aporta el único `<main>` de la página (el root layout no lo tiene).
+- Cada página envuelve su contenido en `flex w-full max-w-md flex-col gap-6`. Las tres páginas miden lo mismo (`max-w-md`, ~440 px), así la columna no cambia de ancho al pasar de una a otra.
 
 ## Panel de marca (`AuthBrandPanel`, server)
 
@@ -74,113 +68,76 @@ pie
   - "Tus entradas, siempre a mano." — `text-2xl lg:text-4xl font-bold tracking-tight leading-tight`.
   - "Compra en minutos y lleva tu QR en el celular." — `text-primary-foreground/80 leading-relaxed`.
 
-## Pestañas (`AuthTabs`, server)
+## Login y registro (componentes de Clerk)
 
-- Prop `current: "login" | "register"`; la renderiza cada página (conoce su ruta), así el layout sigue siendo de servidor sin `usePathname`.
-- Son **enlaces**, no `role="tablist"`, porque navegan entre rutas: `<nav aria-label="Acceso a tu cuenta">`.
-- Estilo de **control segmentado** (como el filtro de `OrganizerDashboard`):
-  - Lista: `grid grid-cols-2 gap-1 rounded-xl bg-muted p-1`.
-  - Enlaces `h-11` (≥ 44 px), `rounded-lg`, `text-sm font-medium`, transición 200 ms, foco `focus-visible:ring-3 focus-visible:ring-ring/50`.
-  - Actual: `aria-current="page"`, `bg-background font-semibold text-foreground shadow-sm`.
-  - Otra: `text-muted-foreground hover:bg-background/60 hover:text-foreground`.
-- Destinos sin query: "Iniciar sesión" → `/login`, "Crear cuenta" → `/registro`.
-
-## Formularios
-
-- `LoginForm` y `RegisterForm` van **sin `Card`**, directamente sobre blanco: raíz `flex w-full flex-col gap-6`, bloque de título `flex flex-col gap-1.5` (h1 `text-2xl md:text-3xl font-bold tracking-tight` + `<p className="text-base text-muted-foreground">`), el `<form>` y el pie (`text-center text-sm text-muted-foreground`, enlace `TEXT_LINK` + `font-semibold`).
-- Textos (del diseño):
-
-  | Página | h1 | Subtítulo | Pie |
-  |---|---|---|---|
-  | `/login` | "Hola de nuevo" | "Ingresa para ver tus entradas y comprar más rápido." | "¿No tienes cuenta? **Crea una gratis**" → `/registro` |
-  | `/registro` | "Crea tu cuenta" | "Guarda tus entradas y recibe novedades de tus eventos." | "¿Ya tienes cuenta? **Inicia sesión**" → `/login` |
-
-- Orden dentro de la raíz `flex flex-col gap-6`: bloque de título, `<GoogleSignIn />`, `<FieldSeparator>o</FieldSeparator>`, `<form>` y pie. No hay contenedor extra.
-- Campo de correo: `placeholder="tu@email.com"` en los dos formularios (del diseño). Es solo un ejemplo: la etiqueta "Correo electrónico" sigue visible.
+- `/login` → `app/(auth)/login/[[...rest]]/page.tsx` con `<SignIn />`; `/registro` → `app/(auth)/registro/[[...rest]]/page.tsx` con `<SignUp />`. La ruta catch-all opcional `[[...rest]]` cubre las subrutas de Clerk (verificación del correo, segundo factor, callback de SSO). Desde la Fase 5, `<SignUp fallbackRedirectUrl="/perfil/completar" />`.
+- **Estilo:** el de MASTER §2 "Componentes de Clerk": tema `shadcn` sobre los tokens de Mentec, Creato Display heredada del `<body>` y textos de `esES`. No se añaden `appearance.variables` ni `appearance.elements` por página. La tarjeta, los campos, los botones y el separador "o" son los que dibuja Clerk con ese tema.
+- **Google:** el botón "Continuar con Google" lo pone Clerk (dashboard: Google activo). No hay botón, logo, aviso ni selector de cuenta propios.
+- **Navegación entre las dos páginas:** el pie de la tarjeta de Clerk enlaza a la otra (`NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/registro`). Ya no hay pestañas propias.
+- **Nombres:** nombre y apellido se piden en el `<SignUp/>` (ajuste del dashboard). Celular, documento y consentimientos van en "Completa tu perfil".
+- Recuperar contraseña y verificar el correo son pantallas de Clerk; no hay diseño propio.
 - La metadata no cambia: "Iniciar sesión — Mentec Tickets" y "Crear cuenta — Mentec Tickets".
-- Campos, mensajes, botones ("Iniciar sesión" / "Crear cuenta", "Ingresando…" / "Creando cuenta…") y flujo sin cambios. El registro conserva Nombres, Apellidos, Celular, Documento, Contraseña, Confirmación, Términos y Novedades: **el campo "Nombre completo" del diseño sigue sin adoptarse**.
 
-## Acceso con Google (maqueta)
+## "Completa tu perfil" (`/perfil/completar`)
 
-Spec: `docs/specs/design-alignment-account-views.md` (Fase 1). **Sin integración real:** no carga Google Identity Services ni llama a ningún backend. El service mock `signInWithGoogle()` (`modules/auth/services/googleAuth.service.ts`) espera `MOCK_LATENCY_MS` (~600 ms) y devuelve la cuenta de ejemplo `GOOGLE_DEMO_ACCOUNT` (`modules/auth/data/googleAccount.mock.ts`: Lucía Fernández Rojas, `lucia.fernandez@gmail.com`, `id` estable `usr-google-001`).
-
-Componentes (`modules/auth/components/`):
-
-| Componente | Tipo | Rol |
-|---|---|---|
-| `GoogleSignIn` | cliente | Bloque completo: botón, aviso, alerta, región de estado y selector. Sin props: el mismo texto en `/login` y `/registro`. |
-| `GoogleAccountChooser` | cliente, presentacional | Selector de cuenta simulado sobre `Dialog` de shadcn (Base UI). |
-| `GoogleLogo` | presentacional | "G" oficial a cuatro colores, SVG inline `viewBox="0 0 48 48"`, `aria-hidden`, `focusable="false"`. Excepción de color de MASTER §2. |
+Ruta `app/(auth)/perfil/completar/page.tsx`, en el layout `(auth)` (con `AuthBrandPanel`). Componente `CompleteProfileForm` (`modules/auth/components/`, `"use client"`), prop `redirectUrl`. **Hereda el diseño del registro anterior** (`RegisterForm`, historial git): mismo bloque de título, mismos campos de celular y documento, mismas casillas y botón. No pide nombre, apellido, correo ni contraseña (los tiene Clerk).
 
 ### Anatomía
 
 ```
-┌──────────────────────────────────────────┐
-│ [G]  Continuar con Google                │  Button outline, h-11, w-full, blanco con borde gris
-└──────────────────────────────────────────┘
-  Al continuar con Google, aceptas los Términos y      text-sm muted, centrado; 3 enlaces en línea
-  condiciones y la Política de privacidad, y autorizas
-  la transferencia internacional de tus datos a
-  proveedores fuera del Perú.
-[ ! Cancelaste el inicio de sesión con Google… ]       Alert destructive (solo si hay error)
-───────────────────── o ─────────────────────          FieldSeparator (ya fuera de GoogleSignIn)
+h1 Completa tu perfil                                    text-2xl md:text-3xl font-bold tracking-tight
+Lo usamos para emitir tus entradas a tu nombre.          text-base text-muted-foreground
+[ ! error del servidor ]                                 Alert destructive (solo si lo hay)
+Celular            [+51 | 9XXXXXXXX        ]             InputGroup h-11
+Tipo de documento [DNI ▾]   Número de documento [    ]   grid sm:grid-cols-2
+[✓] Acepto los Términos y condiciones y la Política de privacidad, incluida la
+    transferencia internacional de mis datos a proveedores en EE. UU.   (obligatorio)
+[ ] Quiero recibir novedades y promociones por correo                   (opcional)
+[        Guardar y continuar        ]                    Button default h-11 w-full
 ```
 
-- Raíz de `GoogleSignIn`: `flex flex-col gap-3`. Orden en el DOM: botón, aviso, `Alert` (si lo hay), región de estado (`sr-only`) y diálogo (en portal).
-- **Botón** (guía de marca de Google Sign-In, tema claro, con tokens Mentec): `Button type="button" variant="outline"` + `h-11 w-full cursor-pointer gap-2.5 rounded-lg border-muted-foreground bg-background font-medium text-foreground duration-200 hover:bg-accent`.
-  - Logo `size-4.5` (18 px) `shrink-0`, a 10 px del texto. Nunca se recolorea, se deforma ni se pone sobre otro fondo.
-  - Borde `border-muted-foreground` (6.3:1), equivalente al trazo gris oscuro de la guía.
-  - Texto "Continuar con Google" (variante localizada permitida; vale también para el registro) en Creato Display. Google recomienda Roboto Medium: pendiente de decisión (pregunta abierta 1 de la spec).
-- **Aviso de aceptación** (patrón del bloque `login-03` de shadcn): `<p className="text-center text-sm text-muted-foreground">`. "Términos y condiciones" → `/terminos`, "Política de privacidad" → `/privacidad` y "transferencia internacional de tus datos" → `/privacidad#transferencia-internacional`; `Link` con `INLINE_LINK`, `target="_blank" rel="noopener noreferrer"`.
-  - Entrar con Google también crea la cuenta, por eso el aviso va en las dos páginas. Novedades queda desmarcada (opt-in): Google no suscribe a nadie.
-  - Solución de maqueta: la Ley 29733 pide consentimiento expreso para la transferencia internacional (pregunta abierta 2 de la spec: posible paso "Completa tu registro" con casillas). No se registran consentimientos con `recordConsents`.
-- **Separador:** `FieldSeparator` de shadcn (`components/ui/field.tsx`) con el texto "o", línea `border` a cada lado y texto `text-muted-foreground` sobre `bg-background`.
+- Raíz `flex w-full flex-col gap-6` (sin `Card`, sobre blanco): bloque de título `flex flex-col gap-1.5` (h1 + `<p>`) y el `<form noValidate>` con `FieldGroup`. Sin pie: no hay a dónde navegar hasta completar el perfil.
+- **Textos:** h1 "Completa tu perfil"; subtítulo "Lo usamos para emitir tus entradas a tu nombre."; botón "Guardar y continuar" / "Guardando…" (con `Spinner` `aria-hidden` `motion-reduce:animate-none`).
+- **Celular:** `Field` + `FieldLabel` "Celular" + `InputGroup className="h-11"` con `InputGroupAddon` → `InputGroupText` "+51" e `InputGroupInput` (`type="tel"`, `inputMode="numeric"`, `autoComplete="tel-national"`, `maxLength={9}`, `className="h-full"`). Validación de `phoneField` (`lib/formFields`).
+- **Documento:** `grid gap-5 sm:grid-cols-2 sm:gap-4`. "Tipo de documento": `Select` con `DOCUMENT_TYPES` / `DOCUMENT_TYPE_LABELS` (`SelectTrigger` `w-full cursor-pointer data-[size=default]:h-11`, `SelectItem` `min-h-11 cursor-pointer`); al cambiarlo se revalidan tipo y número. "Número de documento": `Input h-11`, con DNI `inputMode="numeric"` y `maxLength={8}`. Regla de `getDocumentNumberError`.
+- **Consentimiento obligatorio:** `Field orientation="horizontal"` + `Checkbox` + `FieldContent` con `FieldLabel className="block font-normal"`: "Acepto los **Términos y condiciones** y la **Política de privacidad**, incluida la transferencia internacional de mis datos a proveedores en EE. UU." Enlaces `Link` con `INLINE_LINK` (`lib/linkStyles.ts`) a `/terminos` y `/privacidad`, `target="_blank" rel="noopener noreferrer"`. Crea los consentimientos `terms`, `privacy` e `international_transfer`.
+- **Publicidad (opcional):** `Field orientation="horizontal"` + `Checkbox` + `FieldLabel className="font-normal"` "Quiero recibir novedades y promociones por correo". Desmarcada por defecto (opt-in). Crea el consentimiento `marketing` con su valor.
+- **Botón:** `Button type="submit"` `h-11 w-full cursor-pointer font-semibold duration-200 hover:bg-primary-strong`; `disabled` mientras se envía.
+- **Errores:** por campo con `FieldError` (`id` `<campo>-error`, `aria-invalid` y `aria-describedby` en el control), mensajes de `lib/formFields`. El error de la Server Action va arriba del formulario en `Alert variant="destructive"` con `CircleAlert` (`aria-hidden`) y `AlertTitle`.
+- Formulario controlado con `useZodForm` (`hooks/useZodForm.ts`) y `completeProfileSchema`. Al guardar, la acción redirige a `redirect_url` (solo rutas internas) o a `/perfil`.
+- Metadata: "Completa tu perfil — Mentec Tickets", `robots: { index: false }`.
 
-### Selector de cuenta (modo demostración)
+## Seguridad de la cuenta (`/perfil/seguridad`)
+
+Ruta `app/(site)/perfil/seguridad/page.tsx`, **dentro de `(site)`** (con header y footer, como `/perfil`). Componente `AccountSecurity` (`modules/auth/components/`, server), prop `user` (`role`, `mfaVerified`).
 
 ```
-┌──────────────────────────────────┐  DialogContent sm:max-w-sm, rounded-xl, p-4
-│ [G]                              │  GoogleLogo size-6
-│ Elige una cuenta                 │  DialogTitle
-│ Modo demostración: no se conecta │  DialogDescription
-│ con Google.                      │
-│ ┌──────────────────────────────┐ │
-│ │ (LF)  Lucía Fernández Rojas  │ │  botón de cuenta: UserAvatar lg (40 px) + nombre
-│ │       lucia.fernandez@gmail… │ │  semibold + correo text-sm muted (salto de línea)
-│ └──────────────────────────────┘ │
-├──────────────────────────────────┤  DialogFooter (borde superior, bg-muted/50)
-│                       [Cancelar] │  DialogClose outline h-11
-└──────────────────────────────────┘
+Header sticky
+┌─ section bg-muted a todo el ancho ──────────────────────────┐
+│ max-w-5xl                                                   │
+│ h1 Seguridad                                                │
+│ ┌ [ShieldAlert] Verificación en dos pasos obligatoria ────┐ │  Alert (oculto: MFA diferido)
+│ │ Tu rol requiere verificación en dos pasos: actívala y   │ │
+│ │ vuelve a iniciar sesión.                                │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│ ┌ <UserProfile routing="hash"/> de Clerk ─────────────────┐ │  menú lateral + pestaña de seguridad
+│ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+Footer
 ```
 
-- Diálogo modal centrado (`Dialog` de shadcn sobre Base UI, no `Sheet`). Usa tokens Mentec y **no imita la interfaz de Google**: el texto "Modo demostración" deja claro que es una simulación.
-- **Botón de cuenta:** `<button type="button">` `flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl p-3 text-left ring-1 ring-border transition-colors duration-200 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring`. Nombre (`getFullName`, `wrap-break-word`) y correo (`wrap-anywhere`) no se truncan. Nombre accesible: "Continuar como Lucía Fernández Rojas, lucia.fernandez@gmail.com" ("Continuar como" y la coma en `sr-only`).
-- **"Cancelar":** `DialogClose` con `buttonVariants({ variant: "outline" })` + `h-11 cursor-pointer`.
-- **Sin X de cierre:** `DialogContent showCloseButton={false}`. "Cancelar" es la única salida visible (además de Escape y el clic fuera); una X duplicaría la acción con un target de 28 px (`icon-sm`, por debajo de los 44 px de MASTER §11) y la etiqueta "Close" en inglés del componente generado.
-- Teclado (Base UI, sin código propio): el foco entra en el diálogo al abrirse y Tab queda atrapado dentro; Escape o clic fuera cierran.
-- Al cerrarse, el foco vuelve al botón "Continuar con Google" por el comportamiento por defecto de Base UI (devuelve el foco al elemento que lo tenía al abrir). No se usa `finalFocus` ni código propio.
-
-### Estados
-
-| Estado | Cuándo | Botón | Otros |
-|---|---|---|---|
-| Reposo | inicial, tras cancelar o tras un error | Logo + "Continuar con Google" | — |
-| Eligiendo | al pulsar el botón (clic, Enter o Espacio) | igual | Se borra la alerta previa y se abre el selector |
-| Conectando | tras elegir la cuenta (el diálogo ya se cerró) | `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Conectando con Google…"; `aria-busy="true"`, `disabled` + `focusableWhenDisabled` (conserva el foco, no admite otro clic), `aria-busy:cursor-progress aria-busy:opacity-70` | Región `<p role="status" className="sr-only">` anuncia "Conectando con Google…" |
-| Éxito | `signInWithGoogle` resuelve | — | `signIn(user)` del store `mentec-auth` (persistido) y `router.replace("/")`, el mismo destino que el login con correo |
-| Cancelado | el diálogo se cierra sin elegir cuenta ("Cancelar", Escape o clic fuera) | vuelve a reposo | `Alert variant="destructive"` (`role="alert"`, `CircleAlert`): "Cancelaste el inicio de sesión con Google. Puedes intentarlo de nuevo." No navega |
-| Error | `signInWithGoogle` rechaza | vuelve a reposo | El mismo `Alert` con `GENERIC_ERROR` (`formShared`). No navega |
-
-- `focusableWhenDisabled` solo se activa mientras conecta (en reposo Base UI pondría `aria-disabled="false"`).
-- Volver a pulsar el botón quita la alerta y reabre el selector.
-- El formulario de correo no se bloquea mientras se conecta con Google (fuera de alcance de la spec).
+- `<section className="bg-muted">` → `mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 md:gap-8 md:px-6 md:py-12`. `max-w-5xl` (y no `max-w-7xl`) porque el `<UserProfile/>` de Clerk tiene un ancho propio (~55 rem con su menú lateral) y así queda alineado con el título.
+- h1 "Seguridad": `text-3xl font-extrabold tracking-tight md:text-5xl` (mismo estilo que el h1 de `/perfil`).
+- **Aviso de MFA (no se muestra mientras el MFA esté diferido):** el MFA de `admin`/`super_admin` está diferido hasta Clerk Pro/producción (`MFA_ENFORCED = false` en `modules/auth/utils/can.ts`), así que `isMfaPending(user)` siempre es `false` y hoy ningún usuario ve el aviso. Al activarlo, aparece solo cuando `isMfaPending(user)` (rol `admin`/`super_admin` y sesión sin segundo factor). `Alert` (variante por defecto, no destructive: es una instrucción, no un error) con `className="px-4 py-3"`, icono `ShieldAlert` (`aria-hidden`), `AlertTitle className="font-bold"` "Verificación en dos pasos obligatoria" y `AlertDescription` "Tu rol requiere verificación en dos pasos: actívala y vuelve a iniciar sesión."
+- **`<UserProfile routing="hash" />`** de Clerk (importado como `ClerkUserProfile` para no chocar con nuestro `UserProfile`), con el tema `shadcn` y `esES` del provider; sin `appearance` propia. `routing="hash"` evita una ruta catch-all.
+- Metadata: "Seguridad | Mentec Tickets", `robots: { index: false }`.
 
 ## Accesibilidad
 
-- Un único `<main>` (el del layout `(auth)`) y un único `<h1>` por página: el del formulario. Los textos del panel son `<p>`.
+- Un único `<main>` (el del layout `(auth)` o el de `SiteShell` en `/perfil/seguridad`) y un único `<h1>` por página. En `/login` y `/registro` el h1 es el título de la tarjeta de Clerk; los textos del panel son `<p>`.
 - Logo: nombre accesible "Mentec Tickets: ir al inicio" (incluye el nombre visible de la marca, WCAG 2.5.3), área táctil ≥ 44 px y foco cian (`ring-highlight`) sobre navy.
-- Orden de Tab: logo, pestañas, "Continuar con Google", los tres enlaces del aviso, campos (en login: correo, "¿Olvidaste tu contraseña?", contraseña, mostrar contraseña), botones y enlace del pie, todos con foco visible y ≥ 44 px de alto. Los enlaces del aviso son enlaces en línea (`INLINE_LINK`), exentos del tamaño mínimo por WCAG 2.5.8.
-- Acceso con Google: logo `aria-hidden` (el texto del botón da el nombre accesible); "Conectando con Google…" se anuncia por la región `role="status"`; cancelación y error por `role="alert"`. Selector: foco atrapado, Escape y devolución del foco al botón (Base UI).
-- Imagen del panel decorativa (`alt=""`); el logo conserva su `alt` "Mentec Tickets".
-- Contraste: blanco sobre navy (con el degradado en `lg`), `primary-foreground/80` sobre navy para el subtítulo; `foreground` sobre `background` en la pestaña activa.
-- Sin scroll horizontal a 375, 768, 1024 y 1440 px. A 375 px el texto del botón de Google cabe en una línea y el aviso hace salto de línea.
+- Componentes de Clerk: su teclado, foco, etiquetas y anuncios de error son los de Clerk; el foco visible usa `--ring` a través del tema `shadcn`.
+- "Completa tu perfil": orden de Tab = logo, celular, tipo y número de documento, casilla obligatoria y sus dos enlaces, casilla de publicidad, botón. Todos con foco visible y ≥ 44 px de alto (los enlaces en línea `INLINE_LINK` están exentos por WCAG 2.5.8). Errores asociados con `aria-describedby`; el error del servidor en `Alert` (`role="alert"`).
+- Imagen del panel decorativa (`alt=""`); el logo conserva su `alt` "Mentec Tickets". Iconos de los `Alert` con `aria-hidden`.
+- Contraste: blanco sobre navy (con el degradado en `lg`), `primary-foreground/80` sobre navy para el subtítulo del panel.
+- Sin scroll horizontal a 375, 768, 1024 y 1440 px. A 375 px el `<UserProfile/>` de Clerk pasa a su diseño móvil (menú arriba).

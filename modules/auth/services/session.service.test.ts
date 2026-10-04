@@ -20,7 +20,8 @@ vi.mock("./users.service", () => ({
 
 const updateUserMetadata = vi.fn();
 
-const USER: SessionUser = {
+/** Fila de `users` que devuelve `users.service` (sin `mfaVerified`, que sale de la sesión). */
+const USER: Omit<SessionUser, "mfaVerified"> = {
   id: "00000000-0000-8000-8000-000000000001",
   email: "ana@example.com",
   firstName: "Ana",
@@ -32,8 +33,9 @@ const USER: SessionUser = {
   createdAt: new Date("2026-10-01T00:00:00Z"),
 };
 
-function mockSession(userId: string | null) {
-  vi.mocked(auth).mockResolvedValue({ userId } as Awaited<ReturnType<typeof auth>>);
+/** `factorVerificationAge`: [primer factor, segundo factor] en minutos; -1 si no se usó (por defecto, sin MFA). */
+function mockSession(userId: string | null, factorVerificationAge: [number, number] | null = userId ? [0, -1] : null) {
+  vi.mocked(auth).mockResolvedValue({ userId, factorVerificationAge } as Awaited<ReturnType<typeof auth>>);
 }
 
 function mockClerkUser(user: {
@@ -73,7 +75,7 @@ describe("getSessionUser", () => {
     mockSession("user_1");
     vi.mocked(findUserByClerkId).mockResolvedValue(USER);
 
-    expect(await getSessionUser()).toEqual(USER);
+    expect(await getSessionUser()).toEqual({ ...USER, mfaVerified: false });
     expect(findUserByClerkId).toHaveBeenCalledWith("user_1");
     expect(currentUser).not.toHaveBeenCalled();
     expect(ensureUser).not.toHaveBeenCalled();
@@ -85,7 +87,7 @@ describe("getSessionUser", () => {
     vi.mocked(ensureUser).mockResolvedValue(USER);
     mockClerkUser({ firstName: null, lastName: null });
 
-    expect(await getSessionUser()).toEqual(USER);
+    expect(await getSessionUser()).toEqual({ ...USER, mfaVerified: false });
     expect(ensureUser).toHaveBeenCalledWith({
       clerkId: "user_1",
       email: "Ana@Example.com",
@@ -127,6 +129,19 @@ describe("getSessionUser", () => {
   });
 });
 
+describe("getSessionUser · mfaVerified", () => {
+  it.each([
+    { factorVerificationAge: [0, 0] as [number, number], mfaVerified: true },
+    { factorVerificationAge: [5, 3] as [number, number], mfaVerified: true },
+    { factorVerificationAge: [0, -1] as [number, number], mfaVerified: false },
+    { factorVerificationAge: null, mfaVerified: false },
+  ])("factorVerificationAge $factorVerificationAge → mfaVerified $mfaVerified", async (c) => {
+    mockSession("user_1", c.factorVerificationAge);
+    vi.mocked(findUserByClerkId).mockResolvedValue(USER);
+    expect(await getSessionUser()).toEqual({ ...USER, mfaVerified: c.mfaVerified });
+  });
+});
+
 describe("requireUser", () => {
   it("sin sesión redirige a /login", async () => {
     mockSession(null);
@@ -137,7 +152,28 @@ describe("requireUser", () => {
   it("con sesión devuelve el usuario", async () => {
     mockSession("user_1");
     vi.mocked(findUserByClerkId).mockResolvedValue(USER);
-    expect(await requireUser()).toEqual(USER);
+    expect(await requireUser()).toEqual({ ...USER, mfaVerified: false });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each(["admin", "super_admin"] as const)("con el MFA diferido deja pasar a un %s sin segundo factor", async (role) => {
+    mockSession("user_1", [0, -1]);
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role });
+    expect(await requireUser()).toMatchObject({ role, mfaVerified: false });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("deja pasar a un super_admin con segundo factor en la sesión", async () => {
+    mockSession("user_1", [2, 1]);
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "super_admin" });
+    expect(await requireUser()).toMatchObject({ role: "super_admin", mfaVerified: true });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("no exige MFA a un customer", async () => {
+    mockSession("user_1", [0, -1]);
+    vi.mocked(findUserByClerkId).mockResolvedValue(USER);
+    expect(await requireUser()).toMatchObject({ role: "customer", mfaVerified: false });
     expect(redirect).not.toHaveBeenCalled();
   });
 });

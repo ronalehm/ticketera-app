@@ -23,9 +23,12 @@ const SESSION_USER_COLUMNS = {
   createdAt: users.createdAt,
 };
 
+/** Fila de `users` del usuario; `mfaVerified` lo añade `getSessionUser` desde la sesión. */
+type UserRow = Omit<SessionUser, "mfaVerified">;
+
 type Queryable = Pick<typeof db, "select">;
 
-export async function findUserByClerkId(clerkId: string, database: Queryable = db): Promise<SessionUser | null> {
+export async function findUserByClerkId(clerkId: string, database: Queryable = db): Promise<UserRow | null> {
   const [user] = await database.select(SESSION_USER_COLUMNS).from(users).where(eq(users.clerkId, clerkId));
   return user ?? null;
 }
@@ -34,7 +37,7 @@ export async function findUserByClerkId(clerkId: string, database: Queryable = d
  * Fila de `users` del usuario de Clerk: la suya, la del mismo correo sin `clerk_id` (vinculada si el correo está
  * verificado) o una nueva `customer`. Lanza `AccountLinkError` si el correo pertenece a otra cuenta o no está verificado.
  */
-export async function ensureUser(identity: ClerkIdentity, database = db): Promise<SessionUser> {
+export async function ensureUser(identity: ClerkIdentity, database = db): Promise<UserRow> {
   const email = identity.email.toLowerCase();
 
   return database.transaction(async (tx) => {
@@ -54,11 +57,16 @@ export async function ensureUser(identity: ClerkIdentity, database = db): Promis
       throw new AccountLinkError("El correo ya pertenece a otra cuenta");
     }
 
-    // Aquí `existing` solo existe si la acción es "link".
+    // Aquí `existing` solo existe si la acción es "link": toma los nombres de Clerk (un "" deja el de la fila;
+    // Drizzle omite las claves `undefined`).
     const [written] = existing
       ? await tx
           .update(users)
-          .set({ clerkId: identity.clerkId })
+          .set({
+            clerkId: identity.clerkId,
+            firstName: identity.firstName || undefined,
+            lastName: identity.lastName || undefined,
+          })
           .where(and(eq(users.id, existing.id), isNull(users.clerkId)))
           .returning(SESSION_USER_COLUMNS)
       : await tx

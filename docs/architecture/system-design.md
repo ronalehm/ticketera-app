@@ -55,7 +55,7 @@ El objetivo es una ticketera con:
 | Dominio | `ticketera-mentec.dev` (`.dev` está en la lista HSTS preload: HTTPS obligatorio). |
 | Borde | External HTTPS Load Balancer + Cloud Armor (WAF, límite por IP) + Cloud CDN para imágenes, delante de Cloud Run. |
 | Moderación | Los eventos pasan por revisión de un admin antes de publicarse. |
-| MFA | Obligatorio para `admin` y `super_admin` (Clerk). |
+| MFA | **Diferido** hasta Clerk Pro/producción: el plan actual de Clerk no incluye TOTP ni códigos de respaldo. Al activarlo será obligatorio para `admin` y `super_admin` (constante `MFA_ENFORCED` en `modules/auth/utils/can.ts`, hoy `false`). |
 | Búsqueda | Postgres `pg_trgm` + `unaccent` (tolera errores y tildes). |
 | Caché | Catálogo (home, listado, detalle) con caché invalidada por evento; disponibilidad y checkout siempre en vivo. |
 | CI/CD | GitHub Actions: lint, tests y build en cada PR; al mergear a `main`, imagen → migración → deploy. |
@@ -207,7 +207,7 @@ Todos idempotentes y con `Authorization: Bearer <CRON_SECRET>`.
 - **Google:** flujo OAuth 2.0 / OpenID Connect gestionado íntegramente por Clerk. Google entrega nombre, apellido y un correo **ya verificado**, por lo que `ensureUser()` puede vincular la fila del seed (super_admin) en el primer acceso con Google. La app **no guarda** tokens de Google ni contraseñas: solo `clerk_id` y los datos de perfil. El Client ID/Secret de producción viven en el dashboard de Clerk, no en `.env`.
 - **Datos peruanos:** Clerk no guarda celular ni documento; los pide "Completa tu perfil" (`/perfil/completar`) y se guardan en `users`, junto con los consentimientos en `consents`.
 - `ensureUser()` hace upsert por `clerk_id` en el primer acceso autenticado (no hace falta túnel en local). Si no existe fila con ese `clerk_id` pero sí una con el mismo correo y `clerk_id NULL` (usuario creado por seed), la vincula **solo si Clerk marca el correo como verificado**; si no, cualquiera podría registrarse con ese correo y heredar el rol.
-- MFA obligatorio para `admin` y `super_admin`: `proxy.ts` niega el acceso a `/admin` si la sesión no tiene segundo factor; las Server Actions de admin lo vuelven a comprobar.
+- MFA de `admin` y `super_admin` **diferido** hasta Clerk Pro/producción (el plan actual no incluye TOTP ni códigos de respaldo). La lógica está preparada pero apagada (`MFA_ENFORCED = false` en `modules/auth/utils/can.ts`). Al activarla: `requireUser()` lleva a `/perfil/seguridad` a una sesión sin segundo factor (`auth().factorVerificationAge`), `can()` le niega cualquier acción, `proxy.ts` niega el acceso a `/admin` y las Server Actions de admin lo vuelven a comprobar.
 - Producción: dominio de Clerk con los CNAME que indica Clerk bajo `ticketera-mentec.dev`.
 - Webhook (verificado con svix): `user.updated` sincroniza nombre y correo; `user.deleted` anonimiza el usuario y conserva sus órdenes.
 - Cambio de rol: BD → `clerkClient.users.updateUserMetadata(..., { publicMetadata: { role } })` → `audit_logs`.
@@ -280,7 +280,7 @@ Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y
 - Nadie cambia su propio rol ni asigna un rol igual o superior al propio.
 - Siempre queda al menos un `super_admin`: el sistema rechaza quitar o degradar al último.
 - Quitar el rol `organizer` se **bloquea** mientras tenga eventos `pending_review`/`published` o payouts `pending` (mensaje: "Tiene 1 evento publicado y 1 payout pendiente"). Primero se cancelan o transfieren los eventos y se resuelven los payouts.
-- MFA obligatorio para `admin` y `super_admin`.
+- MFA para `admin` y `super_admin`: **diferido** hasta Clerk Pro/producción (§2, §5 Clerk); hoy no se exige a ningún rol.
 - El organizador solo accede a eventos con `events.organizer_id` propio.
 - El organizador ve los recintos `approved` y los suyos (`status = 'approved' OR organizer_id = <él>`); un recinto `pending_review` solo lo ven su dueño y los admins.
 - Defensa en profundidad: `proxy.ts` filtra rutas por `publicMetadata.role`; **cada Server Action vuelve a validar** con `can(user, action, resource)` contra la BD.

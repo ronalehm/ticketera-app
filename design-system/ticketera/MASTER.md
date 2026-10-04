@@ -60,23 +60,18 @@ Paleta oficial Mentec (manual, pág. 19):
 | `--brand-gradient` | `linear-gradient(135deg, #0072F6 0%, #03D2F4 100%)` | Banner organizadores, acentos. Texto encima: blanco bold ≥ 24px o navy |
 
 Reglas:
-- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`). Únicas excepciones: las constantes RGB del PDF de entradas (§7 "PDF de entradas") y los colores del logo de Google (abajo).
+- Componentes usan **solo tokens** (`bg-primary`, `text-muted-foreground`, `bg-highlight`), nunca hex ni colores por defecto de Tailwind (`blue-500`, `gray-*`). Única excepción: las constantes RGB del PDF de entradas (§7 "PDF de entradas").
 - Color de marca reservado para acción y énfasis; el 80% de la superficie es blanco/gris claro.
 - Estado del evento no depende solo del color: el badge siempre lleva texto.
 
-### Excepción: logo de Google
+### Componentes de Clerk (tema `shadcn`)
 
-El botón "Continuar con Google" (`pages/auth.md`) usa el logo "G" oficial a cuatro colores. Es un activo de marca de terceros y las guías de Google Sign-In prohíben alterarlo, así que sus colores **no se mapean a tokens**. Viven **solo** en `modules/auth/components/GoogleLogo.tsx` (SVG inline, `aria-hidden`), sin cambios de color, proporción ni fondo:
+Los componentes de Clerk (`<SignIn/>`, `<SignUp/>`, `<UserProfile/>`) toman los colores de estos mismos tokens: `ClerkProvider` usa `appearance={{ theme: shadcn }}` (`@clerk/ui/themes`) y `app/globals.css` importa `@clerk/ui/themes/shadcn.css`, que lee `--primary`, `--background`, `--border`, `--radius`… de `:root`. Reglas:
 
-| Parte del logo | Hex |
-|---|---|
-| Rojo | `#EA4335` |
-| Azul | `#4285F4` |
-| Amarillo | `#FBBC05` |
-| Verde | `#34A853` |
-
-- Ningún otro componente usa estos colores (ni el azul de Google en lugar de `--primary`).
-- El resto del botón sí usa tokens: `bg-background`, `border-muted-foreground`, `text-foreground`, `hover:bg-accent`.
+- **No se duplican colores** en `appearance.variables` ni se sobrescriben clases con `appearance.elements`. Si un color de Clerk no encaja, se corrige el token en `app/globals.css`, no en el componente.
+- **Tipografía heredada:** Clerk hereda Creato Display del `<body>`; no se fija `variables.fontFamily`.
+- **Idioma:** `localization={esES}` (`@clerk/localizations`). Los textos de Clerk (títulos, botones, errores) son los de esa localización; no se reescriben.
+- **Logo de Google:** lo dibuja Clerk dentro de su botón "Continuar con Google". El proyecto no tiene SVG ni hex de Google propios.
 
 ---
 
@@ -140,7 +135,9 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
 | Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |
 | Avatar de usuario | `Avatar` + `AvatarFallback` con iniciales (`getInitials` de `lib/userName.ts`) | `components/shared/UserAvatar.tsx` |
-| Acceso con Google (maqueta) | `Button` outline (`h-11 w-full rounded-lg border-muted-foreground bg-background font-medium`) + `GoogleLogo` (18 px, colores oficiales, §2) + aviso de aceptación con enlaces en línea; selector de cuenta simulado con `Dialog` (Base UI) + `UserAvatar`; separador "o" con `FieldSeparator`. Detalle en `pages/auth.md` | `modules/auth/components/GoogleSignIn.tsx` (+ `GoogleAccountChooser`, `GoogleLogo`) |
+| Acceso (login, registro y Google) | `<SignIn/>` / `<SignUp/>` de Clerk con el tema `shadcn` y `esES` (§2 "Componentes de Clerk"); el botón de Google lo pone Clerk. Dentro del layout `(auth)` con `AuthBrandPanel`. Detalle en `pages/auth.md` | `app/(auth)/login/[[...rest]]`, `app/(auth)/registro/[[...rest]]` |
+| Seguridad de la cuenta | `Alert` (aviso de MFA obligatoria para `admin`/`super_admin`) + `<UserProfile routing="hash"/>` de Clerk. Detalle en `pages/auth.md` | `modules/auth/components/AccountSecurity.tsx` (`/perfil/seguridad`) |
+| "Completa tu perfil" | `Field*` + `Input` + `InputGroup` (+51) + `Select` + `Checkbox` + `Button`, con `useZodForm`; hereda el diseño del registro anterior. Detalle en `pages/auth.md` | `modules/auth/components/CompleteProfileForm.tsx` (`/perfil/completar`) |
 | Paginador de entradas | `Button` outline `size-11` (`focusableWhenDisabled` en los extremos), controlado (`index`, `count`, `onIndexChange`). "Entrada n de N" (`text-lg font-bold tabular-nums whitespace-nowrap`, `aria-live="polite"` `aria-atomic`); flechas "Entrada anterior/siguiente" siempre visibles; ArrowLeft/ArrowRight con el foco en una flecha. Layout por contenedor (`@container`): bajo 16rem (`@3xs`) texto arriba y flechas centradas debajo; desde 16rem, una fila `justify-between`. Confirmación (talón) y Mis entradas, ambos `print:hidden` | `components/shared/TicketPager.tsx` |
 | Chip de fecha | nuevo, presentacional, sin `"use client"`. `<span aria-hidden>` `flex w-14 flex-col items-center rounded-xl bg-background px-2.5 py-1.5 leading-none ring-1 ring-border/60`: mes (`text-xs font-bold tracking-wider text-primary-strong`) sobre día (`mt-0.5 text-2xl font-extrabold tabular-nums text-foreground`). Props `month` ("NOV"), `day` ("14") y `placeholder` (marcador "MES" / "--", ambos en `text-muted-foreground`); acepta las props de `span` salvo `children`. Decorativo: la fecha va en texto en el cuerpo de la tarjeta. La posición (`absolute top-3 left-3`…) la pone quien lo usa por `className`; las partes salen de `getDateChipParts` (§10). Lo usan `EventPreviewCard` (organizer) y `TicketCard` (tickets); `EventCard` conserva por ahora su chip propio (mismos colores y tipografía, sin el ancho fijo `w-14`); su migración está pendiente (pregunta abierta 6 de `design-alignment-account-views`) | `components/shared/DateChip.tsx` |
 | Separadores | `Separator` | footer |
@@ -311,7 +308,7 @@ Breakpoints verificados: 375, 768, 1024, 1440. Sin scroll horizontal de página.
 ## 12. Anti-patrones
 
 - Fondo oscuro predominante (solo footer/overlay).
-- Colores por defecto de Tailwind o hex sueltos en componentes (salvo las excepciones de §2: PDF de entradas y logo de Google).
+- Colores por defecto de Tailwind o hex sueltos en componentes (salvo la excepción de §2: PDF de entradas).
 - Otra fuente distinta de Creato Display (salvo Helvetica en el PDF de entradas, §7).
 - Emojis como iconos; texto gris `#B7B7B7`.
 - Cargos ocultos o precio sin "Desde".

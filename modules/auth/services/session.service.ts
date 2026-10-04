@@ -3,16 +3,23 @@ import "server-only";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import type { SessionUser } from "../types/auth.types";
+import { isMfaPending } from "../utils/can";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
 /**
- * Usuario de la sesión (fila de `users`) o `null` sin sesión. Con fila existente solo lee `auth()`; la primera vez
- * pide el usuario a Clerk, crea o vincula la fila y replica su rol en `publicMetadata.role` si difiere.
+ * Usuario de la sesión (fila de `users` + `mfaVerified`) o `null` sin sesión. Con fila existente solo lee `auth()`; la
+ * primera vez pide el usuario a Clerk, crea o vincula la fila y replica su rol en `publicMetadata.role` si difiere.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const { userId } = await auth();
+  const { userId, factorVerificationAge } = await auth();
   if (!userId) return null;
 
+  const user = await findOrCreateUser(userId);
+  // `factorVerificationAge` = [primer factor, segundo factor] en minutos; -1 si la sesión no usó ese factor.
+  return user && { ...user, mfaVerified: (factorVerificationAge?.[1] ?? -1) >= 0 };
+}
+
+async function findOrCreateUser(userId: string) {
   const existing = await findUserByClerkId(userId);
   if (existing) return existing;
 
@@ -35,9 +42,13 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return user;
 }
 
-/** Usuario de la sesión para páginas y layouts privados; sin sesión redirige a `/login`. */
+/**
+ * Usuario de la sesión para páginas y layouts privados (Decisión 10): sin sesión redirige a `/login`; un rol con MFA
+ * sin segundo factor en la sesión, a `/perfil/seguridad`.
+ */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (isMfaPending(user)) redirect("/perfil/seguridad");
   return user;
 }

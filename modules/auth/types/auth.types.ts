@@ -29,4 +29,6 @@ export type SessionUser = {
   documentNumber: string | null;
   role: "customer" | "organizer" | "admin" | "super_admin";
   createdAt: Date;
+  /** La sesión de Clerk verificó el segundo factor (`auth().factorVerificationAge[1] >= 0`). No es columna de la BD. */
+  mfaVerified: boolean;
 };

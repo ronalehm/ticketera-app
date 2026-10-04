@@ -1,8 +1,8 @@
 # Página: Mi perfil `/perfil`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/auth-user-menu.md` (Fase 2: página `/perfil`, solo lectura).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/auth-user-menu.md` (Fase 2: página `/perfil`, solo lectura) y `docs/specs/auth-clerk.md` (Fases 3 y 4: sesión de Clerk y fila de `users`).
 
-Datos de la cuenta con sesión iniciada: nombres, apellidos, correo, celular, documento y fecha de alta. Es una **maqueta con datos mock**: la sesión sale del store zustand persistido en el navegador (`localStorage`, clave `mentec-auth`). No hay edición, foto de perfil ni acciones en la tarjeta. Se llega desde "Mi perfil", el primer enlace del menú de usuario (barra) y del bloque "Tu cuenta" del menú móvil (`Sheet`).
+Datos de la cuenta con sesión iniciada: nombres, apellidos, correo, celular, documento y fecha de alta. La sesión es la de Clerk y los datos salen de la fila de `users` del usuario (la BD manda), que obtiene `requireUser()` en el servidor. Celular y documento muestran "—" hasta que el usuario los registre en "Completa tu perfil" (`/perfil/completar`). No hay edición, foto de perfil ni acciones en la tarjeta. Se llega desde "Mi perfil", el primer enlace del menú de usuario (barra) y del bloque "Tu cuenta" del menú móvil (`Sheet`).
 
 ## Layout
 
@@ -56,8 +56,8 @@ Footer
 ```
 
 - **Fondo `bg-muted`** a todo el ancho (mismo override que `/mis-entradas`): la tarjeta blanca destaca. Interior `mx-auto flex max-w-3xl flex-col gap-6 md:gap-8 px-4 md:px-6 py-8 md:py-12`.
-- h1 "Mi perfil" `text-3xl md:text-5xl font-extrabold tracking-tight`, único h1 y presente en todos los estados (también en SSR).
-- `UserProfile` (`modules/auth`) es el límite cliente; la ruta `app/(site)/perfil/page.tsx` es un Server Component que solo pone metadata (`Mi perfil | Mentec Tickets`, `robots: noindex`) y lo renderiza. El build la genera como ruta estática.
+- h1 "Mi perfil" `text-3xl md:text-5xl font-extrabold tracking-tight`, único h1 de la página.
+- La ruta `app/(site)/perfil/page.tsx` es un Server Component dinámico: pone metadata (`Mi perfil | Mentec Tickets`, `robots: noindex`), obtiene el usuario con `requireUser()` (`@/modules/auth/server`) y renderiza `UserProfile` (`modules/auth`, Server Component, prop `user: SessionUser`). Sin `"use client"`.
 
 ## Tarjeta del perfil
 
@@ -70,29 +70,23 @@ Footer
   - **Documento:** "<tipo> <número>" con las etiquetas de `DOCUMENT_TYPE_LABELS` (`lib/formFields.ts`), p. ej. "DNI 45781236", "Carné de extranjería 001234567". Solo si existen tipo y número.
   - **Celular:** tal como se guardó ("987654321"), sin agrupar ni prefijo.
   - **Miembro desde:** mes y año de `createdAt` con `formatMemberSince` (`Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" })`), p. ej. "marzo de 2025". Una cuenta registrada hoy muestra el mes y el año actuales.
-  - **"No registrado":** si falta un dato (sesiones antiguas en `localStorage` con solo `id`, `firstName`, `lastName` y `email`), el `dd` dice "No registrado" en `font-normal text-muted-foreground`, no en negrita. La página no falla.
+  - **"—":** si falta un dato (celular o documento antes de "Completa tu perfil"; nombre vacío si Clerk no lo trajo), el `dd` muestra "—" en `font-normal text-muted-foreground`, no en negrita. La página no falla.
 
-## Estados
+## Acceso
 
-| Estado | Cuándo | Contenido |
-|---|---|---|
-| Cargando | SSR, primer render del cliente y hasta que termina la rehidratación | h1 + `<div role="status">` con "Cargando tu perfil…" `sr-only` y un `Skeleton` `aria-hidden` `h-96 rounded-2xl bg-background motion-reduce:animate-none` |
-| Sin sesión | Rehidratado y sin usuario | `EmptyState` compartido (`components/shared/EmptyState.tsx`), mismo aspecto que `/mis-entradas`: icono `UserRound`, h2 "Inicia sesión para ver tu perfil", "Ingresa con tu cuenta para ver tus datos y tus entradas." y botón primario "Iniciar sesión" → `/login`. Sin redirección. |
-| Con sesión | Rehidratado y con usuario | Tarjeta del perfil |
-
-- **Rehidratación sin parpadeo:** el store `mentec-auth` usa `skipHydration`. `UserProfile` arranca en "cargando" y, en un `useEffect`, hace `await useAuthStore.persist.rehydrate()`; solo entonces pasa a "sin sesión" o a la tarjeta. Así el HTML del servidor y el primer render del cliente coinciden (sin errores de hidratación) y un usuario con sesión nunca ve "Inicia sesión para ver tu perfil", ni siquiera un instante.
-- **Cerrar sesión** desde el menú de usuario estando en `/perfil` deja al usuario en la misma URL y la página pasa al estado "Sin sesión".
+- Sin sesión no se llega a la página: `proxy.ts` (`auth.protect()`) manda a `/login` con `redirect_url` y, tras iniciar sesión, se vuelve a `/perfil`. `requireUser()` repite la comprobación en el servidor (sin sesión → `redirect("/login")`).
+- No hay estados de carga ni de "sin sesión": la página se renderiza en el servidor con el usuario ya resuelto.
+- **Cerrar sesión** desde el menú de usuario lleva a `/`.
 
 ## Accesibilidad
 
-- Un único `<h1>` "Mi perfil" en todos los estados; el nombre (tarjeta) o el título del estado vacío son `<h2>`.
-- `role="status"` en el estado cargando, con texto `sr-only`; el `Skeleton` es `aria-hidden`.
+- Un único `<h1>` "Mi perfil"; el nombre de la tarjeta es `<h2>`.
 - La tarjeta es una región con nombre: `aria-labelledby="profile-name"` apunta al h2 con el nombre completo.
 - Datos como lista de descripción (`dl`/`dt`/`dd`), que los lectores de pantalla anuncian como pares etiqueta-valor.
-- El avatar y el icono del estado vacío son decorativos (`aria-hidden`).
+- El avatar es decorativo (`aria-hidden`).
 
 ## Reglas específicas
 
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440, también con el nombre "Ronald Eleazar Mendoza Huamán" y un correo largo (`wrap-break-word` / `wrap-anywhere`).
-- Targets ≥ 44 px (el botón "Iniciar sesión" del estado vacío mide `h-11`); foco visible en todo lo interactivo.
+- La página no tiene controles propios; los del header siguen el MASTER (targets ≥ 44 px, foco visible).
 - Solo tokens del tema, Creato Display, iconos lucide `aria-hidden`; sin emojis ni hex; transiciones 150–300 ms con `motion-reduce` respetado.
