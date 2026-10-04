@@ -585,7 +585,7 @@ Coordinación:
   - Archivos: `modules/organizer/components/CoverImageField.tsx`, `modules/organizer/components/CoverCropPreview.tsx` (nuevo), `modules/organizer/components/OrganizerEventForm.tsx`, `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T2 (mismos archivos de formulario).
   - Secuencial.
-- [ ] T4. Diseño de página: modo, ciudad, portada y campos nuevos de la fila.
+- [x] T4. Diseño de página: modo, ciudad, portada y campos nuevos de la fila.
   - Archivos: `design-system/ticketera/pages/organizer.md`.
   - Depende de: —.
   - Paralelo con T1–T3.

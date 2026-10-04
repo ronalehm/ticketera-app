@@ -3,6 +3,7 @@
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
 > Shell a pantalla completa (sidebar, barra móvil, tarjeta de usuario, fondo `bg-muted`, "Volver al resumen"): `docs/specs/layout-fullscreen-shells.md` (Fase 3). Prevalece sobre el layout, la navegación y la ausencia de sesión de `organizer-dashboard`.
 > "Mis eventos" (tarjeta con barra de cabecera solo en `lg`) y la vista previa de Crear evento (anatomía de `EventCard`): `docs/specs/design-alignment-account-views.md` (Fase 2). Prevalece sobre el requisito 23 de `layout-fullscreen-shells` F3 y sobre la decisión 4 de `organizer-dashboard` (marcadores y badge "Disponible" de la vista previa).
+> Crear evento, modo de ubicación ("Mapa de asientos"), "Ciudad" como `Select`, portada obligatoria con guía y recortes, y "Descripción (opcional)" / "Máximo por compra" por tipo de entrada: `docs/specs/organizer-event-seating-mode.md` (Fase 1). Prevalece sobre `organizer-event-seating` y `organizer-dashboard` en esos puntos (subtítulo de "Tipos de entrada", ciudad de texto libre, portada opcional, "no se pide descripción por tipo").
 
 Panel para quien organiza eventos: ver cómo van las ventas (KPIs y lista de eventos) y crear un evento nuevo. Es una **maqueta con datos mock**: sin backend, sin sesión obligatoria ni roles; los eventos creados solo existen en este navegador (`localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es "Mentec Tickets · Organizadores" (`OrganizerBrand`, en el sidebar y en la barra móvil).
 
@@ -176,6 +177,7 @@ h2 "Mis eventos"
 ## Crear evento `/organizador/eventos/nuevo` (Fases 2 y 3)
 
 > Asientos y precio por zona (Fase 1) y datos del evento público (Fase 2): `docs/specs/organizer-event-seating.md`, ampliación de la spec del panel.
+> Modo de ubicación, ciudad, portada obligatoria y campos nuevos de cada tipo de entrada: `docs/specs/organizer-event-seating-mode.md` (Fase 1).
 
 ### Layout
 
@@ -190,14 +192,24 @@ h1 "Crear evento"
 ├──────────────────────────────────┤              │
 │ Fecha y lugar                    │              │
 │ Fecha | Hora | Apertura puertas  │              │
-│ Lugar | Ciudad · Dirección       │              │
+│ Lugar | Ciudad [Select ▾]        │              │
+│ Dirección                        │              │
 ├──────────────────────────────────┤              │
 │ Imagen de portada  (dropzone)    │              │
+│ guía del centro                  │              │
+│ "Así se recorta tu portada" (con │              │
+│  imagen: 5 recortes)             │              │
+├──────────────────────────────────┤              │
+│ Mapa de asientos                 │              │  sección nueva (modo de ubicación)
+│ ¿Cómo se ubica el público?       │              │
+│ [Sin asientos][Con mapa][Mixto]  │              │  md: 3 columnas · móvil: apiladas
 ├──────────────────────────────────┤              │
 │ Tipos de entrada                 │              │
+│ (sin modo: solo la indicación)   │              │
 │ ┌ Tipo 1 ──────────────────── ✕ ┐│              │
 │ │ Nombre | Precio (S/)          ││              │
-│ │ Ubicación [General] [Numerada]││              │
+│ │ Descripción | Máx. por compra ││              │
+│ │ Ubicación [General] [Numerada]││              │  solo en modo "Mixto"
 │ │ campos de capacidad           ││              │
 │ │ [plano] (solo numerada)       ││              │
 │ └───────────────────────────────┘│              │
@@ -210,9 +222,10 @@ Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Guarda
 
 - **"Volver al resumen"** (equivale al "← Mis eventos" del diseño: la lista vive en Resumen): el h1 va dentro de `<div className="flex flex-col gap-2">`, precedido de un `Link` a `/organizador` con `ArrowLeft size-4` (`aria-hidden`) y clases `inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`. Así queda pegado al h1 y no separado por el `gap` de la raíz. El h1 y su clase no cambian.
 - Secciones en `Card rounded-2xl` con h2 `text-lg font-bold` (blancas sobre el `bg-muted` del panel).
-- **Tipos de entrada**: subtítulo "Cada tipo es una zona con su precio: general (de pie) o numerada (con filas y asientos).". Cada tipo es un bloque `<fieldset>` en todos los anchos (ver "Bloque por tipo de entrada"). Una fila inicial, no dos. "Agregar tipo de entrada" lleva el foco al Nombre de la nueva; al quitar, el foco pasa a "Agregar tipo de entrada". Pie "Capacidad total" (ver "Precio y capacidad").
+- **Mapa de asientos**: sección nueva entre "Imagen de portada" y "Tipos de entrada" con el selector del modo de ubicación (ver "Mapa de asientos (modo de ubicación)").
+- **Tipos de entrada**: subtítulo "Cada tipo de entrada es una zona con su precio y su capacidad." (sustituye a "Cada tipo es una zona con su precio: general (de pie) o numerada (con filas y asientos)."). Su contenido depende del modo elegido arriba (ver "Tipos de entrada según el modo"). Cada tipo es un bloque `<fieldset>` en todos los anchos (ver "Bloque por tipo de entrada"). Una fila inicial, no dos. "Agregar tipo de entrada" lleva el foco al Nombre de la nueva; al quitar, el foco pasa a "Agregar tipo de entrada". Pie "Capacidad total" (ver "Precio y capacidad").
 - **Barra de acciones** (Decisión 12): por debajo de `lg`, `sticky bottom-0` (no `fixed`) con `border-t bg-background` y `env(safe-area-inset-bottom)`; se queda abajo mientras se rellena. Sus márgenes negativos (`-mx-4 md:-mx-6`) coinciden con el `px-4 md:px-6` del `<main>` del panel. Los controles llevan `scroll-mb-28 lg:scroll-mb-0` para no quedar tapados al enfocarlos. El primario muestra "Publicar" en móvil con nombre accesible "Publicar evento".
-- **Imagen de portada** (dropzone): `<label>` con borde discontinuo `border-primary/40 bg-accent rounded-2xl` (`h-36` móvil / `h-44` `lg`, `ImagePlus`), input file `sr-only` (PNG/JPEG) cuyo foco se ve en la zona; admite arrastrar y soltar. Error "Sube una imagen en formato JPG o PNG.". Con imagen: vista previa `aspect-video` + "Cambiar imagen" / "Quitar imagen" (`h-11`). Solo vista previa local: no se guarda.
+- **Imagen de portada** (dropzone): `<label>` con borde discontinuo `border-primary/40 bg-accent rounded-2xl` (`h-36` móvil / `h-44` `lg`, `ImagePlus`), input file `sr-only` (PNG/JPEG) cuyo foco se ve en la zona; admite arrastrar y soltar. Con imagen: vista previa `aspect-video` + "Cambiar imagen" / "Quitar imagen" (`h-11`). Solo vista previa local: no se guarda. **Obligatoria al publicar**, con guía, validación al elegir y "Así se recorta tu portada" (ver "Imagen de portada").
 - **Vista previa**: `<aside aria-labelledby>` (`flex flex-col gap-3 self-start`), sticky en `lg` a `lg:top-10` (ya no hay header global de 64 px que compensar), con el h2 "Vista previa" como overline (`text-xs font-bold tracking-wider text-muted-foreground uppercase`), `EventPreviewCard` y el texto "Así verán tu evento los compradores en el listado." (`text-sm text-muted-foreground`). Anatomía de la tarjeta en "Vista previa (`EventPreviewCard`)".
 - Categorías: las 6 del proyecto (por defecto "Conciertos").
 - Metadata: `Crear evento | Mentec Tickets`.
@@ -258,10 +271,11 @@ lg (vertical, columna de 340 px)            < lg (horizontal, tipo entrada)
 - **Marcadores** (`text-muted-foreground`): "Nombre del evento", "Lugar · Ciudad", "Fecha por definir", chip "MES" / "--" y "S/ —". La categoría nunca falta (por defecto "Conciertos").
 - **Sin badge "Disponible"**: `EventCard` tampoco lo muestra (es el caso normal).
 - **Nada enfocable:** sin enlaces ni botones reales; chip, talón, muescas y falso botón son decorativos (`aria-hidden`).
+- **No cambia con `organizer-event-seating-mode`** (decisión 10): no muestra el modo de ubicación, la descripción ni el máximo por compra de los tipos de entrada, porque `EventCard` del listado tampoco los muestra. La ciudad es ahora siempre un valor de la lista ("Estadio Nacional · Lima").
 
 ### Datos del evento público
 
-Campos que la página de detalle del evento muestra y que el formulario no pedía: "Organizador" ("Organiza: …"), "Edad mínima" ("Información importante"), "Apertura de puertas" (junto a la hora de inicio) y "Dirección" ("Lugar" y "Cómo llegar"). No se piden slug, destacado, estado ni descripción por tipo de entrada.
+Campos que la página de detalle del evento muestra y que el formulario no pedía: "Organizador" ("Organiza: …"), "Edad mínima" ("Información importante"), "Apertura de puertas" (junto a la hora de inicio) y "Dirección" ("Lugar" y "Cómo llegar"). No se piden slug, destacado ni estado. La descripción por tipo de entrada sí se pide desde `organizer-event-seating-mode` (ver "Bloque por tipo de entrada"), y "Ciudad" pasa a ser un `Select` (ver "Ciudad").
 
 ```
 Información básica                                   1440 (md+)              375
@@ -274,7 +288,7 @@ Aparece en la página del evento como «Organiza: …».
 Fecha y lugar
 Fecha │ Hora de inicio │ Apertura de puertas         md:grid-cols-3 gap-4    Fecha | Hora de inicio
                                                                              Apertura | (vacío)
-Lugar │ Ciudad                                       sin cambios
+Lugar │ Ciudad [Select ▾]                            sin cambios de grilla
 Dirección                                            todo el ancho           todo el ancho
 ```
 
@@ -295,12 +309,128 @@ Dirección                                            todo el ancho           to
   Al publicar con errores, el foco va al primer campo inválido en el orden del formulario ("Nombre del evento" si el formulario está vacío).
 - **No se guardan**: estos cuatro valores no pasan al evento guardado (`OrganizerEvent`, `localStorage` `mentec-organizer-events`) ni cambian la tarjeta de "Vista previa". Solo se piden y se validan.
 
+### Ciudad
+
+- **`Select` de shadcn** en lugar del `Input` de texto libre, en el mismo sitio (junto a "Lugar"). Opciones: exactamente `CITIES` de `@/modules/events/format` (Lima, Arequipa, Cusco, Trujillo y Piura), la misma lista que el filtro público de `/eventos`, para que un evento publicado sea filtrable. `items` = `CITIES` (la etiqueta es el propio nombre).
+- **Sin valor inicial:** `""`, ninguna opción marcada, con `SelectValue placeholder="Elige la ciudad"` (sustituye al placeholder "Ej. Lima").
+- **Accesibilidad:** `SelectTrigger id="organizer-event-city"`, así que la etiqueta visible "Ciudad" (`FieldLabel htmlFor`) sigue asociada; `aria-invalid` y `aria-describedby` hacia `FieldError`. Se opera con teclado (comportamiento de Base UI). Mismas clases de alto y scroll que "Categoría" y "Edad mínima" (`h-11`, `scroll-mb-*`).
+- **Validación al publicar:** vacía o fuera de `CITIES` → "Elige la ciudad" (sustituye a "Indica la ciudad"). Tras el primer intento, cambiar el valor revalida, como "Categoría". En borrador no da error.
+- La tarjeta de "Vista previa" muestra la ciudad elegida ("Estadio Nacional · Lima"). Se guarda en `OrganizerEvent.city` como hoy, ahora siempre como un valor de `CITIES`. Añadir una ciudad es editar esa constante (el filtro público también la ofrece).
+
+### Imagen de portada
+
+Es la imagen principal de la página del evento ("landing" dentro de Mentec) y la que se recorta en el listado y en el inicio. Componentes: `CoverImageField` (zona de subida, vista previa y botones) y `CoverCropPreview` (recortes, presentacional).
+
+```
+Sin imagen                                       Con imagen
+┌─────────────── dropzone ───────────────┐       ┌──────── vista previa aspect-video ────────┐
+│                [ImagePlus]              │       │                                           │
+│ Arrastra una imagen o haz clic…         │       └───────────────────────────────────────────┘
+│ JPG o PNG, hasta 5 MB. Recomendado:     │       [Cambiar imagen] [Quitar imagen]
+│ 1920 × 1080 px (16:9); mínimo           │       guía del centro
+│ 1200 × 675 px.                          │       Así se recorta tu portada            (h3)
+└─────────────────────────────────────────┘       ┌──────────────┬──────────────┬──────┐  md: 3 columnas
+guía del centro (siempre visible)                 │ 16:9         │ 4:3          │ 2:1  │  móvil: 2 columnas
+[FieldError]                                      │ Pág. · móvil │ Pág. · escr. │ List.│
+                                                  ├──────────────┴──────────────┼──────┤
+                                                  │ 21:8 (col-span-2)           │ 4:5  │
+                                                  │ Inicio · escritorio         │ Ini. │
+                                                  └─────────────────────────────┴──────┘
+                                                  Los recortes de «Inicio» solo se usan si…
+```
+
+- **Texto de ayuda de la zona de subida** (el `span` con id `-hint` al que apunta el `aria-describedby` del input; sustituye a "JPG o PNG, horizontal (16:9)"): "JPG o PNG, hasta 5 MB. Recomendado: 1920 × 1080 px (16:9); mínimo 1200 × 675 px.".
+- **Guía bajo el campo**, siempre visible, con o sin imagen (`text-sm text-muted-foreground`): "Es la imagen principal de la página de tu evento. Deja lo importante (rostros, texto, logo) en el centro: cada pantalla la recorta de forma distinta.". Motivo: el hero del detalle es 16:9 en móvil y ~4:3 en `lg`, la tarjeta del listado ~2:1 y el carrusel de inicio 21:8 en `lg` y 4:5 en móvil; en los casos extremos solo queda a la vista el 45 % central del ancho y el 68 % central del alto.
+- **Reglas** (`COVER_IMAGE_RULES`, definidas una sola vez en código y usadas por la validación y los textos): JPG o PNG, hasta 5 MB, al menos 1200 × 675 px; se recomienda 1920 × 1080 (16:9).
+- **Validación al elegir o soltar un archivo** (`getCoverImageError`, asíncrona: lee el tamaño con `createImageBitmap`). Se muestra el primer error que aplique, en este orden, y **se conserva la imagen anterior**:
+
+  | Orden | Regla | Mensaje |
+  |---|---|---|
+  | 1 | Tipo distinto de JPG o PNG | "Sube una imagen en formato JPG o PNG." |
+  | 2 | Peso mayor de 5 MB | "La imagen pesa más de 5 MB. Sube una más liviana." |
+  | 3 | No se puede leer | "No se pudo leer la imagen. Prueba con otro archivo." |
+  | 4 | Menor que 1200 × 675 px | "La imagen debe medir al menos 1200 × 675 px." |
+
+- **Orden:** el esquema es orientativo en la posición relativa de la guía, el error y los recortes; la spec fija que la guía va "bajo el campo" y que los recortes van "bajo la vista previa actual".
+- **Obligatoria al publicar** (valor `hasCoverImage` del formulario: `true` al aceptar una imagen, `false` al quitarla; el archivo sigue fuera del store). Sin portada: "Sube la imagen de portada", en el mismo `FieldError` del campo. El error de archivo tiene prioridad sobre el de obligatoriedad. El `input` lleva `aria-invalid`, así que recibe el foco si es el primer error. En borrador no da error.
+- **"Así se recorta tu portada"** (`CoverCropPreview`, solo con imagen, bajo la vista previa actual):
+  - título `h3` "Así se recorta tu portada" (`text-sm font-semibold`);
+  - grilla `grid grid-cols-2 gap-3 md:grid-cols-3` de `<figure>`. Cada uno: marco `relative overflow-hidden rounded-lg bg-muted` con su `aspect-*` y la imagen (`next/image` `fill` `unoptimized` `object-cover`, `alt=""`: decorativa, el texto la describe), más `<figcaption className="text-xs text-muted-foreground">`:
+
+    | Pie | Proporción | Extra |
+    |---|---|---|
+    | "Página del evento · móvil" | `aspect-[16/9]` | — |
+    | "Página del evento · escritorio" | `aspect-[4/3]` | — |
+    | "Listado de eventos" | `aspect-[2/1]` | — |
+    | "Inicio · escritorio" | `aspect-[21/8]` | `col-span-2` |
+    | "Inicio · móvil" | `aspect-[4/5]` | — |
+
+  - debajo, la nota "Los recortes de «Inicio» solo se usan si Mentec destaca tu evento en la portada.".
+  - Sin scroll horizontal a 375 ni a 1440. No se instala `aspect-ratio` de shadcn: basta la utilidad `aspect-[x/y]` de Tailwind.
+
+### Mapa de asientos (modo de ubicación)
+
+Decisión a nivel de evento: si quien compra elegirá su asiento en un plano. Componente `SeatingModeField` (cliente), en una `FormSection` propia entre "Imagen de portada" y "Tipos de entrada".
+
+```
+Mapa de asientos                                                         h2 (FormSection)
+Define si quien compra elegirá su asiento en un plano. De esto depende cómo configuras los tipos de entrada.
+¿Cómo se ubica el público?                                               text-sm font-medium
+┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────────┐
+│ ○ [PersonStanding]      │ │ ○ [Armchair]            │ │ ○ [Layers]              │  md: grid-cols-3
+│ Sin asientos numerados  │ │ Con mapa de asientos    │ │ Mixto                   │  móvil: una debajo
+│ Todas las zonas son     │ │ Todas las zonas tienen  │ │ Zonas de pie y zonas    │  de otra
+│ generales (de pie)…     │ │ filas y asientos…       │ │ numeradas, como campo…  │
+└─────────────────────────┘ └─────────────────────────┘ └─────────────────────────┘
+[FieldError]
+```
+
+- **Sección:** `FormSection` titulada "Mapa de asientos", con la descripción "Define si quien compra elegirá su asiento en un plano. De esto depende cómo configuras los tipos de entrada.".
+- **Etiqueta del grupo:** texto visible "¿Cómo se ubica el público?" (`text-sm font-medium`), al que apunta el `aria-labelledby` del `RadioGroup`.
+- **Tarjetas:** mismo patrón "choice card" que "Ubicación" (`FieldLabel` > `Field orientation="horizontal"` > `RadioGroupItem` + icono `aria-hidden` + `FieldTitle` + línea `text-sm text-muted-foreground` enlazada con `aria-describedby`), para que la explicación se lea antes de elegir. Valores en código `seatingMode` (los de `kind` más `mixed`):
+
+  | Valor | Título | Icono | Línea |
+  |---|---|---|---|
+  | `general` | "Sin asientos numerados" | `PersonStanding` | "Todas las zonas son generales (de pie). Quien compra elige cuántas entradas quiere." |
+  | `numbered` | "Con mapa de asientos" | `Armchair` | "Todas las zonas tienen filas y asientos. Quien compra elige su asiento en el plano." |
+  | `mixed` | "Mixto" | `Layers` | "Zonas de pie y zonas numeradas, como campo y tribunas. Quien compra elige asiento solo en las numeradas." |
+
+- **Disposición:** `grid gap-3 md:grid-cols-3`; en móvil, una tarjeta debajo de otra (cada una ≥ 44 px). Tarjetas `min-h-11 cursor-pointer`; la elegida, `has-data-checked:border-primary has-data-checked:bg-accent` (más el radio marcado: el estado nunca depende solo del color).
+- **Sin valor por defecto:** ninguna opción marcada al entrar. El pedido es que el organizador *elija*; un valor por defecto permitiría publicar sin decidir.
+- **Teclado:** Tab entra en el grupo y las flechas cambian la opción (Base UI); foco visible.
+- **Al elegir:** se fija `seatingMode`, las filas se ajustan al modo (`applySeatingMode`, ver "Tipos de entrada según el modo") y se revalidan `seatingMode` y `ticketTypes`.
+- **Errores** (solo al publicar): `aria-invalid` en el `RadioGroup` y `aria-describedby` hacia `FieldError` con id `organizer-event-seatingMode-error`. Recibe el foco si es el primer campo inválido.
+
+  | Regla | Mensaje |
+  |---|---|
+  | Sin modo | "Elige cómo se ubica el público" |
+  | "Mixto" sin al menos una zona general y una numerada | "Un evento mixto necesita al menos una zona general (de pie) y una numerada" |
+
+  El error de "Mixto" se muestra en el selector y no en la lista de tipos: es el control que recibe el foco y el mensaje dice cómo corregirlo. Cambiar, agregar o quitar una fila revalida el modo, así que el error desaparece en cuanto hay una zona de cada tipo.
+- **Qué ve quien compra** (lo explica cada línea): con mapa del recinto, las zonas numeradas se eligen asiento por asiento en el plano (`/eventos/[slug]/entradas`) y las generales por cantidad; sin mapa, se elige la cantidad de cada tipo (`TicketSelector`).
+- **No se guarda** en `OrganizerEvent` ni en `localStorage` (decisión 11 de la spec): nadie lo lee hasta que el evento vaya a la BD. Tampoco cambia la tarjeta de "Vista previa".
+
+### Tipos de entrada según el modo
+
+| Modo | Contenido de "Tipos de entrada" | Grupo "Ubicación" por fila | Fila nueva |
+|---|---|---|---|
+| Sin elegir | Solo `<p className="text-sm text-muted-foreground">` "Elige arriba cómo se ubica el público para configurar los tipos de entrada." Sin filas, sin "Agregar tipo de entrada" ni "Capacidad total" | — | — |
+| "Sin asientos numerados" (`general`) | Filas, todas `general` ("Cantidad") | Oculto (no se renderiza) | `general` |
+| "Con mapa de asientos" (`numbered`) | Filas, todas `numbered` ("Filas", "Asientos por fila", "Cantidad" de solo lectura y plano) | Oculto (no se renderiza) | `numbered` |
+| "Mixto" (`mixed`) | Filas tal como estaban | Visible, como en "Tarjetas «Ubicación»" | `general` |
+
+- **Elegir un modo cambia el `kind` de las filas** (no se deriva al leer): así validación, capacidad y plano siguen leyendo el tipo de cada fila sin cambios.
+- **Nada se pierde al cambiar de modo:** la cantidad de "General" y las filas/asientos de "Numerada" se conservan (una fila general con Cantidad 100 sigue en 100 tras pasar por "Con mapa de asientos" y volver). Sin modo, las filas siguen en el estado aunque no se vean.
+- Cambiar una fila, agregarla o quitarla revalida `ticketTypes` y `seatingMode`.
+
 ### Bloque por tipo de entrada
 
 ```
 ┌ Tipo 1 ─────────────────────────────────────── [✕] ┐  <fieldset> rounded-xl ring-1 ring-border p-4
 │ Nombre                         │ Precio (S/)       │   md: 1fr | 160px · móvil: uno debajo del otro
-│ Ubicación                                          │
+│ Descripción (opcional)         │ Máximo por compra │   misma grilla; [10] por defecto
+│ Se muestra bajo el nombre…     │ Entradas de este… │   FieldDescription de cada uno
+│ Ubicación                                          │   solo en modo "Mixto"
 │ ┌──────────────────────┐ ┌──────────────────────┐  │   tarjetas de elección, grid-cols-2 gap-3
 │ │ ◉ General (de pie)   │ │ ○ Numerada           │  │   (también en móvil)
 │ │ Sin asiento asignado │ │ Filas y asientos num.│  │
@@ -317,19 +447,32 @@ Dirección                                            todo el ancho           to
 └────────────────────────────────────────────────────┘
 ```
 
-- **Orden en el DOM**: cabecera → Nombre | Precio → "Ubicación" → campos de capacidad → vista previa del plano (solo numerada). Contenedor `<fieldset>` `rounded-xl ring-1 ring-border p-4 flex flex-col gap-4`.
+- **Orden en el DOM**: cabecera → Nombre | Precio → Descripción (opcional) | Máximo por compra → "Ubicación" (solo en modo "Mixto") → campos de capacidad → vista previa del plano (solo numerada). Contenedor `<fieldset>` `rounded-xl ring-1 ring-border p-4 flex flex-col gap-4`.
 - **Cabecera**: `<legend>` "Tipo n" (`text-sm font-semibold`) **visible en todos los anchos** (ya no es `lg:sr-only`) y, a la derecha, botón `Trash2` con `aria-label="Quitar tipo de entrada n"` (deshabilitado con una sola fila). Las etiquetas de cada campo son visibles en todos los anchos; **no hay** fila de cabeceras `aria-hidden` en `lg` (el bloque ya no cabe en una línea de tabla).
 - **Nombre y Precio (S/)**: mismos inputs, placeholders y atributos que antes. Grilla `md:grid-cols-[minmax(0,1fr)_160px] gap-4`.
+- **Descripción (opcional) y Máximo por compra**: segunda línea, en una grilla con las mismas columnas (`md:grid-cols-[minmax(0,1fr)_160px] gap-4`; en móvil, uno debajo del otro). Usan el patrón `TicketTypeInputField` (ids `ticket-type-<id>-description` y `ticket-type-<id>-maxPerOrder`, `aria-invalid`, `aria-describedby` hacia la ayuda y el error):
+  - **"Descripción (opcional)"**: `Input` (una línea, no `Textarea`), placeholder "Ej. Campo de pie, sin ubicación asignada.", `maxLength={150}`, con `FieldDescription` "Se muestra bajo el nombre al elegir entradas." (`TicketSelector` la muestra bajo el nombre del tipo).
+  - **"Máximo por compra"**: `Input type="number" inputMode="numeric" min=1 max=10 step=1`, valor inicial `"10"` (el tope global de la compra, `MAX_TICKETS_PER_ORDER` de `@/modules/events/purchase`), con `FieldDescription` "Entradas de este tipo en una misma compra (1 a 10).".
+  - **Validación al publicar** (el borrador no los valida), un mensaje por campo:
+
+    | Campo | Regla | Mensaje |
+    |---|---|---|
+    | Descripción (opcional) | Más de 150 caracteres (con trim) | "La descripción debe tener como máximo 150 caracteres" |
+    | Máximo por compra | Vacío | "Ingresa el máximo por compra" |
+    | Máximo por compra | No es un entero entre 1 y 10 ("0", "11", "2.5") | "El máximo por compra debe ser un número entero entre 1 y 10" |
+
+  - **No se guardan** en `OrganizerEvent` ni en `localStorage` (decisión 11 de la spec) ni cambian la tarjeta de "Vista previa". El máximo por compra tampoco limita todavía la compra (sigue el tope global de 10) ni cambia la "Capacidad total".
 - **Campos y errores**: patrón común del formulario (`Field` con `data-invalid`, `aria-invalid`, `aria-describedby` hacia `FieldError` con id; ids únicos por fila). Controles con `scroll-mb-28 lg:scroll-mb-0 scroll-mt-24` para no quedar bajo la barra sticky ni el header.
 
 ### Tarjetas "Ubicación"
 
+- **Solo en modo "Mixto"** (ver "Tipos de entrada según el modo"). En "Sin asientos numerados" y "Con mapa de asientos" el grupo no se renderiza y la fila muestra los campos del tipo forzado.
 - `RadioGroup` de shadcn (Base UI) con `aria-labelledby` hacia el texto visible "Ubicación" (`text-sm font-medium`). Patrón "choice card" de `PaymentMethodFields` (ver `checkout.md`): cada opción es un `FieldLabel` con `htmlFor` que contiene un `Field orientation="horizontal"` con `RadioGroupItem`, icono `aria-hidden` y `FieldTitle`, más una línea `text-sm text-muted-foreground`.
 - Opciones (valores en código `kind: "general" | "numbered"`, como `VenueZoneLayout.kind` de seating):
 
   | Opción | Icono | Línea |
   |---|---|---|
-  | "General (de pie)" (por defecto) | `PersonStanding` | "Sin asiento asignado" |
+  | "General (de pie)" (por defecto en filas nuevas de "Mixto") | `PersonStanding` | "Sin asiento asignado" |
   | "Numerada" | `Armchair` | "Filas y asientos numerados" |
 
 - Grilla `grid-cols-2 gap-3` en todos los anchos; tarjetas `min-h-11 cursor-pointer`. Elegida: `has-data-checked:border-primary has-data-checked:bg-accent` (más el radio marcado: el estado nunca depende solo del color).
