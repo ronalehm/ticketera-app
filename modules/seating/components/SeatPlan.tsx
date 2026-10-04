@@ -2,7 +2,7 @@
 
 import { Maximize, Minus, Plus } from "lucide-react";
 import { useCallback, useId, useRef, useState } from "react";
-import type { FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, RefObject } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, RefObject } from "react";
 import {
   TransformComponent,
   TransformWrapper,
@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatEventPrice } from "@/modules/events/purchase";
 
-import type { NumberedVenueZone, Seat } from "../types/seating.types";
+import type { NumberedVenueZone, PlanTransform, Seat, VenueMap } from "../types/seating.types";
 import { getRowEdgeLabelPoints } from "../utils/arcSeatRows";
 import { formatSeatShortLabel, getSeatAriaLabel } from "../utils/seatIds";
 import { getAdjacentSeatId, type SeatNavigationKey } from "../utils/seatNavigation";
@@ -25,12 +25,14 @@ import { SEAT_PLAN_MARGIN } from "../utils/seatRows";
 import { parseViewBox } from "../utils/viewBox";
 import { BestSeatsPicker } from "./BestSeatsPicker";
 import { SeatLegend, SeatShape } from "./SeatLegend";
+import { SeatPlanMinimap } from "./SeatPlanMinimap";
 import { SeatTooltip } from "./SeatTooltip";
 import { SelectedSeatChips } from "./SelectedSeatChips";
 
 type SeatPlanProps = {
   zone: NumberedVenueZone;
-  stageLabel: string;
+  /** Estadio de la zona: fondo y minimapa del plano en arco; en cuadrícula, la etiqueta del escenario. */
+  venue: Pick<VenueMap, "viewBox" | "stage" | "zones">;
   /** Ids de todos los asientos elegidos (de cualquier zona). */
   selectedSeatIds: string[];
   /** Todos los asientos elegidos con su etiqueta completa, en orden de selección (chips). */
@@ -72,6 +74,8 @@ const STAGE_HEIGHT = 36;
 const STAGE_FONT_SIZE = 20;
 const ROW_LABEL_FONT_SIZE = 13;
 const SEAT_HIT_SIZE = 32;
+/** Radio de las luces del escenario en el fondo del estadio, en unidades del mapa (el mismo que en `VenueMapView`). */
+const STAGE_LIGHT_RADIUS = 5;
 
 // La librería inyecta su CSS sin capa (`width/height: fit-content`), que gana a las utilidades de Tailwind: el
 // tamaño del lienzo va en línea para que ocupe el contenedor.
@@ -145,6 +149,56 @@ function SeatDetailLevelSync({
   useTransformInit(applyDetailLevel);
   useTransformEffect(applyDetailLevel);
   return null;
+}
+
+/**
+ * Fondo del plano en arco (requisito 28): el estadio en coordenadas del plano (`planTransform`), con el escenario y sus
+ * luces, las demás zonas en gris y la zona abierta en lila con borde azul. Decorativo y sin eventos, debajo de las
+ * butacas. Los trazos no escalan (2 px a cualquier zoom).
+ */
+function SeatPlanBackdrop({
+  venue,
+  activeZoneId,
+  planTransform,
+}: {
+  venue: Pick<VenueMap, "stage" | "zones">;
+  activeZoneId: string;
+  planTransform: PlanTransform;
+}) {
+  const activeZone = venue.zones.find((zone) => zone.id === activeZoneId);
+
+  return (
+    <g
+      aria-hidden
+      transform={`translate(${planTransform.x} ${planTransform.y}) scale(${planTransform.scale})`}
+      className="pointer-events-none"
+    >
+      <path d={venue.stage.path} className="fill-brand-navy" />
+      {venue.stage.lights?.map((light) => (
+        <circle key={`${light.x}-${light.y}`} cx={light.x} cy={light.y} r={STAGE_LIGHT_RADIUS} className="fill-highlight" />
+      ))}
+      {venue.zones
+        .filter((zone) => zone.id !== activeZoneId)
+        .map((zone) => (
+          <path
+            key={zone.id}
+            d={zone.path}
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+            className="fill-secondary stroke-background"
+          />
+        ))}
+      {/* La zona abierta va la última para que su borde quede por encima de los de sus vecinas. */}
+      {activeZone && (
+        <path
+          d={activeZone.path}
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+          className="fill-accent stroke-primary"
+        />
+      )}
+    </g>
+  );
 }
 
 /**
@@ -225,7 +279,7 @@ function SeatPlanBestSeats({
  */
 export function SeatPlan({
   zone,
-  stageLabel,
+  venue,
   selectedSeatIds,
   selectedSeats,
   notice,
@@ -255,7 +309,8 @@ export function SeatPlan({
   const hasAccessible = seats.some((seat) => seat.status === "accessible");
   const { width, height } = parseViewBox(zone.seatViewBox);
   const stageWidth = width - 2 * SEAT_PLAN_MARGIN.x;
-  const isArc = zone.planTransform !== undefined;
+  const { planTransform } = zone;
+  const isArc = planTransform !== undefined;
 
   const findSeat = (seatId: string) => seats.find((seat) => seat.id === seatId);
 
@@ -408,29 +463,55 @@ export function SeatPlan({
       >
         <SeatDetailLevelSync svgRef={svgRef} planWidth={width} planHeight={height} />
 
-        {/* Contenedor del lienzo: desde `sm` la barra es `contents` y el zoom se posiciona sobre el lienzo. */}
+        {/* Contenedor del lienzo: desde `sm` la barra es `contents` y el minimapa y el zoom se posicionan sobre el
+            lienzo (arriba a la izquierda y abajo a la derecha); por debajo, la barra los pone encima del lienzo. */}
         <div className="relative flex flex-col gap-2">
           <div className="flex items-end justify-between gap-2 sm:contents">
+            {planTransform && (
+              // Decorativo: los gestos lo atraviesan para que el paneo y las butacas de debajo sigan respondiendo.
+              <div className="pointer-events-none flex sm:absolute sm:top-3 sm:left-3 sm:z-10">
+                <SeatPlanMinimap
+                  viewBox={venue.viewBox}
+                  stage={venue.stage}
+                  zones={venue.zones}
+                  activeZoneId={zone.id}
+                  planTransform={planTransform}
+                  planWidth={width}
+                  planHeight={height}
+                />
+              </div>
+            )}
             <SeatPlanZoomControls />
           </div>
 
+          {/* Proporción del plano; en arco, apaisado 16:10 desde `sm` (requisito 29). Va por variable CSS porque un
+              `aspect-ratio` en línea ganaría a la variante `sm:`. */}
           <div
             ref={viewportRef}
-            className="relative max-h-[70vh] w-full touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border"
-            style={{ aspectRatio: `${width} / ${height}` }}
+            className={cn(
+              "relative aspect-(--plan-aspect) max-h-[70vh] w-full touch-none overflow-hidden rounded-xl bg-muted ring-1 ring-border",
+              isArc && "sm:aspect-[16/10]",
+            )}
+            style={{ "--plan-aspect": `${width} / ${height}` } as CSSProperties}
           >
             <TransformComponent wrapperStyle={FILL_STYLE} contentStyle={FILL_STYLE}>
-              {/* Desde `sm`, franja inferior libre para la pastilla de zoom superpuesta (requisito 27). Va en este
-                  contenedor y no en `contentClass`: el CSS sin capa de la librería (`padding: 0`) gana a la utilidad. */}
-              <div className="size-full sm:pb-16">
+              {/* En cuadrícula, desde `sm`, franja inferior libre para la pastilla de zoom superpuesta (requisito 27).
+                  Va en este contenedor y no en `contentClass`: el CSS sin capa de la librería (`padding: 0`) gana a la
+                  utilidad. En arco no hay franja: el lienzo 16:10 deja margen lateral para el minimapa y el zoom, y el
+                  `<svg>` mide lo mismo que el lienzo, que es lo que mide el minimapa para su recuadro (requisito 30). */}
+              <div className={cn("size-full", !isArc && "sm:pb-16")}>
                 <svg
                   ref={svgRef}
                   viewBox={zone.seatViewBox}
                   role="group"
                   aria-label={`Plano de asientos de ${zone.name}`}
                   aria-describedby={helpId}
-                  className="group/plan block size-full select-none"
+                  // En arco, `overflow-visible` deja ver el fondo del estadio alrededor del sector, recortado por el lienzo.
+                  className={cn("group/plan block size-full select-none", isArc && "overflow-visible")}
                 >
+                  {planTransform && (
+                    <SeatPlanBackdrop venue={venue} activeZoneId={zone.id} planTransform={planTransform} />
+                  )}
                   <g aria-hidden className="pointer-events-none">
                     {!isArc && (
                       <>
@@ -450,7 +531,7 @@ export function SeatPlan({
                           fontSize={STAGE_FONT_SIZE}
                           className="fill-background font-bold tracking-widest uppercase"
                         >
-                          {stageLabel}
+                          {venue.stage.label}
                         </text>
                       </>
                     )}

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatEventPrice } from "@/modules/events/purchase";
 
 import type { GeneralVenueZone, NumberedVenueZone, VenueMap } from "../types/seating.types";
+import { getAnnularSectorPath, type AnnularSector } from "../utils/annularSector";
+import { generateArcSeatRows, getRowEdgeLabelPoints } from "../utils/arcSeatRows";
 import { SEAT_PLAN_MARGIN } from "../utils/seatRows";
 import { TicketSelection } from "./TicketSelection";
 
@@ -102,6 +104,35 @@ const MAP: VenueMap = {
   ],
 };
 
+/** Sector de prueba (2 filas de 2 butacas), concéntrico con un escenario semicircular como el del festival. */
+const ARC_SECTOR: AnnularSector = { cx: 300, cy: 54, innerRadius: 102, outerRadius: 180, startAngle: -10, endAngle: 30 };
+
+const ARC_ZONE: NumberedVenueZone = {
+  kind: "numbered",
+  id: "oriente",
+  ticketTypeId: "oriente",
+  path: getAnnularSectorPath(ARC_SECTOR),
+  labelPos: { x: 470, y: 90 },
+  ...generateArcSeatRows({ zoneId: "oriente", sector: ARC_SECTOR, scale: 1, rowLabels: ["A", "B"], occupiedRatio: 0 }),
+  name: "Tribuna Oriente",
+  price: 155,
+  status: "available",
+};
+
+/** `MAP` con un escenario con luces y una zona numerada en arco (con `planTransform`). */
+const ARC_MAP: VenueMap = {
+  ...MAP,
+  stage: {
+    ...MAP.stage,
+    path: getAnnularSectorPath({ cx: 300, cy: 54, innerRadius: 0, outerRadius: 90, startAngle: -10, endAngle: 190 }),
+    lights: [
+      { x: 260, y: 100 },
+      { x: 340, y: 100 },
+    ],
+  },
+  zones: [...MAP.zones, ARC_ZONE],
+};
+
 const renderSelection = () => render(<TicketSelection map={MAP} />);
 
 const mapGroup = () => screen.queryByRole("group", { name: "Mapa de zonas de Recinto de prueba" });
@@ -137,6 +168,10 @@ const checkedSeatIds = () =>
     .getAllByRole("checkbox")
     .filter((element) => element.getAttribute("aria-checked") === "true")
     .map((element) => element.getAttribute("data-seat-id"));
+/** Minimapa: el único SVG decorativo con el `viewBox` del mapa de zonas. */
+const minimap = (map: VenueMap = MAP) => document.querySelector<SVGSVGElement>(`svg[aria-hidden="true"][viewBox="${map.viewBox}"]`);
+/** Fondo del estadio: el grupo decorativo con la transformación estadio → plano. */
+const planBackdrop = (name: string) => planGroup(name).querySelector<SVGGElement>(':scope > g[aria-hidden="true"][transform]');
 const animatedStep = (zoomClass: string) => document.querySelector<HTMLElement>(`[class*="${zoomClass}"]`);
 const NORTE_A1 = "Tribuna Norte · Fila A · Asiento 1";
 const NORTE_B1 = "Tribuna Norte · Fila B · Asiento 1";
@@ -595,6 +630,113 @@ describe("TicketSelection · plano renovado", () => {
       for (const label of labels) expect(label.closest('[aria-hidden="true"]')).toBeTruthy();
     }
     expect(within(planGroup()).getByText("ESCENARIO")).toBeTruthy();
+  });
+});
+
+describe("TicketSelection · plano en arco", () => {
+  function openOriente() {
+    render(<TicketSelection map={ARC_MAP} />);
+    fireEvent.click(zoneCard("Tribuna Oriente"));
+  }
+
+  it("pinta debajo de las butacas el fondo del estadio con la zona abierta en lila y el resto en gris", () => {
+    openOriente();
+
+    const backdrop = planBackdrop("Tribuna Oriente")!;
+    const { scale, x, y } = ARC_ZONE.planTransform!;
+    expect(backdrop.getAttribute("transform")).toBe(`translate(${x} ${y}) scale(${scale})`);
+    expect(backdrop.getAttribute("class")).toContain("pointer-events-none");
+    // Debajo de todo: el primer hijo del plano, antes de las letras y de las butacas.
+    expect(planGroup("Tribuna Oriente").firstElementChild).toBe(backdrop);
+
+    expect(backdrop.querySelector(`path.fill-brand-navy[d="${ARC_MAP.stage.path}"]`)).toBeTruthy();
+    expect(backdrop.querySelectorAll("circle.fill-highlight")).toHaveLength(2);
+
+    const active = backdrop.querySelector(`path[d="${ARC_ZONE.path}"]`)!;
+    expect(active.getAttribute("class")).toBe("fill-accent stroke-primary");
+    const others = backdrop.querySelectorAll("path.fill-secondary.stroke-background");
+    expect(others).toHaveLength(ARC_MAP.zones.length - 1);
+    for (const path of [active, ...others]) {
+      expect(path.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+      expect(path.getAttribute("stroke-width")).toBe("2");
+    }
+    expect(backdrop.querySelector("text")).toBeNull();
+    expect(planGroup("Tribuna Oriente").getAttribute("class")).toContain("overflow-visible");
+  });
+
+  it("muestra el minimapa decorativo con el estadio, la zona abierta resaltada y el recuadro del plano entero", () => {
+    openOriente();
+
+    const map = minimap(ARC_MAP)!;
+    expect(map).toBeTruthy();
+    expect(map.querySelector(`path.fill-primary[d="${ARC_ZONE.path}"]`)).toBeTruthy();
+    expect(map.querySelector(`path.fill-brand-navy[d="${ARC_MAP.stage.path}"]`)).toBeTruthy();
+    expect(map.querySelectorAll("path.fill-secondary")).toHaveLength(ARC_MAP.zones.length - 1);
+    expect(map.querySelector("[tabindex]")).toBeNull();
+    // Sin medidas (jsdom), el recuadro es el plano entero pasado a coordenadas del estadio.
+    const { scale, x } = ARC_ZONE.planTransform!;
+    expect(Number(map.querySelector("rect")!.getAttribute("x"))).toBeCloseTo(-x / scale);
+    // Superpuesto arriba a la izquierda desde `sm`, sin interceptar gestos; en móvil va en la barra con el zoom.
+    const overlay = map.parentElement!;
+    expect(overlay.className).toContain("pointer-events-none");
+    expect(overlay.className).toContain("sm:absolute sm:top-3 sm:left-3 sm:z-10");
+    expect(overlay.parentElement).toBe(zoomGroup().parentElement);
+  });
+
+  it("el lienzo es apaisado desde sm, sin franja inferior, y conserva la proporción del plano en móvil", () => {
+    openOriente();
+
+    const svg = planGroup("Tribuna Oriente");
+    const canvas = svg.closest<HTMLElement>(".touch-none")!;
+    expect(canvas.className).toContain("sm:aspect-[16/10]");
+    expect(canvas.style.getPropertyValue("--plan-aspect")).toBe(ARC_ZONE.seatViewBox.split(" ").slice(2).join(" / "));
+    expect(svg.parentElement!.className).not.toContain("sm:pb-16");
+  });
+
+  it("pinta 2 letras por fila de 13 unidades en los puntos de getRowEdgeLabelPoints y sin barra 'ESCENARIO'", () => {
+    openOriente();
+
+    for (const row of ARC_ZONE.rows) {
+      const { start, end } = getRowEdgeLabelPoints(row);
+      const labels = within(planGroup("Tribuna Oriente")).getAllByText(row.label);
+      expect(labels.map((label) => [Number(label.getAttribute("x")), Number(label.getAttribute("y"))])).toEqual([
+        [start.x, start.y],
+        [end.x, end.y],
+      ]);
+      for (const label of labels) {
+        expect(label.getAttribute("font-size")).toBe("13");
+        expect(label.getAttribute("class")).toBe("fill-muted-foreground font-bold");
+        expect(label.getAttribute("text-anchor")).toBe("middle");
+        expect(label.getAttribute("dominant-baseline")).toBe("central");
+        expect(label.closest('[aria-hidden="true"]')).toBeTruthy();
+      }
+    }
+    expect(within(planGroup("Tribuna Oriente")).queryByText("ESCENARIO")).toBeNull();
+  });
+
+  it("el teclado y el clic siguen eligiendo butacas sobre el fondo", () => {
+    openOriente();
+
+    fireEvent.click(seatAt("A", 1));
+    expect(checkedSeatIds()).toEqual(["oriente-A-1"]);
+    fireEvent.keyDown(seatAt("A", 1), { key: "ArrowRight" });
+    fireEvent.keyDown(document.activeElement!, { key: " " });
+    expect(checkedSeatIds()).toEqual(["oriente-A-1", "oriente-A-2"]);
+  });
+
+  it("una zona en cuadrícula no tiene fondo ni minimapa, conserva su proporción y la franja del zoom", () => {
+    render(<TicketSelection map={ARC_MAP} />);
+    openNorte();
+
+    expect(planBackdrop("Tribuna Norte")).toBeNull();
+    expect(minimap(ARC_MAP)).toBeNull();
+    const svg = planGroup();
+    const canvas = svg.closest<HTMLElement>(".touch-none")!;
+    expect(canvas.className).not.toContain("sm:aspect-[16/10]");
+    expect(canvas.style.getPropertyValue("--plan-aspect")).toBe("176 / 160");
+    expect(svg.parentElement!.className).toContain("sm:pb-16");
+    expect(svg.getAttribute("class")).not.toContain("overflow-visible");
+    for (const label of within(svg).getAllByText("A")) expect(label.getAttribute("font-size")).toBe("13");
   });
 });
 
