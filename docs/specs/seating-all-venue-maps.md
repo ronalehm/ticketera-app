@@ -1,7 +1,7 @@
 # Mapas de recinto para todos los eventos posibles
 
 - Módulo: seating
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 **Pedido del usuario:** "En lo posible todos deben tener mapas o zonas como conciertos."
@@ -504,6 +504,112 @@ Holguras previstas de las etiquetas, en px: "sin selección / con insignia", la 
       - en "Planos grandes" se añaden Preferencial de Sueños (21.2 / 31.8 px) y Platea de Ecos (agotada, no se abre);
       - las holguras de la pastilla de zoom y del minimapa incluyen las zonas nuevas.
     - **Línea 5** ("Solo existe para los eventos con mapa…"): sin cambios.
+
+### Migración y seed no destructivos (Fase 1b)
+20. **Migraciones aditivas:**
+    - **`lib/db/migrations.test.ts`** (nuevo, sin BD; lee `drizzle/` con `node:fs`):
+      - cada `drizzle/*.sql` aparece en `drizzle/meta/_journal.json`, en el mismo orden, con `idx` consecutivos y `when` estrictamente creciente;
+      - ningún `.sql` contiene, sin distinguir mayúsculas: `DROP TABLE|COLUMN|TYPE|SCHEMA|EXTENSION|SEQUENCE|VIEW`, `TRUNCATE`, `DELETE FROM`, `UPDATE "…"` (sentencia, no el `ON UPDATE` de las FKs), `RENAME` ni `ALTER COLUMN "…" [SET DATA] TYPE`. Las 5 migraciones actuales lo cumplen (decisión 7);
+      - `DROP CONSTRAINT "x"` solo se acepta si la misma migración hace `ADD CONSTRAINT "x"` (caso de la `0002`).
+    - **Esquema** (`lib/db/schema/events.ts`, tabla `eventSeats`): `retiredAt: timestamptz("retired_at")`, con el comentario "Fuera del inventario (el seed retira lo que su layout ya no tiene); no se vende ni cuenta. No se borra: conserva el historial y las FKs." Sin índice nuevo (YAGNI).
+    - **Migración** `drizzle/0005_event_seat_retired.sql`, generada con `npm run db:generate -- --name event_seat_retired`, junto con `drizzle/meta/0005_snapshot.json` y `_journal.json`. Contenido esperado: una sola sentencia, `ALTER TABLE "event_seats" ADD COLUMN "retired_at" timestamp with time zone;`.
+    - **`docs/architecture/erd.md`:**
+      - `timestamptz retired_at` en `event_seats`, en el diagrama y en el diccionario;
+      - la línea "Disponibles de una zona" y el total de una zona añaden `retired_at IS NULL`;
+      - una nota: el inventario no se borra; lo obsoleto se retira.
+21. **Seed con upsert de lo que posee** (`lib/db/seed/seed.ts`):
+    - Exporta `SEED_OWNED_COLUMNS`, con las columnas de la tabla de la decisión 7, como claves de Drizzle:
+      - `venues: ["mapViewBox", "stage"]`;
+      - `venueSections: ["sortOrder", "seating", "capacity", "mapPath", "labelX", "labelY", "seatViewBox", "wrapLabel", "planTransform"]`;
+      - `venueSeats: ["x", "y", "accessible"]`;
+      - `ticketTypes: ["sectionId", "sortOrder"]`;
+      - `orders: ["subtotalCents", "platformFeeCents", "organizerAmountCents"]`;
+      - `eventSeats: ["status", "orderId", "retiredAt"]`;
+      - `users`, `organizers`, `categories` y `events`: `[]`.
+    - **`insertAll` → `upsertAll(table, rows, owned)`:**
+      - con `owned` vacío: `onConflictDoNothing()`, como hoy;
+      - si no: `onConflictDoUpdate({ target: id, set: { <col>: excluded.<col>…, updatedAt: now() }, setWhere: (<cols>) IS DISTINCT FROM (excluded.<cols>) })`;
+      - para `eventSeats`, `setWhere` añade la guarda de ventas reales: `status <> 'held' AND (order_id IS NULL OR order_id = ANY(<ids de pedido demo>))`. Los ids de pedido demo son `seedUuid("order:<slug>")` de **todos** los eventos de `data.events`;
+      - las filas de `eventSeats` llevan `retiredAt: null` explícito. Las de `organizers` siguen con `userId` como clave (`onConflictDoNothing`).
+    - **Super admin:**
+      - `onConflictDoUpdate` sobre `email`, con `setWhere` `role IS DISTINCT FROM 'super_admin'`;
+      - después, un `select` de su `id` por correo, porque `returning` no devuelve fila si no se actualiza;
+      - conserva `id` y `clerk_id`, como hoy.
+    - **Retiro**, después de los upserts y en la misma transacción: el `UPDATE … SET retired_at = now(), updated_at = now()` de la decisión 7. Los ids esperados y los de los tipos van como un único parámetro `uuid[]` cada uno (`= ANY($1::uuid[])`). Sin `DELETE` ni `TRUNCATE` en ningún sitio del seed.
+    - **Obsoletas con venta real:** las filas que cumplen todo salvo la guarda (`held`, o `order_id` de un pedido no demo) se cuentan en el informe y no se tocan.
+    - **Orden de dependencias:** el de hoy (`users` → … → `orders` → `event_seats`), y el retiro al final.
+    - `buildSeedData.ts` no cambia.
+22. **Informe y CLI:**
+    - **`seed()`** devuelve `Promise<SeedReport>`:
+
+      ```ts
+      export type SeedReport = {
+        /** Filas insertadas o actualizadas por tabla (rowCount de cada INSERT … ON CONFLICT). */
+        written: Record<"users" | "organizers" | "categories" | "venues" | "venueSections" | "venueSeats" | "events" | "ticketTypes" | "orders" | "eventSeats", number>;
+        /** Lugares que esta ejecución pasó a retirados. */
+        retiredEventSeats: number;
+        /** Lugares obsoletos que no se retiran porque tienen una venta o retención real. */
+        obsoleteWithSales: number;
+      };
+      ```
+
+      `written.users` no incluye al super admin.
+    - **`lib/db/seed/run.ts`** imprime, tras "Seed completado", una línea por tabla con `written`, y luego `retiredEventSeats` y `obsoleteWithSales`. Si `obsoleteWithSales > 0`, imprime un aviso (`console.warn`) con el número.
+    - **Valores esperados sobre el estado de producción (pre-F1):**
+      - 1.ª ejecución: `venues` 2, `venueSections` 5, `venueSeats` 100, `orders` 2 (1 nueva y 1 actualizada) y `eventSeats` 2600; el resto 0. `retiredEventSeats` 400 y `obsoleteWithSales` 0;
+      - 2.ª ejecución: todo 0.
+23. **Lectores sin retirados:**
+    - **`modules/events/services/events.service.ts`:** los dos `leftJoin(eventSeats, …)` (en `selectPublishedEvents` y en los tipos de `getEventBySlug`) añaden `isNull(eventSeats.retiredAt)` a la condición del **join**, no al `where`, para no perder tipos sin lugares. Así `totalSeats` y `availableSeats` excluyen lo retirado.
+    - **`modules/seating/services/seating.service.ts`** (`loadLayout`, consulta de butacas): `where(and(eq(eventSeats.eventId, …), isNull(eventSeats.retiredAt)))`. Una butaca retirada no se pinta.
+    - Firmas, schemas y tipos no cambian.
+24. **Tests con BD** (`describeWithDb`), aislados en una transacción que siempre se revierte:
+    - **Helper `lib/db/testTransaction.ts`** (nuevo, solo para tests). Exporta:
+      - `db`: un `Proxy` del `db` real (`vi.importActual("@/lib/db/client")`) que, dentro de `inRolledBackTransaction`, reenvía a la transacción activa;
+      - `inRolledBackTransaction(run)`: abre `db.transaction`, ejecuta `run(tx)` y siempre termina con `tx.rollback()`. Traga `TransactionRollbackError` y relanza el error de `run`, como `rolledBack` de `constraints.test.ts`.
+
+      Los tests que lo usan declaran `vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"))`. Así los services (`getVenueMapBySlug`, `getEventBySlug`) y `seed(db)`, que abre un savepoint, leen y escriben dentro de la transacción, y los demás archivos de test, que corren en paralelo, ven la BD intacta.
+    - **`lib/db/seed/seed.test.ts`**, nuevo bloque "actualiza una BD sembrada antes de la Fase 1 sin vaciarla". Cada `it` va con timeout propio (p. ej. 300 s).
+      - **Preparación, `toPreF1State(tx)`, solo en el test:**
+        - calcula `post = buildSeedData(…)`;
+        - calcula `pre = buildSeedData(…)` quitando de `VENUE_LAYOUTS_MOCK` los layouts de `copa-del-norte-trujillo` y `los-ecos-del-sur-arequipa`, y los restaura en `finally`;
+        - aplica a la BD la diferencia `post → pre`: borra (solo en la transacción del test) las filas de `post` que no están en `pre`, en orden inverso de FKs; inserta las de `pre` que faltan; y devuelve a sus valores de `pre` las que cambian.
+        - Comprueba el resultado: conteos de `pre` (`venue_seats` 456, `event_seats` 38 956, `orders` 7), y Copa y Ecos sin mapa (`getVenueMapBySlug` = `null`).
+      - **(a) Convergencia e idempotencia:**
+        - `seed(db)` una vez y luego otra;
+        - `getVenueMapBySlug` no es `null` para los dos slugs:
+          - Copa: 3 zonas, `occidente` `numbered` con 39 butacas;
+          - Ecos: `platea` con 61 butacas, todas no disponibles, y las dos zonas `sold-out`;
+        - `getEventBySlug` da los estados de `EVENTS_MOCK` para los dos eventos y para cada tipo;
+        - los conteos de **filas activas** (`event_seats` con `retired_at IS NULL`) son los de `buildSeedData`: `venues` 13, `venue_sections` 37, `venue_seats` 556, `events` 14, `ticket_types` 37, `orders` 8, `event_seats` 41 156, y `users` el de `data.users` + 1;
+        - hay 400 `event_seats` retirados: 200 de Copa `occidente` y 200 de Ecos `platea`, todos con `venue_seat_id NULL`. Los de Ecos conservan `status = 'sold'` y su pedido `TK-DEMO-002`;
+        - el informe de la 1.ª ejecución es el del requisito 22, y el de la 2.ª es todo 0;
+        - entre la 1.ª y la 2.ª, las filas (todas las columnas, `updated_at` incluido) de las 10 tablas del seed son idénticas.
+      - **(b) Datos ajenos intactos.** Tras `toPreF1State` y antes de sembrar, se crean, con ids aleatorios:
+        - un usuario `customer`;
+        - un pedido `paid` de ese usuario para Copa (código `TK-TEST-1`);
+        - dos lugares vendidos a ese pedido: el general de índice 0 de Copa `occidente`, que es obsoleto, y uno de Copa `popular`, que el seed quiere libre.
+
+        Tras `seed(db)`:
+        - el usuario y el pedido siguen idénticos;
+        - los dos lugares siguen `sold` con ese pedido, y el de `occidente` sigue con `retired_at NULL`;
+        - el informe da `retiredEventSeats` 399 y `obsoleteWithSales` 1.
+      - **(c) Nada se borra:** en (a) y en (b), cada id que existía antes de sembrar, en las 10 tablas y en las filas ajenas, sigue existiendo después.
+    - **`modules/events/services/events.service.test.ts`**, nuevo, "no cuenta los lugares retirados": en `inRolledBackTransaction`, retira los 22 lugares libres de Copa `occidente`. Entonces `getEventBySlug("copa-del-norte-trujillo")` da Occidente `sold-out` (sin el filtro saldría `available`, con 22/39).
+    - **`modules/seating/services/seating.service.test.ts`**, nuevo, "no pinta las butacas retiradas": en `inRolledBackTransaction`, retira `occidente-A-2` de Copa. Entonces la zona `occidente` de `getVenueMapBySlug` tiene 38 butacas, y `occidente-A-2` no está.
+    - Los tests existentes de `seed.test.ts` no cambian. Siguen valiendo sobre la BD de test recién sembrada, que no tiene retiradas.
+25. **Procedimiento documentado y verificado:**
+    - **`README.md`**, sección nueva "Base de datos":
+      - `npm run db:migrate` aplica las migraciones pendientes, que son aditivas;
+      - `npm run db:seed` crea los datos demo que faltan y actualiza solo su geometría e inventario demo, sin borrar nada, y se puede repetir;
+      - en producción el procedimiento es solo `npm run db:migrate && npm run db:seed`, sin vaciar;
+      - la regla para migraciones nuevas (decisión 7).
+    - **Reproducción de producción en local** (tarea de cierre, y el reviewer lo repite). Solo `ticketera_dev` en `127.0.0.1:5433`:
+      1. recrea los esquemas `public` y `drizzle` de `ticketera_dev`;
+      2. en un worktree temporal de `b90d48a` (en el scratchpad, con `node_modules` enlazado y el `.env` apuntando a `ticketera_dev`), ejecuta `npm run db:migrate && npm run db:seed`. Es el estado de producción;
+      3. guarda los conteos por tabla y crea los datos ajenos del requisito 24 (b) con `psql`;
+      4. en la rama, `npm run db:migrate`: aplica solo la `0005`, los conteos no cambian y `retired_at` es `NULL` en todas las filas;
+      5. `npm run db:seed` dos veces: los informes son los del requisito 22 (con los datos ajenos, 399 y 1), y los conteos después de la 2.ª son iguales a los de después de la 1.ª;
+      6. `npm run build && npm run start`, y con Playwright: `/eventos/copa-del-norte-trujillo/entradas` y `/eventos/los-ecos-del-sur-arequipa/entradas` responden 200 con su `svg[role="group"]` (3 y 2 zonas), y sus detalles enlazan o muestran lo de CC7.
 
 ## Criterios de aceptación
 Se agrupan por fase. Los de Playwright los ejecuta el developer de la tarea de cierre y los repite el reviewer. Entorno de Playwright:
