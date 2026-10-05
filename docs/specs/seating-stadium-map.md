@@ -2075,7 +2075,7 @@ No hay API: son datos mock.
   - Archivos: `modules/seating/components/QuantityStepper.tsx` (nuevo), `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/BestSeatsPicker.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1 y T4. Es la base de T3.
-- [ ] T3. Mapa como ilustración y tarjetas con el control en línea (requisitos 40 y 42, decisiones 34 y 38).
+- [x] T3. Mapa como ilustración y tarjetas con el control en línea (requisitos 40 y 42, decisiones 34 y 38).
   - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
   - Depende de: T2.
   - En paralelo con T1 y T4.
