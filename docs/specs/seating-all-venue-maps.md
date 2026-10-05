@@ -959,7 +959,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
 
 ### Fase 3. Mapa propio por evento en la BD (2 tareas, 10 archivos)
 Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado con layouts sintéticos. No cambia nada visible.
-- [ ] T1. Esquema, migración `0006`, test de la restricción y ERD (requisito 13).
+- [x] T1. Esquema, migración `0006`, test de la restricción y ERD (requisito 13).
   - Archivos: `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0006_event_map_override.sql` (generado), `drizzle/meta/0006_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/constraints.test.ts`, `docs/architecture/erd.md`.
   - Depende de: Fase 2. Secuencial (`lib/`).
   - Aplicar la migración solo a la BD local (`npm run db:migrate` sobre `ticketera_dev`; la de test la migra `testGlobalSetup`). `lib/db/migrations.test.ts` debe pasar sin cambios.
