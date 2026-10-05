@@ -2071,7 +2071,7 @@ No hay API: son datos mock.
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 6.
   - En paralelo con T2 y T4. Verificar `npx vitest run modules/seating/hooks`.
-- [ ] T2. `QuantityStepper` y su uso en `ZoneQuantityPanel` y `BestSeatsPicker`, sin cambios visibles (requisito 41, decisión 40).
+- [x] T2. `QuantityStepper` y su uso en `ZoneQuantityPanel` y `BestSeatsPicker`, sin cambios visibles (requisito 41, decisión 40).
   - Archivos: `modules/seating/components/QuantityStepper.tsx` (nuevo), `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/BestSeatsPicker.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1 y T4. Es la base de T3.
