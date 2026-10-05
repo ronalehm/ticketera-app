@@ -43,6 +43,13 @@
       "when": 1791149268251,
       "tag": "0005_event_seat_retired",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791172287513,
+      "tag": "0006_event_map_override",
+      "breakpoints": true
     }
   ]
 }

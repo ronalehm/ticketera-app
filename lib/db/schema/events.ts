@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -14,7 +15,7 @@ import {
 import { createdAt, eventStatusEnum, seatStatusEnum, timestamptz, updatedAt } from "./enums";
 import { organizers, users } from "./identity";
 import { orders } from "./sales";
-import { venueSeats, venueSections, venues } from "./venues";
+import { type MapStage, venueSeats, venueSections, venues } from "./venues";
 
 export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -52,6 +53,10 @@ export const events = pgTable(
     searchText: text("search_text").notNull(),
     cancelledAt: timestamptz("cancelled_at"),
     cancelReason: text("cancel_reason"),
+    // Configuración del mapa propia del evento (p. ej. fútbol en un estadio cuyo mapa es de concierto);
+    // `NULL` = la del recinto. Van juntas (events_map_override_check).
+    mapViewBox: text("map_view_box"),
+    mapStage: jsonb("map_stage").$type<MapStage>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -62,6 +67,7 @@ export const events = pgTable(
       "events_draft_complete_check",
       sql`${t.status} = 'draft' OR (${t.venueId} IS NOT NULL AND ${t.description} IS NOT NULL AND ${t.imageUrl} IS NOT NULL AND ${t.startsAt} IS NOT NULL AND ${t.doorsOpenAt} IS NOT NULL)`,
     ),
+    check("events_map_override_check", sql`(${t.mapViewBox} IS NULL) = (${t.mapStage} IS NULL)`),
   ],
 );
 

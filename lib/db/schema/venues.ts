@@ -14,6 +14,14 @@ import {
 import { createdAt, seatingTypeEnum, updatedAt, venueStatusEnum } from "./enums";
 import { organizers, users } from "./identity";
 
+/** Escenario (o cancha) del mapa de zonas: forma, etiqueta y luces. */
+export type MapStage = {
+  label: string;
+  path: string;
+  labelPos: { x: number; y: number };
+  lights?: { x: number; y: number }[];
+};
+
 export const venues = pgTable(
   "venues",
   {
@@ -25,12 +33,7 @@ export const venues = pgTable(
     lng: doublePrecision("lng"),
     placeId: text("place_id"),
     mapViewBox: text("map_view_box"),
-    stage: jsonb("stage").$type<{
-      label: string;
-      path: string;
-      labelPos: { x: number; y: number };
-      lights?: { x: number; y: number }[];
-    }>(),
+    stage: jsonb("stage").$type<MapStage>(),
     status: venueStatusEnum("status").notNull().default("approved"),
     organizerId: uuid("organizer_id").references(() => organizers.userId),
     createdBy: uuid("created_by")
