@@ -1,4 +1,5 @@
 import type { AnnularSector } from "../utils/annularSector";
+import { CLASICO_VENUE } from "./clasicoDelPacifico.mock";
 import { COPA_DEL_NORTE_VENUE } from "./copaDelNorte.mock";
 import { ARENA_Y_MAR_VENUE } from "./festivalArenaYMar.mock";
 import { SOL_DE_VERANO_VENUE } from "./festivalSolDeVerano.mock";
@@ -22,6 +23,7 @@ const MOCK_VENUES = [
   ARENA_Y_MAR_VENUE,
   MICRO_ABIERTO_VENUE,
   NOCHE_ANDINA_VENUE,
+  CLASICO_VENUE,
 ];
 
 /** Layouts de los recintos. Nombre, precio y estado de cada zona salen del `ticketType` del evento (service). */

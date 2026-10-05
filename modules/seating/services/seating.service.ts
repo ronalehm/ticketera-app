@@ -18,14 +18,29 @@ function findLayout(slug: string) {
 
 type RawLayout = NonNullable<ReturnType<typeof toVenueLayout>>;
 
-/** Layout del recinto de un evento publicado, sin validar; `null` si no existe o no tiene geometría. */
+/**
+ * Layout del recinto de un evento publicado, sin validar; `null` si no existe o no tiene geometría.
+ * El `viewBox` y el escenario son los propios del evento si los tiene (p. ej. fútbol en un estadio cuyo mapa es de
+ * concierto) y, si no, los del recinto; `events_map_override_check` garantiza que los dos del evento van juntos.
+ */
 async function loadLayout(slug: string): Promise<RawLayout | null> {
-  const [venue] = await db
-    .select({ eventId: events.id, mapViewBox: venues.mapViewBox, stage: venues.stage })
+  const [record] = await db
+    .select({
+      eventId: events.id,
+      eventViewBox: events.mapViewBox,
+      eventStage: events.mapStage,
+      venueViewBox: venues.mapViewBox,
+      venueStage: venues.stage,
+    })
     .from(events)
     .innerJoin(venues, eq(venues.id, events.venueId))
     .where(and(eq(events.slug, slug), eq(events.status, "published")));
-  if (!venue) return null;
+  if (!record) return null;
+
+  const venue =
+    record.eventViewBox !== null
+      ? { eventId: record.eventId, mapViewBox: record.eventViewBox, stage: record.eventStage }
+      : { eventId: record.eventId, mapViewBox: record.venueViewBox, stage: record.venueStage };
 
   const [zones, seats] = await Promise.all([
     db

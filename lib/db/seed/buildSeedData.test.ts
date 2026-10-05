@@ -1,8 +1,11 @@
+import { isDeepStrictEqual } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { getAvailabilityStatus } from "@/modules/events/utils/availability";
 import { LEGAL_DOCUMENT_KINDS } from "@/modules/legal/schemas/legal.schema";
+import { PITCH_STAGE, STADIUM_CENTER } from "@/modules/seating/data/stadium.mock";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "@/modules/seating/data/venueMaps.mock";
+import { getAnnularSectorPath } from "@/modules/seating/utils/annularSector";
 import { DEMO_GENERAL_CAPACITY, buildSeedData, seedUuid } from "./buildSeedData";
 
 const SUPER_ADMIN_ID = seedUuid("test:super-admin");
@@ -21,6 +24,40 @@ const layoutBySlug = (slug: string) => {
   if (!layout) throw new Error(`Layout inexistente: ${slug}`);
   return layout;
 };
+
+/** Evento que nunca tendrá layout: los tests de layouts sintéticos lo mueven al Estadio Nacional. */
+const AVENTURA = "aventura-en-el-bosque-magico";
+const ARENA = "noche-de-sintetizadores-lima";
+/** Un sector cualquiera para las zonas sintéticas (distinto de los de la arena). */
+const SYNTHETIC_PATH = getAnnularSectorPath({
+  ...STADIUM_CENTER,
+  innerRadius: 102,
+  outerRadius: 200,
+  startAngle: 60,
+  endAngle: 120,
+});
+
+type MockLayout = (typeof VENUE_LAYOUTS_MOCK)[number];
+type MockZone = MockLayout["zones"][number];
+
+const mockEvent = (slug: string) => {
+  const event = EVENTS_MOCK.find((candidate) => candidate.slug === slug);
+  if (!event) throw new Error(`falta ${slug}`);
+  return event;
+};
+
+/** Muta `EVENTS_MOCK`: aventura pasa al recinto de la arena (Estadio Nacional de Lima). */
+function moveAventuraToStadium() {
+  const arena = mockEvent(ARENA);
+  const aventura = mockEvent(AVENTURA);
+  Object.assign(aventura, { venue: arena.venue, city: arena.city, address: arena.address });
+  return aventura;
+}
+
+/** Muta `VENUE_LAYOUTS_MOCK`: un layout de fútbol para aventura (otro viewBox, la cancha) con una sola zona. */
+function addAventuraLayout(zone: MockZone) {
+  VENUE_LAYOUTS_MOCK.push({ eventSlug: AVENTURA, viewBox: "0 0 600 300", stage: PITCH_STAGE, zones: [zone] });
+}
 
 /** Conjunto ordenado de pares (id del recinto, slug) de secciones. */
 const sectionKeySet = (sections: { venueId: string; slug: string }[]) =>
@@ -70,40 +107,87 @@ describe("buildSeedData", () => {
     }
   });
 
-  it("un solo Estadio Nacional con geometría y 8 secciones en su orden", () => {
+  it("un solo Estadio Nacional con el mapa de la arena, 8 secciones con geometría y el Clásico con mapa propio", () => {
     const stadiums = data.venues.filter((venue) => venue.name === "Estadio Nacional");
     expect(stadiums).toHaveLength(1);
-    expect(stadiums[0]).toMatchObject({
-      city: "Lima",
-      mapViewBox: layoutBySlug("noche-de-sintetizadores-lima").viewBox,
-      createdBy: SUPER_ADMIN_ID,
-    });
-    expect(stadiums[0].stage).toMatchObject({ label: "ESCENARIO" });
+    const arena = layoutBySlug(ARENA);
+    expect(stadiums[0]).toMatchObject({ city: "Lima", mapViewBox: arena.viewBox, createdBy: SUPER_ADMIN_ID });
+    expect(stadiums[0].stage).toEqual(arena.stage);
+    // Primero las de la arena y después las del Clásico, cada grupo en su orden.
+    const arenaZoneIds = arena.zones.map((zone) => zone.id);
     const sections = data.venueSections
       .filter((section) => section.venueId === stadiums[0].id)
-      .sort((a, b) => Number(!a.mapPath) - Number(!b.mapPath) || a.sortOrder - b.sortOrder);
+      .sort(
+        (a, b) =>
+          Number(!arenaZoneIds.includes(a.slug)) - Number(!arenaZoneIds.includes(b.slug)) || a.sortOrder - b.sortOrder,
+      );
     expect(sections.map((section) => [section.slug, section.sortOrder, section.seating])).toEqual([
       ["vip", 0, "general"],
       ["preferencial", 1, "general"],
       ["general", 2, "general"],
       ["norte", 3, "numbered"],
       ["popular", 0, "general"],
-      ["oriente", 1, "general"],
-      ["occidente", 2, "general"],
+      ["oriente", 1, "numbered"],
+      ["occidente", 2, "numbered"],
       ["palco", 3, "general"],
     ]);
-    expect(sections.slice(0, 4).every((section) => section.mapPath)).toBe(true);
-    expect(sections.slice(4).every((section) => !section.mapPath && section.capacity === DEMO_GENERAL_CAPACITY)).toBe(
-      true,
-    );
+    expect(sections.every((section) => section.mapPath)).toBe(true);
+    expect(sections.some((section) => section.capacity === DEMO_GENERAL_CAPACITY)).toBe(false);
+    expect(eventBySlug("clasico-del-pacifico")).toMatchObject({ mapViewBox: "0 0 600 392", mapStage: PITCH_STAGE });
   });
 
-  it("cada recinto con layout guarda el viewBox y el escenario de su layout", () => {
+  it("cada evento con layout tiene el viewBox y el escenario de su layout, propios o de su recinto", () => {
     for (const layout of VENUE_LAYOUTS_MOCK) {
-      const venue = data.venues.find((candidate) => candidate.id === eventBySlug(layout.eventSlug).venueId);
-      expect(venue?.mapViewBox, layout.eventSlug).toBe(layout.viewBox);
-      expect(venue?.stage, layout.eventSlug).toEqual(layout.stage);
+      const event = eventBySlug(layout.eventSlug);
+      const venue = data.venues.find((candidate) => candidate.id === event.venueId);
+      expect(event.mapViewBox ?? venue?.mapViewBox, layout.eventSlug).toBe(layout.viewBox);
+      expect(event.mapStage ?? venue?.stage, layout.eventSlug).toEqual(layout.stage);
     }
+  });
+
+  it("ningún evento del mock tiene mapa propio salvo los que comparten recinto con otro layout", () => {
+    // El recinto se queda con el mapa del primer evento con layout (orden del mock); los demás que difieren, propio.
+    const venueLayouts = new Map<string, MockLayout>();
+    const expected: string[] = [];
+    for (const event of EVENTS_MOCK) {
+      const layout = VENUE_LAYOUTS_MOCK.find((candidate) => candidate.eventSlug === event.slug);
+      if (!layout) continue;
+      const venueKey = `${event.venue}:${event.city}`;
+      const first = venueLayouts.get(venueKey) ?? layout;
+      venueLayouts.set(venueKey, first);
+      if (first.viewBox !== layout.viewBox || !isDeepStrictEqual(first.stage, layout.stage)) expected.push(event.slug);
+    }
+    const withOwnMap = data.events.filter((event) => event.mapViewBox != null || event.mapStage != null);
+    expect(withOwnMap.map((event) => event.slug)).toEqual(expected);
+    for (const event of withOwnMap) {
+      expect(event.mapViewBox, event.slug).toBe(layoutBySlug(event.slug).viewBox);
+      expect(event.mapStage, event.slug).toEqual(layoutBySlug(event.slug).stage);
+    }
+    // events_map_override_check: las dos columnas van juntas.
+    for (const event of data.events) expect(event.mapViewBox == null, event.slug).toBe(event.mapStage == null);
+  });
+
+  it("un evento cuyo layout difiere del de su recinto guarda su viewBox y su escenario; el recinto conserva los del primero", () => {
+    moveAventuraToStadium();
+    addAventuraLayout({
+      id: "entrada-libre",
+      ticketTypeId: "entrada-libre",
+      kind: "general",
+      capacity: 50,
+      path: SYNTHETIC_PATH,
+      labelPos: { x: 300, y: 200 },
+    });
+    const seeded = buildSeedData({ superAdminId: SUPER_ADMIN_ID });
+    const seededEvent = (slug: string) => seeded.events.find((event) => event.slug === slug);
+    const arena = layoutBySlug(ARENA);
+
+    const stadium = seeded.venues.find((venue) => venue.id === seededEvent(AVENTURA)?.venueId);
+    expect(stadium).toMatchObject({ name: "Estadio Nacional", city: "Lima", mapViewBox: arena.viewBox });
+    expect(stadium?.stage).toEqual(arena.stage);
+    expect(seededEvent(ARENA)?.venueId).toBe(stadium?.id);
+    expect(seededEvent(AVENTURA)?.mapViewBox).toBe("0 0 600 300");
+    expect(seededEvent(AVENTURA)?.mapStage).toEqual(PITCH_STAGE);
+    expect(seededEvent(ARENA)).toMatchObject({ mapViewBox: null, mapStage: null });
   });
 
   it("la Costa Verde guarda el escenario del layout con sus 7 luces", () => {
@@ -289,19 +373,23 @@ describe("buildSeedData", () => {
     expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/tipo de entrada inexistente: no-existe/);
   });
 
-  it("lanza si dos layouts del mismo recinto difieren", () => {
-    const base = VENUE_LAYOUTS_MOCK[0];
-    VENUE_LAYOUTS_MOCK.push({ ...structuredClone(base), eventSlug: "clasico-del-pacifico", viewBox: "0 0 700 560" });
-    const clasico = EVENTS_MOCK.find((event) => event.slug === "clasico-del-pacifico");
-    if (!clasico) throw new Error("falta clasico-del-pacifico");
-    clasico.ticketTypes = structuredClone(EVENTS_MOCK[0].ticketTypes);
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/Dos layouts distintos/);
+  it("lanza si una sección del mismo recinto tiene geometría distinta en dos layouts", () => {
+    const aventura = moveAventuraToStadium();
+    aventura.ticketTypes[0] = { ...aventura.ticketTypes[0], name: "VIP" };
+    const arenaVip = layoutBySlug(ARENA).zones.find((zone) => zone.id === "vip");
+    if (!arenaVip) throw new Error("falta la zona vip de la arena");
+    // Misma geometría de la sección: se comparte aunque el viewBox y el escenario del evento sean otros.
+    addAventuraLayout({ ...structuredClone(arenaVip), ticketTypeId: "entrada-libre" });
+    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).not.toThrow();
+
+    expect(arenaVip.path).not.toBe(SYNTHETIC_PATH);
+    VENUE_LAYOUTS_MOCK.at(-1)!.zones[0].path = SYNTHETIC_PATH;
+    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/geometría distinta/);
   });
 
   it("lanza si dos secciones del mismo recinto comparten slug con distinto nombre", () => {
-    const clasico = EVENTS_MOCK.find((event) => event.slug === "clasico-del-pacifico");
-    if (!clasico) throw new Error("falta clasico-del-pacifico");
-    clasico.ticketTypes[0] = { ...clasico.ticketTypes[0], id: "vip", name: "Otro VIP" };
+    const aventura = moveAventuraToStadium();
+    aventura.ticketTypes[0] = { ...aventura.ticketTypes[0], id: "vip", name: "Otro VIP" };
     expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/repetida con nombres distintos/);
   });
 });

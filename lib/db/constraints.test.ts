@@ -134,6 +134,19 @@ describeWithDb("restricciones (Postgres)", () => {
       ).toMatchObject({ code: "23514", constraint: "events_draft_complete_check" });
     });
 
+    it("events: map_view_box y map_stage van juntas (events_map_override_check, 23514)", async () => {
+      const mapStage = { label: "CANCHA", path: "M 0 0 L 10 0 L 10 10 Z", labelPos: { x: 5, y: 5 } };
+      const setMap = (map: Partial<Pick<typeof events.$inferInsert, "mapViewBox" | "mapStage">>) =>
+        rolledBack((tx) => tx.update(events).set(map).where(eq(events.id, publishedEventId)));
+
+      expect(await setMap({ mapViewBox: "0 0 600 300" })).toMatchObject({
+        code: "23514",
+        constraint: "events_map_override_check",
+      });
+      expect(await setMap({ mapStage })).toMatchObject({ code: "23514", constraint: "events_map_override_check" });
+      expect(await setMap({ mapViewBox: "0 0 600 300", mapStage })).not.toHaveProperty("code");
+    });
+
     it("saved_events: un favorito por usuario y evento (23505 en la PK)", async () => {
       const saved = { userId, eventId: publishedEventId };
       expect(await rolledBack((tx) => tx.insert(savedEvents).values(saved))).not.toHaveProperty("code");

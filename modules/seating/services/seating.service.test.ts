@@ -5,7 +5,7 @@ import { eventSeats, events } from "@/lib/db/schema/events";
 import { venueSeats, venueSections } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
 import { inRolledBackTransaction } from "@/lib/db/testTransaction";
-import { getEventBySlug } from "@/modules/events";
+import { getEventBySlug, getEvents } from "@/modules/events";
 import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
 import { PITCH_STAGE, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "../data/venueMaps.mock";
@@ -136,6 +136,19 @@ describe("seating.service", () => {
       expect(await getVenueMapBySlug("el-circo-de-las-estrellas")).toBeNull();
       expect(await getVenueMapBySlug("no-existe")).toBeNull();
       expect(await getVenueMapBySlug("feria-familiar-de-verano")).toBeNull();
+    });
+
+    it("usa el viewBox y el escenario propios del evento si los tiene", async () => {
+      const clasico = await getMap("clasico-del-pacifico");
+      const arena = await getMap("noche-de-sintetizadores-lima");
+
+      expect([clasico.venue, clasico.viewBox, clasico.stage.label]).toEqual(["Estadio Nacional", "0 0 600 392", "CANCHA"]);
+      expect([arena.venue, arena.viewBox, arena.stage.label]).toEqual(["Estadio Nacional", "0 0 600 640", "ESCENARIO"]);
+    });
+
+    it("todo evento publicado tiene mapa salvo los excluidos (el circo y la aventura)", async () => {
+      const slugs = (await getEvents()).map((event) => event.slug).filter((slug) => !NO_MAP_SLUGS.includes(slug));
+      expect(slugs.sort()).toEqual([...MAP_SLUGS].sort());
     });
   });
 
