@@ -571,11 +571,11 @@ Los roles no excluyen la compra: todos ven "Mi perfil" y "Mis entradas" y compra
 3. **Login sin redirección por rol:** `/login` pasa `fallbackRedirectUrl="/"` a `SignIn`. Con un `redirect_url` interno se vuelve a él (Clerk lo valida contra su propio origen y descarta los externos). Sin `redirect_url` se va a `/`, para todos los roles.
 4. **Archivos:** `accountLinks.ts`, `useSessionUser.ts`, `session.service.ts`, `actions/session.actions.ts` (nuevo), `app/(auth)/login/[[...rest]]/page.tsx` y sus tests.
 5. **Criterios de aceptación:**
-   - [ ] `getAccountLinks`: `customer` → Mi perfil y Mis entradas, sin panel; `organizer` → además "Panel de organizador" → `/organizador`; `admin` y `super_admin` → además "Panel" → `/admin/usuarios`. El menú y el `Sheet` usan esos enlaces.
-   - [ ] Un rol ausente o desconocido en `publicMetadata` no muestra el panel.
-   - [ ] `syncClerkRole`: si Clerk difiere de la BD escribe el rol de la BD y devuelve `changed: true`; si coincide no escribe; sin sesión no escribe.
-   - [ ] `syncSessionRoleAction`: sin parámetros; ante un error devuelve `changed: false`.
-   - [ ] `useSessionUser`: llama a la acción una vez por usuario y, con `changed`, recarga el usuario de Clerk.
+   - [x] `getAccountLinks`: `customer` → Mi perfil y Mis entradas, sin panel; `organizer` → además "Panel de organizador" → `/organizador`; `admin` y `super_admin` → además "Panel" → `/admin/usuarios`. El menú y el `Sheet` usan esos enlaces.
+   - [x] Un rol ausente o desconocido en `publicMetadata` no muestra el panel.
+   - [x] `syncClerkRole`: si Clerk difiere de la BD escribe el rol de la BD y devuelve `changed: true`; si coincide no escribe; sin sesión no escribe.
+   - [x] `syncSessionRoleAction`: sin parámetros; ante un error devuelve `changed: false`.
+   - [x] `useSessionUser`: llama a la acción una vez por usuario y, con `changed`, recarga el usuario de Clerk.
    - [ ] Manual, con `ronalehm@gmail.com` (`super_admin` en la BD): tras entrar, el menú muestra "Mi perfil", "Mis entradas" y "Panel" → `/admin/usuarios`, y puede comprar.
    - [ ] Manual: `/login` sin `redirect_url` lleva a `/` para todos los roles; `/login?redirect_url=/checkout/...` vuelve a esa ruta; `/login?redirect_url=https://ejemplo.com` no sale del sitio.
-   - [ ] Tests: `accountLinks.test.ts`, `useSessionUser.test.ts`, `session.service.test.ts`, `session.actions.test.ts`; se ajustan `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.
+   - [x] Tests: `accountLinks.test.ts`, `useSessionUser.test.ts`, `session.service.test.ts`, `session.actions.test.ts`; se ajustan `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.
