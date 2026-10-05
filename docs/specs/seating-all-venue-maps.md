@@ -953,7 +953,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
 - [x] T4. Sueños de una noche andina (requisito 10), con su test.
   - Archivos: `modules/seating/data/suenosDeUnaNocheAndina.mock.ts` (nuevo), `modules/seating/data/suenosDeUnaNocheAndina.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T5. Cierre: agregador, verificación con BD, build, Playwright de la Fase 2 y diseño de página.
+- [x] T5. Cierre: agregador, verificación con BD, build, Playwright de la Fase 2 y diseño de página.
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1–T4. Secuencial.
 
