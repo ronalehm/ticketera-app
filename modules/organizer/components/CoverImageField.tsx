@@ -9,15 +9,20 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
+import { COVER_IMAGE_RULES } from "../schemas/organizer.schema";
+import { ACCEPTED_COVER_IMAGE_TYPES, MAX_COVER_MEGABYTES } from "../utils/organizerEventForm";
+import { CoverCropPreview } from "./CoverCropPreview";
 import { FORM_CONTROL_SCROLL } from "./TicketTypesField";
 
-const ACCEPTED_TYPES = "image/png,image/jpeg";
+const ACCEPTED_TYPES = ACCEPTED_COVER_IMAGE_TYPES.join(",");
+const COVER_IMAGE_HINT = `JPG o PNG, hasta ${MAX_COVER_MEGABYTES} MB. Recomendado: 1920 × 1080 px (16:9); mínimo ${COVER_IMAGE_RULES.minWidth} × ${COVER_IMAGE_RULES.minHeight} px.`;
 
 type CoverImageFieldProps = {
   /** URL local (`blob:`) de la imagen elegida; `null` muestra la zona de subida. */
   previewUrl: string | null;
+  /** Error del archivo elegido o, sin él, el de portada obligatoria al publicar. */
   error?: string;
-  /** Recibe el archivo elegido o soltado; el formulario valida el tipo. */
+  /** Recibe el archivo elegido o soltado; el formulario lo valida (tipo, peso y tamaño). */
   onSelect: (file: File) => void;
   onRemove: () => void;
 };
@@ -69,7 +74,6 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
     type: "file",
     accept: ACCEPTED_TYPES,
     onChange: handleChange,
-    "aria-invalid": !!error,
   } as const;
 
   return (
@@ -113,7 +117,9 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
               Quitar imagen
             </Button>
           </div>
-          {/* Lo abre "Cambiar imagen"; fuera del orden de tabulación y del árbol de accesibilidad. */}
+          {/* Lo abre "Cambiar imagen"; fuera del orden de tabulación y del árbol de accesibilidad. Sin `aria-invalid`:
+              no se puede enfocar y el error de archivo con imagen previa no bloquea el envío, así que no debe atraer
+              el foco al publicar ("Cambiar imagen" ya enlaza el error). */}
           <input {...inputProps} hidden />
         </div>
       ) : (
@@ -125,6 +131,7 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
         >
           <input
             {...inputProps}
+            aria-invalid={!!error}
             aria-describedby={error ? `${hintId} ${errorId}` : hintId}
             className={cn("sr-only", FORM_CONTROL_SCROLL)}
           />
@@ -134,11 +141,16 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
             <span className="lg:hidden">Subir imagen</span>
           </span>
           <span id={hintId} className="text-sm text-muted-foreground">
-            JPG o PNG, horizontal (16:9)
+            {COVER_IMAGE_HINT}
           </span>
         </label>
       )}
+      <p className="text-sm text-muted-foreground">
+        Es la imagen principal de la página de tu evento. Deja lo importante (rostros, texto, logo) en el centro: cada
+        pantalla la recorta de forma distinta.
+      </p>
       <FieldError id={errorId}>{error}</FieldError>
+      {previewUrl && <CoverCropPreview src={previewUrl} className="mt-2" />}
     </div>
   );
 }

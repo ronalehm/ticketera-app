@@ -4,6 +4,7 @@ import type {
   organizerEventSchema,
   organizerEventStatusSchema,
   savedStatusSchema,
+  seatingModeSchema,
   ticketTypeKindSchema,
 } from "../schemas/organizer.schema";
 
@@ -17,7 +18,11 @@ export type SavedStatus = z.infer<typeof savedStatusSchema>;
 export type OrganizerEventFormValues = z.input<typeof organizerEventFormSchema>;
 export type TicketTypeRow = OrganizerEventFormValues["ticketTypes"][number];
 export type TicketTypeKind = z.infer<typeof ticketTypeKindSchema>;
-export type TicketTypeRowErrors = Partial<Record<"name" | "price" | "quantity" | "rows" | "seatsPerRow", string>>;
+/** "general" | "numbered" | "mixed": cómo se ubica el público del evento. */
+export type SeatingMode = z.infer<typeof seatingModeSchema>;
+export type TicketTypeRowErrors = Partial<
+  Record<"name" | "price" | "description" | "maxPerOrder" | "quantity" | "rows" | "seatsPerRow", string>
+>;
 /** Filas y asientos por fila de una zona numerada válida. */
 export type SeatGridSize = { rows: number; seatsPerRow: number };
 

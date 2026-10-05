@@ -15,7 +15,11 @@ const empty: OrganizerEventFormValues = {
   venue: "",
   city: "",
   address: "",
-  ticketTypes: [{ id: "row-1", name: "", price: "", kind: "general", quantity: "", rows: "", seatsPerRow: "" }],
+  seatingMode: "",
+  hasCoverImage: false,
+  ticketTypes: [
+    { id: "row-1", name: "", price: "", description: "", maxPerOrder: "10", kind: "general", quantity: "", rows: "", seatsPerRow: "" },
+  ],
 };
 
 describe("buildEventPreview", () => {
@@ -41,8 +45,8 @@ describe("buildEventPreview", () => {
       venue: " Teatro Municipal ",
       city: " Lima ",
       ticketTypes: [
-        { id: "row-1", name: "Platea", price: "120", kind: "general", quantity: "100", rows: "", seatsPerRow: "" },
-        { id: "row-2", name: "Mezanine", price: "80", kind: "general", quantity: "50", rows: "", seatsPerRow: "" },
+        { ...empty.ticketTypes[0], id: "row-1", name: "Platea", price: "120", quantity: "100" },
+        { ...empty.ticketTypes[0], id: "row-2", name: "Mezanine", price: "80", quantity: "50" },
       ],
     };
     expect(buildEventPreview(values, "blob:http://localhost/abc")).toEqual({

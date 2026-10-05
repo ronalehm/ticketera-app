@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EVENT_CATEGORIES } from "@/modules/events";
+import { CITIES, EVENT_CATEGORIES } from "@/modules/events/format";
 import type { OrganizerEventFormValues } from "../types/organizer.types";
 import {
+  COVER_IMAGE_RULES,
   EVENT_CATEGORY_OPTIONS,
   MIN_AGE_LABELS,
   MIN_AGE_OPTIONS,
@@ -9,6 +10,8 @@ import {
   organizerEventSchema,
   SEAT_GRID_LIMITS,
   savedStatusSchema,
+  seatingModeSchema,
+  TICKET_DESCRIPTION_MAX_LENGTH,
   ticketTypeFormSchema,
 } from "./organizer.schema";
 
@@ -53,7 +56,18 @@ describe("organizerEventSchema", () => {
   });
 });
 
-const emptyRow = { id: "row-1", name: "", price: "", kind: "general" as const, quantity: "", rows: "", seatsPerRow: "" };
+// Como la fila que crea el formulario: descripción vacía y máximo por compra 10.
+const emptyRow = {
+  id: "row-1",
+  name: "",
+  price: "",
+  description: "",
+  maxPerOrder: "10",
+  kind: "general" as const,
+  quantity: "",
+  rows: "",
+  seatsPerRow: "",
+};
 
 const emptyForm: OrganizerEventFormValues = {
   intent: "publish",
@@ -68,6 +82,8 @@ const emptyForm: OrganizerEventFormValues = {
   venue: "",
   city: "",
   address: "",
+  seatingMode: "",
+  hasCoverImage: false,
   ticketTypes: [emptyRow],
 };
 
@@ -84,13 +100,15 @@ const completeForm: OrganizerEventFormValues = {
   venue: "Estadio Nacional",
   city: "Lima",
   address: "Av. José Díaz s/n, Cercado de Lima",
+  seatingMode: "general",
+  hasCoverImage: true,
   ticketTypes: [
-    { id: "row-1", name: "General", price: "50", kind: "general", quantity: "100", rows: "", seatsPerRow: "" },
-    { id: "row-2", name: "VIP", price: "80", kind: "general", quantity: "50", rows: "", seatsPerRow: "" },
+    { ...emptyRow, id: "row-1", name: "General", price: "50", quantity: "100" },
+    { ...emptyRow, id: "row-2", name: "VIP", price: "80", description: "Zona preferente.", maxPerOrder: "4", quantity: "50" },
   ],
 };
 
-const numberedRow = { id: "row-3", name: "Platea", price: "120", kind: "numbered" as const, quantity: "", rows: "10", seatsPerRow: "20" };
+const numberedRow = { ...emptyRow, id: "row-3", name: "Platea", price: "120", kind: "numbered" as const, rows: "10", seatsPerRow: "20" };
 
 /** Mensajes agrupados por ruta ("ticketTypes.0.name"). */
 function getMessages(values: OrganizerEventFormValues): Record<string, string> {
@@ -130,6 +148,19 @@ describe("organizerEventFormSchema", () => {
       const values = { ...emptyForm, intent: "draft" as const, name: "Mi borrador", date: "2020-01-01", time: "25:00" };
       expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
     });
+
+    it("no da errores de modo, ciudad, portada, máximo por compra ni descripción", () => {
+      const values: OrganizerEventFormValues = {
+        ...emptyForm,
+        intent: "draft",
+        name: "Mi borrador",
+        city: "Chiclayo",
+        hasCoverImage: false,
+        ticketTypes: [{ ...emptyRow, maxPerOrder: "0", description: "x".repeat(151) }, { ...emptyRow, id: "row-2", maxPerOrder: "" }],
+      };
+      expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
+      expect(organizerEventFormSchema.safeParse({ ...values, seatingMode: "mixed" }).success).toBe(true);
+    });
   });
 
   describe("publicar", () => {
@@ -142,8 +173,10 @@ describe("organizerEventFormSchema", () => {
         time: "Indica la hora de inicio",
         doorsOpen: "Indica la hora de apertura de puertas",
         venue: "Indica el lugar del evento",
-        city: "Indica la ciudad",
+        city: "Elige la ciudad",
         address: "Indica la dirección del lugar",
+        hasCoverImage: "Sube la imagen de portada",
+        seatingMode: "Elige cómo se ubica el público",
         "ticketTypes.0.name": "Ingresa el nombre del tipo de entrada",
         "ticketTypes.0.price": "Ingresa el precio",
         "ticketTypes.0.quantity": "Ingresa la cantidad",
@@ -163,7 +196,7 @@ describe("organizerEventFormSchema", () => {
         description: "Agrega una descripción del evento",
         organizer: "Indica el nombre del organizador",
         venue: "Indica el lugar del evento",
-        city: "Indica la ciudad",
+        city: "Elige la ciudad",
         address: "Indica la dirección del lugar",
       });
     });
@@ -188,7 +221,7 @@ describe("organizerEventFormSchema", () => {
 
     it("acepta zonas generales y numeradas mezcladas", () => {
       const ticketTypes = [...completeForm.ticketTypes, numberedRow];
-      expect(organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes }).success).toBe(true);
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, seatingMode: "mixed", ticketTypes }).success).toBe(true);
     });
 
     it("asigna el error de una zona numerada a su índice y campo", () => {
@@ -203,6 +236,95 @@ describe("organizerEventFormSchema", () => {
       const ticketTypes = [completeForm.ticketTypes[0], { ...numberedRow, rows: "0" }];
       const result = organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes });
       expect(result.error?.issues.map((issue) => issue.path)).toEqual([["ticketTypes", 1, "rows"]]);
+    });
+  });
+
+  describe("modo de ubicación", () => {
+    const mixedError = "Un evento mixto necesita al menos una zona general (de pie) y una numerada";
+
+    it("sin elegir da \"Elige cómo se ubica el público\"", () => {
+      expect(getMessages({ ...completeForm, seatingMode: "" })).toEqual({ seatingMode: "Elige cómo se ubica el público" });
+    });
+
+    it("mixto con solo zonas generales da el error de mixto en seatingMode", () => {
+      expect(getMessages({ ...completeForm, seatingMode: "mixed" })).toEqual({ seatingMode: mixedError });
+    });
+
+    it("mixto con solo zonas numeradas da el error de mixto", () => {
+      const ticketTypes = [numberedRow, { ...numberedRow, id: "row-4" }];
+      expect(getMessages({ ...completeForm, seatingMode: "mixed", ticketTypes })).toEqual({ seatingMode: mixedError });
+    });
+
+    it("mixto con una zona general y una numerada válidas es válido", () => {
+      const ticketTypes = [completeForm.ticketTypes[0], numberedRow];
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, seatingMode: "mixed", ticketTypes }).success).toBe(true);
+    });
+
+    it("\"general\" solo con zonas generales y \"numbered\" solo con numeradas son válidos", () => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, seatingMode: "general" }).success).toBe(true);
+      const values = { ...completeForm, seatingMode: "numbered" as const, ticketTypes: [numberedRow] };
+      expect(organizerEventFormSchema.safeParse(values).success).toBe(true);
+    });
+
+    it("rechaza un modo desconocido, también en borrador", () => {
+      const values = { ...completeForm, seatingMode: "vip" } as unknown as OrganizerEventFormValues;
+      expect(Object.keys(getMessages(values))).toEqual(["seatingMode"]);
+      expect(Object.keys(getMessages({ ...values, intent: "draft" }))).toEqual(["seatingMode"]);
+    });
+  });
+
+  describe("ciudad", () => {
+    it("una ciudad fuera de la lista da \"Elige la ciudad\"", () => {
+      expect(getMessages({ ...completeForm, city: "Chiclayo" })).toEqual({ city: "Elige la ciudad" });
+    });
+
+    it.each(CITIES)("%s es válida", (city) => {
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, city }).success).toBe(true);
+    });
+  });
+
+  describe("portada", () => {
+    it("sin portada da \"Sube la imagen de portada\" con path [\"hasCoverImage\"]", () => {
+      const result = organizerEventFormSchema.safeParse({ ...completeForm, hasCoverImage: false });
+      expect(result.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+        [["hasCoverImage"], "Sube la imagen de portada"],
+      ]);
+    });
+  });
+
+  describe("máximo por compra y descripción de las filas", () => {
+    it.each([
+      ["", "Ingresa el máximo por compra"],
+      ["0", "El máximo por compra debe ser un número entero entre 1 y 10"],
+      ["11", "El máximo por compra debe ser un número entero entre 1 y 10"],
+      ["2.5", "El máximo por compra debe ser un número entero entre 1 y 10"],
+    ])("máximo %j da un solo mensaje con path [\"ticketTypes\", i, \"maxPerOrder\"]", (maxPerOrder, message) => {
+      const ticketTypes = [completeForm.ticketTypes[0], { ...completeForm.ticketTypes[1], maxPerOrder }];
+      const result = organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes });
+      expect(result.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+        [["ticketTypes", 1, "maxPerOrder"], message],
+      ]);
+    });
+
+    it.each(["1", "10", " 5 "])("máximo %j es válido", (maxPerOrder) => {
+      const ticketTypes = [{ ...completeForm.ticketTypes[0], maxPerOrder }];
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes }).success).toBe(true);
+    });
+
+    it("una descripción de 151 caracteres da error y una de 150 no", () => {
+      const withDescription = (description: string) => ({
+        ...completeForm,
+        ticketTypes: [{ ...completeForm.ticketTypes[0], description }],
+      });
+      expect(getMessages(withDescription("x".repeat(151)))).toEqual({
+        "ticketTypes.0.description": "La descripción debe tener como máximo 150 caracteres",
+      });
+      expect(organizerEventFormSchema.safeParse(withDescription("x".repeat(150))).success).toBe(true);
+    });
+
+    it("la longitud de la descripción se mide sin espacios al inicio ni al final", () => {
+      const ticketTypes = [{ ...completeForm.ticketTypes[0], description: `  ${"x".repeat(150)}  ` }];
+      expect(organizerEventFormSchema.safeParse({ ...completeForm, ticketTypes }).success).toBe(true);
     });
   });
 
@@ -277,7 +399,17 @@ describe("organizerEventFormSchema", () => {
 });
 
 describe("ticketTypeFormSchema", () => {
-  const row = { id: "row-1", name: "General", price: "50", kind: "general", quantity: "100", rows: "", seatsPerRow: "" };
+  const row = {
+    id: "row-1",
+    name: "General",
+    price: "50",
+    description: "",
+    maxPerOrder: "10",
+    kind: "general",
+    quantity: "100",
+    rows: "",
+    seatsPerRow: "",
+  };
 
   function getRowMessages(values: Partial<Record<keyof typeof row, string>>): string[] {
     const result = ticketTypeFormSchema.safeParse({ ...row, ...values });
@@ -295,6 +427,15 @@ describe("ticketTypeFormSchema", () => {
 
   it("define los límites de la zona numerada", () => {
     expect(SEAT_GRID_LIMITS).toEqual({ maxRows: 30, maxSeatsPerRow: 60 });
+  });
+
+  it("aplica el máximo por compra y la descripción también a las zonas numeradas", () => {
+    expect(
+      getRowMessagesByField({ kind: "numbered", rows: "10", seatsPerRow: "20", maxPerOrder: "11", description: "x".repeat(151) }),
+    ).toEqual({
+      maxPerOrder: ["El máximo por compra debe ser un número entero entre 1 y 10"],
+      description: ["La descripción debe tener como máximo 150 caracteres"],
+    });
   });
 
   it("una fila general válida pasa aunque filas y asientos sean basura", () => {
@@ -365,6 +506,17 @@ describe("ticketTypeFormSchema", () => {
 
   it("exige el nombre", () => {
     expect(getRowMessages({ name: " " })).toEqual(["Ingresa el nombre del tipo de entrada"]);
+  });
+});
+
+describe("constantes del formulario", () => {
+  it("define los modos de ubicación", () => {
+    expect(seatingModeSchema.options).toEqual(["general", "numbered", "mixed"]);
+  });
+
+  it("define el largo de la descripción y las reglas de la portada", () => {
+    expect(TICKET_DESCRIPTION_MAX_LENGTH).toBe(150);
+    expect(COVER_IMAGE_RULES).toEqual({ maxBytes: 5 * 1024 * 1024, minWidth: 1200, minHeight: 675 });
   });
 });
 
