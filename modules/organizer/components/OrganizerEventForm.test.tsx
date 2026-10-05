@@ -591,6 +591,25 @@ describe("OrganizerEventForm", () => {
       expect(createObjectURL).toHaveBeenCalledTimes(1);
     });
 
+    it("con portada válida, un archivo rechazado no atrae el foco al publicar: va al siguiente campo con error", async () => {
+      render(<OrganizerEventForm />);
+      await fillValid();
+      uploadCover(imageFile("animada.gif", { type: "image/gif" }));
+      expect(await screen.findByText("Sube una imagen en formato JPG o PNG.")).toBeTruthy();
+      expect(coverInput().hasAttribute("aria-invalid")).toBe(false);
+      expect(describedTexts(screen.getByRole("button", { name: "Cambiar imagen" }))).toEqual([
+        "Sube una imagen en formato JPG o PNG.",
+      ]);
+
+      type(rowInput(1, "Máximo por compra"), "0");
+      fireEvent.click(publishButton());
+
+      expect(await screen.findByText(MAX_RANGE_ERROR)).toBeTruthy();
+      expect(document.activeElement).toBe(rowInput(1, "Máximo por compra"));
+      expect(coverPreview()?.getAttribute("src")).toBe("blob:http://localhost/portada.png");
+      expect(push).not.toHaveBeenCalled();
+    });
+
     it("una imagen que no se puede leer muestra su error", async () => {
       createImageBitmapMock.mockRejectedValueOnce(new Error("decode"));
       render(<OrganizerEventForm />);

@@ -135,9 +135,11 @@ export function toOrganizerEvent(values: OrganizerEventFormValues, id: string): 
   };
 }
 
-const ACCEPTED_COVER_IMAGE_TYPES = ["image/png", "image/jpeg"];
+/** Tipos MIME aceptados para la portada (JPG o PNG): los usan la validación y el `accept` del input. */
+export const ACCEPTED_COVER_IMAGE_TYPES: readonly string[] = ["image/png", "image/jpeg"];
 
-const MAX_COVER_MEGABYTES = COVER_IMAGE_RULES.maxBytes / (1024 * 1024);
+/** Peso máximo de la portada en MB, para los textos. */
+export const MAX_COVER_MEGABYTES = COVER_IMAGE_RULES.maxBytes / (1024 * 1024);
 
 /**
  * Primer error de una portada, en orden: tipo (JPG o PNG), peso, lectura y tamaño mínimo. `null` si es válida.

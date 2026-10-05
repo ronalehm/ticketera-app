@@ -10,11 +10,12 @@ import { FieldError } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 import { COVER_IMAGE_RULES } from "../schemas/organizer.schema";
+import { ACCEPTED_COVER_IMAGE_TYPES, MAX_COVER_MEGABYTES } from "../utils/organizerEventForm";
 import { CoverCropPreview } from "./CoverCropPreview";
 import { FORM_CONTROL_SCROLL } from "./TicketTypesField";
 
-const ACCEPTED_TYPES = "image/png,image/jpeg";
-const COVER_IMAGE_HINT = `JPG o PNG, hasta ${COVER_IMAGE_RULES.maxBytes / (1024 * 1024)} MB. Recomendado: 1920 × 1080 px (16:9); mínimo ${COVER_IMAGE_RULES.minWidth} × ${COVER_IMAGE_RULES.minHeight} px.`;
+const ACCEPTED_TYPES = ACCEPTED_COVER_IMAGE_TYPES.join(",");
+const COVER_IMAGE_HINT = `JPG o PNG, hasta ${MAX_COVER_MEGABYTES} MB. Recomendado: 1920 × 1080 px (16:9); mínimo ${COVER_IMAGE_RULES.minWidth} × ${COVER_IMAGE_RULES.minHeight} px.`;
 
 type CoverImageFieldProps = {
   /** URL local (`blob:`) de la imagen elegida; `null` muestra la zona de subida. */
@@ -73,7 +74,6 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
     type: "file",
     accept: ACCEPTED_TYPES,
     onChange: handleChange,
-    "aria-invalid": !!error,
   } as const;
 
   return (
@@ -117,7 +117,9 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
               Quitar imagen
             </Button>
           </div>
-          {/* Lo abre "Cambiar imagen"; fuera del orden de tabulación y del árbol de accesibilidad. */}
+          {/* Lo abre "Cambiar imagen"; fuera del orden de tabulación y del árbol de accesibilidad. Sin `aria-invalid`:
+              no se puede enfocar y el error de archivo con imagen previa no bloquea el envío, así que no debe atraer
+              el foco al publicar ("Cambiar imagen" ya enlaza el error). */}
           <input {...inputProps} hidden />
         </div>
       ) : (
@@ -129,6 +131,7 @@ export function CoverImageField({ previewUrl, error, onSelect, onRemove }: Cover
         >
           <input
             {...inputProps}
+            aria-invalid={!!error}
             aria-describedby={error ? `${hintId} ${errorId}` : hintId}
             className={cn("sr-only", FORM_CONTROL_SCROLL)}
           />
