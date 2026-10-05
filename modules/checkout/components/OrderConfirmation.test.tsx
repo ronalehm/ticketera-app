@@ -1,9 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { downloadIcs } from "@/lib/calendar";
 import { downloadTicketsPdf } from "@/lib/ticketPdf";
-import { useOrdersStore } from "../stores/orders.store";
 import type { Order } from "../types/checkout.types";
 import { OrderConfirmation } from "./OrderConfirmation";
 
@@ -14,7 +13,7 @@ vi.mock("@/lib/calendar", async (importOriginal) => ({
 
 vi.mock("@/lib/ticketPdf", () => ({ downloadTicketsPdf: vi.fn().mockResolvedValue(undefined) }));
 
-const CODE = "MT-AB12CD";
+const CODE = "TK-1001";
 
 const ORDER: Order = {
   code: CODE,
@@ -59,12 +58,8 @@ const ORDER: Order = {
   ],
 };
 
-function saveOrder(order: Order) {
-  localStorage.setItem("mentec-orders", JSON.stringify({ state: { orders: [order] }, version: 0 }));
-}
-
-function renderConfirmation(code = CODE) {
-  return render(<OrderConfirmation code={code} />);
+function renderConfirmation(order: Order = ORDER) {
+  return render(<OrderConfirmation order={order} />);
 }
 
 const getSteps = () => screen.queryByRole("list", { name: "Pasos de la compra" });
@@ -73,12 +68,6 @@ const getSteps = () => screen.queryByRole("list", { name: "Pasos de la compra" }
 const byFullText = (tagName: string, text: string) => (_: string, element: Element | null) =>
   element?.tagName === tagName && element.textContent === text;
 
-const findConfirmed = () => screen.findByRole("heading", { level: 1, name: "¡Compra confirmada!" });
-
-beforeEach(() => {
-  useOrdersStore.setState({ orders: [] });
-  localStorage.clear(); // setState también persiste
-});
 
 afterEach(() => {
   cleanup();
@@ -88,23 +77,10 @@ afterEach(() => {
 });
 
 describe("OrderConfirmation", () => {
-  it("muestra Cargando tu compra… con la cabecera de compra solo con el logo antes de leer la orden", async () => {
-    saveOrder(ORDER);
+  it("con la orden muestra el h1, la confirmación, la tarjeta-entrada, el stepper y Ver mis entradas", () => {
     renderConfirmation();
 
-    expect(screen.getByRole("status").textContent).toContain("Cargando tu compra…");
-    expect(screen.getByRole("link", { name: "Mentec Tickets" }).getAttribute("href")).toBe("/");
-    expect(getSteps()).toBeNull();
-    await findConfirmed();
-    expect(screen.queryByText("Cargando tu compra…")).toBeNull();
-  });
-
-  it("con una orden guardada muestra la confirmación, la tarjeta-entrada, el stepper y Ver mis entradas", async () => {
-    saveOrder(ORDER);
-    renderConfirmation();
-
-    await findConfirmed();
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("¡Compra confirmada!");
     expect(screen.getAllByRole("banner")).toHaveLength(1);
     expect(screen.getAllByRole("main")).toHaveLength(1);
 
@@ -133,10 +109,8 @@ describe("OrderConfirmation", () => {
     expect(screen.getByRole("link", { name: "Ver mis entradas" }).getAttribute("href")).toBe("/mis-entradas");
   });
 
-  it("Qué sigue tiene el h2 visible solo por debajo de md y cada tarjeta con el texto corto y el largo por ancho", async () => {
-    saveOrder(ORDER);
+  it("Qué sigue tiene el h2 visible solo por debajo de md, Descarga tus entradas en vez de Revisa tu correo y el texto corto y el largo por ancho", () => {
     renderConfirmation();
-    await findConfirmed();
 
     const heading = screen.getByRole("heading", { level: 2, name: "Qué sigue" });
     expect(heading.classList.contains("md:sr-only")).toBe(true);
@@ -145,7 +119,6 @@ describe("OrderConfirmation", () => {
     const section = screen.getByRole("region", { name: "Qué sigue" });
     const steps = within(section).getAllByRole("listitem");
     const texts = [
-      ["Ahí llegan tus entradas y el comprobante.", "Ahí llegan tus entradas y el comprobante de pago."],
       [
         "Cada entrada tiene su QR. Muéstralo en el ingreso.",
         "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso.",
@@ -155,31 +128,29 @@ describe("OrderConfirmation", () => {
         "Entra con tu cuenta para ver y descargar tus entradas cuando quieras.",
       ],
     ];
-    expect(steps).toHaveLength(texts.length);
-    steps.forEach((step, index) => {
+    expect(steps).toHaveLength(3);
+    expect(steps[0].textContent).toBe("Descarga tus entradasGuárdalas en PDF o muéstralas desde Mis entradas.");
+    expect(within(section).queryByText(/Revisa tu correo/)).toBeNull();
+    steps.slice(1).forEach((step, index) => {
       const [shortText, longText] = texts[index];
       expect(within(step).getByText(shortText).className).toBe("md:hidden");
       expect(within(step).getByText(longText).className).toBe("max-md:hidden");
     });
   });
 
-  it("muestra el correo del comprador en negrita en la cabecera", async () => {
-    saveOrder(ORDER);
+  it("muestra el correo del comprador en negrita en la cabecera", () => {
     renderConfirmation();
-    await findConfirmed();
 
     const email = screen.getByText("luis@correo.pe");
     expect(email.tagName).toBe("STRONG");
     expect(email.className).toContain("break-all");
     expect(email.parentElement?.textContent).toBe(
-      "Enviamos tus entradas a luis@correo.pe. También las tienes siempre en Mis entradas.",
+      "Tus entradas están listas. Te las mostramos abajo y también las tienes en Mis entradas con tu cuenta de luis@correo.pe.",
     );
   });
 
-  it("la tarjeta-entrada muestra la fecha sin año ni hora y los asientos compactos por zona, sin Asientos", async () => {
-    saveOrder(ORDER);
+  it("la tarjeta-entrada muestra la fecha sin año ni hora y los asientos compactos por zona, sin Asientos", () => {
     renderConfirmation();
-    await findConfirmed();
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     const date = within(card).getByText("sábado 14 de noviembre");
@@ -192,14 +163,12 @@ describe("OrderConfirmation", () => {
     expect(within(card).queryByText(/2026|21:00|9:00/)).toBeNull();
   });
 
-  it("con una orden sin asientos la tarjeta-entrada no muestra líneas de asientos", async () => {
-    saveOrder({
+  it("con una orden sin asientos la tarjeta-entrada no muestra líneas de asientos", () => {
+    renderConfirmation({
       ...ORDER,
       items: ORDER.items.map((item) => ({ ...item, seats: undefined })),
       tickets: ORDER.tickets.map((ticket) => ({ ...ticket, seatLabel: undefined })),
     });
-    renderConfirmation();
-    await findConfirmed();
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).queryByText(/Fila/)).toBeNull();
@@ -207,10 +176,8 @@ describe("OrderConfirmation", () => {
     expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
   });
 
-  it("Agregar al calendario descarga <slug>.ics con el título del evento", async () => {
-    saveOrder(ORDER);
+  it("Agregar al calendario descarga <slug>.ics con el título del evento", () => {
     renderConfirmation();
-    await findConfirmed();
 
     fireEvent.click(screen.getByRole("button", { name: "Agregar al calendario" }));
 
@@ -224,9 +191,7 @@ describe("OrderConfirmation", () => {
 
   it("Descargar PDF descarga el PDF del pedido sin abrir el diálogo de impresión", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
-    saveOrder(ORDER);
     renderConfirmation();
-    await findConfirmed();
 
     fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
 
@@ -241,10 +206,8 @@ describe("OrderConfirmation", () => {
     expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
   });
 
-  it("el talón muestra código y titular de la entrada actual y recorre todas las entradas del pedido", async () => {
-    saveOrder(ORDER);
+  it("el talón muestra código y titular de la entrada actual y recorre todas las entradas del pedido", () => {
     renderConfirmation();
-    await findConfirmed();
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     const pager = within(card).getByRole("group", { name: "Entradas del pedido" });
@@ -273,20 +236,16 @@ describe("OrderConfirmation", () => {
     expect(within(card).getByText("Entradas").nextElementSibling?.textContent).toBe("3");
   });
 
-  it("el talón no muestra la línea Titular si el titular está vacío", async () => {
-    saveOrder({ ...ORDER, tickets: ORDER.tickets.map((ticket) => ({ ...ticket, holderName: " " })) });
-    renderConfirmation();
-    await findConfirmed();
+  it("el talón no muestra la línea Titular si el titular está vacío", () => {
+    renderConfirmation({ ...ORDER, tickets: ORDER.tickets.map((ticket) => ({ ...ticket, holderName: " " })) });
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).getByText(`${CODE}-01`).textContent).toBe(`Código de entrada: ${CODE}-01`);
     expect(within(card).queryByText(/Titular/)).toBeNull();
   });
 
-  it("con una sola entrada muestra Entrada 1 de 1 con ambas flechas deshabilitadas", async () => {
-    saveOrder({ ...ORDER, ticketCount: 1, tickets: ORDER.tickets.slice(0, 1) });
-    renderConfirmation();
-    await findConfirmed();
+  it("con una sola entrada muestra Entrada 1 de 1 con ambas flechas deshabilitadas", () => {
+    renderConfirmation({ ...ORDER, ticketCount: 1, tickets: ORDER.tickets.slice(0, 1) });
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
     expect(within(card).getByText("Entrada 1 de 1")).toBeTruthy();
@@ -295,9 +254,7 @@ describe("OrderConfirmation", () => {
   });
 
   it("Descargar PDF incluye todas las entradas del pedido aunque se vea otra entrada", async () => {
-    saveOrder(ORDER);
     renderConfirmation();
-    await findConfirmed();
 
     fireEvent.click(screen.getByRole("button", { name: "Entrada siguiente" }));
     expect(screen.getByText("Entrada 2 de 3")).toBeTruthy();
@@ -309,24 +266,10 @@ describe("OrderConfirmation", () => {
     expect(await screen.findByRole("button", { name: "Descargar PDF" })).toBeTruthy();
   });
 
-  it("no renderiza la región solo-impresión Tus entradas", async () => {
-    saveOrder(ORDER);
+  it("no renderiza la región solo-impresión Tus entradas", () => {
     renderConfirmation();
-    await findConfirmed();
 
     expect(screen.queryByRole("region", { name: "Tus entradas" })).toBeNull();
     expect(screen.queryByText("Tus entradas")).toBeNull();
-  });
-
-  it("con un código que no está en el navegador muestra No encontramos tu compra con la cabecera solo con el logo", async () => {
-    saveOrder(ORDER);
-    renderConfirmation("MT-ZZZZZZ");
-
-    expect(await screen.findByRole("heading", { level: 1, name: "No encontramos tu compra" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Volver al inicio" }).getAttribute("href")).toBe("/");
-    expect(screen.getByRole("link", { name: "Mentec Tickets" }).getAttribute("href")).toBe("/");
-    expect(getSteps()).toBeNull();
-    expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(screen.queryByRole("article")).toBeNull();
   });
 });

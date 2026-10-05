@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { EventCategory, EventDetail } from "@/modules/events";
-import type { checkoutBuyerSchema, checkoutFormSchema, PAYMENT_METHODS } from "../schemas/payment.schema";
+import type { checkoutBuyerSchema } from "../schemas/payment.schema";
 
 export type CheckoutOrderItem = {
   ticketTypeId: string;
@@ -41,16 +41,14 @@ export type PayOrderResult =
   | { ok: true; clientSecret: string }
   | { ok: false; error: "invalid-input" | "order-expired" | "order-unavailable" | "payment-error" };
 
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-
-export type CheckoutFormValues = z.input<typeof checkoutFormSchema>;
-export type CheckoutFormData = z.output<typeof checkoutFormSchema>;
+export type CheckoutFormValues = z.input<typeof checkoutBuyerSchema>;
+export type CheckoutFormData = z.output<typeof checkoutBuyerSchema>;
 
 // Contrato E: vista de una orden pagada (la leen la confirmación, "Mis entradas" y el PDF).
-export type OrderTicket = { code: string /* MT-AB12CD-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
+export type OrderTicket = { code: string /* TK-<n>-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
 
 export type Order = {
-  code: string; // "MT-" + 6 chars A-Z0-9
+  code: string; // "TK-<n>" (orders.code)
   createdAt: string; // ISO
   ownerEmail: string; // correo del comprador (en minúsculas)
   event: { slug: string; title: string; category: EventCategory; startsAt: string; venue: string; city: string; imageUrl: string };
@@ -60,16 +58,6 @@ export type Order = {
   paymentMethod: "card" | "yape" | "pagoefectivo";
   buyer: { name: string; email: string };
   tickets: OrderTicket[];
-};
-
-/** Datos del comprador que recibe el pago simulado (`buildOrder`); desaparece con él en F5. */
-export type OrderBuyer = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  documentType: "dni" | "ce" | "passport";
-  documentNumber: string;
 };
 
 export type ConfirmationState = "paid" | "refunded" | "processing" | "payment-failed" | "expired" | "not-found";

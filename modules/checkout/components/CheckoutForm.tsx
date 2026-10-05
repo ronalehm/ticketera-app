@@ -3,7 +3,9 @@
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import type { Appearance, Stripe, StripePaymentElementOptions } from "@stripe/stripe-js";
 import { CircleAlert, Lock } from "lucide-react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -21,11 +23,9 @@ import { INLINE_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
 import { useSessionUser } from "@/modules/auth/session";
 import { formatEventPrice } from "@/modules/events/format";
-import { checkoutFormSchema } from "../schemas/payment.schema";
-import { PaymentError, processMockPayment } from "../services/payment.service";
-import type { MockPaymentInput } from "../services/payment.service";
-import { persistOrder } from "../stores/orders.store";
-import type { CheckoutFormValues, CheckoutOrder } from "../types/checkout.types";
+import { payOrder } from "../actions/checkout.actions";
+import { checkoutBuyerSchema } from "../schemas/payment.schema";
+import type { CheckoutFormValues, CheckoutOrder, PayOrderResult } from "../types/checkout.types";
 import { CheckoutSummaryPanel } from "./CheckoutSummaryPanel";
 import { OrderSummary } from "./OrderSummary";
 import { PaymentMethodFields } from "./PaymentMethodFields";
@@ -34,6 +34,38 @@ import { ReservationTimer } from "./ReservationTimer";
 
 const PAYMENT_TITLE_ID = "checkout-payment-title";
 const UNEXPECTED_ERROR = "Ocurrió un error inesperado al procesar el pago. Inténtalo de nuevo.";
+const PAY_ORDER_ERRORS: Record<Extract<PayOrderResult, { ok: false }>["error"], string> = {
+  "order-expired": "Tu reserva expiró. Vuelve a elegir tus entradas.",
+  "order-unavailable": "Esta compra ya no está disponible.",
+  "invalid-input": "No pudimos iniciar el pago. Inténtalo de nuevo.",
+  "payment-error": "No pudimos iniciar el pago. Inténtalo de nuevo.",
+};
+
+// El iframe de Stripe no lee variables CSS: valores de los tokens de design-system/ticketera/MASTER.md (decisión 25).
+const STRIPE_APPEARANCE: Appearance = {
+  theme: "stripe",
+  variables: {
+    colorPrimary: "#0072F6", // --primary
+    colorText: "#010817", // --foreground
+    colorTextSecondary: "#5A6070", // --muted-foreground
+    colorDanger: "#E5484D", // --destructive
+    colorBackground: "#FFFFFF", // --background
+    borderRadius: "12px", // --radius (0.75rem)
+    fontSizeBase: "16px",
+    fontFamily: "ui-sans-serif, system-ui, sans-serif", // Creato Display no carga dentro del iframe
+  },
+  // Stripe no admite `height`/`minHeight` en `rules`: 12 + 20 + 12 px + 2 px de borde = 46 px (>= 44 px táctiles).
+  rules: { ".Input": { borderColor: "#D4D4D8" /* --input */, padding: "12px", lineHeight: "20px" } },
+};
+
+// Nombre, correo y celular salen del formulario del comprador (van en `confirmPayment`); sin billeteras.
+const PAYMENT_ELEMENT_OPTIONS: StripePaymentElementOptions = {
+  fields: { billingDetails: { name: "never", email: "never", phone: "never" } },
+  wallets: { applePay: "never", googlePay: "never" },
+};
+
+// Una sola instancia de Stripe por pestaña: la clave publicable no cambia en tiempo de ejecución.
+let stripePromise: Promise<Stripe | null> | null = null;
 const PREFILL_FIELDS = ["firstName", "lastName", "email"] as const;
 
 type TextField = "firstName" | "lastName" | "email" | "phone" | "documentNumber";
@@ -52,11 +84,6 @@ const INITIAL_VALUES: CheckoutFormValues = {
   phone: "",
   documentType: "dni",
   documentNumber: "",
-  paymentMethod: "card",
-  cardNumber: "",
-  cardExpiry: "",
-  cardCvv: "",
-  cardName: "",
   acceptTerms: false,
 };
 
@@ -105,18 +132,53 @@ function PayButton({ totalLabel, isProcessing, disabled, termsPending, className
 
 type CheckoutFormProps = {
   order: CheckoutOrder;
+  /** Id (UUID) de la orden `pending` en la BD. */
+  orderId: string;
+  /** Importe de la orden en céntimos: solo para pintar el Payment Element (el cobro lo fija el servidor). */
+  amountCents: number;
   /** Milisegundos que le quedan a la reserva (`getPendingCheckout`). */
   remainingMs: number;
   changeHref: string;
+  /** `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (la página la lee de `publicEnv`). */
+  publishableKey: string;
 };
 
-export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormProps) {
-  const router = useRouter();
+/** Checkout con Stripe: Elements en modo diferido (el PaymentIntent se crea al pulsar "Pagar"). */
+export function CheckoutForm({ amountCents, publishableKey, ...props }: CheckoutFormProps) {
+  stripePromise ??= loadStripe(publishableKey);
+  return (
+    <Elements
+      stripe={stripePromise}
+      options={{
+        mode: "payment",
+        amount: amountCents,
+        currency: "pen",
+        allowedPaymentMethodTypes: ["card"],
+        appearance: STRIPE_APPEARANCE,
+        locale: "es-419",
+      }}
+    >
+      <CheckoutFormContent {...props} />
+    </Elements>
+  );
+}
+
+type PaymentElementStatus = "loading" | "ready" | "error";
+
+// Los hooks de Stripe (`useStripe`, `useElements`) solo funcionan dentro de `Elements`.
+function CheckoutFormContent({
+  order,
+  orderId,
+  remainingMs,
+  changeHref,
+}: Omit<CheckoutFormProps, "amountCents" | "publishableKey">) {
+  const stripe = useStripe();
+  const elements = useElements();
   const { user } = useSessionUser();
+  const [paymentElementStatus, setPaymentElementStatus] = useState<PaymentElementStatus>("loading");
   const [isExpired, setIsExpired] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  // Tras un pago aprobado, useZodForm vuelve a isSubmitting=false mientras la navegación sigue en curso:
-  // este estado mantiene "Pagar" bloqueado para que no se pueda crear una segunda orden.
+  // Si `confirmPayment` resuelve sin error, Stripe ya está redirigiendo: "Pagar" sigue bloqueado.
   const [isRedirecting, setIsRedirecting] = useState(false);
   // Guarda síncrona contra envíos concurrentes: dos requestSubmit() en el mismo tick llegan antes de que React
   // re-renderice, así que isSubmitting/isRedirecting aún valen false en el segundo. Se libera solo si el pago falla.
@@ -124,7 +186,7 @@ export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormPro
   const paymentErrorRef = useRef<HTMLDivElement>(null);
   const termsRef = useRef<HTMLElement>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
-    checkoutFormSchema,
+    checkoutBuyerSchema,
     INITIAL_VALUES,
   );
   const isDni = values.documentType === "dni";
@@ -150,38 +212,55 @@ export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormPro
   }, [paymentError]);
 
   const isProcessing = isSubmitting || isRedirecting;
+  const isPaymentReady = !!stripe && !!elements && paymentElementStatus === "ready";
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     // Se corta antes de handleSubmit: si no, su `finally` pondría isSubmitting=false con el primer pago aún en curso.
-    if (isExpired || isProcessing || paymentInFlightRef.current) {
+    if (!stripe || !elements || !isPaymentReady || isExpired || isProcessing || paymentInFlightRef.current) {
       event.preventDefault();
       return;
     }
-    // Sin Términos no se valida (ni errores ni service): el foco va a la casilla, que explica por qué no se paga.
+    // Sin Términos no se valida (ni errores ni Stripe): el foco va a la casilla, que explica por qué no se paga.
     if (!values.acceptTerms) {
       event.preventDefault();
       termsRef.current?.focus();
       return;
     }
-    handleSubmit(async (data) => {
+    handleSubmit(async (buyer) => {
       // useZodForm invoca este callback de forma síncrona dentro del submit: la ref queda marcada antes del siguiente.
       paymentInFlightRef.current = true;
       setPaymentError(null);
-      const { firstName, lastName, email, phone, documentType, documentNumber, paymentMethod, cardNumber } = data;
-      const payment: MockPaymentInput["payment"] =
-        paymentMethod === "card" ? { method: "card", cardNumber } : { method: paymentMethod };
-      try {
-        const paidOrder = await processMockPayment({
-          order,
-          buyer: { firstName, lastName, email, phone, documentType, documentNumber },
-          payment,
-        });
-        await persistOrder(paidOrder);
-        setIsRedirecting(true);
-        router.replace(`/checkout/confirmacion?orden=${paidOrder.code}`);
-      } catch (error) {
+      const fail = (message: string | null) => {
         paymentInFlightRef.current = false;
-        setPaymentError(error instanceof PaymentError ? error.message : UNEXPECTED_ERROR);
+        setPaymentError(message);
+      };
+      try {
+        // Valida la tarjeta: Stripe muestra sus errores dentro del Payment Element.
+        const { error: submitError } = await elements.submit();
+        if (submitError) return fail(null);
+
+        const result = await payOrder({ orderId, buyer });
+        if (!result.ok) return fail(PAY_ORDER_ERRORS[result.error]);
+
+        const { error } = await stripe.confirmPayment({
+          elements,
+          clientSecret: result.clientSecret,
+          confirmParams: {
+            return_url: `${window.location.origin}/checkout/confirmacion?orden=${orderId}`,
+            payment_method_data: {
+              billing_details: {
+                name: `${buyer.firstName} ${buyer.lastName}`,
+                email: buyer.email,
+                phone: `+51${buyer.phone}`,
+              },
+            },
+          },
+        });
+        if (!error) return setIsRedirecting(true);
+        const showStripeMessage = error.type === "card_error" || error.type === "validation_error";
+        fail(showStripeMessage && error.message ? error.message : UNEXPECTED_ERROR);
+      } catch {
+        fail(UNEXPECTED_ERROR);
       }
     })(event);
   };
@@ -202,7 +281,12 @@ export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormPro
   );
 
   const termsPending = !values.acceptTerms && !isExpired && !isProcessing;
-  const payButtonProps = { totalLabel, isProcessing, disabled: isExpired || isProcessing, termsPending };
+  const payButtonProps = {
+    totalLabel,
+    isProcessing,
+    disabled: !isPaymentReady || isExpired || isProcessing,
+    termsPending,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -350,13 +434,28 @@ export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormPro
             </h2>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <PaymentMethodFields
-              values={values}
-              errors={errors}
-              onChange={setValue}
-              onBlur={handleBlur}
-              labelledBy={PAYMENT_TITLE_ID}
-            />
+            <PaymentMethodFields labelledBy={PAYMENT_TITLE_ID}>
+              {paymentElementStatus === "error" ? (
+                <Alert variant="destructive">
+                  <CircleAlert aria-hidden />
+                  <AlertTitle>No pudimos cargar el formulario de pago. Recarga la página.</AlertTitle>
+                </Alert>
+              ) : (
+                <>
+                  {paymentElementStatus === "loading" && (
+                    <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Spinner aria-hidden className="motion-reduce:animate-none" />
+                      Cargando formulario de pago…
+                    </p>
+                  )}
+                  <PaymentElement
+                    options={PAYMENT_ELEMENT_OPTIONS}
+                    onReady={() => setPaymentElementStatus("ready")}
+                    onLoadError={() => setPaymentElementStatus("error")}
+                  />
+                </>
+              )}
+            </PaymentMethodFields>
             {paymentError && (
               <Alert
                 ref={paymentErrorRef}

@@ -3,38 +3,15 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Action = { label: string; href: "home" | "events" | "event"; primary: boolean };
+type Action = { label: string; href: "home" | "event" | "checkout"; primary: boolean };
 
 const HOME: Action = { label: "Volver al inicio", href: "home", primary: true };
 const RETRY: Action = { label: "Volver a elegir entradas", href: "event", primary: true };
 
 const STATUS_CONTENT = {
-  "not-found": {
-    title: "No encontramos este evento",
-    description: "Puede que el enlace sea incorrecto o que el evento ya no esté disponible.",
-    actions: [HOME],
-  },
-  "sold-out": {
-    title: "Entradas agotadas",
-    description: "Ya no quedan entradas disponibles para este evento.",
-    actions: [
-      { label: "Ver más eventos", href: "events", primary: true },
-      { label: "Ver el evento", href: "event", primary: false },
-    ],
-  },
-  "invalid-tickets": {
-    title: "No pudimos preparar tu compra",
-    description: "Las entradas seleccionadas no son válidas o ya no están disponibles.",
-    actions: [RETRY],
-  },
-  free: {
-    title: "Este evento es de entrada libre",
-    description: "No necesitas comprar entradas para asistir.",
-    actions: [{ label: "Ver el evento", href: "event", primary: true }],
-  },
   "order-not-found": {
     title: "No encontramos tu compra",
-    description: "El enlace no es válido o la compra se realizó en otro navegador.",
+    description: "El enlace no es válido o la compra ya no existe.",
     actions: [HOME],
   },
   "order-expired": {
@@ -43,19 +20,41 @@ const STATUS_CONTENT = {
       "El tiempo para completar la compra terminó y liberamos tus entradas. Vuelve a elegirlas para intentarlo de nuevo.",
     actions: [RETRY],
   },
+  "payment-processing": {
+    title: "Estamos procesando tu pago",
+    description: "Esto puede tardar unos segundos. Esta página se actualizará sola.",
+    actions: [{ ...HOME, primary: false }],
+  },
+  "payment-failed": {
+    title: "Tu pago no se completó",
+    description: "No se realizó ningún cobro. Puedes volver a intentarlo mientras tu reserva siga vigente.",
+    actions: [{ label: "Volver a intentar el pago", href: "checkout", primary: true }],
+  },
+  "order-refunded": {
+    title: "No pudimos confirmar tus entradas",
+    description:
+      "Tu reserva venció antes de que se confirmara el pago y las entradas ya no estaban disponibles. Te devolvimos el 100 % del pago; puede tardar de 5 a 10 días hábiles en verse en tu tarjeta.",
+    actions: [RETRY],
+  },
 } satisfies Record<string, { title: string; description: string; actions: Action[] }>;
 
 const ACTION_CLASS = "h-11 cursor-pointer px-6 font-semibold duration-200";
 
 type CheckoutStatusMessageProps = {
   variant: keyof typeof STATUS_CONTENT;
-  /** Necesario en las variantes con enlace al evento (sold-out, invalid-tickets, free, order-expired). */
+  /** Necesario en las variantes con enlace al evento (order-expired, order-refunded). */
   eventSlug?: string;
+  /** Necesario en payment-failed ("Volver a intentar el pago" → `/checkout?orden=<id>`). */
+  orderId?: string;
 };
 
-export function CheckoutStatusMessage({ variant, eventSlug }: CheckoutStatusMessageProps) {
+export function CheckoutStatusMessage({ variant, eventSlug, orderId }: CheckoutStatusMessageProps) {
   const { title, description, actions } = STATUS_CONTENT[variant];
-  const hrefs = { home: "/", events: "/eventos", event: eventSlug ? `/eventos/${eventSlug}` : "/eventos" };
+  const hrefs = {
+    home: "/",
+    event: eventSlug ? `/eventos/${eventSlug}` : "/eventos",
+    checkout: orderId ? `/checkout?orden=${orderId}` : "/",
+  };
 
   return (
     <section className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 py-16 text-center md:px-6 md:py-24 lg:px-8">

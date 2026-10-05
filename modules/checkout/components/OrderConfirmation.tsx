@@ -1,19 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, CircleCheck, Mail, QrCode, Ticket } from "lucide-react";
+import { CalendarPlus, CircleCheck, Download, QrCode, Ticket } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
-import { useStoredOrder } from "../hooks/useStoredOrder";
 import type { Order } from "../types/checkout.types";
 import { buildTicketPdfInput } from "../utils/ticketPdfInput";
-import { CheckoutStatusMessage } from "./CheckoutStatusMessage";
 import { ConfirmationTicketCard } from "./ConfirmationTicketCard";
 
 const CONTAINER_CLASS = "mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 py-8 md:px-6 md:py-12";
@@ -23,13 +20,12 @@ const OUTLINE_ACTION_CLASS = cn(
   "text-primary-strong hover:bg-accent hover:text-primary-strong",
 );
 
-/** `shortDescription` se muestra por debajo de `md`, donde las tarjetas van apiladas. */
-const NEXT_STEPS: { icon: LucideIcon; title: string; shortDescription: string; description: string }[] = [
+/** `shortDescription` (si existe) se muestra por debajo de `md`, donde las tarjetas van apiladas. */
+const NEXT_STEPS: { icon: LucideIcon; title: string; shortDescription?: string; description: string }[] = [
   {
-    icon: Mail,
-    title: "Revisa tu correo",
-    shortDescription: "Ahí llegan tus entradas y el comprobante.",
-    description: "Ahí llegan tus entradas y el comprobante de pago.",
+    icon: Download,
+    title: "Descarga tus entradas",
+    description: "Guárdalas en PDF o muéstralas desde Mis entradas.",
   },
   {
     icon: QrCode,
@@ -46,36 +42,11 @@ const NEXT_STEPS: { icon: LucideIcon; title: string; shortDescription: string; d
 ];
 
 type OrderConfirmationProps = {
-  code: string;
+  order: Order;
 };
 
-/** Paso 3 de la compra. La cabecera solo muestra el stepper si se encuentra la orden. */
-export function OrderConfirmation({ code }: OrderConfirmationProps) {
-  const storedOrder = useStoredOrder(code);
-
-  if (storedOrder.status === "not-found") {
-    return (
-      <PurchaseShell>
-        <CheckoutStatusMessage variant="order-not-found" />
-      </PurchaseShell>
-    );
-  }
-
-  if (storedOrder.status === "loading") {
-    return (
-      <PurchaseShell>
-        <div className={CONTAINER_CLASS}>
-          <div role="status" className="flex items-center gap-3 py-16 text-muted-foreground">
-            <Spinner aria-hidden className="size-5 motion-reduce:animate-none" />
-            Cargando tu compra…
-          </div>
-        </div>
-      </PurchaseShell>
-    );
-  }
-
-  const { order } = storedOrder;
-
+/** Paso 3 de la compra: la orden pagada, leída de la BD por la página. */
+export function OrderConfirmation({ order }: OrderConfirmationProps) {
   return (
     <PurchaseShell currentStep={3}>
       <div className={CONTAINER_CLASS}>
@@ -96,8 +67,8 @@ function ConfirmationHeader({ code, email }: { code: string; email: string }) {
       </span>
       <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">¡Compra confirmada!</h1>
       <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-        Enviamos tus entradas a <strong className="font-semibold break-all text-foreground">{email}</strong>. También
-        las tienes siempre en Mis entradas.
+        Tus entradas están listas. Te las mostramos abajo y también las tienes en Mis entradas con tu cuenta de{" "}
+        <strong className="font-semibold break-all text-foreground">{email}</strong>.
       </p>
       <p className="flex h-9 items-center rounded-full bg-card px-4 text-sm text-muted-foreground ring-1 ring-border">
         Pedido N.º
@@ -174,8 +145,14 @@ function NextSteps() {
             <span className="flex flex-col gap-1">
               <span className="font-semibold">{title}</span>
               <span className="text-sm leading-relaxed text-muted-foreground">
-                <span className="md:hidden">{shortDescription}</span>
-                <span className="max-md:hidden">{description}</span>
+                {shortDescription ? (
+                  <>
+                    <span className="md:hidden">{shortDescription}</span>
+                    <span className="max-md:hidden">{description}</span>
+                  </>
+                ) : (
+                  description
+                )}
               </span>
             </span>
           </li>
