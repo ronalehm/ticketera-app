@@ -24,6 +24,11 @@ export const managedEventSchema = z.object({
   organizer: z.string(),
   /** Entradas de órdenes `paid`. */
   sold: z.number().int().nonnegative(),
+  /**
+   * Tiene ventas activas (`lib/db/activeSales.ts`: órdenes `paid`, `partially_refunded` o `pending` vigentes). Bloquea
+   * cancelar el evento (Decisión 12); `sold` solo cuenta las `paid`.
+   */
+  hasActiveSales: z.boolean(),
   /** Ventas brutas MVP (Decisión 10): órdenes `paid`; parte del organizador o subtotal para el admin. */
   revenueCents: z.number().int().nonnegative(),
   /** Inventario sin retirar; en un borrador, la capacidad configurada en sus secciones. */

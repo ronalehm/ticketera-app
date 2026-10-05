@@ -30,7 +30,7 @@ export function hasEventRowActions(status: ManagedEvent["status"], role: Role): 
 }
 
 type EventRowActionsProps = {
-  event: Pick<ManagedEvent, "id" | "title" | "status" | "sold">;
+  event: Pick<ManagedEvent, "id" | "title" | "status" | "hasActiveSales">;
   /** Rol de la sesión: decide qué transiciones se ofrecen (`getAvailableTransitions`). */
   role: Role;
   onAction: (action: EventRowAction) => void;
@@ -107,7 +107,7 @@ export function EventRowActions({ event, role, onAction }: EventRowActionsProps)
         </Button>
       )}
       {transitions.includes("cancel") && (
-        <CancelEventButton title={event.title} hasSales={event.sold > 0} onCancel={() => onAction("cancel")} />
+        <CancelEventButton title={event.title} hasSales={event.hasActiveSales} onCancel={() => onAction("cancel")} />
       )}
     </>
   );

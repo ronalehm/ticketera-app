@@ -59,6 +59,7 @@ async function insertOrder(
   status: (typeof orders.$inferInsert)["status"],
   ticketCount: number,
   subtotalCents: number,
+  expiresAt = new Date(),
 ) {
   const platformFeeCents = subtotalCents / 10;
   await tx.insert(orders).values({
@@ -70,7 +71,7 @@ async function insertOrder(
     buyerPhone: "+51900000000",
     buyerDocumentType: "dni",
     buyerDocumentNumber: "00000000",
-    expiresAt: new Date(),
+    expiresAt,
     ticketCount,
     subtotalCents,
     platformFeeCents,
@@ -130,10 +131,30 @@ describeWithDb("listManagedEvents (Postgres)", () => {
     });
   });
 
+  it.each([
+    ["una pending vigente", "pending", 60_000, true],
+    ["una pending vencida", "pending", -60_000, false],
+    ["una partially_refunded", "partially_refunded", 0, true],
+    ["una paid", "paid", 0, true],
+    ["una refunded", "refunded", 0, false],
+    ["una expired", "expired", 0, false],
+  ] as const)("hasActiveSales con %s → %s", async (_label, status, expiresInMs, expected) => {
+    await inRolledBackTransaction(async (tx) => {
+      const event = await createEvent(tx, { general: 5 });
+      await publish(tx, event.eventId);
+      await insertOrder(tx, event.eventId, status, 1, 5_000, new Date(Date.now() + expiresInMs));
+      expect(byId(await listManagedEvents(event.organizer), event.eventId)?.hasActiveSales).toBe(expected);
+    });
+  });
+
   it("sin órdenes: 0 vendidas y 0 de ingresos", async () => {
     await inRolledBackTransaction(async (tx) => {
       const event = await createEvent(tx, { general: 5 });
-      expect(byId(await listManagedEvents(event.organizer), event.eventId)).toMatchObject({ sold: 0, revenueCents: 0 });
+      expect(byId(await listManagedEvents(event.organizer), event.eventId)).toMatchObject({
+        sold: 0,
+        revenueCents: 0,
+        hasActiveSales: false,
+      });
     });
   });
 
@@ -202,6 +223,7 @@ describeWithDb("listManagedEvents (Postgres)", () => {
         imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
         organizer: organizer.legalName,
         sold: 0,
+        hasActiveSales: false,
         revenueCents: 0,
         capacity: 5,
       });

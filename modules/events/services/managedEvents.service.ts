@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { db } from "@/lib/db/client";
 import { escapeLike } from "@/lib/db/escapeLike";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
@@ -69,6 +70,7 @@ export async function listManagedEvents(
       imageUrl: events.imageUrl,
       organizer: sql<string>`coalesce(${organizers.legalName}, trim(${users.firstName} || ' ' || ${users.lastName}))`,
       sold: paidOrdersSum(orders.ticketCount),
+      hasActiveSales: sql<boolean>`exists (select 1 from ${orders} where ${orders.eventId} = ${events.id} and ${isActiveSaleOrder})`,
       revenueCents: paidOrdersSum(manageAny ? orders.subtotalCents : orders.organizerAmountCents),
       capacity: sql<number>`case when ${events.status} in ('draft', 'pending_review') then ${configuredCapacity} else ${inventoryCapacity} end`.mapWith(
         Number,

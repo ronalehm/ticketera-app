@@ -208,8 +208,11 @@ describe("OrganizerEventsList", () => {
       expect(cardOf("Evento c").getByRole("button", { name: "Enviar a revisión Evento c" })).toBeTruthy();
     });
 
-    it("con ventas, Cancelar evento queda deshabilitado con el motivo", () => {
-      const events = [makeEvent("a", { sold: 3 })];
+    it.each([
+      ["ventas pagadas", { sold: 3, hasActiveSales: true }],
+      ["solo una reserva pendiente vigente (0 vendidas)", { sold: 0, hasActiveSales: true }],
+    ])("con %s, Cancelar evento queda deshabilitado con el motivo", (_label, overrides) => {
+      const events = [makeEvent("a", overrides)];
       renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={events} canMutate role="admin" />);
       const button = cardOf("Evento a").getByRole("button", { name: "Cancelar evento Evento a" });
       expect(button.getAttribute("aria-disabled") === "true" || button.hasAttribute("disabled")).toBe(true);

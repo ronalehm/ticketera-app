@@ -13,6 +13,7 @@ export function makeManagedEvent(id: string, overrides: Partial<ManagedEvent> = 
     imageUrl: null,
     organizer: `Productora ${id}`,
     sold: 0,
+    hasActiveSales: false,
     revenueCents: 0,
     capacity: 100,
     ...overrides,
