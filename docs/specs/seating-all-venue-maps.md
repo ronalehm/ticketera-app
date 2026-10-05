@@ -963,7 +963,7 @@ Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado c
   - Archivos: `lib/db/schema/venues.ts`, `lib/db/schema/events.ts`, `drizzle/0006_event_map_override.sql` (generado), `drizzle/meta/0006_snapshot.json` (generado), `drizzle/meta/_journal.json`, `lib/db/constraints.test.ts`, `docs/architecture/erd.md`.
   - Depende de: Fase 2. Secuencial (`lib/`).
   - Aplicar la migración solo a la BD local (`npm run db:migrate` sobre `ticketera_dev`; la de test la migra `testGlobalSetup`). `lib/db/migrations.test.ts` debe pasar sin cambios.
-- [ ] T2. Seed con mapa propio por evento y coherencia por sección, con sus tests (requisitos 14 y 15).
+- [x] T2. Seed con mapa propio por evento y coherencia por sección, con sus tests (requisitos 14 y 15).
   - Archivos: `lib/db/seed/buildSeedData.ts`, `lib/db/seed/buildSeedData.test.ts`, `lib/db/seed/seed.ts` (`SEED_OWNED_COLUMNS.events`).
   - Depende de: T1. Secuencial.
   - Al terminar: suite completa con BD; BD de desarrollo migrada y sembrada sin vaciar (2.ª ejecución: 0 escrituras); `npm run lint` y `npm run build`.
