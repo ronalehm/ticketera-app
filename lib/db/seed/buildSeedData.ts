@@ -72,35 +72,6 @@ const toKebab = (text: string) =>
 
 const toCents = (price: number) => Math.round(price * 100);
 
-/** Geometría del recinto en un layout (sin ocupación ni tipos de entrada, que son del evento). */
-function venueGeometry(layout: VenueLayout) {
-  return {
-    viewBox: layout.viewBox,
-    stage: layout.stage,
-    zones: layout.zones.map((zone) =>
-      zone.kind === "general"
-        ? {
-            id: zone.id,
-            kind: zone.kind,
-            path: zone.path,
-            labelPos: zone.labelPos,
-            wrapLabel: zone.wrapLabel,
-            capacity: zone.capacity,
-          }
-        : {
-            id: zone.id,
-            kind: zone.kind,
-            path: zone.path,
-            labelPos: zone.labelPos,
-            wrapLabel: zone.wrapLabel,
-            seatViewBox: zone.seatViewBox,
-            planTransform: zone.planTransform,
-            rows: zone.rows.map((row) => row.seats.map(({ row: label, number, x, y }) => ({ label, number, x, y }))),
-          },
-    ),
-  };
-}
-
 /**
  * Lugares de una zona general según el estado del mock: libres todos, el 10 % o ninguno. Con `fillAvailable`,
  * una zona `available` deja libre solo lo justo para seguir `available` (el 20 % + 1), para que el evento
@@ -173,41 +144,45 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     return id;
   }
 
-  const venueGeometries = new Map<string, ReturnType<typeof venueGeometry>>();
-  function venueId(name: string, city: string, address: string, layout: VenueLayout | undefined): string {
-    const key = `${name}:${city}`;
-    const id = seedUuid(`venue:${key}`);
-    if (layout) {
-      const geometry = venueGeometry(layout);
-      const previous = venueGeometries.get(key);
-      if (previous && !isDeepStrictEqual(previous, geometry)) {
-        throw new Error(`Dos layouts distintos para el recinto "${name}" (${city})`);
-      }
-      venueGeometries.set(key, geometry);
+  /**
+   * Recinto del evento. El recinto toma el `viewBox` y el escenario del primer layout que lo usa; un evento cuyo
+   * layout trae otros los guarda como propios (`mapViewBox`/`mapStage`), y si no, `null` = los del recinto.
+   */
+  function venueId(name: string, city: string, address: string, layout: VenueLayout | undefined) {
+    const id = seedUuid(`venue:${name}:${city}`);
+    let venue = data.venues.find((candidate) => candidate.id === id);
+    if (!venue) {
+      venue = { id, name, city, address, mapViewBox: null, stage: null, createdBy: superAdminId };
+      data.venues.push(venue);
     }
-    const existing = data.venues.find((venue) => venue.id === id);
-    if (!existing) {
-      data.venues.push({
-        id,
-        name,
-        city,
-        address,
-        mapViewBox: layout?.viewBox ?? null,
-        stage: layout?.stage ?? null,
-        createdBy: superAdminId,
-      });
-    } else if (layout && !existing.mapViewBox) {
-      existing.mapViewBox = layout.viewBox;
-      existing.stage = layout.stage;
+    if (layout && !venue.mapViewBox) {
+      venue.mapViewBox = layout.viewBox;
+      venue.stage = layout.stage;
     }
-    return id;
+    const ownMap = layout && (layout.viewBox !== venue.mapViewBox || !isDeepStrictEqual(layout.stage, venue.stage));
+    return { id, mapViewBox: ownMap ? layout.viewBox : null, mapStage: ownMap ? layout.stage : null };
   }
+
+  /** Geometría de una sección en el mapa: dos layouts que comparten la sección deben darle la misma. */
+  const sectionGeometry = (section: Omit<Insert<typeof venueSections>, "id">) => ({
+    mapPath: section.mapPath,
+    labelX: section.labelX,
+    labelY: section.labelY,
+    seating: section.seating,
+    capacity: section.capacity ?? null,
+    seatViewBox: section.seatViewBox ?? null,
+    wrapLabel: section.wrapLabel ?? false,
+    planTransform: section.planTransform ?? null,
+  });
 
   function sectionId(row: Omit<Insert<typeof venueSections>, "id">, venueKey: string): string {
     const id = seedUuid(`venue-section:${venueKey}:${row.slug}`);
     const existing = data.venueSections.find((section) => section.id === id);
     if (existing && existing.name !== row.name) {
       throw new Error(`Sección "${row.slug}" repetida con nombres distintos en ${venueKey}: ${existing.name} / ${row.name}`);
+    }
+    if (existing?.mapPath && row.mapPath && !isDeepStrictEqual(sectionGeometry(existing), sectionGeometry(row))) {
+      throw new Error(`Sección "${row.slug}" con geometría distinta en ${venueKey}`);
     }
     if (!existing) data.venueSections.push({ id, ...row });
     return id;
@@ -279,12 +254,14 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
 
     const eventId = seedUuid(`event:${event.slug}`);
     const venueKey = `${event.venue}:${event.city}`;
-    const eventVenueId = venueId(event.venue, event.city, event.address, layout);
+    const { id: eventVenueId, mapViewBox, mapStage } = venueId(event.venue, event.city, event.address, layout);
     data.events.push({
       id: eventId,
       slug: event.slug,
       organizerId: organizerId(event.organizer),
       venueId: eventVenueId,
+      mapViewBox,
+      mapStage,
       categoryId: seedUuid(`category:${event.category}`),
       title: event.title,
       description: event.description,
@@ -393,13 +370,15 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     }
     const slug = toKebab(draft.title);
     const eventId = seedUuid(`event:${slug}`);
-    const draftVenueId = venueId(draft.venue, draft.city, "Por confirmar", undefined);
+    const { id: draftVenueId, mapViewBox, mapStage } = venueId(draft.venue, draft.city, "Por confirmar", undefined);
     const startsAt = new Date(draft.startsAt);
     data.events.push({
       id: eventId,
       slug,
       organizerId: organizerId(draftOrganizer),
       venueId: draftVenueId,
+      mapViewBox,
+      mapStage,
       categoryId: seedUuid(`category:${draft.category}`),
       title: draft.title,
       description: "Borrador sin descripción.",
