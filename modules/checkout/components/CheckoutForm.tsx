@@ -301,8 +301,8 @@ function CheckoutFormContent({
           <CardHeader>
             <h2 className="text-xl font-bold">Datos del comprador</h2>
             <CardDescription className="text-base">
-              <span className="sm:hidden">Enviaremos tus entradas a este correo.</span>
-              <span className="max-sm:hidden">Enviaremos tus entradas al correo que indiques.</span> Los campos con *
+              <span className="sm:hidden">Asociaremos tus entradas a este correo.</span>
+              <span className="max-sm:hidden">Asociaremos tus entradas al correo que indiques.</span> Los campos con *
               son obligatorios.
             </CardDescription>
           </CardHeader>

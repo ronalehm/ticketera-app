@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Order } from "@/modules/checkout/orders";
-import { DEMO_ACCOUNT_EMAIL, DEMO_ORDERS } from "../data/demoOrders";
-import { formatOrderZones, formatTicketCount, getDateChipParts, getUserOrders, splitOrdersByDate } from "./myOrders";
+import { formatOrderZones, formatTicketCount, getDateChipParts, splitOrdersByDate } from "./myOrders";
 
 function makeOrder(overrides: { code: string; ownerEmail?: string; startsAt?: string; createdAt?: string }): Order {
   const { code, ownerEmail = "ana@correo.pe", startsAt = "2026-11-14T21:00:00-05:00", createdAt = "2026-09-01T10:00:00-05:00" } =
@@ -29,44 +28,6 @@ function makeOrder(overrides: { code: string; ownerEmail?: string; startsAt?: st
 }
 
 const codes = (orders: readonly Order[]) => orders.map((order) => order.code);
-
-describe("getUserOrders", () => {
-  const own = makeOrder({ code: "MT-AAAAAA", ownerEmail: "ana@correo.pe" });
-  const other = makeOrder({ code: "MT-BBBBBB", ownerEmail: "otro@correo.pe" });
-
-  it("filtra por ownerEmail aceptando mayúsculas y espacios en el correo", () => {
-    expect(codes(getUserOrders([own, other], "  Ana@Correo.PE "))).toEqual(["MT-AAAAAA"]);
-  });
-
-  it("excluye las órdenes de otros correos", () => {
-    expect(getUserOrders([other], "ana@correo.pe")).toEqual([]);
-  });
-
-  it("con el correo demo añade DEMO_ORDERS después de las del store", () => {
-    const demoOwn = makeOrder({ code: "MT-CCCCCC", ownerEmail: DEMO_ACCOUNT_EMAIL });
-    expect(codes(getUserOrders([demoOwn, other], "DEMO@mentectickets.pe"))).toEqual([
-      "MT-CCCCCC",
-      ...codes(DEMO_ORDERS),
-    ]);
-  });
-
-  it("con otro correo no añade DEMO_ORDERS", () => {
-    expect(codes(getUserOrders([own], "ana@correo.pe"))).toEqual(["MT-AAAAAA"]);
-  });
-
-  it("si el store tiene una orden con el code de una demo, aparece una sola vez y es la del store", () => {
-    const stored = makeOrder({ code: DEMO_ORDERS[0].code, ownerEmail: DEMO_ACCOUNT_EMAIL });
-    const result = getUserOrders([stored], DEMO_ACCOUNT_EMAIL);
-    const matches = result.filter((order) => order.code === stored.code);
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toBe(stored);
-    expect(result).toHaveLength(DEMO_ORDERS.length);
-  });
-
-  it("store vacío y correo no demo → []", () => {
-    expect(getUserOrders([], "ana@correo.pe")).toEqual([]);
-  });
-});
 
 describe("splitOrdersByDate", () => {
   const now = new Date("2026-10-03T12:00:00-05:00");

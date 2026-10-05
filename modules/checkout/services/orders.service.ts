@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
@@ -8,7 +8,7 @@ import { orders, tickets } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { stripe } from "@/lib/stripe";
 import type { EventCategory } from "@/modules/events";
-import type { CheckoutOrder, OrderConfirmationResult, PendingCheckoutResult } from "../types/checkout.types";
+import type { CheckoutOrder, Order, OrderConfirmationResult, PendingCheckoutResult } from "../types/checkout.types";
 import { getConfirmationState } from "../utils/orderRules";
 import { buildOrderView, buildPendingCheckoutOrder } from "../utils/orderViews";
 
@@ -24,9 +24,10 @@ function required<T>(value: T | null, slug: string): T {
  * Orden con su evento. Los asientos de una orden real nunca están retirados (`retired_at`: el seed solo retira
  * lugares sin retener y sin pedido real), así que aquí no se filtran.
  */
-async function selectOrderWithEvent(database: typeof db, orderId: string) {
-  const [row] = await database
+function selectOrdersWithEvent(database: typeof db) {
+  return database
     .select({
+      id: orders.id,
       status: orders.status,
       code: orders.code,
       subtotalCents: orders.subtotalCents,
@@ -46,12 +47,52 @@ async function selectOrderWithEvent(database: typeof db, orderId: string) {
     .from(orders)
     .innerJoin(events, eq(events.id, orders.eventId))
     .innerJoin(categories, eq(categories.id, events.categoryId))
-    .innerJoin(venues, eq(venues.id, events.venueId))
-    .where(eq(orders.id, orderId));
+    .innerJoin(venues, eq(venues.id, events.venueId));
+}
+
+async function selectOrderWithEvent(database: typeof db, orderId: string) {
+  const [row] = await selectOrdersWithEvent(database).where(eq(orders.id, orderId));
   return row;
 }
 
 type OrderWithEvent = NonNullable<Awaited<ReturnType<typeof selectOrderWithEvent>>>;
+
+/** Entradas de un lote de órdenes en una sola consulta, ordenadas por código. */
+function selectTicketRows(database: typeof db, orderIds: string[]) {
+  return database
+    .select({
+      orderId: tickets.orderId,
+      code: tickets.code,
+      holderName: tickets.holderName,
+      unitPriceCents: tickets.unitPriceCents,
+      sectionSlug: venueSections.slug,
+      rowLabel: venueSeats.rowLabel,
+      number: venueSeats.number,
+      ticketTypeSlug: ticketTypes.slug,
+      ticketTypeName: ticketTypes.name,
+    })
+    .from(tickets)
+    .innerJoin(eventSeats, eq(eventSeats.id, tickets.eventSeatId))
+    .innerJoin(ticketTypes, eq(ticketTypes.id, eventSeats.ticketTypeId))
+    .leftJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
+    .leftJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
+    .where(inArray(tickets.orderId, orderIds))
+    .orderBy(sql`length(${tickets.code})`, tickets.code);
+}
+
+type TicketRow = Awaited<ReturnType<typeof selectTicketRows>>[number];
+
+/** Vista `Order` de una orden `paid` (siempre tiene `paid_at` del webhook y comprador por `orders_buyer_required_check`). */
+function toPaidOrderView(row: OrderWithEvent, ticketRows: TicketRow[]): Order {
+  const order = {
+    code: row.code,
+    paidAt: row.paidAt!,
+    buyerName: row.buyerName!,
+    buyerEmail: row.buyerEmail!,
+    subtotalCents: row.subtotalCents,
+  };
+  return buildOrderView(order, toEventView(row), ticketRows);
+}
 
 function toEventView(row: OrderWithEvent): CheckoutOrder["event"] {
   return {
@@ -132,32 +173,44 @@ export async function getOrderConfirmation(orderId: unknown, database = db): Pro
   if (state === "payment-failed") return { status: state, orderId: id.data };
   if (state !== "paid") return { status: "processing" };
 
-  const ticketRows = await database
-    .select({
-      code: tickets.code,
-      holderName: tickets.holderName,
-      unitPriceCents: tickets.unitPriceCents,
-      sectionSlug: venueSections.slug,
-      rowLabel: venueSeats.rowLabel,
-      number: venueSeats.number,
-      ticketTypeSlug: ticketTypes.slug,
-      ticketTypeName: ticketTypes.name,
-    })
-    .from(tickets)
-    .innerJoin(eventSeats, eq(eventSeats.id, tickets.eventSeatId))
-    .innerJoin(ticketTypes, eq(ticketTypes.id, eventSeats.ticketTypeId))
-    .leftJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
-    .leftJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
-    .where(eq(tickets.orderId, id.data))
-    .orderBy(sql`length(${tickets.code})`, tickets.code);
+  return { status: "paid", order: toPaidOrderView(row, await selectTicketRows(database, [id.data])) };
+}
 
-  const order = {
-    code: row.code,
-    // `paid` siempre tiene `paid_at` (webhook) y comprador (`orders_buyer_required_check`).
-    paidAt: row.paidAt!,
-    buyerName: row.buyerName!,
-    buyerEmail: row.buyerEmail!,
-    subtotalCents: row.subtotalCents,
-  };
-  return { status: "paid", order: buildOrderView(order, toEventView(row), ticketRows) };
+/**
+ * Órdenes `paid` del usuario con al menos una entrada (las demo del seed no tienen), de la más reciente a la más
+ * antigua. Dos consultas en total: órdenes con su evento y todas sus entradas.
+ */
+export async function getUserPaidOrders(userId: string, database = db): Promise<Order[]> {
+  const rows = await selectOrdersWithEvent(database)
+    .where(
+      and(
+        eq(orders.userId, userId),
+        eq(orders.status, "paid"),
+        exists(database.select({ id: tickets.id }).from(tickets).where(eq(tickets.orderId, orders.id))),
+      ),
+    )
+    .orderBy(desc(orders.paidAt), orders.id);
+  if (rows.length === 0) return [];
+
+  const ticketsByOrder = Map.groupBy(await selectTicketRows(database, rows.map((row) => row.id)), (ticket) => ticket.orderId);
+  return rows.map((row) => toPaidOrderView(row, ticketsByOrder.get(row.id) ?? []));
+}
+
+/**
+ * Asigna al usuario las órdenes de invitado (`user_id IS NULL`) ya cerradas compradas con su correo verificado, sin
+ * distinguir mayúsculas. Nunca toca órdenes con dueño; idempotente. El llamador garantiza que el correo está verificado.
+ */
+export async function claimGuestOrders(userId: string, email: string, database = db): Promise<void> {
+  // ponytail: `lower(buyer_email)` no usa `orders_buyer_email_idx`; índice por expresión si la tabla crece mucho.
+  await database
+    .update(orders)
+    .set({ userId })
+    .where(
+      and(
+        isNull(orders.userId),
+        sql`lower(${orders.buyerEmail}) = ${email.trim().toLowerCase()}`,
+        // Solo cerradas (decisión 23): una `pending` puede cambiar de `buyer_email` en un reintento de pago.
+        inArray(orders.status, ["paid", "partially_refunded", "refunded"]),
+      ),
+    );
 }

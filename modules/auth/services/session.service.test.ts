@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "../types/auth.types";
 import { isMfaPending } from "../utils/can";
-import { getSessionUser, requireUser } from "./session.service";
+import { getSessionUser, getVerifiedEmail, requireUser } from "./session.service";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn(), currentUser: vi.fn(), clerkClient: vi.fn() }));
@@ -145,6 +145,28 @@ describe("getSessionUser · mfaVerified", () => {
     mockSession("user_1", c.factorVerificationAge);
     vi.mocked(findUserByClerkId).mockResolvedValue(USER);
     expect(await getSessionUser()).toEqual({ ...USER, mfaVerified: c.mfaVerified });
+  });
+});
+
+describe("getVerifiedEmail", () => {
+  it("con correo principal verificado lo devuelve en minúsculas", async () => {
+    mockClerkUser({ email: "Ana@Example.com" });
+    expect(await getVerifiedEmail()).toBe("ana@example.com");
+  });
+
+  it("con correo principal no verificado devuelve null", async () => {
+    mockClerkUser({ verified: false });
+    expect(await getVerifiedEmail()).toBeNull();
+  });
+
+  it("sin correo principal devuelve null", async () => {
+    mockClerkUser({ email: null });
+    expect(await getVerifiedEmail()).toBeNull();
+  });
+
+  it("sin usuario de Clerk (sin sesión) devuelve null", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    expect(await getVerifiedEmail()).toBeNull();
   });
 });
 

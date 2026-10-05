@@ -44,6 +44,15 @@ async function findOrCreateUser(userId: string) {
 }
 
 /**
+ * Correo principal de la sesión de Clerk en minúsculas si Clerk lo marca como verificado; `null` sin sesión, sin
+ * correo principal o sin verificar. Base para asociar las compras de invitado (`buyer_email`) a la cuenta.
+ */
+export async function getVerifiedEmail(): Promise<string | null> {
+  const primaryEmail = (await currentUser())?.primaryEmailAddress;
+  return primaryEmail?.verification?.status === "verified" ? primaryEmail.emailAddress.toLowerCase() : null;
+}
+
+/**
  * Usuario de la sesión para páginas y layouts privados (Decisión 10): sin sesión redirige a `/login`; un rol con MFA
  * sin segundo factor en la sesión, a `/perfil/seguridad`; con el perfil incompleto (sin celular o documento), a
  * `/perfil/completar?redirect_url=<returnTo>`, salvo con `allowIncompleteProfile` (la propia página de completar).

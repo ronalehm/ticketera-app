@@ -42,7 +42,6 @@ export type PayOrderResult =
   | { ok: false; error: "invalid-input" | "order-expired" | "order-unavailable" | "payment-error" };
 
 export type CheckoutFormValues = z.input<typeof checkoutBuyerSchema>;
-export type CheckoutFormData = z.output<typeof checkoutBuyerSchema>;
 
 // Contrato E: vista de una orden pagada (la leen la confirmación, "Mis entradas" y el PDF).
 export type OrderTicket = { code: string /* TK-<n>-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };

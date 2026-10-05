@@ -6,7 +6,7 @@ import { getQrModules } from "@/components/shared/TicketQr";
 import { downloadBlob } from "@/lib/download";
 
 export type TicketPdfTicket = {
-  /** "MT-7Q4K2P-01" */
+  /** "TK-1042-01" */
   code: string;
   /** "Tribuna Norte · Fila B · Asiento 4" o "General" */
   locationLabel: string;
@@ -15,7 +15,7 @@ export type TicketPdfTicket = {
 };
 
 export type TicketPdfInput = {
-  /** "MT-7Q4K2P" */
+  /** "TK-1042" */
   orderCode: string;
   event: {
     /** "Noche de Sintetizadores: Gira Neón 2026" */

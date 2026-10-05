@@ -511,8 +511,8 @@ describe("CheckoutForm", () => {
 
   it("el subtítulo del comprador cambia por ancho y conserva la leyenda de los *", () => {
     renderForm();
-    const short = screen.getByText("Enviaremos tus entradas a este correo.");
-    const long = screen.getByText("Enviaremos tus entradas al correo que indiques.");
+    const short = screen.getByText("Asociaremos tus entradas a este correo.");
+    const long = screen.getByText("Asociaremos tus entradas al correo que indiques.");
     expect(short.tagName).toBe("SPAN");
     expect(short.className.split(" ")).toContain("sm:hidden");
     expect(long.tagName).toBe("SPAN");
