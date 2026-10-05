@@ -3,9 +3,8 @@ import type { Order } from "../types/checkout.types";
 import { buildTicketPdfInput } from "./ticketPdfInput";
 
 const order: Order = {
-  code: "MT-7Q4K2P",
+  code: "TK-1042",
   createdAt: "2026-10-03T15:00:00.000Z",
-  ownerEmail: "ana.quispe@example.com",
   event: {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores: Gira Neón 2026",
@@ -21,11 +20,16 @@ const order: Order = {
   ],
   ticketCount: 2,
   total: 370,
-  paymentMethod: "card",
   buyer: { name: "Ana Quispe", email: "ana.quispe@example.com" },
   tickets: [
-    { code: "MT-7Q4K2P-01", ticketTypeName: "Tribuna Norte", seatLabel: "Tribuna Norte · Fila B · Asiento 4", holderName: "Ana Quispe" },
-    { code: "MT-7Q4K2P-02", ticketTypeName: "General", holderName: "Carlos Quispe" },
+    {
+      code: "TK-1042-01",
+      ticketTypeName: "Tribuna Norte",
+      seatLabel: "Tribuna Norte · Fila B · Asiento 4",
+      holderName: "Ana Quispe",
+      qrToken: "q7Vx0bR3mN2pL8sK4tY6wA",
+    },
+    { code: "TK-1042-02", ticketTypeName: "General", holderName: "Carlos Quispe", qrToken: "Zf1Hc9Jd5Gk3Ue7Iy0Ob2Q" },
   ],
 };
 
@@ -33,7 +37,7 @@ describe("buildTicketPdfInput", () => {
   it("toma el código del pedido y formatea los datos del evento", () => {
     const input = buildTicketPdfInput(order);
 
-    expect(input.orderCode).toBe("MT-7Q4K2P");
+    expect(input.orderCode).toBe("TK-1042");
     expect(input.event).toEqual({
       title: "Noche de Sintetizadores: Gira Neón 2026",
       dateLabel: "Sábado, 14 de noviembre de 2026",
@@ -49,12 +53,12 @@ describe("buildTicketPdfInput", () => {
     expect(general.locationLabel).toBe("General");
   });
 
-  it("mantiene el código y el titular de cada entrada en el mismo orden", () => {
+  it("mantiene el código, el titular y el qrToken de cada entrada en el mismo orden", () => {
     const { tickets } = buildTicketPdfInput(order);
 
-    expect(tickets.map(({ code, holderName }) => ({ code, holderName }))).toEqual([
-      { code: "MT-7Q4K2P-01", holderName: "Ana Quispe" },
-      { code: "MT-7Q4K2P-02", holderName: "Carlos Quispe" },
+    expect(tickets.map(({ code, holderName, qrToken }) => ({ code, holderName, qrToken }))).toEqual([
+      { code: "TK-1042-01", holderName: "Ana Quispe", qrToken: "q7Vx0bR3mN2pL8sK4tY6wA" },
+      { code: "TK-1042-02", holderName: "Carlos Quispe", qrToken: "Zf1Hc9Jd5Gk3Ue7Iy0Ob2Q" },
     ]);
   });
 });

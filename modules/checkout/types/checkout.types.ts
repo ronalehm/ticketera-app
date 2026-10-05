@@ -44,17 +44,21 @@ export type PayOrderResult =
 export type CheckoutFormValues = z.input<typeof checkoutBuyerSchema>;
 
 // Contrato E: vista de una orden pagada (la leen la confirmación, "Mis entradas" y el PDF).
-export type OrderTicket = { code: string /* TK-<n>-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
+export type OrderTicket = {
+  code: string; // "TK-<n>-01"
+  ticketTypeName: string;
+  seatLabel?: string;
+  holderName: string;
+  qrToken: string; // `tickets.qr_token`: lo único que codifica el QR
+};
 
 export type Order = {
   code: string; // "TK-<n>" (orders.code)
   createdAt: string; // ISO
-  ownerEmail: string; // correo del comprador (en minúsculas)
   event: { slug: string; title: string; category: EventCategory; startsAt: string; venue: string; city: string; imageUrl: string };
   items: { ticketTypeId: string; name: string; unitPrice: number; quantity: number; seats?: { id: string; label: string }[] }[];
   ticketCount: number;
   total: number; // PEN
-  paymentMethod: "card" | "yape" | "pagoefectivo";
   buyer: { name: string; email: string };
   tickets: OrderTicket[];
 };

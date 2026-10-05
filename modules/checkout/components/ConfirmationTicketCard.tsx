@@ -76,7 +76,7 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
             aria-hidden
             className={cn(NOTCH_CLASS, "-top-3 -right-3 md:top-auto md:right-auto md:-bottom-3 md:-left-3")}
           />
-          <TicketQr value={ticket.code} className="size-40 md:size-32" />
+          <TicketQr value={ticket.qrToken} ticketCode={ticket.code} className="size-40 md:size-32" />
           <div className="flex w-full min-w-0 flex-col items-center gap-0.5 text-center">
             <p className="text-sm font-semibold tabular-nums">
               <span className="sr-only">Código de entrada: </span>

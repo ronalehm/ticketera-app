@@ -428,9 +428,11 @@ Estados: `draft` → `pending_review` → `published` → `finished`; `published
 | `consents`, `audit_logs` | Mientras exista la relación + 5 años | Se conservan. |
 
 ### 7.14 Entradas con QR real
-- "Mis entradas" dibuja el QR desde `qr_token` con la librería `qrcode` (una dependencia) y reemplaza el `TicketQr` decorativo.
+- La confirmación y "Mis entradas" dibujan el QR desde `qr_token` con la librería `qrcode` (una dependencia) y reemplazan el `TicketQr` decorativo.
+- El QR codifica **solo** el `qr_token` (opaco, ver §10). Nunca datos personales (nombre, correo, documento, teléfono), de pago (PaymentIntent, importes, tarjeta), ids internos ni el código `TK-…`.
+- El lector de pantalla lo anuncia como "Código QR de la entrada TK-…-01", sin el token.
 - El correo de compra incluye un enlace a la entrada y el QR como imagen.
-- "Descargar PDF" usa la impresión del navegador ("Guardar como PDF"), como hoy.
+- "Descargar PDF" genera el PDF con el mismo QR (mismo `qr_token`).
 
 ## 8. Páginas legales
 
@@ -463,7 +465,7 @@ Estados: `draft` → `pending_review` → `published` → `finished`; `published
 - zod en toda frontera (Server Actions, webhooks, jobs, formularios públicos) y `can()` en servidor en cada acción.
 - Dos usuarios de BD: `app` (DML) y `migrator` (DDL, solo el job de migraciones).
 - Límites anti-abuso en Postgres (sin Redis): N órdenes `pending` por correo/IP cada 10 min, `max_per_order` por zona, tope de entradas por documento y evento, límite por IP en el Libro de Reclamaciones.
-- `qr_token`: 128 bits aleatorios, nunca secuencial; el código `TK-…` no sirve para entrar.
+- `qr_token`: opaco, 128 bits aleatorios (`randomBytes(16)`, base64url, 22 caracteres), no derivado de ningún dato, nunca secuencial, único. El QR (pantalla y PDF) codifica solo ese token, sin datos personales, de pago ni ids internos; el código `TK-…` no sirve para entrar.
 - Datos de tarjeta solo en iframes de Stripe; datos bancarios solo en Stripe.
 - Datos personales cifrados en reposo por Neon y Cloud SQL. `ponytail:` sin cifrado por columna del número de documento; agregar si una auditoría lo exige.
 - Markdown legal sin HTML crudo.

@@ -77,6 +77,12 @@ async function paidOrder(items: CheckoutOrderItem[], fields: Partial<typeof orde
   return orderId;
 }
 
+/** `qr_token` real de cada entrada de la orden, por código. */
+async function qrTokensOf(orderId: string): Promise<Record<string, string>> {
+  const rows = await db.select({ code: tickets.code, qrToken: tickets.qrToken }).from(tickets).where(eq(tickets.orderId, orderId));
+  return Object.fromEntries(rows.map((row) => [row.code, row.qrToken]));
+}
+
 const userIdOf = async (orderId: string) =>
   (await db.select({ userId: orders.userId }).from(orders).where(eq(orders.id, orderId)))[0].userId;
 
@@ -214,12 +220,14 @@ describeWithDb("orders.service", () => {
         })),
       );
 
+      const qr = await qrTokensOf(orderId);
+      expect(new Set(Object.values(qr)).size).toBe(2);
+
       expect(await getOrderConfirmation(orderId)).toEqual({
         status: "paid",
         order: {
           code: order.code,
           createdAt: order.paidAt!.toISOString(),
-          ownerEmail: BUYER.buyerEmail,
           event: expect.objectContaining({ slug: testEvent.slug, startsAt: STARTS_AT.toISOString(), imageUrl: IMAGE_URL }),
           items: [
             { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 1 },
@@ -233,15 +241,15 @@ describeWithDb("orders.service", () => {
           ],
           ticketCount: 2,
           total: 100,
-          paymentMethod: "card",
           buyer: { name: BUYER.buyerName, email: BUYER.buyerEmail },
           tickets: [
-            { code: `${order.code}-01`, ticketTypeName: "General", holderName: BUYER.buyerName },
+            { code: `${order.code}-01`, ticketTypeName: "General", holderName: BUYER.buyerName, qrToken: qr[`${order.code}-01`] },
             {
               code: `${order.code}-02`,
               ticketTypeName: "Platea",
               seatLabel: "Platea · Fila B · Asiento 1",
               holderName: BUYER.buyerName,
+              qrToken: qr[`${order.code}-02`],
             },
           ],
         },
@@ -332,10 +340,11 @@ describeWithDb("orders.service", () => {
       const codes = await db.select({ id: orders.id, code: orders.code }).from(orders).where(inArray(orders.id, [newer, older]));
       const codeOf = (id: string) => codes.find((row) => row.id === id)!.code;
       expect(result.map((order) => order.code)).toEqual([codeOf(newer), codeOf(older)]);
+      const qr = await qrTokensOf(newer);
+      expect(new Set(Object.values(qr)).size).toBe(2);
       expect(result[0]).toEqual({
         code: codeOf(newer),
         createdAt: "2026-10-02T10:00:00.000Z",
-        ownerEmail: BUYER.buyerEmail,
         event: expect.objectContaining({ slug: testEvent.slug, startsAt: STARTS_AT.toISOString(), imageUrl: IMAGE_URL }),
         items: [
           { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 1 },
@@ -349,19 +358,19 @@ describeWithDb("orders.service", () => {
         ],
         ticketCount: 2,
         total: 100,
-        paymentMethod: "card",
         buyer: { name: BUYER.buyerName, email: BUYER.buyerEmail },
         tickets: [
-          { code: `${codeOf(newer)}-01`, ticketTypeName: "General", holderName: BUYER.buyerName },
+          { code: `${codeOf(newer)}-01`, ticketTypeName: "General", holderName: BUYER.buyerName, qrToken: qr[`${codeOf(newer)}-01`] },
           {
             code: `${codeOf(newer)}-02`,
             ticketTypeName: "Platea",
             seatLabel: "Platea · Fila A · Asiento 2",
             holderName: BUYER.buyerName,
+            qrToken: qr[`${codeOf(newer)}-02`],
           },
         ],
       });
-      expect(result[1].tickets).toHaveLength(1);
+      expect(result[1].tickets).toEqual([expect.objectContaining({ qrToken: Object.values(await qrTokensOf(older))[0] })]);
     });
 
     it("usuario sin órdenes → []", async () => {

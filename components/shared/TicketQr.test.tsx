@@ -1,130 +1,101 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { create } from "qrcode";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getQrModules, TicketQr } from "./TicketQr";
 
-const VALUE = "MT-AB12CD-01";
+/** `qr_token` de ejemplo: 22 caracteres base64url. */
+const TOKEN = "q3Zk9x_Lr8Tn2Yb-Pw4MvA";
+const OTHER_TOKEN = "Hc7uJ0aQe5WmX2pR-sN9tg";
+const CODE = "TK-1042-01";
 
-const renderPath = (value: string) => {
-  const { container, unmount } = render(<TicketQr value={value} />);
-  const d = container.querySelector("path")?.getAttribute("d");
-  unmount();
-  return d;
-};
+const renderQr = (value = TOKEN) => render(<TicketQr value={value} ticketCode={CODE} />);
+
+/** Celdas `fila:columna` pintadas por el `d` del path (`M<col> <fila>h1v1h-1z` por módulo). */
+const paintedCells = (d: string) =>
+  new Set(Array.from(d.matchAll(/M(\d+) (\d+)h1v1h-1z/g), ([, col, row]) => `${row}:${col}`));
+
+const darkCells = (modules: boolean[][]) =>
+  new Set(modules.flatMap((cells, row) => cells.flatMap((dark, col) => (dark ? [`${row}:${col}`] : []))));
 
 /** Patrón de posición esperado en coordenadas locales 0..6: anillo, hueco y núcleo 3×3. */
-const expectedFinder = (r: number, c: number) => {
-  const ring = Math.min(r, c, 6 - r, 6 - c);
-  return ring !== 1;
-};
-
-/** Matriz de `VALUE` fijada con el código anterior a `lib/hash.ts`: la salida no debe cambiar. */
-const PINNED_MODULES = [
-  "111111101010001111111",
-  "100000100100001000001",
-  "101110100111001011101",
-  "101110100000001011101",
-  "101110100000101011101",
-  "100000100110101000001",
-  "111111101000101111111",
-  "000000000101100000000",
-  "111010000101001000101",
-  "110110100110101000010",
-  "111001100110100010110",
-  "110011001101011010110",
-  "111011001101100011010",
-  "000000000101001100011",
-  "111111101101010000010",
-  "100000101111010110000",
-  "101110100010011100001",
-  "101110101101101000001",
-  "101110101011000010000",
-  "100000101100101100001",
-  "111111100111011111101",
-];
+const expectedFinder = (r: number, c: number) => Math.min(r, c, 6 - r, 6 - c) !== 1;
 
 afterEach(cleanup);
 
-describe("TicketQr", () => {
-  it("expone un svg accesible con el valor y viewBox 21×21", () => {
-    render(<TicketQr value={VALUE} />);
-    const svg = screen.getByRole("img", { name: `Código QR de la entrada ${VALUE}` });
-
-    expect(svg.tagName.toLowerCase()).toBe("svg");
-    expect(svg.getAttribute("viewBox")).toBe("0 0 21 21");
-    expect(svg.querySelectorAll("path")).toHaveLength(1);
-    expect(svg.querySelector("path")?.getAttribute("fill")).toBe("currentColor");
-  });
-
-  it("une className a las clases base", () => {
-    render(<TicketQr value={VALUE} className="size-40" />);
-    const classes = screen.getByRole("img").getAttribute("class")?.split(" ");
-
-    expect(classes).toEqual(expect.arrayContaining(["bg-background", "text-foreground", "size-40"]));
-  });
-
-  it("el mismo valor produce el mismo dibujo y otro valor uno distinto", () => {
-    const first = renderPath(VALUE);
-
-    expect(first).toBeTruthy();
-    expect(renderPath(VALUE)).toBe(first);
-    expect(renderPath("MT-AB12CD-02")).not.toBe(first);
-  });
-});
-
 describe("getQrModules", () => {
-  it("devuelve una matriz 21×21 determinista", () => {
-    const modules = getQrModules(VALUE);
+  it("es la matriz de QRCode.create con corrección M", () => {
+    const { modules } = create(TOKEN, { errorCorrectionLevel: "M" });
+    const expected = Array.from({ length: modules.size }, (_, row) =>
+      Array.from({ length: modules.size }, (_, col) => modules.get(row, col) === 1),
+    );
 
-    expect(modules).toHaveLength(21);
-    for (const row of modules) expect(row).toHaveLength(21);
-    expect(getQrModules(VALUE)).toEqual(modules);
-    expect(getQrModules("MT-ZZ99ZZ-01")).not.toEqual(modules);
+    expect(modules.size).toBeGreaterThanOrEqual(21);
+    expect(getQrModules(TOKEN)).toEqual(expected);
   });
 
-  it("las tres esquinas tienen el patrón de posición con separador claro", () => {
-    const modules = getQrModules(VALUE);
-    const corners = [
-      [0, 0],
-      [0, 14],
-      [14, 0],
-    ];
+  it("es determinista y distinta para otro token", () => {
+    expect(getQrModules(TOKEN)).toEqual(getQrModules(TOKEN));
+    expect(getQrModules(OTHER_TOKEN)).not.toEqual(getQrModules(TOKEN));
+  });
 
-    for (const [top, left] of corners) {
+  it("tiene los tres patrones de posición en sus esquinas", () => {
+    const modules = getQrModules(TOKEN);
+    const size = modules.length;
+
+    for (const [top, left] of [
+      [0, 0],
+      [0, size - 7],
+      [size - 7, 0],
+    ]) {
       for (let r = 0; r < 7; r++) {
         for (let c = 0; c < 7; c++) {
           expect(modules[top + r][left + c]).toBe(expectedFinder(r, c));
         }
       }
     }
+  });
+});
 
-    for (let i = 0; i < 8; i++) {
-      // Separador de la esquina superior izquierda: fila 7 y columna 7.
-      expect(modules[7][i]).toBe(false);
-      expect(modules[i][7]).toBe(false);
-      // Superior derecha: fila 7 y columna 13.
-      expect(modules[7][20 - i]).toBe(false);
-      expect(modules[i][13]).toBe(false);
-      // Inferior izquierda: fila 13 y columna 7.
-      expect(modules[13][i]).toBe(false);
-      expect(modules[20 - i][7]).toBe(false);
-    }
+describe("TicketQr", () => {
+  it("se anuncia con el código de la entrada y sin el token", () => {
+    renderQr();
+    const svg = screen.getByRole("img", { name: `Código QR de la entrada ${CODE}` });
+
+    expect(svg.tagName.toLowerCase()).toBe("svg");
+    expect(svg.getAttribute("aria-label")).not.toContain(TOKEN);
+    expect(svg.outerHTML).not.toContain(TOKEN);
   });
 
-  it("los módulos libres son ~50 % oscuros", () => {
-    const modules = getQrModules(VALUE);
-    const inFinderArea = (r: number, c: number) => (r < 8 && c < 8) || (r < 8 && c > 12) || (r > 12 && c < 8);
-    const free = modules.flatMap((row, r) => row.filter((_, c) => !inFinderArea(r, c)));
-    const ratio = free.filter(Boolean).length / free.length;
+  it("deja un margen de 2 módulos dentro del viewBox", () => {
+    renderQr();
+    const size = getQrModules(TOKEN).length;
 
-    expect(ratio).toBeGreaterThan(0.3);
-    expect(ratio).toBeLessThan(0.7);
+    expect(screen.getByRole("img").getAttribute("viewBox")).toBe(`-2 -2 ${size + 4} ${size + 4}`);
   });
 
-  it("da exactamente la matriz fijada para el mismo valor", () => {
-    const rows = getQrModules(VALUE).map((row) => row.map((dark) => (dark ? "1" : "0")).join(""));
+  it("pinta exactamente los módulos oscuros del QR del token", () => {
+    const { container } = renderQr();
+    const paths = container.querySelectorAll("path");
 
-    expect(rows).toEqual(PINNED_MODULES);
-    expect(rows.join("").replace(/0/g, "")).toHaveLength(217);
+    expect(paths).toHaveLength(1);
+    expect(paths[0].getAttribute("fill")).toBe("currentColor");
+    expect(paintedCells(paths[0].getAttribute("d") ?? "")).toEqual(darkCells(getQrModules(TOKEN)));
+  });
+
+  it("dos tokens distintos producen dibujos distintos", () => {
+    const first = renderQr().container.querySelector("path")?.getAttribute("d");
+    cleanup();
+    const second = renderQr(OTHER_TOKEN).container.querySelector("path")?.getAttribute("d");
+
+    expect(first).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
+
+  it("une className a las clases base", () => {
+    render(<TicketQr value={TOKEN} ticketCode={CODE} className="size-40" />);
+    const classes = screen.getByRole("img").getAttribute("class")?.split(" ");
+
+    expect(classes).toEqual(expect.arrayContaining(["bg-background", "text-foreground", "size-40"]));
   });
 });

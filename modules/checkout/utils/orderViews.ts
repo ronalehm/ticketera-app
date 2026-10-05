@@ -14,6 +14,7 @@ export type OrderTicketRow = SeatPlace & {
   ticketTypeName: string;
   unitPriceCents: number;
   holderName: string;
+  qrToken: string;
 };
 
 /** Asiento numerado → `{ id, label }`; `null` en zonas generales. */
@@ -65,12 +66,10 @@ export function buildOrderView(
   return {
     code: order.code,
     createdAt: order.paidAt.toISOString(),
-    ownerEmail: order.buyerEmail, // F7 lo quita
     event,
     items: groupItems(tickets.map((ticket) => ({ ...ticket, priceCents: ticket.unitPriceCents }))),
     ticketCount: tickets.length,
     total: order.subtotalCents / 100,
-    paymentMethod: "card", // F7 lo quita; Stripe solo cobra con tarjeta (decisión 1)
     buyer: { name: order.buyerName, email: order.buyerEmail },
     tickets: tickets.map((ticket) => {
       const seatLabel = toSeat(ticket, ticket.ticketTypeName)?.label;
@@ -79,6 +78,7 @@ export function buildOrderView(
         ticketTypeName: ticket.ticketTypeName,
         ...(seatLabel !== undefined && { seatLabel }),
         holderName: ticket.holderName,
+        qrToken: ticket.qrToken,
       };
     }),
   };

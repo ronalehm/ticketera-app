@@ -18,7 +18,6 @@ const CODE = "TK-1001";
 const ORDER: Order = {
   code: CODE,
   createdAt: "2026-10-03T15:00:00.000Z",
-  ownerEmail: "luis@correo.pe",
   event: {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores",
@@ -49,12 +48,11 @@ const ORDER: Order = {
   ],
   ticketCount: 3,
   total: 910,
-  paymentMethod: "card",
   buyer: { name: "Luis Pérez", email: "luis@correo.pe" },
   tickets: [
-    { code: `${CODE}-01`, ticketTypeName: "General", seatLabel: "General · Fila A, asiento 1", holderName: "Luis Pérez" },
-    { code: `${CODE}-02`, ticketTypeName: "General", seatLabel: "General · Fila A, asiento 2", holderName: "Luis Pérez" },
-    { code: `${CODE}-03`, ticketTypeName: "VIP", seatLabel: "VIP · Fila B, asiento 5", holderName: "Luis Pérez" },
+    { code: `${CODE}-01`, qrToken: "qTok01Zk9x_Lr8Tn2Yb-Pw4", ticketTypeName: "General", seatLabel: "General · Fila A, asiento 1", holderName: "Luis Pérez" },
+    { code: `${CODE}-02`, qrToken: "qTok02Zk9x_Lr8Tn2Yb-Pw4", ticketTypeName: "General", seatLabel: "General · Fila A, asiento 2", holderName: "Luis Pérez" },
+    { code: `${CODE}-03`, qrToken: "qTok03Zk9x_Lr8Tn2Yb-Pw4", ticketTypeName: "VIP", seatLabel: "VIP · Fila B, asiento 5", holderName: "Luis Pérez" },
   ],
 };
 

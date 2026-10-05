@@ -12,6 +12,8 @@ export type TicketPdfTicket = {
   locationLabel: string;
   /** "Ana Quispe" */
   holderName: string;
+  /** `tickets.qr_token`: lo único que codifica el QR. */
+  qrToken: string;
 };
 
 export type TicketPdfInput = {
@@ -65,7 +67,8 @@ const CONTENT_X = MARGIN + PADDING;
 const CONTENT_WIDTH = FRAME_WIDTH - PADDING * 2;
 const CONTENT_RIGHT = CONTENT_X + CONTENT_WIDTH;
 const QR_MODULE_SIZE = 3;
-const QR_FRAME_GAP = 3;
+/** Zona tranquila blanca de 2 módulos entre el QR y su marco, como el margen del SVG de `TicketQr`. */
+const QR_FRAME_GAP = 2 * QR_MODULE_SIZE;
 const COLUMN_GAP = 8;
 const FIELD_GAP = 4;
 
@@ -171,9 +174,9 @@ function drawBand(doc: jsPDF, index: number, total: number): void {
   });
 }
 
-/** Dibuja el QR con su marco desde (`x`, `y`) y devuelve el borde inferior del marco. */
-function drawQr(doc: jsPDF, code: string, x: number, y: number): number {
-  const modules = getQrModules(code);
+/** Dibuja el QR de `qrToken` con su marco desde (`x`, `y`) y devuelve el borde inferior del marco. */
+function drawQr(doc: jsPDF, qrToken: string, x: number, y: number): number {
+  const modules = getQrModules(qrToken);
   const frameSize = modules.length * QR_MODULE_SIZE + QR_FRAME_GAP * 2;
 
   doc.setFillColor(...COLORS.primaryForeground);
@@ -246,7 +249,7 @@ function drawTicketPage(
   doc.setLineDashPattern([], 0);
   y += 8;
 
-  const qrBottom = drawQr(doc, ticket.code, CONTENT_X, y);
+  const qrBottom = drawQr(doc, ticket.qrToken, CONTENT_X, y);
   const qrFrameSize = qrBottom - y;
   const fieldsX = CONTENT_X + qrFrameSize + COLUMN_GAP;
   const fieldsWidth = CONTENT_RIGHT - fieldsX;

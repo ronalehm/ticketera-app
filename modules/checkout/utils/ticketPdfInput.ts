@@ -16,10 +16,11 @@ export function buildTicketPdfInput(order: Order): TicketPdfInput {
       timeLabel: `${formatTime(event.startsAt)} h`,
       venueLabel: `${event.venue}, ${event.city}`,
     },
-    tickets: order.tickets.map(({ code, seatLabel, ticketTypeName, holderName }) => ({
+    tickets: order.tickets.map(({ code, seatLabel, ticketTypeName, holderName, qrToken }) => ({
       code,
       locationLabel: seatLabel ?? ticketTypeName,
       holderName,
+      qrToken,
     })),
   };
 }

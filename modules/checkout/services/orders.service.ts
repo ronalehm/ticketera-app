@@ -64,6 +64,7 @@ function selectTicketRows(database: typeof db, orderIds: string[]) {
       orderId: tickets.orderId,
       code: tickets.code,
       holderName: tickets.holderName,
+      qrToken: tickets.qrToken,
       unitPriceCents: tickets.unitPriceCents,
       sectionSlug: venueSections.slug,
       rowLabel: venueSeats.rowLabel,

@@ -482,7 +482,7 @@ Restricción: `CHECK orders_buyer_required_check (status = 'pending' OR (buyer_n
 | `code` | text UNIQUE | `<code de orden>-01`. |
 | `holder_name` | text | |
 | `unit_price_cents` | integer | |
-| `qr_token` | text UNIQUE | 128 bits aleatorios (base64url). |
+| `qr_token` | text UNIQUE | Opaco: 128 bits aleatorios (`randomBytes(16)`) en base64url, 22 caracteres. No se deriva de ningún dato y nunca es secuencial. Es lo único que codifica el QR. |
 | `status` | `ticket_status` | Default `valid`. |
 | `refund_id` | uuid NULL → `refunds.id` | |
 | `checked_in_at` | timestamptz NULL | |
@@ -721,3 +721,4 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Siempre queda al menos un `super_admin`; nadie cambia su propio rol.
 - Quitar `organizer` se bloquea con eventos `pending_review`/`published` o payouts `pending`.
 - Edición limitada de eventos con ventas (§7.11 de `system-design.md`).
+- `tickets.qr_token` se genera al emitir con `randomBytes(16).toString("base64url")`; la BD solo garantiza que es único.

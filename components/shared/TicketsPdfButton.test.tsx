@@ -15,7 +15,9 @@ const input: TicketPdfInput = {
     timeLabel: "21:00 h",
     venueLabel: "Estadio Nacional, Lima",
   },
-  tickets: [{ code: "MT-7Q4K2P-01", locationLabel: "General", holderName: "Ana Quispe" }],
+  tickets: [
+    { code: "MT-7Q4K2P-01", locationLabel: "General", holderName: "Ana Quispe", qrToken: "q3Zk9x_Lr8Tn2Yb-Pw4MvA" },
+  ],
 };
 
 const ERROR_MESSAGE = "No pudimos generar el PDF. Inténtalo de nuevo.";
