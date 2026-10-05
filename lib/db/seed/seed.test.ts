@@ -417,3 +417,49 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
     MIGRATION_TIMEOUT_MS,
   );
 });
+
+// --- `orders.ticket_count` es del seed: con otro mapa cambia el número de lugares vendidos de la orden demo. ---
+
+const CLASICO = "clasico-del-pacifico";
+
+describeWithDb("seed: corrige el ticket_count de una orden demo sembrada con otro mapa", () => {
+  it(
+    "lo deja igual a los lugares vendidos de la orden y una 2.ª ejecución no escribe",
+    async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const [admin] = await tx.select({ id: users.id }).from(users).where(eq(users.email, SUPER_ADMIN_EMAIL));
+        const data = buildSeedData({ superAdminId: admin.id });
+        const scope = seedScope([data], [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL]);
+        const orderId = seedUuid(`order:${CLASICO}`);
+        const demoOrder = data.orders.find((row) => row.id === orderId);
+        if (!demoOrder) throw new Error(`Falta la orden demo de ${CLASICO}`);
+        // Sembrada con otro mapa: el resto de la BD ya coincide con buildSeedData.
+        const staleTicketCount = demoOrder.ticketCount + 7;
+        await tx.update(orders).set({ ticketCount: staleTicketCount }).where(eq(orders.id, orderId));
+
+        const first = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+        const afterFirst = await fingerprint(tx, scope);
+        const second = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+
+        expect(first).toEqual({ ...EMPTY_REPORT, written: { ...EMPTY_REPORT.written, orders: 1 } });
+        expect(second).toEqual(EMPTY_REPORT);
+        expect(await fingerprint(tx, scope)).toEqual(afterFirst);
+
+        const [order] = await tx.select().from(orders).where(eq(orders.id, orderId));
+        const [{ sold }] = await tx
+          .select({ sold: count() })
+          .from(eventSeats)
+          .where(and(eq(eventSeats.orderId, orderId), eq(eventSeats.status, "sold"), isNull(eventSeats.retiredAt)));
+        expect(order.ticketCount).not.toBe(staleTicketCount);
+        expect(order.ticketCount).toBe(sold);
+        expect(order).toMatchObject({
+          ticketCount: demoOrder.ticketCount,
+          subtotalCents: demoOrder.subtotalCents,
+          platformFeeCents: demoOrder.platformFeeCents,
+          organizerAmountCents: demoOrder.organizerAmountCents,
+        });
+      });
+    },
+    MIGRATION_TIMEOUT_MS,
+  );
+});

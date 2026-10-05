@@ -35,7 +35,7 @@ export const SEED_OWNED_COLUMNS: { [K in keyof SeedData]: (keyof SeedData[K][num
   // Mapa propio del evento (`NULL` = el del recinto): así un evento recibe el suyo en una BD ya sembrada.
   events: ["mapViewBox", "mapStage"],
   ticketTypes: ["sectionId", "sortOrder"],
-  orders: ["subtotalCents", "platformFeeCents", "organizerAmountCents"],
+  orders: ["ticketCount", "subtotalCents", "platformFeeCents", "organizerAmountCents"],
   eventSeats: ["status", "orderId", "retiredAt"],
   // Documentos legales publicados: identidad y negocio, como `users`; solo se insertan los que faltan.
   legalDocuments: [],
