@@ -1,7 +1,7 @@
 # Panel admin + organizador: seguridad, seed limpio, datos reales, usuarios y eventos
 
 - Módulo: panel (con cambios en auth, organizer, events, users y lib/db)
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Convertir `/organizador` (hoy casi todo mock, sin control de rol) en un panel de back-office real y compartido por organizadores y administradores, con:
@@ -201,9 +201,9 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 
 ### F5b — Moderación, publicación e inventario
 1. **Transiciones permitidas:**
-   - organizador: `draft → pending_review`;
+   - organizador (dueño y aprobado) o admin: `draft → pending_review`. El admin también puede enviarlo, por ejemplo cuando creó el evento para un organizador (decisión del usuario);
    - admin: `pending_review → published` (aprobar) o `pending_review → draft` con `review_note` (rechazar);
-   - admin: `published → cancelled`, solo sin órdenes `paid` ni `pending` vigentes;
+   - admin: `published → cancelled`, solo sin ventas activas (punto 3).
    - `cancelled` es terminal y `finished` lo pone el sistema. Cualquier otra transición se rechaza.
 2. **Aprobar** en una sola transacción:
    1. `SELECT … FOR UPDATE` del evento.
@@ -213,7 +213,13 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
    5. Pone `status = published` y `reviewed_by`/`reviewed_at`.
    6. `COMMIT`.
    - Un segundo clic espera el lock y no genera nada; un fallo hace rollback de todo.
-3. **Cambios sensibles** (Decisión 11): precio, zonas, recinto y fecha solo sin órdenes `paid` ni `pending` vigentes. Se actualiza `system-design.md`.
+3. **Cambios sensibles** (Decisión 11). **Ventas activas** son las órdenes `paid`, `partially_refunded` (todavía tienen entradas válidas) o `pending` sin vencer (decisión del usuario). Qué se edita según el estado:
+   - `draft`: todo.
+   - `pending_review`: nada. Si hacen falta cambios, el admin lo rechaza y vuelve a borrador.
+   - `published` sin ventas activas: textos, portada, categoría, fecha, y nombre y precio de los tipos de entrada. Recinto, secciones y organizador no se cambian nunca, porque el inventario ya está generado (decisión del usuario).
+   - `published` con ventas activas: solo título, descripción, portada y edad mínima.
+   - `cancelled` / `finished`: nada.
+   - Aprobar, cancelar o editar un publicado invalida la caché de las páginas públicas (`/`, `/eventos` y `/eventos/<slug>`). Se actualiza `system-design.md`.
 4. **Requisitos para enviar a revisión y para aprobar:** ambos exigen `starts_at > now()` y los campos que pide `events_draft_complete_check` (recinto, descripción, portada, `starts_at`, `doors_open_at`), además de al menos un tipo de entrada. Si falta algo, el mensaje dice qué.
 5. **Orden de los tipos de entrada:** es el de la sección dentro del recinto. El usuario no lo elige.
 6. **Portadas en las vistas públicas** (decisión del usuario): toda imagen de portada de evento se renderiza con `next/image` `unoptimized`, en tarjeta, carrusel, detalle, compra, checkout y "Mis entradas". Así se acepta cualquier URL `https` sin abrir `remotePatterns`. Las imágenes estáticas propias del sitio siguen optimizadas.
@@ -276,6 +282,9 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [ ] Un evento `pending_review` muestra la capacidad configurada.
 - [ ] Tras `db:reset-demo`, un evento que no es del seed conserva su inventario, todo `available`.
 - [ ] `db:seed` no cambia la fecha de un evento demo con una orden `paid`.
+- [ ] Un evento `pending_review` no se puede editar; en un publicado no se cambian recinto, secciones ni organizador.
+- [ ] Una reserva no puede quedar `pending` sobre un evento cancelado (prueba concurrente cancelar/reservar), y una orden de un evento no publicado no se paga.
+- [ ] Al aprobar, cancelar o editar un publicado, las páginas públicas muestran el cambio.
 
 ## Diseño técnico (F1)
 - **`modules/auth`:**
