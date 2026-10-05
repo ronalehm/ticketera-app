@@ -969,10 +969,10 @@ Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado c
   - Al terminar: suite completa con BD; BD de desarrollo migrada y sembrada sin vaciar (2.ª ejecución: 0 escrituras); `npm run lint` y `npm run build`.
 
 ### Fase 4. Clásico del Pacífico (3 tareas, 10 archivos)
-- [ ] T1. Clásico en herradura con Palco y Popular al fondo (requisito 11), con su test.
+- [x] T1. Clásico en herradura con Palco y Popular al fondo (requisito 11), con su test.
   - Archivos: `modules/seating/data/clasicoDelPacifico.mock.ts` (nuevo), `modules/seating/data/clasicoDelPacifico.mock.test.ts` (nuevo).
   - Depende de: Fase 3. En paralelo con T2.
-- [ ] T2. Orden demo y tests de otros módulos (requisito 17, decisión 6).
+- [x] T2. Orden demo y tests de otros módulos (requisito 17, decisión 6).
   - Archivos: `modules/tickets/data/demoOrders.ts`, `modules/tickets/components/TicketCard.test.tsx`, `modules/checkout/services/checkout.service.test.ts`.
   - Depende de: Fase 3. En paralelo con T1.
   - Verificar sin BD `modules/tickets modules/checkout`.
