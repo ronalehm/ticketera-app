@@ -2067,7 +2067,7 @@ No hay API: son datos mock.
   - Mientras no termine T5, `TicketSelection.tsx` no compila con las props nuevas de T3 y T4 y `TicketSelection.test.tsx` falla: es lo esperado. Los developers de T1–T4 verifican solo con `npx vitest run <sus tests>` (T1) y `npx eslint <sus archivos>`.
   - T5 y el reviewer ejecutan `npx vitest run`, `npm run lint` y `npm run build`, y el reviewer, el Playwright de F7 a 375, 768 y 1440 contra `npm run start`.
 
-- [ ] T1. Hook: `changeQuantity` sin activar la zona y `clearZone`, con tests (requisito 44, decisiones 36 y 37).
+- [x] T1. Hook: `changeQuantity` sin activar la zona y `clearZone`, con tests (requisito 44, decisiones 36 y 37).
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 6.
   - En paralelo con T2 y T4. Verificar `npx vitest run modules/seating/hooks`.
