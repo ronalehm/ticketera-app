@@ -102,6 +102,8 @@ erDiagram
     uuid venue_id FK
     event_status status
     timestamptz starts_at
+    text map_view_box
+    jsonb map_stage
   }
   saved_events {
     uuid user_id PK,FK
@@ -368,8 +370,14 @@ Id público del asiento: `<section.slug>-<row_label>-<number>` (`SEAT_ID_PATTERN
 | `search_text` | text | Título + recinto + ciudad en minúsculas y sin tildes; lo mantiene la app al guardar. |
 | `cancelled_at` | timestamptz NULL | |
 | `cancel_reason` | text NULL | |
+| `map_view_box` | text NULL | `viewBox` del mapa propio del evento; `NULL` = el del recinto (`venues.map_view_box`). |
+| `map_stage` | jsonb NULL | Escenario propio del evento, con la forma de `venues.stage` (p. ej. "CANCHA" en un estadio cuyo mapa es de concierto); `NULL` = el del recinto. |
 
 Restricción: `CHECK events_draft_complete_check (status = 'draft' OR (venue_id IS NOT NULL AND description IS NOT NULL AND image_url IS NOT NULL AND starts_at IS NOT NULL AND doors_open_at IS NOT NULL))`: un borrador solo exige título y categoría; al salir de `draft` exige las cinco. Que `description` no esté vacía y que `doors_open_at <= starts_at` lo valida el formulario al publicar.
+
+Restricción: `CHECK events_map_override_check ((map_view_box IS NULL) = (map_stage IS NULL))`: el mapa propio del evento va completo o no va.
+
+Mapa propio por evento: un recinto puede alojar eventos con mapas distintos (p. ej. un concierto y un partido de fútbol en el mismo estadio). La geometría de las zonas (`venue_sections`, `venue_seats`) es siempre del recinto; el `viewBox` y el escenario pueden ser del evento (`map_view_box` y `map_stage`) y, si son `NULL`, se usan los del recinto.
 
 Índices: `(status, starts_at)`; GIN `(search_text gin_trgm_ops)`.
 
@@ -693,6 +701,7 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Un correo invitado una vez por evento: `UNIQUE event_staff (event_id, email)`.
 - Zonas consistentes: CHECK `seating`/`capacity` en `venue_sections`.
 - Un evento fuera de `draft` está completo (fecha, apertura de puertas, recinto, imagen y descripción): CHECK `events_draft_complete_check`.
+- El mapa propio de un evento lleva `viewBox` y escenario juntos: CHECK `events_map_override_check`.
 - Un recinto `pending_review` siempre tiene dueño: CHECK `venues_pending_has_owner_check`.
 - Un favorito por usuario y evento: PK `saved_events (user_id, event_id)`.
 
