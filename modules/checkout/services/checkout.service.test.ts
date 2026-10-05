@@ -1,9 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events/catalog";
 import { getVenueMapBySlug, type Seat } from "@/modules/seating/seats";
 import { getCheckoutOrder, resolveCheckoutOrder } from "./checkout.service";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 // `getEventBySlug` real, envuelto en un `vi.fn` para contar las cargas del evento.
 vi.mock("@/modules/events/catalog", async (importOriginal) => {
@@ -34,10 +39,14 @@ describeWithDb("checkout.service", () => {
       expect(await getCheckoutOrder(params)).toEqual({ status: "not-found" });
     });
 
+    // El seed no siembra ventas: los agotados los crea cada test, en una transacción revertida.
     it("evento agotado → sold-out", async () => {
-      expect(await getCheckoutOrder({ evento: "los-ecos-del-sur-arequipa", general: "1" })).toEqual({
-        status: "sold-out",
-        eventSlug: "los-ecos-del-sur-arequipa",
+      await inRolledBackTransaction(async () => {
+        await sellTestSeats("los-ecos-del-sur-arequipa");
+        expect(await getCheckoutOrder({ evento: "los-ecos-del-sur-arequipa", general: "1" })).toEqual({
+          status: "sold-out",
+          eventSlug: "los-ecos-del-sur-arequipa",
+        });
       });
     });
 
@@ -54,9 +63,14 @@ describeWithDb("checkout.service", () => {
     });
 
     it("tipo agotado → invalid-tickets", async () => {
-      expect(await getCheckoutOrder({ evento: "risas-sin-filtro", mesa: "1" })).toEqual({
-        status: "invalid-tickets",
-        eventSlug: "risas-sin-filtro",
+      const params = { evento: "el-circo-de-las-estrellas", general: "1" };
+      expect((await getCheckoutOrder(params)).status).toBe("ok");
+      await inRolledBackTransaction(async () => {
+        await sellTestSeats("el-circo-de-las-estrellas", { ticketTypes: ["general"] });
+        expect(await getCheckoutOrder(params)).toEqual({
+          status: "invalid-tickets",
+          eventSlug: "el-circo-de-las-estrellas",
+        });
       });
     });
 
@@ -81,6 +95,18 @@ describeWithDb("checkout.service", () => {
 
   describe("asientos", () => {
     const slug = "noche-de-sintetizadores-lima";
+
+    it("asiento ocupado → invalid-tickets", async () => {
+      await inRolledBackTransaction(async () => {
+        const [seat] = await getNorteSeats("available");
+        await sellTestSeats(slug, { seatIds: [seat.id] });
+        expect(await getNorteSeats("occupied")).toEqual([expect.objectContaining({ id: seat.id })]);
+        expect(await getCheckoutOrder({ evento: slug, norte: "1", asientos: seat.id })).toEqual({
+          status: "invalid-tickets",
+          eventSlug: slug,
+        });
+      });
+    });
 
     async function getNorteSeats(status: Seat["status"]) {
       const map = await getVenueMapBySlug(slug);
@@ -118,7 +144,6 @@ describeWithDb("checkout.service", () => {
 
     it.each([
       ["norte=2 sin asientos", async () => ({ norte: "2" })],
-      ["asiento ocupado", async () => ({ norte: "1", asientos: (await getNorteSeats("occupied"))[0].id })],
       ["1 solo asiento para norte=2", async () => ({ norte: "2", asientos: (await getNorteSeats("available"))[0].id })],
       ["asientos vacío", async () => ({ norte: "1", asientos: "" })],
       [

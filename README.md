@@ -43,7 +43,8 @@ Postgres con Drizzle. La conexión sale de `DATABASE_URL` (y `DATABASE_URL_UNPOO
 | Comando | Qué hace |
 |---|---|
 | `npm run db:migrate` | Aplica solo las migraciones pendientes de `drizzle/`, cada una en su transacción. Todas son aditivas: no borran ni reescriben datos. |
-| `npm run db:seed` | Crea los datos demo que faltan y actualiza solo lo que el seed posee: la geometría de los mapas y el inventario demo. No borra nada y se puede repetir: una 2.ª ejecución escribe 0 filas. Al terminar imprime un informe por tabla (filas escritas, lugares retirados y lugares obsoletos con venta real, que no se tocan). |
+| `npm run db:seed` | Crea los datos demo que faltan y actualiza solo lo que el seed posee: la geometría de los mapas, el inventario demo y el organizador y las fechas de cada evento. No borra nada y se puede repetir: una 2.ª ejecución el mismo día escribe 0 filas (otro día solo desplaza las fechas). Al terminar imprime un informe por tabla (filas escritas, lugares retirados y lugares obsoletos con venta real, que no se tocan). |
+| `npm run db:reset-demo` | **Destructivo.** Borra todas las ventas y deja la BD como un seed limpio. Exige `ALLOW_DEMO_RESET=true` y `--confirm=<host>`; ver [Reset de datos demo](#reset-de-datos-demo). |
 | `npm run db:generate -- --name <nombre>` | Genera una migración nueva a partir de los cambios en `lib/db/schema/`. |
 
 **En producción** el procedimiento es solo este, **sin vaciar la BD**:
@@ -53,7 +54,19 @@ npm run db:migrate && npm run db:seed
 ```
 
 - El inventario no se borra: los lugares demo que el layout ya no tiene se **retiran** (`event_seats.retired_at`), conservan su historial y dejan de venderse y contarse.
-- El seed nunca toca un lugar vendido o retenido por un pedido real, ni los datos de negocio (títulos, precios, fechas, usuarios, pedidos reales).
+- El seed nunca toca un lugar vendido o retenido (con pedido), ni los datos de negocio (títulos, precios, pedidos), ni el perfil ni el `clerk_id` de un usuario que ya existe.
+
+**Qué siembra** (`lib/db/seed/`; variables en `.env`, solo para los scripts del seed, no para la app):
+
+| Variable | Qué es |
+|---|---|
+| `SUPER_ADMIN_EMAIL` | Correo del `super_admin`. Nunca puede estar en `SEED_ORGANIZER_EMAILS`: el seed aborta sin escribir nada y nunca lo degrada a organizador. |
+| `SEED_ORGANIZER_EMAILS` | Organizadores reales de prueba, separados por comas (al menos uno). Cada correo pasa a `users` con rol `organizer` (sin `clerk_id`: se vincula en su primer login) y a `organizers` `approved` con datos fiscales demo. Si el correo ya es `admin` o `super_admin`, el seed aborta sin escribir nada. |
+
+- Cada evento demo se asigna a un organizador de `SEED_ORGANIZER_EMAILS` por un hash de su slug (siempre el mismo reparto).
+- Las fechas se calculan a partir del día en que se ejecuta: el primer evento queda 7 días después, conservando la hora y la distancia entre eventos del mock. Todas son futuras.
+- Todo el inventario que crea queda disponible y no crea órdenes.
+- El seed respeta el estado que un admin puso a un organizador: si un correo de `SEED_ORGANIZER_EMAILS` ya tiene su fila en `organizers` como `pending` o `suspended`, no lo vuelve a aprobar (solo crea `approved` la fila que falta). Aun así le reparte eventos, y el informe final lo avisa con su correo y su estado.
 
 **Regla para migraciones nuevas:**
 
@@ -63,6 +76,31 @@ npm run db:migrate && npm run db:seed
 - si una restricción nueva no la cumplieran los datos existentes, la migración falla entera (transacción) y no destruye nada.
 
 `lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`. Única excepción revisada, registrada en su `ALLOWED_VIOLATIONS`: `0006_orders_reservation.sql` lleva un `UPDATE` que solo rellena `orders.ticket_count` (la columna que crea esa misma migración) con el número de asientos de cada orden, antes de su `SET NOT NULL`; no toca ninguna otra columna.
+
+## Reset de datos demo
+
+`npm run db:reset-demo` deja la BD como recién sembrada, **sin ventas**. Es lo único que borra datos: `db:seed`, `db:migrate`, la instalación y el build nunca lo ejecutan.
+
+En una sola transacción (si algo falla no cambia nada):
+
+1. vacía `check_in_scans`, `refund_requests`, `tickets`, `refunds`, `event_seats`, `orders`, `payouts` y `stripe_events`, y reinicia `order_code_seq` (la próxima orden vuelve a `TK-1`);
+2. ejecuta el seed: regenera todo el inventario disponible y reasigna los eventos a `SEED_ORGANIZER_EMAILS`;
+3. borra los organizadores sintéticos `@example.com` de seeds anteriores (los que creó el seed, sin `clerk_id`) que ya nada referencia. Si otra fila sigue apuntando a uno (p. ej. un evento guardado, un registro de auditoría o una solicitud), lo conserva en vez de abortar el reset.
+
+Conserva a los usuarios con `clerk_id` y al super admin. Si un consentimiento o un reclamo apunta a una orden, aborta sin tocar nada (son registros legales).
+
+**Orden exacto:**
+
+```sh
+npm run db:migrate
+ALLOW_DEMO_RESET=true npm run db:reset-demo -- --confirm=<host de la BD>
+```
+
+y listo: no hace falta un `db:seed` después (el reset ya lo ejecuta). `npm run db:seed` solo **no borra** ventas ni organizadores sintéticos.
+
+- `<host de la BD>` es el host de `DATABASE_URL_UNPOOLED` (o de `DATABASE_URL` si no hay), sin usuario, puerto ni base de datos: p. ej. `ep-cool-name-123.us-east-2.aws.neon.tech` o `127.0.0.1`. Si no coincide, o falta `ALLOW_DEMO_RESET=true`, el comando aborta sin conectarse.
+- Necesita `SUPER_ADMIN_EMAIL` y `SEED_ORGANIZER_EMAILS` en `.env`, como `db:seed`. `ALLOW_DEMO_RESET` va en la misma línea del comando, no en `.env`.
+- Al terminar imprime las filas borradas por tabla, lo que escribió el seed, los organizadores sintéticos borrados y los conservados por estar referenciados.
 
 ## Pagos con Stripe (modo test)
 

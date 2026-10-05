@@ -2,17 +2,18 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
+import { parseSeedEnv } from "./env";
 import { seed, type SeedReport } from "./seed";
 
 async function main() {
-  const superAdminEmail = env.SUPER_ADMIN_EMAIL;
-  if (!superAdminEmail) throw new Error("Falta SUPER_ADMIN_EMAIL en .env");
+  // Antes de conectar: sin SUPER_ADMIN_EMAIL y SEED_ORGANIZER_EMAILS válidas no se escribe nada.
+  const roles = parseSeedEnv();
 
   // Conexión directa: el seed es una transacción larga, mejor sin el pooler.
   const pool = new Pool({ connectionString: env.DATABASE_URL_UNPOOLED ?? env.DATABASE_URL });
   let report: SeedReport;
   try {
-    report = await seed(drizzle({ client: pool }), { superAdminEmail });
+    report = await seed(drizzle({ client: pool }), { ...roles, now: new Date() });
   } finally {
     await pool.end();
   }
@@ -23,6 +24,11 @@ async function main() {
   if (report.obsoleteWithSales > 0) {
     console.warn(
       `Aviso: ${report.obsoleteWithSales} lugares obsoletos tienen una venta o retención real; no se retiran ni se tocan.`,
+    );
+  }
+  for (const { email, status } of report.nonApprovedOrganizers) {
+    console.warn(
+      `Aviso: el organizador ${email} está ${status}; el seed respeta el estado que puso un admin y no lo aprueba, pero le reparte eventos.`,
     );
   }
 }

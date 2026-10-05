@@ -1,6 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import { getVenueMapBySlug } from "../services/seating.service";
@@ -8,7 +10,11 @@ import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
 import { CLASICO_VENUE } from "./clasicoDelPacifico.mock";
+import { toSeededLayout } from "./seededLayout";
 import { PITCH_STAGE, STADIUM_CENTER, STAGE_SECTOR } from "./stadium.mock";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const SLUG = "clasico-del-pacifico";
 const layout = venueLayoutSchema.parse(CLASICO_VENUE.layout);
@@ -119,7 +125,7 @@ describeWithDb("getVenueMapBySlug (Clásico del Pacífico, mapa propio en el Est
   it("devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,
@@ -131,12 +137,16 @@ describeWithDb("getVenueMapBySlug (Clásico del Pacífico, mapa propio en el Est
     });
   });
 
-  it("resuelve oriente-A-1 como Oriente · Fila A · Asiento 1 y rechaza occidente-F-4 (ocupada)", async () => {
-    const map = await getVenueMapBySlug(SLUG);
-    if (!map) throw new Error(`Sin mapa: ${SLUG}`);
-    expect(resolveSeats(map, ["oriente-A-1"])).toEqual([
-      { id: "oriente-A-1", label: "Oriente · Fila A · Asiento 1", zoneId: "oriente", ticketTypeId: "oriente" },
-    ]);
-    expect(resolveSeats(map, ["occidente-F-4"])).toBeNull();
+  it("resuelve oriente-A-1 como Oriente · Fila A · Asiento 1 y rechaza occidente-F-4 si está vendida", async () => {
+    await inRolledBackTransaction(async () => {
+      // El seed no siembra ventas: la venta la crea el test.
+      await sellTestSeats(SLUG, { seatIds: ["occidente-F-4"] });
+      const map = await getVenueMapBySlug(SLUG);
+      if (!map) throw new Error(`Sin mapa: ${SLUG}`);
+      expect(resolveSeats(map, ["oriente-A-1"])).toEqual([
+        { id: "oriente-A-1", label: "Oriente · Fila A · Asiento 1", zoneId: "oriente", ticketTypeId: "oriente" },
+      ]);
+      expect(resolveSeats(map, ["occidente-F-4"])).toBeNull();
+    });
   });
 });

@@ -1,6 +1,7 @@
-// Solo para tests de integración (describeWithDb): eventos `draft` propios que no tocan el seed ni el catálogo.
+// Solo para tests de integración (describeWithDb): eventos `draft` propios que no tocan el seed ni el catálogo, y
+// ventas de prueba (el seed no siembra ventas: spec admin-panel, F2).
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
@@ -141,5 +142,70 @@ async function deleteTestEvent(eventId: string, venueId: string, userId: string)
     await tx.delete(venues).where(eq(venues.id, venueId));
     await tx.delete(organizers).where(eq(organizers.userId, userId));
     await tx.delete(users).where(eq(users.id, userId));
+  });
+}
+
+export type SellTestSeatsFilter = {
+  /** Solo los lugares de estos tipos de entrada (slug). */
+  ticketTypes?: string[];
+  /** Solo estas butacas, con el id del mapa: `<sección>-<fila>-<número>` (p. ej. `occidente-F-4`). */
+  seatIds?: string[];
+  /** Como mucho estos lugares. */
+  count?: number;
+};
+
+/**
+ * Vende a una orden `paid` de prueba los lugares disponibles del evento `slug` que cumplan `filter` (todos sin filtro);
+ * devuelve la orden y los lugares. Sobre un evento del seed, úsalo solo dentro de `inRolledBackTransaction` (con
+ * `vi.mock("@/lib/db/client", …)`), para no dejar ventas en la BD que comparten los demás tests.
+ */
+export async function sellTestSeats(
+  slug: string,
+  filter: SellTestSeatsFilter = {},
+): Promise<{ orderId: string; eventSeatIds: string[] }> {
+  return db.transaction(async (tx) => {
+    const seats = await tx
+      .select({ id: eventSeats.id, eventId: eventSeats.eventId })
+      .from(eventSeats)
+      .innerJoin(events, eq(events.id, eventSeats.eventId))
+      .innerJoin(ticketTypes, eq(ticketTypes.id, eventSeats.ticketTypeId))
+      .leftJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
+      .leftJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
+      .where(
+        and(
+          eq(events.slug, slug),
+          eq(eventSeats.status, "available"),
+          isNull(eventSeats.retiredAt),
+          filter.ticketTypes && inArray(ticketTypes.slug, filter.ticketTypes),
+          filter.seatIds &&
+            inArray(sql`${venueSections.slug} || '-' || ${venueSeats.rowLabel} || '-' || ${venueSeats.number}`, filter.seatIds),
+        ),
+      )
+      .orderBy(eventSeats.id)
+      .then((rows) => rows.slice(0, filter.count));
+    if (seats.length === 0) throw new Error(`sellTestSeats: no hay lugares disponibles en ${slug} con ese filtro`);
+
+    const [{ id: orderId }] = await tx
+      .insert(orders)
+      .values({
+        code: `TK-TEST-${randomUUID().slice(0, 8)}`,
+        eventId: seats[0].eventId,
+        buyerName: "Comprador de prueba",
+        buyerEmail: "comprador.prueba@example.com",
+        buyerPhone: "+51900000000",
+        buyerDocumentType: "dni",
+        buyerDocumentNumber: "00000000",
+        status: "paid",
+        expiresAt: new Date(),
+        paidAt: new Date(),
+        ticketCount: seats.length,
+        subtotalCents: 0,
+        platformFeeCents: 0,
+        organizerAmountCents: 0,
+      })
+      .returning({ id: orders.id });
+    const eventSeatIds = seats.map((seat) => seat.id);
+    await tx.update(eventSeats).set({ status: "sold", orderId }).where(inArray(eventSeats.id, eventSeatIds));
+    return { orderId, eventSeatIds };
   });
 }

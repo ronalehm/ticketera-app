@@ -53,23 +53,13 @@ describe("serverEnvSchema", () => {
         DATABASE_URL_UNPOOLED: "",
         DATABASE_URL_MIGRATOR: "",
         DATABASE_URL_TEST: "",
-        SUPER_ADMIN_EMAIL: "",
       }),
     ).toEqual({
       ...SERVER_BASE,
       DATABASE_URL_UNPOOLED: undefined,
       DATABASE_URL_MIGRATOR: undefined,
       DATABASE_URL_TEST: undefined,
-      SUPER_ADMIN_EMAIL: undefined,
     });
-  });
-
-  it("normaliza SUPER_ADMIN_EMAIL a minúsculas", () => {
-    const parsed = serverEnvSchema.parse({
-      ...SERVER_BASE,
-      SUPER_ADMIN_EMAIL: "Ronalehm@Gmail.com",
-    });
-    expect(parsed.SUPER_ADMIN_EMAIL).toBe("ronalehm@gmail.com");
   });
 
   it("falla si falta CLERK_SECRET_KEY o no empieza por sk_ y la nombra", () => {
@@ -92,10 +82,13 @@ describe("serverEnvSchema", () => {
     });
   });
 
-  it("falla con un correo inválido", () => {
-    expect(errorOf({ ...SERVER_BASE, SUPER_ADMIN_EMAIL: "no-es-correo" })).toContain(
-      "SUPER_ADMIN_EMAIL",
-    );
+  it("no exige ni valida las variables del seed (lib/db/seed/env.ts)", () => {
+    const parsed = serverEnvSchema.parse({
+      ...SERVER_BASE,
+      SUPER_ADMIN_EMAIL: "no-es-correo",
+      SEED_ORGANIZER_EMAILS: "tampoco",
+    });
+    expect(parsed).toEqual(SERVER_BASE);
   });
 });
 

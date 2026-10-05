@@ -32,11 +32,13 @@ describeWithDb("getOrganizerEvents", () => {
 
   it("el primero toma los datos del evento y las ventas mock", async () => {
     const [first] = await getOrganizerEvents();
+    // La fecha es la que siembra el seed (relativa a su `now`), no la del mock.
+    const event = (await getEvents()).find(({ slug }) => slug === "noche-de-sintetizadores-lima");
     expect(first).toEqual({
-      id: await eventId("noche-de-sintetizadores-lima"),
+      id: event?.id,
       title: "Noche de Sintetizadores: Gira Neón 2026",
       category: "conciertos",
-      startsAt: new Date("2026-11-14T21:00:00-05:00").toISOString(),
+      startsAt: event?.startsAt,
       venue: "Estadio Nacional",
       city: "Lima",
       imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80",

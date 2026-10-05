@@ -230,10 +230,10 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [x] `npm run lint`, `npx vitest run` y `npm run build` sin errores.
 
 ### F2
-- [ ] `db:reset-demo` aborta sin `ALLOW_DEMO_RESET=true` o sin un `--confirm` correcto, y no lo invoca ningún otro script.
-- [ ] El seed aborta si `SUPER_ADMIN_EMAIL` está en `SEED_ORGANIZER_EMAILS`.
-- [ ] Tras reset + seed (BD de test): `orders`, `tickets`, `refunds` y `stripe_events` en 0; 2 organizadores `approved`; todos los eventos con `starts_at > now`; los usuarios con `clerk_id` y el super admin intactos; ningún organizador `@example.com`.
-- [ ] Con el mismo `now`, dos corridas del seed dan el mismo estado.
+- [x] `db:reset-demo` aborta sin `ALLOW_DEMO_RESET=true` o sin un `--confirm` correcto, y no lo invoca ningún otro script.
+- [x] El seed aborta si `SUPER_ADMIN_EMAIL` está en `SEED_ORGANIZER_EMAILS`.
+- [x] Tras reset + seed (BD de test): `orders`, `tickets`, `refunds` y `stripe_events` en 0; 2 organizadores `approved`; todos los eventos con `starts_at > now`; los usuarios con `clerk_id` y el super admin intactos; ningún organizador `@example.com`.
+- [x] Con el mismo `now`, dos corridas del seed dan el mismo estado.
 
 ### F3
 - [ ] Un organizador solo ve sus eventos y un admin ve todos.
@@ -312,10 +312,10 @@ Coordinación:
   - secuencial
 
 ### F2 — Limpieza + seed limpio
-- [ ] T1 — `lib/db/seed/env.ts` con test y `.env.example`
-- [ ] T2 — `buildSeedData.ts`/`seed.ts`: 2 organizadores, reparto por hash, `now` inyectado, sin órdenes demo, `SEED_OWNED_COLUMNS.events`, con tests
-- [ ] T3 — `resetDemo.ts` + runner + script `db:reset-demo`, con protección y test de integración
-- [ ] T4 — README: cómo ejecutar reset + seed
+- [x] T1 — `lib/db/seed/env.ts` con test y `.env.example`
+- [x] T2 — `buildSeedData.ts`/`seed.ts`: 2 organizadores, reparto por hash, `now` inyectado, sin órdenes demo, `SEED_OWNED_COLUMNS.events`, con tests
+- [x] T3 — `resetDemo.ts` + runner + script `db:reset-demo`, con protección y test de integración
+- [x] T4 — README: cómo ejecutar reset + seed
 
 ### F3 — Dashboard real
 - [ ] T1 — `listManagedEvents` con test de integración

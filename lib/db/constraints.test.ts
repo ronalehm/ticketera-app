@@ -1,16 +1,16 @@
 // @vitest-environment node
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TransactionRollbackError, eq, inArray, sql } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { TransactionRollbackError, and, eq, inArray, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, savedEvents } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
-import { buildSeedData } from "@/lib/db/seed/buildSeedData";
 import { tickets } from "@/lib/db/schema/sales";
 import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
+import { createTestEvent, sellTestSeats, type TestEvent } from "@/lib/db/testFixtures";
+import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -45,11 +45,24 @@ describeWithDb("restricciones (Postgres)", () => {
   let soldSeat: typeof eventSeats.$inferSelect;
   let availableSeat: typeof eventSeats.$inferSelect;
   let venueId: string;
+  // El seed no siembra ventas: un evento propio con un lugar vendido y otro disponible.
+  let testEvent: TestEvent;
 
   beforeAll(async () => {
-    [soldSeat] = await db.select().from(eventSeats).where(eq(eventSeats.status, "sold")).limit(1);
-    [availableSeat] = await db.select().from(eventSeats).where(eq(eventSeats.status, "available")).limit(1);
+    testEvent = await createTestEvent({ general: 2 });
+    const {
+      eventSeatIds: [soldSeatId],
+    } = await sellTestSeats(testEvent.slug, { count: 1 });
+    [soldSeat] = await db.select().from(eventSeats).where(eq(eventSeats.id, soldSeatId));
+    [availableSeat] = await db
+      .select()
+      .from(eventSeats)
+      .where(and(eq(eventSeats.eventId, testEvent.eventId), eq(eventSeats.status, "available")));
     [{ id: venueId }] = await db.select({ id: venues.id }).from(venues).limit(1);
+  });
+
+  afterAll(async () => {
+    await testEvent?.cleanup();
   });
 
   it("tickets.event_seat_id es único (23505)", async () => {
@@ -178,12 +191,12 @@ describeWithDb("restricciones (Postgres)", () => {
 
     // Solo las filas del seed: los fixtures de otros archivos de test crean organizadores mientras corre este.
     it("el seed inserta sus organizadores approved", async () => {
-      const seedIds = buildSeedData({ superAdminId: randomUUID() }).organizers.map(({ userId }) => userId);
       const seeded = await db
         .select({ status: organizers.status })
         .from(organizers)
-        .where(inArray(organizers.userId, seedIds));
-      expect(seeded).toHaveLength(seedIds.length);
+        .innerJoin(users, eq(users.id, organizers.userId))
+        .where(inArray(users.email, TEST_SEED_OPTIONS.organizerEmails));
+      expect(seeded).toHaveLength(TEST_SEED_OPTIONS.organizerEmails.length);
       expect(seeded.every(({ status }) => status === "approved")).toBe(true);
     });
   });

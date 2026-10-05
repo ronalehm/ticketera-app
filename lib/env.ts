@@ -12,7 +12,6 @@ export const serverEnvSchema = z.object({
   DATABASE_URL_UNPOOLED: optional(z.url()),
   DATABASE_URL_MIGRATOR: optional(z.url()),
   DATABASE_URL_TEST: optional(z.url()),
-  SUPER_ADMIN_EMAIL: optional(z.email().transform((email) => email.toLowerCase())),
   CLERK_SECRET_KEY: z.string().startsWith("sk_"),
   // Solo claves de test de Stripe en todos los entornos (las live llegan en F8).
   STRIPE_SECRET_KEY: z.string().startsWith("sk_test_"),

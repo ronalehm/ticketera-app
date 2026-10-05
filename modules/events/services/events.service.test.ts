@@ -1,12 +1,15 @@
 // @vitest-environment node
+import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
+import { buildSeedData, seedUuid } from "@/lib/db/seed/buildSeedData";
 import { describeWithDb } from "@/lib/db/testDb";
+import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { EVENTS_MOCK } from "../data/events.mock";
 import { eventDetailSchema, eventSchema } from "../schemas/events.schema";
-import type { Event } from "../types/events.types";
+import type { Event, EventDetail } from "../types/events.types";
 import { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./events.service";
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
@@ -14,7 +17,38 @@ vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** Igual al mock salvo `id` (UUID de la fila) y las fechas, que deben ser el mismo instante (Decisión 13). */
+/** Lo que el seed de test (`TEST_SEED_OPTIONS`) deriva de los mocks: fechas, organizador y estados. */
+const SEEDED = buildSeedData({
+  superAdminId: randomUUID(),
+  organizers: TEST_SEED_OPTIONS.organizerEmails.map((email) => ({ id: seedUuid(`user:${email}`), email })),
+  now: TEST_SEED_OPTIONS.now,
+});
+
+function seededRow(slug: string) {
+  const row = SEEDED.events.find((event) => event.slug === slug);
+  if (!row?.startsAt || !row.doorsOpenAt) throw new Error(`Evento no sembrado: ${slug}`);
+  const organizer = SEEDED.organizers.find(({ userId }) => userId === row.organizerId)?.legalName;
+  return { startsAt: row.startsAt.toISOString(), doorsOpenAt: row.doorsOpenAt.toISOString(), organizer: organizer ?? "" };
+}
+
+/** El evento del mock como lo siembra el seed: sus fechas desde `now`, sin ventas (todo disponible). */
+function seededEvent(mock: Event): Event {
+  return { ...mock, startsAt: seededRow(mock.slug).startsAt, status: "available" };
+}
+
+/** El detalle del mock como lo siembra el seed: además, el organizador real de prueba que le toca. */
+function seededDetail(mock: EventDetail): EventDetail {
+  const { doorsOpenAt, organizer } = seededRow(mock.slug);
+  return {
+    ...mock,
+    ...seededEvent(mock),
+    doorsOpenAt,
+    organizer,
+    ticketTypes: mock.ticketTypes.map((type) => ({ ...type, status: "available" })),
+  };
+}
+
+/** Igual al esperado salvo `id` (UUID de la fila) y las fechas, que deben ser el mismo instante (Decisión 13). */
 function expectSameAsMock<T extends Event & { doorsOpenAt?: string }>(actual: T, expected: T) {
   expect(actual.id).toMatch(UUID);
   expect(Date.parse(actual.startsAt)).toBe(Date.parse(expected.startsAt));
@@ -26,7 +60,7 @@ describeWithDb("events.service (BD)", () => {
   it("getEvents devuelve los eventos publicados del mock, en su orden", async () => {
     const events = await getEvents();
     expect(events.map((event) => event.slug)).toEqual(EVENTS_MOCK.map((event) => event.slug));
-    events.forEach((event, index) => expectSameAsMock(event, eventSchema.parse(EVENTS_MOCK[index])));
+    events.forEach((event, index) => expectSameAsMock(event, seededEvent(eventSchema.parse(EVENTS_MOCK[index]))));
   });
 
   it("getFeaturedEvents devuelve solo los destacados", async () => {
@@ -41,7 +75,7 @@ describeWithDb("events.service (BD)", () => {
       async (slug, mock) => {
         const event = await getEventBySlug(slug);
         expect(event).not.toBeNull();
-        expectSameAsMock(event!, eventDetailSchema.parse(mock));
+        expectSameAsMock(event!, seededDetail(eventDetailSchema.parse(mock)));
       },
     );
 
@@ -85,7 +119,7 @@ describeWithDb("events.service con lugares retirados (BD)", () => {
 
   it("no cuenta los lugares retirados", async () => {
     await inRolledBackTransaction(async (tx) => {
-      expect(await getOccidenteStatus()).toBe("available"); // 22 libres de 39
+      expect(await getOccidenteStatus()).toBe("available"); // 39 libres de 39: el seed no siembra ventas
 
       const occidente = tx
         .select({ id: ticketTypes.id })
@@ -98,7 +132,7 @@ describeWithDb("events.service con lugares retirados (BD)", () => {
         .where(and(inArray(eventSeats.ticketTypeId, occidente), eq(eventSeats.status, "available")))
         .returning({ id: eventSeats.id });
 
-      expect(retired).toHaveLength(22);
+      expect(retired).toHaveLength(39);
       expect(await getOccidenteStatus()).toBe("sold-out"); // sin el filtro seguiría `available`
     });
   });

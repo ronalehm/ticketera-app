@@ -7,6 +7,7 @@ import { getVenueMapBySlug } from "../services/seating.service";
 import type { VenueZoneLayout } from "../types/seating.types";
 import { resolveSeats } from "../utils/seatIds";
 import { RISAS_VENUE } from "./risasSinFiltro.mock";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STAGE_SECTOR } from "./stadium.mock";
 
 const SLUG = "risas-sin-filtro";
@@ -110,7 +111,7 @@ describeWithDb("risasSinFiltro.mock en la BD", () => {
   it("getVenueMapBySlug devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,

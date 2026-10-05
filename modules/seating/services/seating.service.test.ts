@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { eventSeats, events } from "@/lib/db/schema/events";
 import { venueSeats, venueSections } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
 import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug, getEvents } from "@/modules/events";
 import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
+import { toSeededLayout } from "../data/seededLayout";
 import { PITCH_STAGE, STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "../data/stadium.mock";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "../data/venueMaps.mock";
 import { venueLayoutSchema } from "../schemas/seating.schema";
@@ -82,11 +84,11 @@ async function getNumberedZone(slug: string, zoneId: string): Promise<NumberedVe
 
 describe("seating.service", () => {
   describeWithDb("getVenueMapBySlug", () => {
-    it.each(MAP_SLUGS)("%s: devuelve el mismo mapa que construía el mock", async (slug) => {
+    it.each(MAP_SLUGS)("%s: devuelve el mismo mapa que construía el mock, sin ventas", async (slug) => {
       const map = await getMap(slug);
       const event = await getEventBySlug(slug);
       const mockLayout = VENUE_LAYOUTS_MOCK.find((layout) => layout.eventSlug === slug);
-      const { zones, ...layout } = venueLayoutSchema.parse(mockLayout);
+      const { zones, ...layout } = toSeededLayout(venueLayoutSchema.parse(mockLayout));
 
       expect(map).toEqual({
         ...layout,
@@ -219,7 +221,7 @@ describe("seating.service", () => {
       expect(map.zones.map((zone) => zone.ticketTypeId)).toEqual(event?.ticketTypes.map((type) => type.id));
       expect(map.zones.map((zone) => [zone.id, zone.name, zone.price, zone.status])).toEqual([
         ["campo-vip", "Campo VIP", 330, "available"],
-        ["campo-general", "Campo General", 215, "low-stock"],
+        ["campo-general", "Campo General", 215, "available"],
         ["occidente", "Tribuna Occidente", 180, "available"],
         ["oriente", "Tribuna Oriente", 155, "available"],
         ["norte", "Tribuna Norte", 120, "available"],
@@ -404,9 +406,15 @@ describe("seating.service", () => {
       }
     });
 
-    it("cada zona numerada no agotada tiene al menos 1 butaca disponible y 1 accesible", async () => {
+    it("cada zona numerada que el mock no agota tiene al menos 1 butaca disponible y 1 accesible", async () => {
+      // El seed deja todo disponible; las zonas que el mock vende enteras no tienen butacas accesibles.
+      const mockZones = VENUE_LAYOUTS_MOCK.find((layout) => layout.eventSlug === slug)?.zones ?? [];
+      const soldOutInMock = (zoneId: string) =>
+        mockZones.some(
+          (zone) => zone.id === zoneId && zone.kind === "numbered" && zone.rows.every((row) => row.seats.every((seat) => seat.status === "occupied")),
+        );
       for (const { zone } of await getArcZones()) {
-        if (zone.status === "sold-out") continue;
+        if (zone.status === "sold-out" || soldOutInMock(zone.id)) continue;
         const statuses = zone.rows.flatMap((row) => row.seats.map((seat) => seat.status));
         expect(statuses, zone.id).toContain("available");
         expect(statuses, zone.id).toContain("accessible");
@@ -471,9 +479,12 @@ describe("seating.service", () => {
       });
     });
 
-    it("risas-sin-filtro: Mesa sold-out", async () => {
-      const map = await getMap("risas-sin-filtro");
-      expect(getZoneTones(map.zones).mesa).toBe("sold-out");
+    it("risas-sin-filtro: Mesa vendida entera → sold-out", async () => {
+      await inRolledBackTransaction(async () => {
+        await sellTestSeats("risas-sin-filtro", { ticketTypes: ["mesa"] });
+        const map = await getMap("risas-sin-filtro");
+        expect(getZoneTones(map.zones).mesa).toBe("sold-out");
+      });
     });
   });
 });

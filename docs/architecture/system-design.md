@@ -151,8 +151,9 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `GCS_BUCKET` | Imágenes de portada. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional) | Mapa del recinto; sin clave no se muestra el mapa. |
 | `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://ticketera-mentec.dev`. |
-| `SUPER_ADMIN_EMAIL` | Correo del primer `super_admin` que crea el seed (`ronalehm@gmail.com`). |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Errores de servidor y cliente. |
+
+Variables solo del seed (`lib/db/seed/env.ts`, no las lee la app): `SUPER_ADMIN_EMAIL`, `SEED_ORGANIZER_EMAILS`; y `ALLOW_DEMO_RESET` para `npm run db:reset-demo`.
 
 ### Pool de conexiones
 

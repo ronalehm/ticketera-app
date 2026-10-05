@@ -1,9 +1,14 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events";
 import type { VenueZone, ZoneTone } from "../types/seating.types";
 import { getZoneTones, ZONE_TONE_CLASSES } from "./zoneTone";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 type ToneInput = Pick<VenueZone, "id" | "price" | "status">;
 
@@ -93,8 +98,11 @@ describe("getZoneTones", () => {
       });
     });
 
-    it("risas-sin-filtro: Mesa → sold-out", async () => {
-      expect(getZoneTones(await zonesOf("risas-sin-filtro"))).toMatchObject({ mesa: "sold-out" });
+    it("risas-sin-filtro: Mesa vendida entera → sold-out", async () => {
+      await inRolledBackTransaction(async () => {
+        await sellTestSeats("risas-sin-filtro", { ticketTypes: ["mesa"] });
+        expect(getZoneTones(await zonesOf("risas-sin-filtro"))).toMatchObject({ mesa: "sold-out" });
+      });
     });
   });
 });
