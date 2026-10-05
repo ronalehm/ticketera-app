@@ -1,9 +1,13 @@
 // @vitest-environment node
-import { TransactionRollbackError, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { TransactionRollbackError, eq, inArray, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, savedEvents } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { buildSeedData } from "@/lib/db/seed/buildSeedData";
 import { tickets } from "@/lib/db/schema/sales";
 import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
@@ -87,6 +91,101 @@ describeWithDb("restricciones (Postgres)", () => {
         tx.insert(venueSections).values({ ...section, venueId, seating: "numbered", capacity: 10 }),
       ),
     ).toBe("23514");
+  });
+
+  describe("organizers.status (0008_organizer_status)", () => {
+    /** Inserta un usuario organizador y su fila de `organizers` con `values`; devuelve el `status` guardado. */
+    const insertOrganizer = (tx: Tx, values: Partial<typeof organizers.$inferInsert>) =>
+      tx
+        .insert(users)
+        .values({ email: "organizer.status.test@example.com", firstName: "Prueba", lastName: "Estado", role: "organizer" })
+        .returning({ id: users.id })
+        .then(([{ id }]) =>
+          tx
+            .insert(organizers)
+            .values({ userId: id, commissionBps: 1000, ...values })
+            .returning({ status: organizers.status }),
+        );
+
+    const fiscal = { legalName: "Prueba SAC", taxIdType: "ruc", taxId: "test-organizer-status" } as const;
+
+    it("approved sin legal_name, tax_id_type o tax_id incumple organizers_approved_complete_check (23514)", async () => {
+      for (const missing of ["legalName", "taxIdType", "taxId"] as const) {
+        expect(
+          await rolledBack((tx) => insertOrganizer(tx, { ...fiscal, [missing]: null, status: "approved" })),
+        ).toMatchObject({ code: "23514", constraint: "organizers_approved_complete_check" });
+      }
+      expect(
+        await rolledBack(async (tx) => {
+          await insertOrganizer(tx, { ...fiscal, status: "approved" });
+          await tx.update(organizers).set({ taxId: null }).where(eq(organizers.taxId, fiscal.taxId));
+        }),
+      ).toMatchObject({ code: "23514", constraint: "organizers_approved_complete_check" });
+    });
+
+    it("sin status queda pending; pending y suspended sin datos fiscales se insertan", async () => {
+      expect(await rolledBack((tx) => insertOrganizer(tx, {}))).toEqual({ value: [{ status: "pending" }] });
+      expect(await rolledBack((tx) => insertOrganizer(tx, { status: "suspended" }))).toEqual({
+        value: [{ status: "suspended" }],
+      });
+      expect(await rolledBack((tx) => insertOrganizer(tx, { ...fiscal, status: "approved" }))).toEqual({
+        value: [{ status: "approved" }],
+      });
+    });
+
+    it("la migración 0008 deja approved a los organizadores existentes y pending a los nuevos", async () => {
+      // El CREATE TYPE se omite: el tipo ya existe al dejar `organizers` como antes de 0008; los DROP NOT NULL son idempotentes.
+      const statements = readFileSync(join(process.cwd(), "drizzle/0008_organizer_status.sql"), "utf8")
+        .split("--> statement-breakpoint")
+        .map((statement) => statement.trim())
+        .filter((statement) => statement && !statement.startsWith("CREATE TYPE"));
+
+      const insertLegacyOrganizer = async (tx: Tx, email: string, taxId: string) => {
+        const { rows } = await tx.execute<{ id: string }>(
+          sql`INSERT INTO users (email, first_name, last_name, role) VALUES (${email}, 'Prueba', 'Backfill', 'organizer') RETURNING id`,
+        );
+        await tx.execute(
+          sql`INSERT INTO organizers (user_id, legal_name, tax_id_type, tax_id, commission_bps) VALUES (${rows[0].id}, 'Prueba SAC', 'ruc', ${taxId}, 1000)`,
+        );
+        return rows[0].id;
+      };
+
+      const result = await rolledBack(async (tx) => {
+        await tx.execute(sql`ALTER TABLE organizers DROP CONSTRAINT organizers_approved_complete_check`);
+        await tx.execute(sql`ALTER TABLE organizers DROP COLUMN status`);
+        const existingId = await insertLegacyOrganizer(tx, "organizer.backfill.old@example.com", "test-backfill-old");
+
+        for (const statement of statements) await tx.execute(sql.raw(statement));
+
+        const [{ id: newId }] = await tx
+          .insert(users)
+          .values({ email: "organizer.backfill.new@example.com", firstName: "Prueba", lastName: "Nuevo", role: "organizer" })
+          .returning({ id: users.id });
+        await tx.insert(organizers).values({ userId: newId, commissionBps: 1000 });
+
+        const rows = await tx
+          .select({ userId: organizers.userId, status: organizers.status })
+          .from(organizers)
+          .where(inArray(organizers.userId, [existingId, newId]));
+        return {
+          existing: rows.find(({ userId }) => userId === existingId)?.status,
+          created: rows.find(({ userId }) => userId === newId)?.status,
+        };
+      });
+
+      expect(result).toEqual({ value: { existing: "approved", created: "pending" } });
+    });
+
+    // Solo las filas del seed: los fixtures de otros archivos de test crean organizadores mientras corre este.
+    it("el seed inserta sus organizadores approved", async () => {
+      const seedIds = buildSeedData({ superAdminId: randomUUID() }).organizers.map(({ userId }) => userId);
+      const seeded = await db
+        .select({ status: organizers.status })
+        .from(organizers)
+        .where(inArray(organizers.userId, seedIds));
+      expect(seeded).toHaveLength(seedIds.length);
+      expect(seeded.every(({ status }) => status === "approved")).toBe(true);
+    });
   });
 
   describe("data gaps: borradores, favoritos y recintos", () => {

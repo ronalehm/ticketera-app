@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "../types/auth.types";
 import { isMfaPending } from "../utils/can";
-import { getSessionUser, getVerifiedEmail, requireUser } from "./session.service";
+import { getSessionUser, getVerifiedEmail, requirePermission, requireUser } from "./session.service";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn(), currentUser: vi.fn(), clerkClient: vi.fn() }));
@@ -240,5 +240,44 @@ describe("requireUser", () => {
       ).toMatchObject({ phone: null });
       expect(redirect).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("requirePermission", () => {
+  it("sin sesión redirige a /login (requireUser)", async () => {
+    mockSession(null);
+    await expect(requirePermission("panel:access", { returnTo: "/organizador" })).rejects.toThrow("NEXT_REDIRECT /login");
+  });
+
+  it("con el perfil incompleto redirige a /perfil/completar con el returnTo", async () => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "admin", phone: null });
+    await expect(requirePermission("users:manage", { returnTo: "/admin/usuarios" })).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/perfil/completar?redirect_url=%2Fadmin%2Fusuarios");
+  });
+
+  it.each([
+    { role: "customer", action: "panel:access", to: "/" },
+    { role: "customer", action: "users:manage", to: "/" },
+    { role: "organizer", action: "users:manage", to: "/organizador" },
+    { role: "organizer", action: "events:moderate", to: "/organizador" },
+    { role: "admin", action: "users:assignAdmin", to: "/organizador" },
+  ] as const)("un $role sin $action redirige a $to", async ({ role, action, to }) => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role });
+    await expect(requirePermission(action)).rejects.toThrow(`NEXT_REDIRECT ${to}`);
+    expect(redirect).toHaveBeenCalledWith(to);
+  });
+
+  it.each([
+    { role: "organizer", action: "panel:access" },
+    { role: "admin", action: "panel:access" },
+    { role: "admin", action: "users:manage" },
+    { role: "super_admin", action: "users:assignAdmin" },
+  ] as const)("un $role con $action recibe el usuario de la sesión", async ({ role, action }) => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role });
+    expect(await requirePermission(action, { returnTo: "/organizador" })).toEqual({ ...USER, role, mfaVerified: false });
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

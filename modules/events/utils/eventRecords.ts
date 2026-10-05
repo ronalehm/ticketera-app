@@ -23,7 +23,8 @@ export type EventDetailRecord = EventRecord & {
   address: string;
   doorsOpenAt: Date | null;
   minAge: number;
-  organizer: string;
+  /** `legal_name` del organizador: nullable salvo si está `approved` (CHECK `organizers_approved_complete_check`). */
+  organizer: string | null;
 };
 
 export type TicketTypeRecord = {
@@ -37,9 +38,13 @@ export type TicketTypeRecord = {
 
 const toSoles = (cents: number) => cents / 100;
 
-/** Columnas nullable solo en `draft` (CHECK `events_draft_complete_check`): en un publicado nunca llegan `null`. */
-function required<T>(value: T | null, slug: string): T {
-  if (value === null) throw new Error(`Evento publicado incompleto: ${slug}`);
+/**
+ * Campo que la BD garantiza en un evento publicado: columnas del evento nullable solo en `draft`
+ * (CHECK `events_draft_complete_check`) y el `legal_name` del organizador, nullable salvo si está aprobado
+ * (CHECK `organizers_approved_complete_check`). Un `null` aquí es un dato inconsistente: se lanza con slug y campo.
+ */
+function required<T>(value: T | null, slug: string, field: string): T {
+  if (value === null) throw new Error(`Evento publicado incompleto: ${slug} (falta ${field})`);
   return value;
 }
 
@@ -50,10 +55,10 @@ export function toEvent(record: EventRecord): z.input<typeof eventSchema> {
     slug: record.slug,
     title: record.title,
     category: record.category as z.input<typeof eventSchema>["category"],
-    startsAt: required(record.startsAt, record.slug).toISOString(),
+    startsAt: required(record.startsAt, record.slug, "startsAt").toISOString(),
     venue: record.venue,
     city: record.city,
-    imageUrl: required(record.imageUrl, record.slug),
+    imageUrl: required(record.imageUrl, record.slug, "imageUrl"),
     priceFrom: toSoles(record.priceFromCents),
     status: getAvailabilityStatus(record.availableSeats, record.totalSeats),
     featured: record.featured,
@@ -67,11 +72,11 @@ export function toEventDetail(
 ): z.input<typeof eventDetailSchema> {
   return {
     ...toEvent(record),
-    description: required(record.description, record.slug),
+    description: required(record.description, record.slug, "description"),
     address: record.address,
-    doorsOpenAt: required(record.doorsOpenAt, record.slug).toISOString(),
+    doorsOpenAt: required(record.doorsOpenAt, record.slug, "doorsOpenAt").toISOString(),
     minAge: record.minAge,
-    organizer: record.organizer,
+    organizer: required(record.organizer, record.slug, "organizer"),
     ticketTypes: ticketTypes.map((ticketType) => ({
       id: ticketType.slug,
       name: ticketType.name,

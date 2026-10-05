@@ -102,7 +102,7 @@ describe("buildSeedData", () => {
 
   it("los ids son únicos en cada tabla", () => {
     for (const rows of Object.values(data)) {
-      const ids = rows.map((row) => ("legalName" in row ? row.userId : row.id));
+      const ids = rows.map((row) => ("commissionBps" in row ? row.userId : row.id));
       expect(new Set(ids).size).toBe(ids.length);
     }
   });
@@ -308,7 +308,7 @@ describe("buildSeedData", () => {
     expect(data.organizers.map((organizer) => organizer.legalName)).toEqual([...names]);
     const taxIds = data.organizers.map((organizer) => organizer.taxId);
     expect(new Set(taxIds).size).toBe(taxIds.length);
-    expect(taxIds.every((taxId) => /^20\d{9}$/.test(taxId))).toBe(true);
+    expect(taxIds.every((taxId) => /^20\d{9}$/.test(taxId ?? ""))).toBe(true);
     expect(taxIds[0]).toBe("20000000001");
     for (const user of data.users) {
       expect(user).toMatchObject({ role: "organizer", clerkId: null, lastName: "" });

@@ -3,7 +3,7 @@ import "server-only";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import type { SessionUser } from "../types/auth.types";
-import { isMfaPending } from "../utils/can";
+import { type Action, can, isMfaPending } from "../utils/can";
 import { isProfileComplete } from "../utils/isProfileComplete";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
@@ -70,5 +70,15 @@ export async function requireUser(
         : "/perfil/completar",
     );
   }
+  return user;
+}
+
+/**
+ * Usuario de la sesión con permiso para `action` (`requireUser` + `can`). Sin el permiso redirige al panel si el rol
+ * tiene `panel:access` (p. ej. un organizador en `/admin`) y, si no, a la home.
+ */
+export async function requirePermission(action: Action, options: { returnTo?: string } = {}): Promise<SessionUser> {
+  const user = await requireUser({ returnTo: options.returnTo });
+  if (!can(user, action)) redirect(can(user, "panel:access") ? "/organizador" : "/");
   return user;
 }

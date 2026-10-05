@@ -135,6 +135,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     data.users.push({ id, email, firstName: name, lastName: "", role: "organizer", clerkId: null });
     data.organizers.push({
       userId: id,
+      status: "approved",
       legalName: name,
       taxIdType: "ruc",
       taxId: `20${String(organizerIds.size).padStart(9, "0")}`,

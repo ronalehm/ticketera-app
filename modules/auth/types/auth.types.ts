@@ -29,3 +29,6 @@ export type SessionUser = {
   /** La sesión de Clerk verificó el segundo factor (`auth().factorVerificationAge[1] >= 0`). No es columna de la BD. */
   mfaVerified: boolean;
 };
+
+/** Estado del organizador (`organizers.status`), separado del rol: solo `approved` muta eventos. */
+export type OrganizerStatus = "approved" | "pending" | "suspended";

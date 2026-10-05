@@ -218,16 +218,16 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 ## Criterios de aceptación
 
 ### F1
-- [ ] `0008_organizer_status` existe en `drizzle/` y `_journal.json`; `migrations.test.ts` la acepta como aditiva (sin excepciones nuevas en `ALLOWED_VIOLATIONS`).
-- [ ] Con la migración aplicada en la BD de test, insertar u actualizar un organizador `approved` sin `legal_name`, `tax_id_type` o `tax_id` falla con 23514. Uno `pending` sin esos datos se inserta. Los organizadores ya existentes quedan `approved`.
-- [ ] Test tabla de `can`: rol × acción completo según la matriz; sin sesión, `false`.
-- [ ] Test tabla de `canManageUser` y `canAssignRole`: actor × objetivo según las reglas (incluye "a sí mismo" y "super_admin a super_admin").
-- [ ] Un `customer` que entra a `/organizador` o a `/admin/usuarios` es redirigido a `/`. Un `organizer` que entra a `/admin/usuarios` es redirigido a `/organizador`. Un `admin` entra a ambos.
-- [ ] Un organizador `pending` o `suspended` entra a `/organizador`, ve el aviso de solo lectura y "Crear evento" deshabilitado; `/organizador/eventos/nuevo` lo redirige a `/organizador`.
-- [ ] `requireApprovedOrganizer` lanza para `pending`, `suspended` y para quien no tiene fila de organizador.
-- [ ] El sidebar muestra "Administración" solo a admin y super_admin. Los ítems sin página aparecen con "Próximamente" y no navegan. Se puede contraer a rail y expandir, y en móvil se abre en un `Sheet`. El breadcrumb muestra la sección y el título de la página.
-- [ ] `proxy.ts` exige sesión en `/admin(.*)`.
-- [ ] `npm run lint`, `npx vitest run` y `npm run build` sin errores.
+- [x] `0008_organizer_status` existe en `drizzle/` y `_journal.json`; `migrations.test.ts` la acepta como aditiva (sin excepciones nuevas en `ALLOWED_VIOLATIONS`).
+- [x] Con la migración aplicada en la BD de test, insertar u actualizar un organizador `approved` sin `legal_name`, `tax_id_type` o `tax_id` falla con 23514. Uno `pending` sin esos datos se inserta. Los organizadores ya existentes quedan `approved`.
+- [x] Test tabla de `can`: rol × acción completo según la matriz; sin sesión, `false`.
+- [x] Test tabla de `canManageUser` y `canAssignRole`: actor × objetivo según las reglas (incluye "a sí mismo" y "super_admin a super_admin").
+- [x] Un `customer` que entra a `/organizador` o a `/admin/usuarios` es redirigido a `/`. Un `organizer` que entra a `/admin/usuarios` es redirigido a `/organizador`. Un `admin` entra a ambos.
+- [x] Un organizador `pending` o `suspended` entra a `/organizador`, ve el aviso de solo lectura y "Crear evento" deshabilitado; `/organizador/eventos/nuevo` lo redirige a `/organizador`.
+- [x] `requireApprovedOrganizer` lanza para `pending`, `suspended` y para quien no tiene fila de organizador.
+- [x] El sidebar muestra "Administración" solo a admin y super_admin. Los ítems sin página aparecen con "Próximamente" y no navegan. Se puede contraer a rail y expandir, y en móvil se abre en un `Sheet`. El breadcrumb muestra la sección y el título de la página.
+- [x] `proxy.ts` exige sesión en `/admin(.*)`.
+- [x] `npm run lint`, `npx vitest run` y `npm run build` sin errores.
 
 ### F2
 - [ ] `db:reset-demo` aborta sin `ALLOW_DEMO_RESET=true` o sin un `--confirm` correcto, y no lo invoca ningún otro script.
@@ -290,20 +290,20 @@ Coordinación:
 - Las fases F2 a F5b pueden ajustar su lista de archivos al empezar. Cambiar la spec la devuelve a `borrador` y requiere una nueva aprobación.
 
 ### F1 — Seguridad y shell · ~24 archivos (4 generados/movidos)
-- [ ] T1 — Migración 0008 con su test
+- [x] T1 — Migración 0008 con su test
   - archivos: `lib/db/schema/enums.ts`, `lib/db/schema/identity.ts`, `drizzle/0008_organizer_status.sql`, `drizzle/meta/0008_snapshot.json`, `drizzle/meta/_journal.json`, `lib/db/constraints.test.ts`, `docs/architecture/erd.md`
   - depende de: —
   - paralelo con T2 y T3
-- [ ] T2 — Matriz de permisos, `canManageUser`, `canAssignRole`, `requirePermission`, `getOrganizerStatus`/`requireApprovedOrganizer`, entradas públicas, con tests
+- [x] T2 — Matriz de permisos, `canManageUser`, `canAssignRole`, `requirePermission`, `getOrganizerStatus`/`requireApprovedOrganizer`, entradas públicas, con tests
   - archivos: `modules/auth/utils/can.ts`, `modules/auth/utils/can.test.ts`, `modules/auth/services/session.service.ts`, `modules/auth/services/session.service.test.ts`, `modules/auth/services/organizers.service.ts`, `modules/auth/services/organizers.service.test.ts`, `modules/auth/server.ts`, `modules/auth/permissions.ts`
   - depende de: T1 (columna `status`), solo para el test de integración
   - paralelo con T3
-- [ ] T3 — Módulo `panel`: `buildPanelNav`/`findNavItem` con test y componentes del shell (movidos desde organizer), con el test de `PanelUserCard`
+- [x] T3 — Módulo `panel`: `buildPanelNav`/`findNavItem` con test y componentes del shell (movidos desde organizer), con el test de `PanelUserCard`
   - archivos: `modules/panel/utils/panelNav.ts`, `modules/panel/utils/panelNav.test.ts`, `modules/panel/types/panel.types.ts`, `modules/panel/components/{PanelSidebar,PanelNav,PanelMobileBar,PanelBrand,PanelUserCard,PanelUserCard.test,PanelBreadcrumb,PanelReadOnlyNotice}.tsx`, `modules/panel/index.ts`
   - elimina: `modules/organizer/components/{OrganizerSidebar,OrganizerNav,OrganizerMobileBar,OrganizerBrand,OrganizerUserCard,OrganizerUserCard.test}.tsx`
   - depende de: —
   - paralelo con T1 y T2
-- [ ] T4 — Rutas `(panel)`, protección y doc
+- [x] T4 — Rutas `(panel)`, protección y doc
   - mover `app/organizador/**` a `app/(panel)/organizador/**`
   - `app/(panel)/layout.tsx`, `app/(panel)/admin/layout.tsx`, `app/(panel)/admin/usuarios/page.tsx`
   - nuevo-evento y Resumen respetan el estado del organizador

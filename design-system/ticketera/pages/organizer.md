@@ -1,115 +1,174 @@
-# Página: panel de organizador `/organizador` y `/organizador/eventos/nuevo`
+# Página: panel `/organizador`, `/organizador/eventos/nuevo` y `/admin/usuarios`
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
-> Shell a pantalla completa (sidebar, barra móvil, tarjeta de usuario, fondo `bg-muted`, "Volver al resumen"): `docs/specs/layout-fullscreen-shells.md` (Fase 3). Prevalece sobre el layout, la navegación y la ausencia de sesión de `organizer-dashboard`.
+> Shell compartido por organizador y admin (route group `app/(panel)`, sidebar por rol de 264/76 px, "Próximamente", breadcrumb, solo lectura, `/admin/usuarios`): `docs/specs/admin-panel.md` (Fase 1). Prevalece sobre el layout, la navegación y la sesión de `layout-fullscreen-shells` (Fase 3) y de `organizer-dashboard`, y sobre su Decisión 2 (ítems sin página).
 > "Mis eventos" (tarjeta con barra de cabecera solo en `lg`) y la vista previa de Crear evento (anatomía de `EventCard`): `docs/specs/design-alignment-account-views.md` (Fase 2). Prevalece sobre el requisito 23 de `layout-fullscreen-shells` F3 y sobre la decisión 4 de `organizer-dashboard` (marcadores y badge "Disponible" de la vista previa).
 > Crear evento, modo de ubicación ("Mapa de asientos"), "Ciudad" como `Select`, portada obligatoria con guía y recortes, y "Descripción (opcional)" / "Máximo por compra" por tipo de entrada: `docs/specs/organizer-event-seating-mode.md` (Fase 1). Prevalece sobre `organizer-event-seating` y `organizer-dashboard` en esos puntos (subtítulo de "Tipos de entrada", ciudad de texto libre, portada opcional, "no se pide descripción por tipo").
 
-Panel para quien organiza eventos: ver cómo van las ventas (KPIs y lista de eventos) y crear un evento nuevo. Es una **maqueta con datos mock**: sin backend, sin sesión obligatoria ni roles; los eventos creados solo existen en este navegador (`localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es "Mentec Tickets · Organizadores" (`OrganizerBrand`, en el sidebar y en la barra móvil).
+Back-office de Mentec Tickets, compartido por organizadores y administradores. El organizador ve cómo van las ventas de sus eventos (KPIs y lista) y crea eventos; el admin gestiona además usuarios. El acceso exige sesión y rol (`panel:access`); los datos de Resumen y Crear evento siguen siendo **mock** hasta las fases F3/F5a de `admin-panel` (los eventos creados solo existen en este navegador, `localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`, "Panel · Escritorio/Móvil") se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es el logo de Mentec Tickets con "Panel" debajo (`PanelBrand`, en el sidebar y en la barra móvil).
 
-## Layout común `/organizador/*`
+## Layout común del panel (`app/(panel)`)
 
-**Pantalla completa:** sin header ni footer del sitio. `app/organizador` vive fuera del route group `app/(site)`, así que no usa `SiteShell`; el panel tiene su propio shell.
+**Pantalla completa:** sin header ni footer del sitio. El route group `app/(panel)` vive fuera de `app/(site)`, así que no usa `SiteShell`; el panel tiene su propio shell (módulo `modules/panel`). Las URLs no cambian: `app/(panel)/organizador/**` → `/organizador/**` y `app/(panel)/admin/usuarios` → `/admin/usuarios`.
+
+### Rutas y acceso
+
+- `app/(panel)/layout.tsx` (Server Component, `LayoutProps<"/">`, metadata `robots: { index: false }`): `getPanelContext("panel:access", { returnTo: "/organizador" })` (`@/modules/panel/server`) exige el permiso y, si el rol es `organizer`, lee su estado (`approved | pending | suspended | null`). Con eso construye `sections = buildPanelNav(role, organizerStatus)` (serializables: clave, etiqueta, clave de icono, estado y `href`) y `roleLabel = getPanelRoleLabel(role)`, y los pasa a `PanelSidebar`, `PanelMobileBar` y `PanelBreadcrumb`.
+- `app/(panel)/admin/layout.tsx`: `requirePermission("users:manage", { returnTo: "/admin/usuarios" })`.
+- Redirecciones: un `customer` en `/organizador` o `/admin/**` va a `/`; un `organizer` en `/admin/**` va a `/organizador`. `proxy.ts` exige sesión en `/organizador(.*)` y `/admin(.*)`.
+- Las páginas que dependen del estado (`/organizador`, `/organizador/eventos/nuevo`) vuelven a llamar a `getPanelContext("events:manageOwn", …)`: layout y página se renderizan en paralelo y cada uno valida por su cuenta.
 
 ### Escritorio (`lg+`)
 
 ```
-┌──── 240px · bg-background · border-r ────┬──────────── 1fr · bg-muted ────────────────────┐
-│ [logo Mentec] → /                         │  <main> px-10 py-10                             │
-│ Organizadores                             │  ┌──────── mx-auto max-w-6xl ───────────────┐   │
-│                                           │  │ contenido de la página                   │   │
-│ ▣ Resumen          (activo: bg-accent)    │  │                                          │   │
-│ + Crear evento                            │  │                                          │   │
-│                                           │  │                                          │   │
-│                                           │  │                                          │   │
-│ ───────────────────────────────────────── │  │                                          │   │
-│ (AQ) Ana Quispe                           │  │                                          │   │
-│      demo@mentectickets.pe                │  │                                          │   │
-│ [ ⇥  Cerrar sesión                    ]   │  └──────────────────────────────────────────┘   │
-└──── sticky top-0 · h-dvh ─────────────────┴─────────────────────────────────────────────────┘
+┌── 264px · bg-background · border-r ───┬──────────── 1fr · bg-muted ─────────────────────┐
+│ [logo Mentec] → /              [⇤]    │  <main> px-10 py-10                              │
+│ Panel                                 │  ┌──────── mx-auto max-w-6xl ───────────────┐    │
+│                                       │  │ Organizador / Resumen      (breadcrumb)  │    │
+│ ADMINISTRACIÓN      (admin, super)    │  │ [Aviso de solo lectura]  (org. no aprob.)│    │
+│ ◔ Dashboard          [Próximamente]   │  │ contenido de la página                   │    │
+│ ◎ Usuarios                            │  │                                          │    │
+│ ▥ Organizadores      [Próximamente]   │  │                                          │    │
+│ ORGANIZADOR                           │  │                                          │    │
+│ ▣ Resumen          (activo: bg-accent)│  │                                          │    │
+│ ▦ Mis eventos        [Próximamente]   │  │                                          │    │
+│ + Crear evento     (o [Solo lectura]) │  │                                          │    │
+│ ⌗ Check-in           [Próximamente]   │  │                                          │    │
+│ ▭ Pagos              [Próximamente]   │  │                                          │    │
+│ ───────────────────────────────────── │  │                                          │    │
+│ (AQ) Ana Quispe                       │  │                                          │    │
+│      ana@mentectickets.pe             │  │                                          │    │
+│      [Organizador]                    │  │                                          │    │
+│ [ ⇥  Cerrar sesión                ]   │  └──────────────────────────────────────────┘    │
+└── sticky top-0 · h-dvh ───────────────┴──────────────────────────────────────────────────┘
+
+Rail (contraído, 76px):
+┌──────┐
+│ [m]  │  logo recortado a la "m"
+│ [⇥]  │  Expandir menú
+│  ◔   │  solo iconos; etiqueta en sr-only + title
+│  ◎   │
+│  ▥   │
+│ ──── │  Separator entre secciones (los títulos quedan sr-only)
+│  ▣   │
+│  …   │
+│ ──── │
+│ (AQ) │  avatar (title "Nombre · Rol")
+│ [⇥]  │  Cerrar sesión (solo icono, aria-label)
+└──────┘
 ```
 
-- `app/organizador/layout.tsx` (Server Component, `LayoutProps<"/organizador">`, metadata `robots: { index: false }`):
+- Contenedor del layout:
   ```tsx
-  <div className="flex-1 bg-muted lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
-    <OrganizerSidebar />
-    <OrganizerMobileBar />
+  <div className="flex-1 bg-muted lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
+    <PanelSidebar sections={sections} roleLabel={roleLabel} />
+    <PanelMobileBar sections={sections} roleLabel={roleLabel} />
     <main className="min-w-0 px-4 py-6 md:px-6 md:py-8 lg:px-10 lg:py-10">
-      <div className="mx-auto max-w-6xl">{children}</div>
+      <div className="mx-auto max-w-6xl">
+        <PanelBreadcrumb sections={sections} />
+        {/* organizador no aprobado: pending, suspended o sin fila (null) */}
+        {readOnly && organizerStatus !== "approved" && <PanelReadOnlyNotice status={organizerStatus} />}
+        {children}
+      </div>
     </main>
   </div>
   ```
-  El layout aporta el único `<main>` (el root layout ya no lo tiene). El contenido va sobre `bg-muted`; las tarjetas blancas (`bg-card`) destacan sobre él.
-- **`OrganizerSidebar`** (server): `<header className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col lg:gap-8 lg:overflow-y-auto lg:border-r lg:bg-background lg:px-4 lg:py-6">`. Orden: `OrganizerBrand` (en `px-2`), `OrganizerNav` y, abajo (`mt-auto border-t pt-4`), `OrganizerUserCard`. Se queda fijo a toda la altura de la ventana al hacer scroll; si no cabe, hace scroll propio.
+  La columna del sidebar es `auto`: el ancho lo pone el propio sidebar. El layout aporta el único `<main>`. El contenido va sobre `bg-muted`; las tarjetas blancas (`bg-card`) destacan sobre él.
+- **`PanelSidebar`** (cliente, `useState` para `collapsed`): `<header className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col lg:gap-8 lg:overflow-x-hidden lg:overflow-y-auto lg:border-r lg:bg-background lg:px-4 lg:py-6 lg:transition-[width] lg:duration-200 lg:ease-out motion-reduce:lg:transition-none">` con `lg:w-66` (264 px) o `lg:w-19` (76 px, rail: 44 px de contenido con `px-4`). Orden: fila de `PanelBrand` + botón de contraer, `PanelNav` y, abajo (`mt-auto border-t pt-4`), `PanelUserCard`. Se queda fijo a toda la altura de la ventana; si no cabe, hace scroll propio.
+- **Botón contraer/expandir:** `Button variant="ghost" size="icon"` `size-11 shrink-0 cursor-pointer text-muted-foreground hover:text-foreground`, icono `PanelLeftClose` / `PanelLeftOpen` (`size-5`). `aria-label` y `title` "Contraer menú" / "Expandir menú", `aria-expanded` (expandido = `true`) y `aria-controls` con el `id` de la `nav`. Expandido va a la derecha de la marca (`items-start justify-between px-2`); en el rail, debajo del logo (`flex-col items-center`). El estado no se persiste.
+- **Rail:** las etiquetas de los ítems, los títulos de sección y los badges pasan a `sr-only` (siguen dando el nombre accesible); cada ítem lleva `title` "Etiqueta" o "Etiqueta · Próximamente". Los ítems se centran (`justify-center px-0`) y un `Separator` separa las secciones.
 
 ### Móvil (`< lg`)
 
 ```
 ┌──────────── header sticky top-0 · h-16 · bg-background · border-b ────────────┐
 │ [logo Mentec] → /                                                       [≡]   │  botón 44×44
-│ Organizadores                                                                  │
+│ Panel                                                                          │
 └────────────────────────────────────────────────────────────────────────────────┘
 <main> px-4 py-6 (md: px-6 py-8) sobre bg-muted
 
 Sheet desde la izquierda (al pulsar ≡):
 ┌──────────────────────────────┐
-│ Panel de organizador     [✕] │  SheetTitle
+│ Panel                    [✕] │  SheetTitle
+│ ADMINISTRACIÓN               │  (mismas secciones que el sidebar)
+│ ◔ Dashboard  [Próximamente]  │
+│ …                            │
+│ ORGANIZADOR                  │
 │ ▣ Resumen                    │
-│ + Crear evento               │
-│                              │
+│ …                            │
 │ ──────────────────────────── │
 │ (AQ) Ana Quispe              │
-│      demo@mentectickets.pe   │
+│      ana@mentectickets.pe    │
+│      [Organizador]           │
 │ [ ⇥  Cerrar sesión       ]   │
 └──────────────────────────────┘
 ```
 
-- **`OrganizerMobileBar`** (cliente, `Sheet` controlado con `useState`): `<header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 lg:hidden">` con `OrganizerBrand` y un `SheetTrigger` `aria-label="Abrir menú del panel"` (`buttonVariants({ variant: "ghost", size: "icon" })` + `size-11 cursor-pointer`, icono `Menu size-5`).
-- `SheetContent side="left"` (`overflow-y-auto`): `SheetHeader` con `SheetTitle` "Panel de organizador" y, debajo, `flex flex-1 flex-col gap-6 px-4 pb-6` con `<OrganizerNav onNavigate={() => setOpen(false)} />` y `<div className="mt-auto border-t pt-4"><OrganizerUserCard /></div>`.
+- **`PanelMobileBar`** (cliente, `Sheet` controlado con `useState`): `<header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 lg:hidden">` con `PanelBrand` y un `SheetTrigger` `aria-label="Abrir menú del panel"` (`buttonVariants({ variant: "ghost", size: "icon" })` + `size-11 cursor-pointer`, icono `Menu size-5`).
+- `SheetContent side="left"` (`overflow-y-auto`): `SheetHeader` con `SheetTitle` "Panel" y, debajo, `flex flex-1 flex-col gap-6 px-4 pb-6` con `<PanelNav sections={sections} onNavigate={() => setOpen(false)} />` y `<div className="mt-auto border-t pt-4"><PanelUserCard roleLabel={roleLabel} /></div>`. En el `Sheet` nunca hay rail.
 - Al elegir un enlace, el `Sheet` se cierra. Base UI mueve el foco al abrir, cierra con Escape y devuelve el foco al disparador.
-- Sustituye a los chips horizontales de la primera versión: sin header global, el menú también tiene que alojar la sesión.
 
-### Marca (`OrganizerBrand`, server)
+### Marca (`PanelBrand`, server)
 
 - `<div className="flex flex-col gap-0.5">` con:
   - `<Link href="/" aria-label="Mentec Tickets: ir al inicio">` (`inline-flex min-h-11 items-center self-start rounded-lg`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`) que contiene `<BrandLogo className="h-7 w-auto" />`. El nombre accesible incluye el nombre visible de la marca (WCAG 2.5.3).
-  - `<p className="px-0.5 text-xs font-medium text-muted-foreground">Organizadores</p>`.
+  - `<p className="px-0.5 text-xs font-medium text-muted-foreground">Panel</p>`.
+- En el rail (`collapsed`): el enlace es `min-w-11 justify-center`, el logo se recorta a la "m" inicial (`w-6.5 object-cover object-left`) y "Panel" no se muestra.
 - La misma marca en el sidebar y en la barra móvil. Es el único enlace al sitio público.
 
-### Navegación (`OrganizerNav`, cliente)
+### Navegación por rol (`buildPanelNav` + `PanelNav`)
 
-- `<nav aria-label="Panel de organizador">` con lista **vertical** en todos los anchos (`flex flex-col gap-1`). Sin overline ni chips.
-- Enlaces: "Resumen" (`LayoutDashboard`, `/organizador`) y "Crear evento" (`Plus`, `/organizador/eventos/nuevo`). Icono `size-5` `aria-hidden`.
+`buildPanelNav(role, organizerStatus)` (función pura, `modules/panel/utils/panelNav.ts`) devuelve las secciones visibles:
+
+| Sección | Visible para | Ítems (icono lucide) |
+|---|---|---|
+| **Administración** | `admin`, `super_admin` (`users:manage`) | Dashboard (`Gauge`, Próximamente) · Usuarios (`Users`, `/admin/usuarios`) · Organizadores (`Building2`, Próximamente) |
+| **Organizador** | `organizer`, `admin`, `super_admin` (`events:manageOwn`) | Resumen (`LayoutDashboard`, `/organizador`) · Mis eventos (`CalendarDays`, Próximamente hasta F3) · Crear evento (`Plus`, `/organizador/eventos/nuevo`; "Solo lectura" para un organizador no aprobado) · Check-in (`ScanLine`, Próximamente) · Pagos (`Wallet`, Próximamente) |
+
+- Un `customer` no ve ninguna sección (ni entra al panel). El estado de organizador solo afecta al rol `organizer`.
+- **`PanelNav`** (cliente): `<nav aria-label="Panel" className="flex flex-col gap-4">`; por sección, un título `<p>` (`px-3 pb-1 text-xs font-bold tracking-wider text-muted-foreground uppercase`) que nombra su `<ul aria-labelledby className="flex flex-col gap-1">`. Los iconos se resuelven en el cliente con un mapa clave → componente (las secciones llegan serializadas del servidor). Icono `size-5` `aria-hidden`.
 - Items `flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium`, transición 200 ms, foco `focus-visible:ring-3 focus-visible:ring-ring/50`.
   - Activo (ruta exacta): `aria-current="page"` + `bg-accent font-semibold text-accent-foreground`.
   - Inactivo: `text-muted-foreground hover:bg-muted hover:text-foreground`.
+  - **Deshabilitado** ("Próximamente" o "Solo lectura"): `<span>` (sin `aria-disabled`, que no aplica a un span genérico), no es enlace ni recibe foco, `cursor-not-allowed text-muted-foreground`, icono `opacity-50` y, a la derecha, `Badge` "Próximamente" (`variant="secondary"`) o "Solo lectura" (`variant="outline"`). El texto del badge y un `sr-only` "(no disponible)" anuncian el estado (nunca solo color).
 - Prop opcional `onNavigate`, que se llama al pulsar cualquier enlace (la usa la barra móvil para cerrar el `Sheet`).
-- **Solo destinos reales**: "Mis eventos", "Ventas" y "Configuración" no aparecen (ni deshabilitados ni como "Próximamente"). "Mis eventos" no tiene ruta propia: la lista vive en Resumen, y un ancla compartiría `aria-current` con "Resumen".
 
-### Tarjeta de usuario (`OrganizerUserCard`, cliente)
+### Breadcrumb (`PanelBreadcrumb`, cliente)
+
+- Sobre el contenido, dentro del `max-w-6xl` (`mb-4`): `Breadcrumb` de shadcn con `aria-label="Ruta de navegación"` y "Sección / Título" (p. ej. "Organizador / Resumen", "Administración / Usuarios"). La sección es texto (no tiene página); el título es `BreadcrumbPage` `font-medium`.
+- Se deriva del pathname con la misma configuración del menú (`findNavItem`: ruta exacta, sin barra final, solo ítems enlace). Fuera del menú no se muestra.
+
+### Solo lectura (organizador `pending`, `suspended` o sin fila)
+
+- **`PanelReadOnlyNotice`** (server): `Alert` (`mb-6 px-4 py-3`, icono `Info`) entre el breadcrumb y el contenido, con título "Tu cuenta de organizador está pendiente de aprobación" / "… está suspendida" / "Tu cuenta de organizador aún no está dada de alta" (estado `null`) (`font-semibold`) y "Puedes ver tu panel, pero no crear ni editar eventos.".
+- En el menú, "Crear evento" aparece deshabilitado con el badge "Solo lectura"; en Resumen el botón "Crear evento" no se muestra; `/organizador/eventos/nuevo` redirige a `/organizador`.
+- Un organizador sin fila de `organizers` (estado `null`) también queda en solo lectura en el menú y en las páginas, con su propio aviso ("Tu cuenta de organizador aún no está dada de alta").
+
+### Tarjeta de usuario (`PanelUserCard`, cliente)
 
 ```
 Con sesión                                Sin sesión
 (AQ)  Ana Quispe                          [ →  Iniciar sesión          ]  → /login
-      demo@mentectickets.pe
+      ana@mentectickets.pe
+      [Organizador]
 [ ⇥  Cerrar sesión                 ]
 ```
 
-- **Regla de sesión:** lee `useAuthStore` (`user`, `signOut`) desde la entrada pública `@/modules/auth/session` y la rehidrata al montar (`useAuthStore.persist.rehydrate()`, patrón de `AuthHeaderActions`).
-  - **Sin sesión el panel sigue accesible** (sin redirección: un bloqueo solo en cliente no protege nada). La tarjeta muestra el enlace "Iniciar sesión" (`LogIn`) hacia `/login`.
-  - **"Cerrar sesión"** llama a `signOut()` y navega a `/` (el panel no se queda en la página, a diferencia del menú del header del sitio).
-- **Con sesión:** `flex flex-col gap-3` con:
-  - `UserSummary` (`@/components/shared/UserSummary`): avatar `UserAvatar size="lg"` de 40 px con las iniciales (`bg-accent text-accent-foreground`, p. ej. "AQ"), nombre completo (`font-semibold`) y correo (`text-sm text-muted-foreground`).
-  - Debajo, `Button variant="outline"` "Cerrar sesión" con icono `LogOut` (`aria-hidden`) y texto, **a todo el ancho** (`h-11 w-full cursor-pointer gap-2`).
-- Sin sesión: enlace con `buttonVariants({ variant: "outline" })` y las mismas clases de ancho completo.
-- **Sin truncado:** nombres y correos largos hacen salto de línea (`wrap-break-word` / `wrap-anywhere` de `UserSummary`), sin salirse de la tarjeta ni provocar scroll horizontal. Con el botón debajo (y no un botón solo-icono al lado) el texto dispone de ~155 px en el sidebar de 240 px y el botón tiene etiqueta visible.
-- Es la misma composición que el bloque "Tu cuenta" del `Sheet` del sitio (tarjeta + "Cerrar sesión" outline a todo el ancho). No compone `Avatar` ni calcula iniciales: lo hace `UserSummary` → `UserAvatar`.
+- **Sesión:** `useSessionUser()` de la entrada pública `@/modules/auth/session` (Clerk). Mientras carga no muestra nada (evita un "Iniciar sesión" fugaz). "Cerrar sesión" llama a `signOut()`, que ya redirige a `/`.
+- **Con sesión:** `flex flex-col gap-3` con `UserSummary` (`@/components/shared/UserSummary`: avatar de 40 px con iniciales, nombre `font-semibold` y correo `text-sm text-muted-foreground`), debajo el rol como `Badge variant="secondary"` alineado con la columna de texto (`ms-13`): "Organizador", "Administrador" o "Super admin" (`getPanelRoleLabel`), y `Button variant="outline"` "Cerrar sesión" (`LogOut`) a todo el ancho (`h-11 w-full cursor-pointer gap-2`).
+- **Rail:** solo `UserAvatar size="lg"` (con `title` "Nombre · Rol") y un botón outline `size-11` solo icono con `aria-label`/`title` "Cerrar sesión" (o "Iniciar sesión" sin sesión).
+- **Sin truncado:** nombres y correos largos hacen salto de línea (`wrap-break-word` / `wrap-anywhere` de `UserSummary`), sin salirse de la tarjeta ni provocar scroll horizontal.
 
 ### Landmarks y accesibilidad
 
-- El sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`; solo uno es visible en cada breakpoint y el otro tiene `display: none`, así que hay un único `banner` y una única `nav` "Panel de organizador" (con el `Sheet` cerrado).
+- El sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`; solo uno es visible en cada breakpoint y el otro tiene `display: none`, así que hay un único `banner` y una única `nav` "Panel" (con el `Sheet` cerrado).
 - Un único `<main>` (el del layout) y un único `<h1>` por página. El `<header>` interno de Resumen (h1 + "Crear evento") queda dentro de `<main>`, así que no es un `banner`.
-- Todo lo interactivo mide 44 px o más (`h-11`, `min-h-11`, `size-11`) y muestra foco visible.
+- Todo lo interactivo mide 44 px o más (`h-11`, `min-h-11`, `size-11`) y muestra foco visible. La transición de ancho del sidebar se desactiva con `prefers-reduced-motion`.
+
+## Usuarios y roles `/admin/usuarios` (F1)
+
+- Solo admin y super_admin. Metadata: `Usuarios y roles | Mentec Tickets`.
+- h1 "Usuarios y roles" (`text-3xl md:text-4xl font-extrabold tracking-tight`) y, debajo, un estado vacío (`Empty` de shadcn, `rounded-2xl border-2 border-dashed border-border bg-background px-6 py-14 md:py-20`, icono `Users` en `bg-accent text-accent-foreground`) con el h2 "La gestión de usuarios llega en la siguiente fase". Se reemplaza por la tabla de usuarios en F4.
 
 ## Resumen `/organizador`
 
@@ -151,7 +210,7 @@ h2 "Mis eventos"
   - **Barra de cabecera:** `<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between lg:border-b lg:px-6 lg:py-4">` con el h2 "Mis eventos" (`text-lg font-bold`, 18 px; antes `text-2xl md:text-3xl`) y el filtro a la derecha desde `md`. En `lg`, su `border-b` la separa de la tabla.
   - **Pista del filtro:** `bg-secondary` por debajo de `lg` (sobre `bg-muted` no se vería) y `bg-muted` en `lg` (dentro de la tarjeta blanca). El segmento elegido es `bg-background`.
 
-- Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`.
+- Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`. No se muestra a un organizador no aprobado (solo lectura).
 - **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: el filtro no los cambia.
 - **Filtro**: `ToggleGroup` de selección única, `aria-label="Filtrar eventos por estado"`, control segmentado `rounded-lg bg-secondary p-1 lg:bg-muted`; items `h-11 px-4 text-muted-foreground`, seleccionado (`aria-pressed`) `bg-background font-semibold text-foreground shadow-sm`. Móvil: `grid grid-cols-3 w-full`; desde `md`, `flex w-fit`. Deseleccionar vuelve a "Todos".
 - **Lista** (Decisión 13): tabla en `lg` (`hidden lg:block`) y tarjetas por debajo (`lg:hidden`); `display:none` evita duplicados en el árbol de accesibilidad. Ambas nombradas por el h2 (`aria-labelledby`).

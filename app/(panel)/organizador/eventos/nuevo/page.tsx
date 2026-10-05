@@ -1,14 +1,20 @@
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { OrganizerEventForm } from "@/modules/organizer";
+import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
   title: "Crear evento | Mentec Tickets",
 };
 
-export default function CreateOrganizerEventPage() {
+export default async function CreateOrganizerEventPage() {
+  const { readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos/nuevo" });
+  // Un organizador pendiente o suspendido no crea eventos.
+  if (readOnly) redirect("/organizador");
+
   return (
     <div className="flex flex-col gap-8 md:gap-10">
       <div className="flex flex-col gap-2">
