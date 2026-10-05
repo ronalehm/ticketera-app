@@ -22,14 +22,7 @@ const order: Order = {
   ticketCount: 2,
   total: 370,
   paymentMethod: "card",
-  buyer: {
-    firstName: "Ana",
-    lastName: "Quispe",
-    email: "ana.quispe@example.com",
-    phone: "912345678",
-    documentType: "dni",
-    documentNumber: "12345678",
-  },
+  buyer: { name: "Ana Quispe", email: "ana.quispe@example.com" },
   tickets: [
     { code: "MT-7Q4K2P-01", ticketTypeName: "Tribuna Norte", seatLabel: "Tribuna Norte · Fila B · Asiento 4", holderName: "Ana Quispe" },
     { code: "MT-7Q4K2P-02", ticketTypeName: "General", holderName: "Carlos Quispe" },

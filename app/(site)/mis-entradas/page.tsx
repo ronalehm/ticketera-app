@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
-import { requireUser } from "@/modules/auth/server";
-import { MyTickets } from "@/modules/tickets";
+import { getVerifiedEmail, requireUser } from "@/modules/auth/server";
+import { claimGuestOrders, getUserPaidOrders } from "@/modules/checkout/server";
+import { MyTickets, splitOrdersByDate } from "@/modules/tickets";
 
 export const metadata: Metadata = {
   title: "Mis entradas | Mentec Tickets",
@@ -9,6 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default async function MyTicketsPage() {
-  await requireUser({ returnTo: "/mis-entradas" });
-  return <MyTickets />;
+  const user = await requireUser({ returnTo: "/mis-entradas" });
+  const email = await getVerifiedEmail();
+  if (email) await claimGuestOrders(user.id, email);
+  const { upcoming, past } = splitOrdersByDate(await getUserPaidOrders(user.id), new Date());
+  return <MyTickets upcoming={upcoming} past={past} />;
 }

@@ -62,7 +62,36 @@ npm run db:migrate && npm run db:seed
 - no llevan `DROP TABLE/COLUMN/TYPE/SCHEMA/EXTENSION/SEQUENCE/VIEW`, `TRUNCATE`, `DELETE`, `UPDATE`, `RENAME` ni `ALTER COLUMN … TYPE`;
 - si una restricción nueva no la cumplieran los datos existentes, la migración falla entera (transacción) y no destruye nada.
 
-`lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`.
+`lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`. Única excepción revisada, registrada en su `ALLOWED_VIOLATIONS`: `0006_orders_reservation.sql` lleva un `UPDATE` que solo rellena `orders.ticket_count` (la columna que crea esa misma migración) con el número de asientos de cada orden, antes de su `SET NOT NULL`; no toca ninguna otra columna.
+
+## Pagos con Stripe (modo test)
+
+La app solo acepta claves de **test** de Stripe y no arranca sin ellas (`lib/env.ts` las valida). Cópialas de [Dashboard → Developers → API keys](https://dashboard.stripe.com/test/apikeys) a `.env`:
+
+| Variable | Valor |
+|---|---|
+| `STRIPE_SECRET_KEY` | Clave secreta `sk_test_…` (solo servidor, `lib/stripe.ts`) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Clave publicable `pk_test_…` (Payment Element en el navegador) |
+| `STRIPE_WEBHOOK_SECRET` | Secreto `whsec_…` que imprime `stripe listen` (ver abajo) |
+
+Para recibir los webhooks en local, con el [Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```sh
+stripe login
+stripe listen --forward-to localhost:3000/api/webhooks/stripe   # imprime whsec_… → cópialo a STRIPE_WEBHOOK_SECRET
+npm run dev
+```
+
+Deja `stripe listen` abierto mientras pruebas: sin él, el pago se aprueba pero las entradas no se emiten hasta que Stripe reenvía el evento.
+
+Tarjetas de prueba (cualquier fecha futura y cualquier CVC):
+
+| Tarjeta | Resultado |
+|---|---|
+| `4242 4242 4242 4242` | Aprobada |
+| `4000 0000 0000 0002` | Rechazada |
+| `4000 0000 0000 9995` | Fondos insuficientes |
+| `4000 0025 0000 3155` | Pide autenticación 3D Secure |
 
 ## Estructura
 

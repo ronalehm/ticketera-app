@@ -1,25 +1,60 @@
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PaymentError, processMockPayment } from "../services/payment.service";
-import { useOrdersStore } from "../stores/orders.store";
-import type { CheckoutOrder, Order } from "../types/checkout.types";
+import { payOrder } from "../actions/checkout.actions";
+import type { CheckoutOrder } from "../types/checkout.types";
 import { CheckoutForm } from "./CheckoutForm";
 
 const session = vi.hoisted(() => ({
   user: null as { firstName: string; lastName: string; email: string } | null,
 }));
 
+// Stripe falso: nunca se carga Stripe.js real. `paymentElement` decide qué avisa el Payment Element al montar.
+const stripeMock = vi.hoisted(() => ({
+  paymentElement: "ready" as "ready" | "loading" | "error",
+  elementsOptions: undefined as unknown,
+  paymentElementOptions: undefined as unknown,
+  submit: vi.fn(),
+  confirmPayment: vi.fn(),
+}));
+
 vi.mock("@/modules/auth/session", () => ({
   useSessionUser: () => ({ isLoaded: true, user: session.user && { ...session.user }, signOut: vi.fn() }),
 }));
 
-const replace = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
-vi.mock("../services/payment.service", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../services/payment.service")>()),
-  processMockPayment: vi.fn(),
+vi.mock("@stripe/stripe-js", () => ({ loadStripe: vi.fn(() => Promise.resolve({})) }));
+
+vi.mock("@stripe/react-stripe-js", () => ({
+  Elements: ({ options, children }: { options: unknown; children: ReactNode }) => {
+    stripeMock.elementsOptions = options;
+    return children;
+  },
+  PaymentElement: function PaymentElement({
+    options,
+    onReady,
+    onLoadError,
+  }: {
+    options: unknown;
+    onReady?: () => void;
+    onLoadError?: () => void;
+  }) {
+    stripeMock.paymentElementOptions = options;
+    useEffect(() => {
+      if (stripeMock.paymentElement === "ready") onReady?.();
+      if (stripeMock.paymentElement === "error") onLoadError?.();
+    }, [onReady, onLoadError]);
+    return <div data-testid="payment-element" />;
+  },
+  useStripe: () => ({ confirmPayment: stripeMock.confirmPayment }),
+  useElements: () => ({ submit: stripeMock.submit }),
 }));
+
+vi.mock("../actions/checkout.actions", () => ({ payOrder: vi.fn() }));
+
+const ORDER_ID = "0b8f2f6e-3c1a-4d2b-9e7f-5a6b7c8d9e0f";
+const CLIENT_SECRET = "pi_123_secret_456";
 
 const ORDER: CheckoutOrder = {
   event: {
@@ -47,28 +82,13 @@ const BUYER = {
   phone: "912345678",
   documentType: "dni",
   documentNumber: "12345678",
+  acceptTerms: true,
 } as const;
-
-const PAID_ORDER: Order = {
-  code: "MT-AB12CD",
-  createdAt: "2026-10-03T15:00:00.000Z",
-  ownerEmail: BUYER.email,
-  event: ORDER.event,
-  items: ORDER.items,
-  ticketCount: 3,
-  total: 910,
-  paymentMethod: "card",
-  buyer: BUYER,
-  tickets: [
-    { code: "MT-AB12CD-01", ticketTypeName: "General", holderName: "Luis Pérez" },
-    { code: "MT-AB12CD-02", ticketTypeName: "General", holderName: "Luis Pérez" },
-    { code: "MT-AB12CD-03", ticketTypeName: "VIP", holderName: "Luis Pérez" },
-  ],
-};
 
 const SESSION_USER = { firstName: "Ana", lastName: "Quispe", email: "ana@correo.pe" };
 
-const DECLINED_MESSAGE = "Tu tarjeta fue rechazada. Prueba con otra tarjeta o elige otro método de pago.";
+const DECLINED_MESSAGE = "Tu tarjeta fue rechazada.";
+const UNEXPECTED_ERROR = "Ocurrió un error inesperado al procesar el pago. Inténtalo de nuevo.";
 
 // Por rol y nombre accesible: el `*` (aria-hidden) queda dentro del <label> pero fuera del nombre.
 const input = (label: string) => screen.getByRole("textbox", { name: label }) as HTMLInputElement;
@@ -82,9 +102,23 @@ const toggleTerms = () => fireEvent.click(screen.getByText(/^Acepto los/));
 const TERMS_HINT = "Acepta los términos para continuar.";
 const summaryPanel = () => screen.getByRole("complementary", { name: "Resumen de la compra" });
 
-function renderForm(order: CheckoutOrder = ORDER) {
-  return render(<CheckoutForm order={order} changeHref="/eventos/noche-de-sintetizadores-lima" />);
+// Tiempo restante de la reserva que da la BD (p. ej. al recargar a los 7 minutos).
+const REMAINING_MS = 180_000;
+
+function formElement(order: CheckoutOrder = ORDER) {
+  return (
+    <CheckoutForm
+      order={order}
+      orderId={ORDER_ID}
+      amountCents={Math.round(order.total * 100)}
+      remainingMs={REMAINING_MS}
+      changeHref="/eventos/noche-de-sintetizadores-lima"
+      publishableKey="pk_test_unused"
+    />
+  );
 }
+
+const renderForm = (order?: CheckoutOrder) => render(formElement(order));
 
 function fillBuyer() {
   type("Nombres", BUYER.firstName);
@@ -95,11 +129,11 @@ function fillBuyer() {
   toggleTerms();
 }
 
-function fillCard(number = "4242424242424242") {
-  type("Número de tarjeta", number);
-  type("Vencimiento", "1230");
-  type("CVV", "739");
-  type("Nombre en la tarjeta", "Luis Pérez");
+/** Stripe y la acción responden bien: `confirmPayment` sin error = Stripe redirige. */
+function mockSuccessfulPayment() {
+  stripeMock.submit.mockResolvedValue({});
+  vi.mocked(payOrder).mockResolvedValue({ ok: true, clientSecret: CLIENT_SECRET });
+  stripeMock.confirmPayment.mockResolvedValue({});
 }
 
 afterEach(() => {
@@ -107,11 +141,67 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
   session.user = null;
-  useOrdersStore.setState({ orders: [] });
-  localStorage.clear();
+  stripeMock.paymentElement = "ready";
 });
 
 describe("CheckoutForm", () => {
+  it("monta Elements en modo diferido (solo tarjeta, PEN, es-419, tema Mentec) y el Payment Element sin billeteras ni datos de contacto", () => {
+    renderForm();
+    expect(stripeMock.elementsOptions).toMatchObject({
+      mode: "payment",
+      amount: 91000,
+      currency: "pen",
+      allowedPaymentMethodTypes: ["card"],
+      locale: "es-419",
+      appearance: { theme: "stripe", variables: { colorPrimary: "#0072F6", colorDanger: "#E5484D" } },
+    });
+    expect(stripeMock.paymentElementOptions).toEqual({
+      fields: { billingDetails: { name: "never", email: "never", phone: "never" } },
+      wallets: { applePay: "never", googlePay: "never" },
+    });
+    expect(screen.getByTestId("payment-element")).toBeTruthy();
+  });
+
+  it("'Método de pago' tiene Tarjeta seleccionada y Yape y PagoEfectivo deshabilitados con 'Próximamente'", () => {
+    renderForm();
+    const group = screen.getByRole("radiogroup", { name: "Método de pago" });
+    const card = within(group).getByRole("radio", { name: /^Tarjeta/ });
+    expect(card.getAttribute("aria-checked")).toBe("true");
+    for (const name of ["Yape", "PagoEfectivo"]) {
+      const radio = within(group).getByRole("radio", { name: new RegExp(`^${name}`) });
+      expect(radio.getAttribute("aria-disabled")).toBe("true");
+      expect(radio.getAttribute("aria-checked")).toBe("false");
+      expect(document.getElementById(radio.getAttribute("aria-labelledby")!)?.textContent).toBe(`${name}Próximamente`);
+    }
+    expect(within(group).getAllByText("Próximamente")).toHaveLength(2);
+    expect(screen.queryByRole("textbox", { name: /tarjeta|CVV|Vencimiento/i })).toBeNull();
+  });
+
+  it("muestra las notas de pago seguro y de modo de prueba", () => {
+    renderForm();
+    expect(screen.getByText("Pago seguro procesado por Stripe. No almacenamos los datos de tu tarjeta.")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Modo de prueba: no se realiza ningún cobro real. Tarjeta de prueba 4242 4242 4242 4242, cualquier fecha futura y CVC.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("mientras carga el Payment Element muestra el estado de carga y 'Pagar' queda deshabilitado", () => {
+    stripeMock.paymentElement = "loading";
+    renderForm();
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain("Cargando formulario de pago…");
+    for (const button of payButtons()) expect(button.disabled).toBe(true);
+  });
+
+  it("si el Payment Element no carga, muestra el Alert y 'Pagar' queda deshabilitado", () => {
+    stripeMock.paymentElement = "error";
+    renderForm();
+    expect(screen.getByRole("alert").textContent).toBe("No pudimos cargar el formulario de pago. Recarga la página.");
+    expect(screen.queryByTestId("payment-element")).toBeNull();
+    for (const button of payButtons()) expect(button.disabled).toBe(true);
+  });
+
   it("muestra los botones 'Pagar' con el total del pedido, bloqueados con aria-disabled hasta aceptar los Términos", () => {
     renderForm();
     const buttons = payButtons();
@@ -127,7 +217,7 @@ describe("CheckoutForm", () => {
     }
   });
 
-  it("con Términos marcados, el envío vacío muestra los errores del comprador y de la tarjeta, enfoca 'Nombres' y no llama al service", () => {
+  it("con Términos marcados, el envío vacío muestra los errores del comprador, enfoca 'Nombres' y no llama a Stripe ni a la acción", () => {
     renderForm();
     toggleTerms();
     pay();
@@ -138,49 +228,23 @@ describe("CheckoutForm", () => {
       "Ingresa tu correo electrónico",
       "Ingresa tu número de celular",
       "Ingresa tu número de documento",
-      "Ingresa el número de tarjeta",
-      "Ingresa la fecha de vencimiento",
-      "Ingresa el CVV",
-      "Ingresa el nombre que figura en la tarjeta",
     ]) {
       expect(screen.getByText(message)).toBeTruthy();
     }
-    expect(screen.queryByText("Debes aceptar los Términos y condiciones y la Política de privacidad")).toBeNull();
     expect(input("Nombres").getAttribute("aria-describedby")).toBe("checkout-firstName-error");
     expect(document.activeElement).toBe(input("Nombres"));
-    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(stripeMock.submit).not.toHaveBeenCalled();
+    expect(payOrder).not.toHaveBeenCalled();
   });
 
-  it("formatea el número de tarjeta y el vencimiento al escribir", () => {
-    renderForm();
-    type("Número de tarjeta", "4242424242424242");
-    type("Vencimiento", "1230");
-    expect(input("Número de tarjeta").value).toBe("4242 4242 4242 4242");
-    expect(input("Vencimiento").value).toBe("12/30");
-  });
-
-  it("con Yape oculta la tarjeta, muestra su texto y el envío válido paga con { method: 'yape' }", async () => {
-    vi.mocked(processMockPayment).mockResolvedValue({ ...PAID_ORDER, paymentMethod: "yape" });
-    renderForm();
-
-    fireEvent.click(screen.getByRole("radio", { name: "Yape" }));
-    expect(screen.queryByRole("textbox", { name: "Número de tarjeta" })).toBeNull();
-    expect(screen.getByText(/código QR para pagar desde tu app de Yape/)).toBeTruthy();
-
-    fillBuyer();
-    pay();
-
-    expect(processMockPayment).toHaveBeenCalledWith({ order: ORDER, buyer: BUYER, payment: { method: "yape" } });
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
-  });
-
-  it("envío válido con tarjeta muestra 'Procesando pago…', guarda la orden y navega a la confirmación", async () => {
-    let resolvePayment!: (order: Order) => void;
-    vi.mocked(processMockPayment).mockReturnValue(new Promise((resolve) => (resolvePayment = resolve)));
+  it("envío válido: 'Procesando pago…', elements.submit, payOrder sin importes y confirmPayment con return_url y billing_details", async () => {
+    let resolveConfirm!: (value: object) => void;
+    stripeMock.submit.mockResolvedValue({});
+    vi.mocked(payOrder).mockResolvedValue({ ok: true, clientSecret: CLIENT_SECRET });
+    stripeMock.confirmPayment.mockReturnValue(new Promise((resolve) => (resolveConfirm = resolve)));
     renderForm();
 
     fillBuyer();
-    fillCard();
     pay();
 
     for (const button of payButtons()) {
@@ -188,31 +252,30 @@ describe("CheckoutForm", () => {
       expect(button.disabled).toBe(true);
     }
     expect(screen.getByRole("status").textContent).toBe("Procesando pago…");
-    expect(processMockPayment).toHaveBeenCalledWith({
-      order: ORDER,
-      buyer: BUYER,
-      payment: { method: "card", cardNumber: "4242424242424242" },
+
+    await waitFor(() => expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(1));
+    expect(stripeMock.submit).toHaveBeenCalledTimes(1);
+    expect(payOrder).toHaveBeenCalledWith({ orderId: ORDER_ID, buyer: BUYER });
+    const [{ elements, clientSecret, confirmParams }] = stripeMock.confirmPayment.mock.calls[0];
+    expect(elements).toEqual({ submit: stripeMock.submit });
+    expect(clientSecret).toBe(CLIENT_SECRET);
+    expect(confirmParams.return_url).toBe(`${window.location.origin}/checkout/confirmacion?orden=${ORDER_ID}`);
+    expect(confirmParams.payment_method_data).toEqual({
+      billing_details: { name: "Luis Pérez", email: "luis@correo.pe", phone: "+51912345678" },
     });
 
-    await act(async () => resolvePayment(PAID_ORDER));
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
-    expect(useOrdersStore.getState().getOrder("MT-AB12CD")).toEqual(PAID_ORDER);
-    const stored = localStorage.getItem("mentec-orders") ?? "";
-    expect(stored).toContain("MT-AB12CD");
-    expect(stored).not.toContain("4242");
-    expect(stored).not.toContain("739");
+    await act(async () => resolveConfirm({}));
+    for (const button of payButtons()) expect(button.disabled).toBe(true);
   });
 
-  it("tras un pago aprobado 'Pagar' sigue deshabilitado mientras navega y un segundo envío no vuelve a pagar", async () => {
-    vi.mocked(processMockPayment).mockResolvedValue(PAID_ORDER);
+  it("tras confirmar (Stripe redirigiendo) 'Pagar' sigue deshabilitado y un segundo envío no vuelve a pagar", async () => {
+    mockSuccessfulPayment();
     const { container } = renderForm();
 
     fillBuyer();
-    fillCard();
     pay();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
+    await waitFor(() => expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(1));
     // Deja terminar el `finally` de useZodForm (isSubmitting vuelve a false).
     await act(async () => {});
 
@@ -223,71 +286,98 @@ describe("CheckoutForm", () => {
 
     fireEvent.submit(container.querySelector("form")!);
     await act(async () => {});
-    expect(processMockPayment).toHaveBeenCalledTimes(1);
-    expect(replace).toHaveBeenCalledTimes(1);
+    expect(payOrder).toHaveBeenCalledTimes(1);
+    expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(1);
   });
 
   it("dos envíos seguidos sin esperar (mismo tick, sin re-render) solo pagan una vez", async () => {
-    vi.mocked(processMockPayment).mockResolvedValue(PAID_ORDER);
+    mockSuccessfulPayment();
     const { container } = renderForm();
     const form = container.querySelector("form")!;
 
     fillBuyer();
-    fillCard();
     // Un único act: React no re-renderiza entre los dos envíos, como un doble requestSubmit() en el mismo tick.
     act(() => {
       fireEvent.submit(form);
       fireEvent.submit(form);
     });
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
+    await waitFor(() => expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(1));
     await act(async () => {});
-    expect(processMockPayment).toHaveBeenCalledTimes(1);
-    expect(replace).toHaveBeenCalledTimes(1);
+    expect(stripeMock.submit).toHaveBeenCalledTimes(1);
+    expect(payOrder).toHaveBeenCalledTimes(1);
   });
 
-  it("tras un pago rechazado se puede volver a pagar", async () => {
-    vi.mocked(processMockPayment).mockRejectedValueOnce(new PaymentError()).mockResolvedValueOnce(PAID_ORDER);
+  it("card_error muestra el mensaje de Stripe en el Alert con el foco, reactiva 'Pagar' y se puede reintentar", async () => {
+    mockSuccessfulPayment();
+    stripeMock.confirmPayment.mockResolvedValueOnce({ error: { type: "card_error", message: DECLINED_MESSAGE } });
     renderForm();
 
     fillBuyer();
-    fillCard();
-    pay();
-    await screen.findByRole("alert");
-
-    pay();
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/confirmacion?orden=MT-AB12CD"));
-    expect(processMockPayment).toHaveBeenCalledTimes(2);
-  });
-
-  it("tarjeta rechazada muestra el Alert con el foco, reactiva los botones y no navega ni guarda", async () => {
-    vi.mocked(processMockPayment).mockRejectedValue(new PaymentError());
-    renderForm();
-
-    fillBuyer();
-    fillCard("4000000000000002");
     pay();
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(DECLINED_MESSAGE);
     await waitFor(() => expect(document.activeElement).toBe(alert));
     for (const button of payButtons()) expect(button.disabled).toBe(false);
-    expect(input("Número de tarjeta").value).toBe("4000 0000 0000 0002");
-    expect(replace).not.toHaveBeenCalled();
-    expect(useOrdersStore.getState().orders).toEqual([]);
+
+    pay();
+    await waitFor(() => expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(2));
+    expect(payOrder).toHaveBeenCalledTimes(2);
   });
 
-  it("un error inesperado muestra el mensaje genérico", async () => {
-    vi.mocked(processMockPayment).mockRejectedValue(new Error("boom"));
+  it("un error de Stripe que no es de tarjeta muestra el mensaje genérico (no el de Stripe)", async () => {
+    mockSuccessfulPayment();
+    stripeMock.confirmPayment.mockResolvedValue({ error: { type: "api_error", message: "Internal: pi_123" } });
     renderForm();
 
     fillBuyer();
-    fillCard();
     pay();
 
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "Ocurrió un error inesperado al procesar el pago. Inténtalo de nuevo.",
-    );
+    expect((await screen.findByRole("alert")).textContent).toBe(UNEXPECTED_ERROR);
+  });
+
+  it.each([
+    ["order-expired", "Tu reserva expiró. Vuelve a elegir tus entradas."],
+    ["order-unavailable", "Esta compra ya no está disponible."],
+    ["invalid-input", "No pudimos iniciar el pago. Inténtalo de nuevo."],
+    ["payment-error", "No pudimos iniciar el pago. Inténtalo de nuevo."],
+  ] as const)("payOrder con %s muestra su mensaje y no llama a confirmPayment", async (error, message) => {
+    stripeMock.submit.mockResolvedValue({});
+    vi.mocked(payOrder).mockResolvedValue({ ok: false, error });
+    renderForm();
+
+    fillBuyer();
+    pay();
+
+    expect((await screen.findByRole("alert")).textContent).toBe(message);
+    expect(stripeMock.confirmPayment).not.toHaveBeenCalled();
+    for (const button of payButtons()) expect(button.disabled).toBe(false);
+  });
+
+  it("si payOrder lanza, muestra el mensaje genérico", async () => {
+    stripeMock.submit.mockResolvedValue({});
+    vi.mocked(payOrder).mockRejectedValue(new Error("network"));
+    renderForm();
+
+    fillBuyer();
+    pay();
+
+    expect((await screen.findByRole("alert")).textContent).toBe(UNEXPECTED_ERROR);
+  });
+
+  it("si elements.submit devuelve error, no llama a la acción ni muestra el Alert (Stripe lo muestra) y reactiva 'Pagar'", async () => {
+    stripeMock.submit.mockResolvedValue({ error: { type: "validation_error", message: "Número incompleto" } });
+    renderForm();
+
+    fillBuyer();
+    pay();
+
+    await waitFor(() => expect(stripeMock.submit).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(payOrder).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    for (const button of payButtons()) expect(button.disabled).toBe(false);
   });
 
   it("con sesión precarga Nombres, Apellidos y Correo", () => {
@@ -304,7 +394,7 @@ describe("CheckoutForm", () => {
 
     type("Nombres", "Luis");
     session.user = SESSION_USER;
-    rerender(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" />);
+    rerender(formElement());
 
     expect(input("Nombres").value).toBe("Luis");
     expect(input("Apellidos").value).toBe("Quispe");
@@ -331,33 +421,33 @@ describe("CheckoutForm", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("a los 10 minutos la reserva expira, deshabilita 'Pagar' y enviar no llama al service", () => {
+  it("el temporizador arranca en el tiempo restante de la BD, no en 10 minutos", () => {
+    renderForm();
+    expect(screen.getByText("03:00")).toBeTruthy();
+  });
+
+  it("la reserva expira a los remainingMs (no a los 10 minutos), deshabilita 'Pagar' y enviar no llama a Stripe ni a la acción", () => {
     vi.useFakeTimers();
     const { container } = renderForm();
     fillBuyer();
-    fillCard();
 
-    act(() => vi.advanceTimersByTime(600_000));
+    act(() => vi.advanceTimersByTime(REMAINING_MS - 1000));
+    expect(screen.queryByText("Tu reserva expiró")).toBeNull();
+    for (const button of payButtons()) expect(button.disabled).toBe(false);
+
+    act(() => vi.advanceTimersByTime(1000));
 
     expect(screen.getByText("Tu reserva expiró")).toBeTruthy();
     for (const button of payButtons()) expect(button.disabled).toBe(true);
 
     fireEvent.submit(container.querySelector("form")!);
-    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(stripeMock.submit).not.toHaveBeenCalled();
+    expect(payOrder).not.toHaveBeenCalled();
   });
+
   it("marca los campos obligatorios con required y un * oculto a la tecnología de apoyo", () => {
     const { container } = renderForm();
-    for (const label of [
-      "Nombres",
-      "Apellidos",
-      "Correo electrónico",
-      "Celular",
-      "Número de documento",
-      "Número de tarjeta",
-      "Vencimiento",
-      "CVV",
-      "Nombre en la tarjeta",
-    ]) {
+    for (const label of ["Nombres", "Apellidos", "Correo electrónico", "Celular", "Número de documento"]) {
       expect(input(label).required).toBe(true);
     }
     const terms = termsCheckbox();
@@ -367,7 +457,7 @@ describe("CheckoutForm", () => {
     expect(screen.queryByRole("checkbox", { name: /\*/ })).toBeNull();
     expect(screen.queryByRole("group", { name: /\*/ })).toBeNull();
     const marks = [...container.querySelectorAll("span")].filter((span) => span.textContent === "*");
-    expect(marks.length).toBeGreaterThanOrEqual(10);
+    expect(marks.length).toBeGreaterThanOrEqual(6);
     for (const mark of marks) expect(mark.getAttribute("aria-hidden")).toBe("true");
   });
 
@@ -377,17 +467,6 @@ describe("CheckoutForm", () => {
     const typeSelect = within(group).getByRole("combobox", { name: "Tipo de documento" });
     expect(typeSelect.querySelector("[data-slot=select-value]")?.textContent).toBe("DNI");
     expect(within(group).getByRole("textbox", { name: "Número de documento" })).toBeTruthy();
-  });
-
-  it("muestra la nota de demo y las tarjetas de prueba solo con Tarjeta", () => {
-    renderForm();
-    expect(screen.getByText(/Demo: no se realiza ningún cobro real\./)).toBeTruthy();
-    expect(screen.getByText(/4242 4242 4242 4242/)).toBeTruthy();
-    expect(screen.queryByText(/Pago simulado:/)).toBeNull();
-
-    fireEvent.click(screen.getByRole("radio", { name: "Yape" }));
-    expect(screen.getByText(/Demo: no se realiza ningún cobro real\./)).toBeTruthy();
-    expect(screen.queryByText(/4242 4242 4242 4242/)).toBeNull();
   });
 
   it("el resumen compacto lleva líneas, fecha corta, total y el 'Pagar' de la tarjeta con su aviso", () => {
@@ -428,14 +507,12 @@ describe("CheckoutForm", () => {
     const suffix = screen.getByText((_, element) => element?.textContent === " de crédito o débito");
     expect(suffix.tagName).toBe("SPAN");
     expect(suffix.className).toContain("sm:hidden");
-    expect(screen.getByRole("radio", { name: "Yape" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "PagoEfectivo" })).toBeTruthy();
   });
 
   it("el subtítulo del comprador cambia por ancho y conserva la leyenda de los *", () => {
     renderForm();
-    const short = screen.getByText("Enviaremos tus entradas a este correo.");
-    const long = screen.getByText("Enviaremos tus entradas al correo que indiques.");
+    const short = screen.getByText("Asociaremos tus entradas a este correo.");
+    const long = screen.getByText("Asociaremos tus entradas al correo que indiques.");
     expect(short.tagName).toBe("SPAN");
     expect(short.className.split(" ")).toContain("sm:hidden");
     expect(long.tagName).toBe("SPAN");
@@ -511,24 +588,24 @@ describe("CheckoutForm", () => {
     expect(within(summaryPanel()).getByText("Fila L · 9 · Fila M · 8")).toBeTruthy();
   });
 
-  it("con Términos sin marcar, pagar (clic o Enter) no valida ni llama al service y enfoca la casilla de Términos", () => {
+  it("con Términos sin marcar, pagar (clic o Enter) no valida ni llama a Stripe y enfoca la casilla de Términos", () => {
     const { container } = renderForm();
     type("Nombres", BUYER.firstName);
     type("Apellidos", BUYER.lastName);
     type("Correo electrónico", BUYER.email);
     type("Celular", BUYER.phone);
     type("Número de documento", BUYER.documentNumber);
-    fillCard();
 
     pay();
-    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(stripeMock.submit).not.toHaveBeenCalled();
+    expect(payOrder).not.toHaveBeenCalled();
     expect(screen.queryByText("Debes aceptar los Términos y condiciones y la Política de privacidad")).toBeNull();
     expect(screen.queryByText("Procesando pago…")).toBeNull();
     expect(document.activeElement).toBe(termsCheckbox());
 
     (document.activeElement as HTMLElement).blur();
     fireEvent.submit(container.querySelector("form")!);
-    expect(processMockPayment).not.toHaveBeenCalled();
+    expect(stripeMock.submit).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(termsCheckbox());
   });
 
@@ -556,7 +633,7 @@ describe("CheckoutForm", () => {
   it("con la reserva expirada y Términos sin marcar, 'Pagar' queda disabled y sin aviso de términos", () => {
     vi.useFakeTimers();
     renderForm();
-    act(() => vi.advanceTimersByTime(600_000));
+    act(() => vi.advanceTimersByTime(REMAINING_MS));
 
     for (const button of payButtons()) expect(button.disabled).toBe(true);
     expect(screen.queryAllByText(TERMS_HINT)).toHaveLength(0);

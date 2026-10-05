@@ -37,13 +37,16 @@ export const orders = pgTable(
       .notNull()
       .references(() => events.id),
     userId: uuid("user_id").references(() => users.id),
-    buyerName: text("buyer_name").notNull(),
-    buyerEmail: text("buyer_email").notNull(),
-    buyerPhone: text("buyer_phone").notNull(),
-    buyerDocumentType: documentTypeEnum("buyer_document_type").notNull(),
-    buyerDocumentNumber: text("buyer_document_number").notNull(),
+    // Nullable en `pending` (la orden nace antes de conocer al comprador); obligatorias fuera (orders_buyer_required_check).
+    buyerName: text("buyer_name"),
+    buyerEmail: text("buyer_email"),
+    buyerPhone: text("buyer_phone"),
+    buyerDocumentType: documentTypeEnum("buyer_document_type"),
+    buyerDocumentNumber: text("buyer_document_number"),
     status: orderStatusEnum("status").notNull().default("pending"),
     expiresAt: timestamptz("expires_at").notNull(),
+    // Asientos de la orden: el webhook comprueba que los conserva todos.
+    ticketCount: integer("ticket_count").notNull(),
     subtotalCents: integer("subtotal_cents").notNull(),
     platformFeeCents: integer("platform_fee_cents").notNull(),
     organizerAmountCents: integer("organizer_amount_cents").notNull(),
@@ -60,6 +63,11 @@ export const orders = pgTable(
       "orders_amounts_check",
       sql`${t.platformFeeCents} + ${t.organizerAmountCents} = ${t.subtotalCents}`,
     ),
+    check(
+      "orders_buyer_required_check",
+      sql`${t.status} = 'pending' OR (${t.buyerName} IS NOT NULL AND ${t.buyerEmail} IS NOT NULL AND ${t.buyerPhone} IS NOT NULL AND ${t.buyerDocumentType} IS NOT NULL AND ${t.buyerDocumentNumber} IS NOT NULL)`,
+    ),
+    check("orders_ticket_count_check", sql`${t.ticketCount} > 0`),
     index("orders_user_id_idx").on(t.userId),
     index("orders_event_id_status_idx").on(t.eventId, t.status),
     index("orders_buyer_email_idx").on(t.buyerEmail),

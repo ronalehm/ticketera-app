@@ -2,7 +2,7 @@
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/tickets-my-tickets.md` (Fase 1: datos, pestañas, lista y entrada; Fase 2: acciones, impresión y enlace en el header). "Descargar PDF": `docs/specs/tickets-pdf-download.md`. h1, chip y metadatos móviles: `docs/specs/design-alignment-account-views.md` (Fase 3).
 
-Entradas de los pedidos del comprador con sesión iniciada, separadas en próximas y pasadas, con la entrada seleccionada como un boleto. Es una **maqueta con datos mock**: las órdenes salen del store del navegador (`localStorage`, clave `mentec-orders`, creado por el checkout con pago simulado) y, para la cuenta `demo@mentectickets.pe`, de pedidos demo. Del diseño de referencia (`MyTickets.dc.html`, `MyTicketsMobile.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins del diseño. El QR es decorativo (`TicketQr`): no codifica nada escaneable.
+Entradas de los pedidos del comprador con sesión iniciada, separadas en próximas y pasadas, con la entrada seleccionada como un boleto. Las órdenes salen de la BD: las pagadas con Stripe (modo test) del usuario, más las compras de invitado hechas con su correo verificado, que se vinculan a su cuenta al entrar (`docs/specs/checkout-stripe.md`). Del diseño de referencia (`MyTickets.dc.html`, `MyTicketsMobile.dc.html`) se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins del diseño. El QR es decorativo (`TicketQr`): no codifica nada escaneable.
 
 ## Layout
 
@@ -28,7 +28,7 @@ Footer            (igual que la landing)
 
 - **Fondo `bg-muted`** a todo el ancho (override del MASTER, que reserva `bg-muted` para secciones alternas): la tarjeta blanca destaca y las muescas del talón usan el mismo `bg-muted`. Interior `mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-8 md:py-12`.
 - h1 "Mis entradas" `text-3xl font-extrabold tracking-tight md:text-4xl` (30 px en móvil, 36 px desde `md`; la misma escala que el h1 del panel de organizador), único h1 y presente en todos los estados (también en SSR).
-- `MyTickets` es el límite cliente (todo depende de `localStorage`); la ruta es un Server Component que solo pone metadata (`Mis entradas | Mentec Tickets`, `robots: noindex`) y lo renderiza.
+- `MyTickets` es el límite cliente (pestañas y selección); la ruta es un Server Component que exige sesión, vincula las compras de invitado, lee las órdenes de la BD, pone metadata (`Mis entradas | Mentec Tickets`, `robots: noindex`) y le pasa `upcoming`/`past`.
 
 ## Pestañas (`Tabs` de shadcn / Base UI)
 
@@ -66,19 +66,18 @@ Footer            (igual que la landing)
 
 ## Estados
 
-- **Cargando** (SSR, primer render y rehidratación de sesión y órdenes): h1 + bloque `role="status"` con "Cargando tus entradas…" `sr-only` y `Skeleton` `aria-hidden` en `bg-background` (pestañas, lista y tarjeta), `motion-reduce:animate-none`. Nunca se muestra "sin sesión" mientras se rehidrata.
+- **Sin estado de carga ni de "sin sesión":** la ruta exige sesión (`requireUser`; sin ella no se llega a la página) y llega con las órdenes ya cargadas desde el servidor, así que no hay esqueleto ni rehidratación.
 - **Vacíos** (`Empty` de shadcn): bloque `rounded-2xl border-2 border-dashed border-border bg-background px-6 py-14 md:py-20` centrado; icono `Ticket` en `size-14 rounded-2xl bg-accent text-accent-foreground` (`aria-hidden`); título h2 `text-xl font-bold`; descripción `text-muted-foreground max-w-md`; enlace-botón primario `h-11 px-6 font-semibold hover:bg-primary-strong`.
 
 | Caso | Título | Descripción | Acción |
 |---|---|---|---|
-| Sin sesión (sin pestañas, sin redirección) | Inicia sesión para ver tus entradas | Ingresa con tu cuenta para ver y descargar tus entradas cuando quieras. | Iniciar sesión → `/login` |
 | Próximas vacía | Aún no tienes eventos próximos | Cuando compres entradas, las verás aquí. | Explorar eventos → `/eventos` |
 | Pasadas vacía | Aún no tienes eventos pasados | Cuando vayas a tu primer evento, lo verás aquí. | Explorar eventos → `/eventos` |
 
 ## Acciones, PDF e impresión (Fase 2)
 
 - Bajo el `<dl>`: `Button variant="outline"` `h-11 font-semibold` "Descargar PDF" (`Download`) y, solo en Próximas, "Agregar al calendario" (`CalendarPlus`). Etiquetas completas en todos los tamaños (no "PDF"/"Calendario" como el diseño móvil); bajo `sm` apilados a todo el ancho, en fila desde `sm`.
-- "Descargar PDF" (`TicketsPdfButton`, `components/shared/`) genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-MT-7Q4K2P.pdf`) con **todas las entradas del pedido seleccionado**, una por página A4, aunque se esté viendo "Entrada 2 de 2": las flechas sirven para ver los QR en pantalla, no para elegir qué descargar. Es el mismo PDF que en la confirmación de compra (anatomía, colores RGB y Helvetica en MASTER §7 "PDF de entradas"). No abre el diálogo de impresión.
+- "Descargar PDF" (`TicketsPdfButton`, `components/shared/`) genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-TK-1042.pdf`) con **todas las entradas del pedido seleccionado**, una por página A4, aunque se esté viendo "Entrada 2 de 2": las flechas sirven para ver los QR en pantalla, no para elegir qué descargar. Es el mismo PDF que en la confirmación de compra (anatomía, colores RGB y Helvetica en MASTER §7 "PDF de entradas"). No abre el diálogo de impresión.
   - **Reposo:** `Download` + "Descargar PDF".
   - **Generando:** `Spinner` (`aria-hidden`, `size-5 motion-reduce:animate-none`) + "Generando…"; `aria-busy="true"`, `aria-disabled="true"` (deshabilitado pero enfocable: conserva el foco y no admite un segundo clic), `cursor-progress opacity-70`; región `sr-only` `role="status"` anuncia "Generando PDF…".
   - **Error** (falla la carga de jsPDF o la generación): vuelve a reposo y aparece debajo `<p role="alert">` "No pudimos generar el PDF. Inténtalo de nuevo." (`text-sm text-destructive`, `sm:basis-full`: bajo `sm` queda apilado con los botones; desde `sm`, en su propia línea del `flex-wrap`). Al reintentar desaparece.

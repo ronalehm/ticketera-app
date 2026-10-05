@@ -233,9 +233,9 @@ Anatomía de cada página (mm; A4 210 × 297, margen 20). La entrada ocupa la mi
 │ │ (21 × 3 mm) │   TITULAR                                                                 │
 │ │  marco rect │   Ana Quispe                           (12 pt bold, foreground; envuelve) │
 │ │   border    │   CÓDIGO DE ENTRADA                                                       │
-│ └─────────────┘   MT-7Q4K2P-01                         (14 pt bold, foreground)           │
+│ └─────────────┘   TK-1042-01                           (14 pt bold, foreground)           │
 │                   PEDIDO                                                                  │
-│                   MT-7Q4K2P                            (12 pt, foreground)                │
+│                   TK-1042                              (12 pt, foreground)                │
 │          Presenta este código en la entrada    (10 pt, mutedForeground, centrado)         │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```

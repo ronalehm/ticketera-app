@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { count, eq, getTableColumns, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { and, count, eq, getTableColumns, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { expect, it, vi } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
@@ -27,49 +27,63 @@ const SUPER_ADMIN_EMAIL = "super.admin@example.com";
 /** Un seed completo contra Neon tarda decenas de segundos. */
 const SEED_TIMEOUT_MS = 120_000;
 
-/** Sin `users`: se cuenta aparte, solo los del seed, porque otros tests de integración crean usuarios en paralelo. */
-const TABLES = {
-  organizers,
-  categories,
-  venues,
-  venueSections,
-  venueSeats,
-  events,
-  ticketTypes,
-  orders,
-  eventSeats,
-  legalDocuments,
-};
+const idsOf = (rows: { id?: string }[]) => rows.map((row) => row.id as string);
 
-async function countRows(seedEmails: string[]) {
-  const [{ value: seedUsers }] = await db
-    .select({ value: count() })
-    .from(users)
-    .where(inArray(users.email, seedEmails));
+/** Por tabla del seed: la columna que la filtra y sus valores en el seed. */
+type SeedScope = Record<keyof SeedData, [table: PgTable, column: PgColumn, values: string[]]>;
+
+/**
+ * Solo las filas del seed (de uno o varios `buildSeedData`): otros tests de integración crean usuarios, eventos `draft`
+ * y órdenes en paralelo. Las tablas grandes se filtran por su padre del seed para no mandar miles de ids.
+ */
+function seedScope(datasets: SeedData[], seedEmails: string[]): SeedScope {
+  const union = (pick: (data: SeedData) => string[]) => [...new Set(datasets.flatMap(pick))];
+  const sectionIds = union((data) => idsOf(data.venueSections));
+  const eventIds = union((data) => idsOf(data.events));
+  return {
+    users: [users, users.email, seedEmails],
+    organizers: [organizers, organizers.userId, union((data) => data.organizers.map((row) => row.userId))],
+    categories: [categories, categories.id, union((data) => idsOf(data.categories))],
+    venues: [venues, venues.id, union((data) => idsOf(data.venues))],
+    venueSections: [venueSections, venueSections.id, sectionIds],
+    venueSeats: [venueSeats, venueSeats.sectionId, sectionIds],
+    events: [events, events.id, eventIds],
+    ticketTypes: [ticketTypes, ticketTypes.eventId, eventIds],
+    orders: [orders, orders.id, union((data) => idsOf(data.orders))],
+    eventSeats: [eventSeats, eventSeats.eventId, eventIds],
+    legalDocuments: [legalDocuments, legalDocuments.id, union((data) => idsOf(data.legalDocuments))],
+  };
+}
+
+async function countSeedRows(data: SeedData, seedEmails: string[]) {
   const entries = await Promise.all(
-    Object.entries(TABLES).map(async ([name, table]) => {
-      const [{ value }] = await db.select({ value: count() }).from(table);
+    Object.entries(seedScope([data], seedEmails)).map(async ([name, [table, column, values]]) => {
+      const [{ value }] = await db.select({ value: count() }).from(table).where(inArray(column, values));
       return [name, value] as const;
     }),
   );
-  return { users: seedUsers, ...Object.fromEntries(entries) };
+  return Object.fromEntries(entries);
 }
 
 describeWithDb("seed (Postgres)", () => {
+  const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
+
   it("volver a ejecutarlo no falla y deja los conteos de buildSeedData", async () => {
     await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
 
-    const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
     const expected = Object.fromEntries(Object.entries(data).map(([name, rows]) => [name, rows.length]));
     const seedEmails = [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
-    expect(await countRows(seedEmails)).toEqual({ ...expected, users: seedEmails.length });
+    expect(await countSeedRows(data, seedEmails)).toEqual({ ...expected, users: seedEmails.length });
   }, SEED_TIMEOUT_MS);
 
   it("el super admin tiene el correo en minúsculas, rol super_admin, sin clerk_id y es el creador de los recintos", async () => {
     const admins = await db.select().from(users).where(eq(users.email, SUPER_ADMIN_EMAIL));
     expect(admins).toEqual([expect.objectContaining({ role: "super_admin", clerkId: null })]);
 
-    const creators = await db.selectDistinct({ createdBy: venues.createdBy }).from(venues);
+    const creators = await db
+      .selectDistinct({ createdBy: venues.createdBy })
+      .from(venues)
+      .where(inArray(venues.id, idsOf(data.venues)));
     expect(creators).toEqual([{ createdBy: admins[0].id }]);
   });
 
@@ -201,7 +215,8 @@ async function toPreF1State(tx: Tx) {
   }
 
   const seedEmails = [...post.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
-  expect(await countActiveRows(tx, seedEmails)).toEqual(expectedCounts(pre, seedEmails));
+  const scope = seedScope([pre, post], seedEmails);
+  expect(await countActiveRows(tx, scope)).toEqual(expectedCounts(pre, seedEmails));
   // Fase 1: 456 → 556 butacas, 38 956 → 41 156 lugares y 7 → 8 pedidos demo.
   expect([
     post.venueSeats.length - pre.venueSeats.length,
@@ -210,35 +225,31 @@ async function toPreF1State(tx: Tx) {
   ]).toEqual([100, 2200, 1]);
   for (const slug of PHASE_1_SLUGS) expect(await getVenueMapBySlug(slug)).toBeNull();
 
-  return { pre, post, seedEmails };
+  return { pre, post, seedEmails, scope };
 }
 
 const expectedCounts = (data: SeedData, seedEmails: string[]) =>
   Object.fromEntries(SEED_TABLE_NAMES.map((name) => [name, name === "users" ? seedEmails.length : data[name].length]));
 
-/** Filas por tabla del seed: `users` solo los de `seedEmails` y `event_seats` solo los activos (sin retirar). */
-async function countActiveRows(tx: Tx, seedEmails: string[]) {
+/** Filas del seed (`scope`) por tabla; de `event_seats`, solo los activos (sin retirar). */
+async function countActiveRows(tx: Tx, scope: SeedScope) {
   const counts: Record<string, number> = {};
   for (const name of SEED_TABLE_NAMES) {
-    const where =
-      name === "users" ? inArray(users.email, seedEmails) : name === "eventSeats" ? isNull(eventSeats.retiredAt) : undefined;
-    const table: PgTable = SEED_TABLES[name];
+    const [table, column, values] = scope[name];
+    const where = and(inArray(column, values), name === "eventSeats" ? isNull(eventSeats.retiredAt) : undefined);
     const [{ value }] = await tx.select({ value: count() }).from(table).where(where);
     counts[name] = value;
   }
   return counts;
 }
 
-/** Ids de cada tabla del seed (`users`, solo los de `emails`: otros archivos de test crean y borran usuarios). */
-async function tableIds(tx: Tx, emails: string[]): Promise<TableIds> {
+/** Ids de las filas del seed (`scope`) de cada tabla: otros archivos de test crean y borran filas en paralelo. */
+async function tableIds(tx: Tx, scope: SeedScope): Promise<TableIds> {
   const ids = {} as TableIds;
   for (const name of SEED_TABLE_NAMES) {
+    const [table, column, values] = scope[name];
     const key = keyColumn(name);
-    const table: PgTable = SEED_TABLES[name];
-    const rows = await tx
-      .select({ key })
-      .from(table)
-      .where(name === "users" ? inArray(users.email, emails) : undefined);
+    const rows = await tx.select({ key }).from(table).where(inArray(column, values));
     ids[name] = rows.map((row) => row.key);
   }
   return ids;
@@ -260,13 +271,14 @@ async function missingIds(tx: Tx, before: TableIds): Promise<TableIds> {
  * Huella de cada tabla del seed: todas las columnas de cada fila (`updated_at` incluido) y su `xmin`. Dentro de una
  * transacción `now()` no avanza, así que es `xmin` (el savepoint que escribió la fila) lo que delata una reescritura.
  */
-async function fingerprint(tx: Tx, seedEmails: string[]) {
+async function fingerprint(tx: Tx, scope: SeedScope) {
   const digests: Record<string, string | null> = {};
   for (const name of SEED_TABLE_NAMES) {
-    const where: SQL = name === "users" ? sql`WHERE t.email = ANY(${sql.param(seedEmails)}::text[])` : sql``;
+    const [table, column, values] = scope[name];
+    const type = name === "users" ? sql`text[]` : sql`uuid[]`;
     const { rows } = await tx.execute<{ digest: string | null }>(
       sql`SELECT md5(string_agg(t::text || '@' || t.xmin::text, ',' ORDER BY t::text)) AS digest
-          FROM ${SEED_TABLES[name]} t ${where}`,
+          FROM ${table} t WHERE t.${sql.identifier(column.name)} = ANY(${sql.param(values)}::${type})`,
     );
     digests[name] = rows[0].digest;
   }
@@ -284,18 +296,18 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
     "converge a buildSeedData, retira lo obsoleto sin borrar nada y una 2.ª ejecución no escribe",
     async () => {
       await inRolledBackTransaction(async (tx) => {
-        const { post, seedEmails } = await toPreF1State(tx);
-        const idsBefore = await tableIds(tx, seedEmails);
+        const { post, seedEmails, scope } = await toPreF1State(tx);
+        const idsBefore = await tableIds(tx, scope);
 
         const first = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
-        const afterFirst = await fingerprint(tx, seedEmails);
+        const afterFirst = await fingerprint(tx, scope);
         const second = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
 
         expect(first).toEqual(PRE_F1_REPORT);
         expect(second).toEqual(EMPTY_REPORT);
-        expect(await fingerprint(tx, seedEmails)).toEqual(afterFirst);
+        expect(await fingerprint(tx, scope)).toEqual(afterFirst);
         expect(await missingIds(tx, idsBefore)).toEqual(NO_IDS);
-        expect(await countActiveRows(tx, seedEmails)).toEqual(expectedCounts(post, seedEmails));
+        expect(await countActiveRows(tx, scope)).toEqual(expectedCounts(post, seedEmails));
 
         const copa = await getVenueMapBySlug(COPA);
         expect(copa?.stage.label).toBe("CANCHA");
@@ -326,7 +338,7 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
           })
           .from(eventSeats)
           .leftJoin(orders, eq(orders.id, eventSeats.orderId))
-          .where(isNotNull(eventSeats.retiredAt));
+          .where(and(isNotNull(eventSeats.retiredAt), inArray(eventSeats.eventId, scope.eventSeats[2])));
         const byType = (id: string) => retired.filter((seat) => seat.ticketTypeId === id);
         expect(retired).toHaveLength(400);
         expect(byType(ticketTypeId(COPA, "occidente"))).toHaveLength(200);
@@ -344,7 +356,7 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
     "no toca los datos ajenos: el usuario, su pedido y sus lugares vendidos siguen intactos",
     async () => {
       await inRolledBackTransaction(async (tx) => {
-        const { pre, post, seedEmails } = await toPreF1State(tx);
+        const { pre, post, scope } = await toPreF1State(tx);
         const postIds = new Set(post.eventSeats.map((row) => row.id));
         const preIds = new Set(pre.eventSeats.map((row) => row.id));
         // El general de índice 0 de Occidente (obsoleto) y uno de Popular que el seed quiere libre.
@@ -377,13 +389,16 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
             subtotalCents: 2000,
             platformFeeCents: 200,
             organizerAmountCents: 1800,
+            ticketCount: 2,
           })
           .returning();
         await tx
           .update(eventSeats)
           .set({ status: "sold", orderId: order.id })
           .where(inArray(eventSeats.id, foreignSeatIds));
-        const idsBefore = await tableIds(tx, [...seedEmails, customer.email]);
+        // Las filas del seed más el cliente y el pedido ajenos (sus lugares son de un evento del seed).
+        const seedIds = await tableIds(tx, scope);
+        const idsBefore = { ...seedIds, users: [...seedIds.users, customer.id], orders: [...seedIds.orders, order.id] };
 
         const report = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
 

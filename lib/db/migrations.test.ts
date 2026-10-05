@@ -38,6 +38,12 @@ function findViolations(sql: string): string[] {
   return violations;
 }
 
+/**
+ * Excepciones revisadas a mano. 0006 rellena con `UPDATE` solo la columna `orders.ticket_count`, que crea
+ * en la misma migración, antes de `SET NOT NULL` (spec checkout-stripe): no reescribe datos existentes.
+ */
+const ALLOWED_VIOLATIONS: Record<string, string[]> = { "0006_orders_reservation.sql": ["UPDATE"] };
+
 describe("migraciones de drizzle/", () => {
   it("cada .sql está en _journal.json, en el mismo orden, con idx consecutivos y when creciente", () => {
     expect(sqlFiles.length).toBeGreaterThan(0);
@@ -49,7 +55,7 @@ describe("migraciones de drizzle/", () => {
   });
 
   it.each(sqlFiles)("%s es aditiva", (file) => {
-    expect(findViolations(readFileSync(join(MIGRATIONS_DIR, file), "utf8"))).toEqual([]);
+    expect(findViolations(readFileSync(join(MIGRATIONS_DIR, file), "utf8"))).toEqual(ALLOWED_VIOLATIONS[file] ?? []);
   });
 });
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ArrowRight, Trash2 } from "lucide-react";
 import { useRef, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
@@ -6,6 +5,7 @@ import { flushSync } from "react-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { StartCheckoutButton } from "@/modules/checkout/start";
 import { formatEventPrice } from "@/modules/events/purchase";
 
 import type { SelectionLine } from "../types/seating.types";
@@ -100,17 +100,10 @@ export function PurchaseSummaryContent({
         <p className="text-sm text-muted-foreground">Precio final, sin cargos ocultos</p>
       </div>
 
-      {checkoutHref === null ? (
-        <button type="button" disabled className={CTA_CLASS}>
-          Continuar
-          <ArrowRight className="size-5" aria-hidden />
-        </button>
-      ) : (
-        <Link href={checkoutHref} className={CTA_CLASS}>
-          Continuar
-          <ArrowRight className="size-5" aria-hidden />
-        </Link>
-      )}
+      <StartCheckoutButton checkoutHref={checkoutHref} className={CTA_CLASS}>
+        Continuar
+        <ArrowRight className="size-5" aria-hidden />
+      </StartCheckoutButton>
     </div>
   );
 }

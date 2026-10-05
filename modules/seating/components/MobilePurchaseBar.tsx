@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { ArrowRight, ChevronUp, X } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { StartCheckoutButton } from "@/modules/checkout/start";
 import { formatEventPrice } from "@/modules/events/purchase";
 
 import { formatTicketCount } from "../utils/selectionSummary";
@@ -72,17 +72,13 @@ export function MobilePurchaseBar({
         </SheetContent>
       </Sheet>
 
-      {checkoutHref === null ? (
-        <button type="button" disabled className={CTA_CLASS}>
+      {/* w-min: el ancho lo fija el botón (nowrap) y un error largo se parte debajo sin comprimir el total. */}
+      <div className="w-min shrink-0">
+        <StartCheckoutButton checkoutHref={checkoutHref} className={CTA_CLASS}>
           Continuar
           <ArrowRight className="size-5" aria-hidden />
-        </button>
-      ) : (
-        <Link href={checkoutHref} className={CTA_CLASS}>
-          Continuar
-          <ArrowRight className="size-5" aria-hidden />
-        </Link>
-      )}
+        </StartCheckoutButton>
+      </div>
     </div>
   );
 }

@@ -1,16 +1,5 @@
 import type { Order } from "@/modules/checkout/orders";
-import { DEMO_ACCOUNT_EMAIL, DEMO_ORDERS } from "../data/demoOrders";
 import type { OrdersByTimeframe } from "../types/tickets.types";
-
-/** Órdenes del store cuyo `ownerEmail` es el del usuario; la cuenta demo suma `DEMO_ORDERS` (gana la del store si se repite el `code`). */
-export function getUserOrders(storeOrders: readonly Order[], email: string): Order[] {
-  const ownerEmail = email.trim().toLowerCase();
-  const own = storeOrders.filter((order) => order.ownerEmail === ownerEmail);
-  if (ownerEmail !== DEMO_ACCOUNT_EMAIL) return own;
-
-  const codes = new Set(own.map((order) => order.code));
-  return [...own, ...DEMO_ORDERS.filter((order) => !codes.has(order.code))];
-}
 
 const byCreatedAtDesc = (a: Order, b: Order) => Date.parse(b.createdAt) - Date.parse(a.createdAt);
 const startsAt = (order: Order) => Date.parse(order.event.startsAt);

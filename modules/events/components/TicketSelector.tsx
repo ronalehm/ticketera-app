@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Minus, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { StartCheckoutButton } from "@/modules/checkout/start";
 
 import { EVENT_STATUS_BADGE } from "../data/eventStatus";
 import type { EventStatus, TicketType } from "../types/events.types";
@@ -127,15 +127,12 @@ export function TicketSelector({ slug, status, priceFrom, ticketTypes, initialQu
               </div>
               <p className="text-sm text-muted-foreground">Precio final, sin cargos ocultos</p>
             </div>
-            {count === 0 ? (
-              <button type="button" disabled className={CTA_CLASS}>
-                Continuar con la compra
-              </button>
-            ) : (
-              <Link href={buildCheckoutHref(slug, quantities)} className={CTA_CLASS}>
-                Continuar con la compra
-              </Link>
-            )}
+            <StartCheckoutButton
+              checkoutHref={count === 0 ? null : buildCheckoutHref(slug, quantities)}
+              className={CTA_CLASS}
+            >
+              Continuar con la compra
+            </StartCheckoutButton>
           </>
         )}
       </CardContent>

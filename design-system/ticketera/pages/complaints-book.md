@@ -104,7 +104,7 @@ Tipo *
 └────────────────────────┘ └────────────────────────┘
 Monto reclamado (opcional) [S/][ 0.00 ]
 Descripción * (ancho completo)
-  Ej.: 2 entradas para Noche de sintetizadores, pedido MT-AB12CD
+  Ej.: 2 entradas para Noche de sintetizadores, pedido TK-1042
 ```
 
 - **Radio cards:** patrón de `PaymentMethodFields`. `FieldLabel` como tarjeta `min-h-11 cursor-pointer`; seleccionada, `border-primary bg-accent` (`has-data-checked`); con error, `border-destructive`. El título "Tipo" es un `FieldTitle` con id, referenciado por `aria-labelledby` del `RadioGroup`.
