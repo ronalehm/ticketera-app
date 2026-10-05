@@ -39,14 +39,7 @@ function makeOrder(code: string, ownerEmail: string, startsAt: string): Order {
     ticketCount: 1,
     total: 100,
     paymentMethod: "card",
-    buyer: {
-      firstName: "Ana",
-      lastName: "Pérez",
-      email: ownerEmail,
-      phone: "987654321",
-      documentType: "dni",
-      documentNumber: "12345678",
-    },
+    buyer: { name: "Ana Pérez", email: ownerEmail },
     tickets: [{ code: `${code}-01`, ticketTypeName: "General", holderName: "Ana Pérez" }],
   };
 }

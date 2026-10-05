@@ -6,14 +6,7 @@ export const DEMO_ACCOUNT_EMAIL = "demo@mentectickets.pe";
 
 const image = (id: string) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=80`;
 
-const DEMO_BUYER = {
-  firstName: "Ana",
-  lastName: "Quispe",
-  email: DEMO_ACCOUNT_EMAIL,
-  phone: "987654321",
-  documentType: "dni",
-  documentNumber: "45678912",
-} as const satisfies Order["buyer"];
+const DEMO_BUYER = { name: "Ana Quispe", email: DEMO_ACCOUNT_EMAIL } as const satisfies Order["buyer"];
 
 export const DEMO_ORDERS = [
   {

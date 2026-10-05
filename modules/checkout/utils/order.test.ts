@@ -88,7 +88,7 @@ describe("buildOrder", () => {
     expect(build().ownerEmail).toBe("ana.quispe@example.com");
   });
 
-  it("guarda solo los campos del comprador (sin Términos ni datos de tarjeta)", () => {
+  it("guarda del comprador solo nombre completo y correo normalizado (sin Términos ni datos de tarjeta)", () => {
     const formData = {
       ...buyer,
       paymentMethod: "card",
@@ -99,10 +99,7 @@ describe("buildOrder", () => {
       acceptTerms: true,
     };
     const order = build({ buyer: formData });
-    expect(order.buyer).toEqual(buyer);
-    expect(Object.keys(order.buyer).sort()).toEqual(
-      ["documentNumber", "documentType", "email", "firstName", "lastName", "phone"].sort(),
-    );
+    expect(order.buyer).toEqual({ name: "Ana Quispe", email: "ana.quispe@example.com" });
     const serialized = JSON.stringify(order);
     for (const secret of ["4242424242424242", "4242", "12/30", "acceptTerms", "cardCvv", "cardName"]) {
       expect(serialized).not.toContain(secret);

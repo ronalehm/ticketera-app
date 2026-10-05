@@ -48,7 +48,7 @@ function buildTickets(code: string, items: Order["items"], holderName: string): 
 
 /**
  * Orden a guardar tras el pago. `ticketCount` y `total` se recalculan desde `items` (se ignora `checkout.total`)
- * y del comprador solo se copian los campos de `OrderBuyer` (nunca Términos ni datos de tarjeta).
+ * y del comprador solo se guardan nombre completo y correo normalizado (nunca Términos ni datos de tarjeta).
  */
 export function buildOrder({ code, createdAt, checkout, buyer, paymentMethod }: BuildOrderInput): Order {
   const items: Order["items"] = checkout.items.map(({ ticketTypeId, name, unitPrice, quantity, seats }) => ({
@@ -58,18 +58,19 @@ export function buildOrder({ code, createdAt, checkout, buyer, paymentMethod }: 
     quantity,
     ...(seats && { seats: seats.map(({ id, label }) => ({ id, label })) }),
   }));
-  const { firstName, lastName, email, phone, documentType, documentNumber } = buyer;
+  const name = `${buyer.firstName} ${buyer.lastName}`;
+  const email = buyer.email.trim().toLowerCase();
 
   return {
     code,
     createdAt,
-    ownerEmail: email.trim().toLowerCase(),
+    ownerEmail: email,
     event: { ...checkout.event },
     items,
     ticketCount: items.reduce((count, item) => count + item.quantity, 0),
     total: items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
     paymentMethod,
-    buyer: { firstName, lastName, email, phone, documentType, documentNumber },
-    tickets: buildTickets(code, items, `${firstName} ${lastName}`),
+    buyer: { name, email },
+    tickets: buildTickets(code, items, name),
   };
 }

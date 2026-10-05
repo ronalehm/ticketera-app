@@ -23,14 +23,7 @@ const order: Order = {
   ticketCount: 1,
   total: 80,
   paymentMethod: "yape",
-  buyer: {
-    firstName: "Ana",
-    lastName: "Quispe",
-    email: "ana@example.com",
-    phone: "987654321",
-    documentType: "dni",
-    documentNumber: "12345678",
-  },
+  buyer: { name: "Ana Quispe", email: "ana@example.com" },
   tickets: [{ code: `${CODE}-01`, ticketTypeName: "General", holderName: "Ana Quispe" }],
 };
 

@@ -58,7 +58,7 @@ const PAID_ORDER: Order = {
   ticketCount: 3,
   total: 910,
   paymentMethod: "card",
-  buyer: BUYER,
+  buyer: { name: "Luis Pérez", email: BUYER.email },
   tickets: [
     { code: "MT-AB12CD-01", ticketTypeName: "General", holderName: "Luis Pérez" },
     { code: "MT-AB12CD-02", ticketTypeName: "General", holderName: "Luis Pérez" },

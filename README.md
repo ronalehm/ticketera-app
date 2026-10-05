@@ -62,7 +62,7 @@ npm run db:migrate && npm run db:seed
 - no llevan `DROP TABLE/COLUMN/TYPE/SCHEMA/EXTENSION/SEQUENCE/VIEW`, `TRUNCATE`, `DELETE`, `UPDATE`, `RENAME` ni `ALTER COLUMN … TYPE`;
 - si una restricción nueva no la cumplieran los datos existentes, la migración falla entera (transacción) y no destruye nada.
 
-`lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`.
+`lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`. Única excepción revisada, registrada en su `ALLOWED_VIOLATIONS`: `0006_orders_reservation.sql` lleva un `UPDATE` que solo rellena `orders.ticket_count` (la columna que crea esa misma migración) con el número de asientos de cada orden, antes de su `SET NOT NULL`; no toca ninguna otra columna.
 
 ## Pagos con Stripe (modo test)
 

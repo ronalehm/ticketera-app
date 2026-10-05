@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, type SQL, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL, sql, TransactionRollbackError } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers } from "@/lib/db/schema/identity";
@@ -10,8 +10,8 @@ import { parseSeatId } from "@/modules/seating/seats";
 import type { CheckoutOrder, ReservationResult } from "../types/checkout.types";
 import { computeOrderAmounts, RESERVATION_MINUTES } from "../utils/orderRules";
 
-/** Libre para reservar: disponible, o retenido con la retención vencida. */
-const isSeatAvailable = sql`(${eventSeats.status} = 'available' OR (${eventSeats.status} = 'held' AND ${eventSeats.heldUntil} < now()))`;
+/** Libre para reservar: no retirado y disponible, o retenido con la retención vencida. */
+const isSeatAvailable = sql`(${isNull(eventSeats.retiredAt)} AND (${eventSeats.status} = 'available' OR (${eventSeats.status} = 'held' AND ${eventSeats.heldUntil} < now())))`;
 
 // `now()` es la hora de inicio de la transacción: la orden y sus asientos reciben el mismo instante.
 const expiresAtSql = sql`now() + make_interval(mins => ${RESERVATION_MINUTES})`;

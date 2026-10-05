@@ -51,14 +51,7 @@ const ORDER: Order = {
   ticketCount: 3,
   total: 910,
   paymentMethod: "card",
-  buyer: {
-    firstName: "Luis",
-    lastName: "Pérez",
-    email: "luis@correo.pe",
-    phone: "912345678",
-    documentType: "dni",
-    documentNumber: "12345678",
-  },
+  buyer: { name: "Luis Pérez", email: "luis@correo.pe" },
   tickets: [
     { code: `${CODE}-01`, ticketTypeName: "General", seatLabel: "General · Fila A, asiento 1", holderName: "Luis Pérez" },
     { code: `${CODE}-02`, ticketTypeName: "General", seatLabel: "General · Fila A, asiento 2", holderName: "Luis Pérez" },

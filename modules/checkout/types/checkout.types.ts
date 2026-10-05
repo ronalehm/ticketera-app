@@ -46,7 +46,7 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type CheckoutFormValues = z.input<typeof checkoutFormSchema>;
 export type CheckoutFormData = z.output<typeof checkoutFormSchema>;
 
-// Contrato E: orden guardada en el navegador tras el pago simulado (la leen la confirmación y "Mis entradas").
+// Contrato E: vista de una orden pagada (la leen la confirmación, "Mis entradas" y el PDF).
 export type OrderTicket = { code: string /* MT-AB12CD-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
 
 export type Order = {
@@ -58,8 +58,24 @@ export type Order = {
   ticketCount: number;
   total: number; // PEN
   paymentMethod: "card" | "yape" | "pagoefectivo";
-  buyer: { firstName: string; lastName: string; email: string; phone: string; documentType: "dni" | "ce" | "passport"; documentNumber: string };
+  buyer: { name: string; email: string };
   tickets: OrderTicket[];
 };
 
-export type OrderBuyer = Order["buyer"];
+/** Datos del comprador que recibe el pago simulado (`buildOrder`); desaparece con él en F5. */
+export type OrderBuyer = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  documentType: "dni" | "ce" | "passport";
+  documentNumber: string;
+};
+
+export type ConfirmationState = "paid" | "refunded" | "processing" | "payment-failed" | "expired" | "not-found";
+
+export type OrderConfirmationResult =
+  | { status: "not-found" | "processing" }
+  | { status: "paid"; order: Order }
+  | { status: "payment-failed"; orderId: string }
+  | { status: "expired" | "refunded"; eventSlug: string };

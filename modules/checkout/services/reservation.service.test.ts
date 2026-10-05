@@ -127,6 +127,30 @@ describeWithDb("reservation.service", () => {
     expect(seat).toMatchObject({ status: "held", orderId: secondOrderId });
   });
 
+  it("lugares retirados (retired_at) → nunca se reservan, generales ni numerados", async () => {
+    const { eventId, slug } = await setup({ general: 3, numbered: { rows: ["A"], seatsPerRow: 1 } });
+    // El primer general en el orden de reserva (venue_seat_id NULLS LAST, id) y el único numerado.
+    const generals = await db
+      .select({ id: eventSeats.id })
+      .from(eventSeats)
+      .where(sql`${eventSeats.eventId} = ${eventId} AND ${eventSeats.venueSeatId} IS NULL`)
+      .orderBy(eventSeats.id);
+    const retiredId = generals[0].id;
+    await db
+      .update(eventSeats)
+      .set({ retiredAt: new Date() })
+      .where(sql`${eventSeats.id} = ${retiredId} OR (${eventSeats.eventId} = ${eventId} AND ${eventSeats.venueSeatId} IS NOT NULL)`);
+
+    expect(await reserveCheckoutOrder(checkoutOrder(slug, [general(3)]), null)).toEqual({ status: "unavailable" });
+    expect(await reserveCheckoutOrder(checkoutOrder(slug, [numbered("numbered-A-1")]), null)).toEqual({ status: "unavailable" });
+    const orderId = await reserve(slug, [general(2)]);
+
+    const seats = await db.select({ id: eventSeats.id, status: eventSeats.status, orderId: eventSeats.orderId }).from(eventSeats).where(eq(eventSeats.eventId, eventId));
+    expect(seats.filter((seat) => seat.status === "held").map((seat) => seat.id).sort()).toEqual(generals.slice(1).map((seat) => seat.id).sort());
+    expect(seats.filter((seat) => seat.status === "held").every((seat) => seat.orderId === orderId)).toBe(true);
+    expect(seats.find((seat) => seat.id === retiredId)).toMatchObject({ status: "available", orderId: null });
+  });
+
   it("asiento numerado ya retenido → unavailable sin orden nueva", async () => {
     const { eventId, slug } = await setup({ numbered: { rows: ["A"], seatsPerRow: 2 } });
     await reserve(slug, [numbered("numbered-A-1")]);

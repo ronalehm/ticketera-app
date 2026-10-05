@@ -1,3 +1,6 @@
+import type Stripe from "stripe";
+import type { ConfirmationState } from "../types/checkout.types";
+
 /** Minutos que una orden `pending` retiene sus asientos (`expires_at = now() + 10 min`). */
 export const RESERVATION_MINUTES = 10;
 
@@ -17,4 +20,25 @@ export function computeOrderAmounts(
   }
   const platformFeeCents = Math.round((subtotalCents * commissionBps) / 10000);
   return { ticketCount, subtotalCents, platformFeeCents, organizerAmountCents: subtotalCents - platformFeeCents };
+}
+
+/**
+ * Estado de la confirmación. Una orden `pending` cuyo PaymentIntent ya se cobró (o se está cobrando) espera al
+ * webhook aunque haya vencido; si no, vencida → `expired` y vigente → `payment-failed` (puede reintentar).
+ */
+export function getConfirmationState(
+  order: { status: "pending" | "paid" | "expired" | "refunded" | "partially_refunded"; isExpired: boolean },
+  paymentIntentStatus: Stripe.PaymentIntent.Status | null,
+): ConfirmationState {
+  switch (order.status) {
+    case "paid":
+    case "partially_refunded":
+      return "paid";
+    case "refunded":
+      return "refunded";
+    case "expired":
+      return "expired";
+  }
+  if (paymentIntentStatus === "succeeded" || paymentIntentStatus === "processing") return "processing";
+  return order.isExpired ? "expired" : "payment-failed";
 }

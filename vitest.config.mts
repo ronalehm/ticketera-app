@@ -33,6 +33,10 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // ponytail: timeout global holgado porque los tests de integración van contra Neon remoto y algunos esperan
+    // bloqueos de fila mientras `lib/db/seed/seed.test.ts` reescribe filas del seed (18–35 s). Arreglo de fondo:
+    // que los tests de "retirados" de `events.service.test.ts` y `seating.service.test.ts` usen un evento propio.
+    testTimeout: 60_000,
     // Los worktrees de agentes (`.claude/worktrees/`) son copias del repo: no se ejecutan sus tests.
     exclude: [...configDefaults.exclude, ".claude/worktrees/**"],
     env: testDatabaseUrl

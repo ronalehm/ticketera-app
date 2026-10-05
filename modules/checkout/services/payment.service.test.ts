@@ -125,7 +125,7 @@ describe("processMockPayment", () => {
       ticketCount: 3,
       total: 910,
       paymentMethod: "card",
-      buyer,
+      buyer: { name: "Ana Quispe", email: "ana@example.com" },
     });
     expect(created.tickets.map((ticket) => ticket.code)).toEqual([
       `${created.code}-01`,
