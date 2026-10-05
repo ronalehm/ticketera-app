@@ -941,19 +941,19 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
   - El reviewer repite el requisito 25 entero. El merge de la Fase 1 espera a su APROBADO.
 
 ### Fase 2. Sol de Verano, Arena y Mar, Micro abierto y Sueños andinos (5 tareas, 10 archivos)
-- [ ] T1. Sol de Verano (requisito 7), con su test.
+- [x] T1. Sol de Verano (requisito 7), con su test.
   - Archivos: `modules/seating/data/festivalSolDeVerano.mock.ts` (nuevo), `modules/seating/data/festivalSolDeVerano.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo con T2–T4.
-- [ ] T2. Arena y Mar (requisito 8), con su test.
+- [x] T2. Arena y Mar (requisito 8), con su test.
   - Archivos: `modules/seating/data/festivalArenaYMar.mock.ts` (nuevo), `modules/seating/data/festivalArenaYMar.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T3. Micro abierto (requisito 9), con su test.
+- [x] T3. Micro abierto (requisito 9), con su test.
   - Archivos: `modules/seating/data/microAbierto.mock.ts` (nuevo), `modules/seating/data/microAbierto.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T4. Sueños de una noche andina (requisito 10), con su test.
+- [x] T4. Sueños de una noche andina (requisito 10), con su test.
   - Archivos: `modules/seating/data/suenosDeUnaNocheAndina.mock.ts` (nuevo), `modules/seating/data/suenosDeUnaNocheAndina.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T5. Cierre: agregador, verificación con BD, build, Playwright de la Fase 2 y diseño de página.
+- [x] T5. Cierre: agregador, verificación con BD, build, Playwright de la Fase 2 y diseño de página.
   - Archivos: `modules/seating/data/venueMaps.mock.ts`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1–T4. Secuencial.
 

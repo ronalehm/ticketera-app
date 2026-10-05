@@ -6,17 +6,10 @@ import { cn } from "@/lib/utils";
 import { StartCheckoutButton } from "@/modules/checkout/start";
 import { formatEventPrice } from "@/modules/events/purchase";
 
-import type { SelectionLine } from "../types/seating.types";
 import { formatTicketCount } from "../utils/selectionSummary";
-import { PurchaseSummaryContent } from "./PurchaseSummary";
+import { PurchaseSummaryContent, type PurchaseSummaryContentProps } from "./PurchaseSummary";
 
-type MobilePurchaseBarProps = {
-  lines: SelectionLine[];
-  ticketCount: number;
-  total: number;
-  checkoutHref: string | null;
-  className?: string;
-};
+type MobilePurchaseBarProps = PurchaseSummaryContentProps & { className?: string };
 
 const CTA_CLASS = cn(
   buttonVariants(),
@@ -24,7 +17,14 @@ const CTA_CLASS = cn(
 );
 
 /** Barra inferior (< lg): total, "Ver resumen de la compra" (hoja inferior "Tu compra") y "Continuar". */
-export function MobilePurchaseBar({ lines, ticketCount, total, checkoutHref, className }: MobilePurchaseBarProps) {
+export function MobilePurchaseBar({
+  lines,
+  ticketCount,
+  total,
+  checkoutHref,
+  onRemoveLine,
+  className,
+}: MobilePurchaseBarProps) {
   return (
     <div
       className={cn(
@@ -66,6 +66,7 @@ export function MobilePurchaseBar({ lines, ticketCount, total, checkoutHref, cla
               ticketCount={ticketCount}
               total={total}
               checkoutHref={checkoutHref}
+              onRemoveLine={onRemoveLine}
             />
           </div>
         </SheetContent>
