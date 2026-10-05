@@ -941,7 +941,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
   - El reviewer repite el requisito 25 entero. El merge de la Fase 1 espera a su APROBADO.
 
 ### Fase 2. Sol de Verano, Arena y Mar, Micro abierto y Sueños andinos (5 tareas, 10 archivos)
-- [ ] T1. Sol de Verano (requisito 7), con su test.
+- [x] T1. Sol de Verano (requisito 7), con su test.
   - Archivos: `modules/seating/data/festivalSolDeVerano.mock.ts` (nuevo), `modules/seating/data/festivalSolDeVerano.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo con T2–T4.
 - [ ] T2. Arena y Mar (requisito 8), con su test.
