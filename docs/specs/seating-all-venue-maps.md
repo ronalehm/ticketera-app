@@ -947,7 +947,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
 - [ ] T2. Arena y Mar (requisito 8), con su test.
   - Archivos: `modules/seating/data/festivalArenaYMar.mock.ts` (nuevo), `modules/seating/data/festivalArenaYMar.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T3. Micro abierto (requisito 9), con su test.
+- [x] T3. Micro abierto (requisito 9), con su test.
   - Archivos: `modules/seating/data/microAbierto.mock.ts` (nuevo), `modules/seating/data/microAbierto.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
 - [ ] T4. Sueños de una noche andina (requisito 10), con su test.
