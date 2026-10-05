@@ -944,13 +944,13 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
 - [x] T1. Sol de Verano (requisito 7), con su test.
   - Archivos: `modules/seating/data/festivalSolDeVerano.mock.ts` (nuevo), `modules/seating/data/festivalSolDeVerano.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo con T2–T4.
-- [ ] T2. Arena y Mar (requisito 8), con su test.
+- [x] T2. Arena y Mar (requisito 8), con su test.
   - Archivos: `modules/seating/data/festivalArenaYMar.mock.ts` (nuevo), `modules/seating/data/festivalArenaYMar.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
 - [x] T3. Micro abierto (requisito 9), con su test.
   - Archivos: `modules/seating/data/microAbierto.mock.ts` (nuevo), `modules/seating/data/microAbierto.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
-- [ ] T4. Sueños de una noche andina (requisito 10), con su test.
+- [x] T4. Sueños de una noche andina (requisito 10), con su test.
   - Archivos: `modules/seating/data/suenosDeUnaNocheAndina.mock.ts` (nuevo), `modules/seating/data/suenosDeUnaNocheAndina.mock.test.ts` (nuevo).
   - Depende de: Fase 1. En paralelo.
 - [ ] T5. Cierre: agregador, verificación con BD, build, Playwright de la Fase 2 y diseño de página.
