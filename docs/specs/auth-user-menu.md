@@ -1,7 +1,7 @@
 # Menú de usuario en el header y página "Mi perfil"
 
 - Módulo: auth (+ `components/shared`, `lib/`)
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Pedido del usuario: "cuando ingreso a la página con un usuario y contraseña debe verse quién está logeado con un ícono y ver perfil: card de usuario".
@@ -71,7 +71,7 @@ Es solo UI/UX con datos mock. La sesión sigue en el store zustand persistido `m
    - Un `DropdownMenuGroup` cuyo `DropdownMenuLabel` es la tarjeta del usuario (`UserSummary`: avatar de 40 px, nombre completo y correo). Así el grupo de enlaces queda etiquetado con el nombre y el correo del usuario.
    - Dentro del grupo, los enlaces de `ACCOUNT_LINKS`: Fase 1 "Mis entradas" y "Panel de organizador"; Fase 2 añade "Mi perfil" al principio.
    - Después, `DropdownMenuSeparator` y el item "Cerrar sesión".
-   - **"Panel de organizador" se muestra a toda sesión:** no hay roles y el panel ya es accesible sin sesión (Decisión 9 de `layout-fullscreen-shells`). Es el único acceso al panel desde el header aparte del banner de la landing (Pregunta abierta 2).
+   - ~~**"Panel de organizador" se muestra a toda sesión**~~ — **Reemplazado por la Enmienda 1** (al final de la spec): el enlace al panel depende del rol.
 6. **Cerrar sesión deja al usuario en la página actual**, como hoy en el header: `signOut()` sin navegar. En `/perfil` o `/mis-entradas`, la página pasa a su estado "Inicia sesión…".
    - Limitación aceptada: el disparador se desmonta al cerrar sesión, así que Base UI no puede devolverle el foco y el foco vuelve al documento (Pregunta abierta 3).
    - El panel del organizador (layout F3) sí navega a `/`, porque allí lo pide el diseño.
@@ -530,7 +530,25 @@ Coordinación:
 
 ## Preguntas abiertas
 1. **Edición de datos en `/perfil`:** la Fase 2 es solo lectura. ¿Se confirma la Fase 3 (editar nombres, apellidos, celular y documento con el correo fijo, guardado mock en el navegador), o se deja hasta tener backend?
-2. **"Panel de organizador" en el menú:** se muestra a toda sesión porque no hay roles y el panel es accesible sin sesión (Decisión 5). ¿Debe ocultarse a los compradores cuando exista un rol "organizador" (otra spec)?
+2. ~~**"Panel de organizador" en el menú**~~ — Resuelta por la Enmienda 1: se oculta a los compradores.
 3. **Foco tras "Cerrar sesión" desde el menú:** el botón de cuenta desaparece y el foco vuelve al documento (Decisión 6). ¿Se quiere llevar el foco a "Iniciar sesión" (solo visible desde `sm`), o redirigir a `/` como en el panel del organizador?
 4. **Precarga en el checkout:** ahora la sesión trae celular y documento. ¿Se precargan también en el formulario de compra (hoy solo nombre, apellido y correo), en otra spec de checkout?
 5. **Formato del celular:** se muestra tal como se guardó ("987654321"). ¿Se prefiere agrupado ("987 654 321") o con prefijo (+51)?
+
+## Enmiendas
+
+### Enmienda 1 — Enlace al panel según el rol (pedido del usuario; implementado en `admin-panel` F5b, commit `0db0f5e`)
+Reemplaza el punto "Panel de organizador se muestra a toda sesión" y resuelve la Pregunta abierta 2. Con `admin-panel` ya existen los roles y el panel exige `panel:access`, así que mostrar el enlace a un comprador solo lo llevaba de vuelta a `/`.
+1. **Rol en el cliente:** `useSessionUser` devuelve `role`, leído de `publicMetadata.role` de Clerk (copia del rol de la BD). Un valor ausente o desconocido cuenta como `customer`. Solo sirve para mostrar u ocultar enlaces; la autorización la sigue haciendo el servidor (`requirePermission`).
+2. **Enlaces de la cuenta:** `getAccountLinks(role)` en `modules/auth/components/accountLinks.ts` sustituye a la constante `ACCOUNT_LINKS`. La usan el menú (`UserMenu`, que recibe `role`) y el bloque "Tu cuenta" del `Sheet` (`AuthHeaderActions`).
+   - Todos los roles ven "Mi perfil" y "Mis entradas".
+   - Con `panel:access` se añade el enlace a `/organizador`:
+     - "Panel de organizador" para `organizer`;
+     - "Panel" para `admin` y `super_admin`, que también gestionan usuarios.
+   - Un `customer` no ve enlace al panel.
+3. **Limitación conocida:** `publicMetadata.role` se sincroniza al vincular la cuenta y cuando un admin cambia el rol desde `/admin/usuarios`. Si el rol cambia por otra vía (seed o SQL), el enlace puede no aparecer hasta que se corrija el metadato. No afecta el acceso, que lo decide la BD.
+4. **Criterios de aceptación:**
+   - [x] Un `customer`, o una sesión sin rol o con un rol desconocido en `publicMetadata`, no ve el enlace al panel, ni en el menú ni en el `Sheet`.
+   - [x] Un `organizer` ve "Panel de organizador" → `/organizador`.
+   - [x] `admin` y `super_admin` ven "Panel" → `/organizador`.
+   - [x] Tests: `useSessionUser.test.ts`, `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.
