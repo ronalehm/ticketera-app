@@ -1,4 +1,4 @@
-import { and, count, eq, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers } from "@/lib/db/schema/identity";
@@ -9,6 +9,9 @@ import { toEvent, toEventDetail } from "../utils/eventRecords";
 
 /** Lugar libre: `available`, o `held` con la retención vencida. */
 const availableSeats = sql<number>`count(${eventSeats.id}) filter (where ${eventSeats.status} = 'available' or (${eventSeats.status} = 'held' and ${eventSeats.heldUntil} < now()))`.mapWith(Number);
+
+/** Lugares en inventario de cada tipo (sin retirados). Va en el join, no en el `where`, para no perder tipos sin lugares. */
+const inventorySeatsJoin = and(eq(eventSeats.ticketTypeId, ticketTypes.id), isNull(eventSeats.retiredAt));
 
 // Incluye los campos del detalle: getEvents los descarta en `toEvent` (12 filas; no compensa otra consulta).
 const eventFields = {
@@ -40,7 +43,7 @@ function selectPublishedEvents(where?: SQL) {
     .innerJoin(venues, eq(venues.id, events.venueId))
     .innerJoin(organizers, eq(organizers.userId, events.organizerId))
     .innerJoin(ticketTypes, eq(ticketTypes.eventId, events.id))
-    .leftJoin(eventSeats, eq(eventSeats.ticketTypeId, ticketTypes.id))
+    .leftJoin(eventSeats, inventorySeatsJoin)
     .where(and(eq(events.status, "published"), where))
     .groupBy(events.id, categories.id, venues.id, organizers.userId)
     .orderBy(events.createdAt, events.id);
@@ -70,7 +73,7 @@ export async function getEventBySlug(slug: string): Promise<EventDetail | null> 
       availableSeats,
     })
     .from(ticketTypes)
-    .leftJoin(eventSeats, eq(eventSeats.ticketTypeId, ticketTypes.id))
+    .leftJoin(eventSeats, inventorySeatsJoin)
     .where(eq(ticketTypes.eventId, record.id))
     .groupBy(ticketTypes.id)
     .orderBy(ticketTypes.sortOrder);

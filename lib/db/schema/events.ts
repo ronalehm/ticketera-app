@@ -106,6 +106,9 @@ export const eventSeats = pgTable(
     status: seatStatusEnum("status").notNull().default("available"),
     orderId: uuid("order_id").references(() => orders.id),
     heldUntil: timestamptz("held_until"),
+    // Fuera del inventario (el seed retira lo que su layout ya no tiene); no se vende ni cuenta.
+    // No se borra: conserva el historial y las FKs.
+    retiredAt: timestamptz("retired_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

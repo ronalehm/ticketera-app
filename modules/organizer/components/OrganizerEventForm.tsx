@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useZodForm } from "@/hooks/useZodForm";
 import { cn } from "@/lib/utils";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import { CITIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 import {
   EVENT_CATEGORY_OPTIONS,
@@ -23,26 +23,32 @@ import {
 } from "../schemas/organizer.schema";
 import { useObjectUrl } from "../hooks/useObjectUrl";
 import { useOrganizerStore } from "../stores/organizer.store";
-import type { OrganizerEventFormValues } from "../types/organizer.types";
+import type { OrganizerEventFormValues, SeatingMode, TicketTypeRow } from "../types/organizer.types";
 import { buildEventPreview } from "../utils/eventPreview";
 import {
+  applySeatingMode,
   createTicketTypeRow,
+  getCoverImageError,
   getTicketTypeErrors,
-  isAcceptedCoverImage,
   toOrganizerEvent,
 } from "../utils/organizerEventForm";
 import { CoverImageField } from "./CoverImageField";
 import { EventPreviewCard } from "./EventPreviewCard";
+import { SeatingModeField } from "./SeatingModeField";
 import { FORM_CONTROL_SCROLL, TicketTypesField } from "./TicketTypesField";
 
-type TextField = Exclude<keyof OrganizerEventFormValues, "intent" | "category" | "minAge" | "ticketTypes">;
+type TextField = Exclude<
+  keyof OrganizerEventFormValues,
+  "intent" | "category" | "minAge" | "city" | "seatingMode" | "hasCoverImage" | "ticketTypes"
+>;
 
 const INPUT_CLASS = cn("h-11", FORM_CONTROL_SCROLL);
 
-const COVER_IMAGE_ERROR = "Sube una imagen en formato JPG o PNG.";
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
 const ORGANIZER_DESCRIPTION_ID = "organizer-event-organizer-description";
 const SELECT_TRIGGER_CLASS = cn("w-full cursor-pointer data-[size=default]:h-11", FORM_CONTROL_SCROLL);
+// La etiqueta de cada ciudad es su propio nombre: la misma lista que el filtro público (decisión 6).
+const CITY_ITEMS = CITIES.map((city) => ({ label: city, value: city }));
 
 const INITIAL_VALUES: Omit<OrganizerEventFormValues, "ticketTypes"> = {
   intent: "publish",
@@ -57,6 +63,8 @@ const INITIAL_VALUES: Omit<OrganizerEventFormValues, "ticketTypes"> = {
   venue: "",
   city: "",
   address: "",
+  seatingMode: "",
+  hasCoverImage: false,
 };
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
@@ -89,6 +97,8 @@ export function OrganizerEventForm() {
   // La portada solo vive en este formulario: una URL local compartida con la vista previa, nunca va al store (Decisión 7).
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverError, setCoverError] = useState<string>();
+  // Último archivo elegido: si se elige otro mientras se valida el anterior, solo cuenta el último.
+  const pendingCoverRef = useRef<File | null>(null);
   const coverUrl = useObjectUrl(coverFile);
 
   // Sin rehidratar, el primer addEvent sobrescribiría los eventos guardados en localStorage.
@@ -105,18 +115,40 @@ export function OrganizerEventForm() {
   const ticketTypeErrors = errors.ticketTypes ? getTicketTypeErrors(values.ticketTypes) : null;
 
   // Un archivo no válido muestra el error y conserva la imagen anterior.
-  function selectCover(file: File) {
-    if (!isAcceptedCoverImage(file)) {
-      setCoverError(COVER_IMAGE_ERROR);
-      return;
-    }
-    setCoverError(undefined);
+  async function selectCover(file: File) {
+    pendingCoverRef.current = file;
+    const error = await getCoverImageError(file);
+    if (pendingCoverRef.current !== file) return;
+    setCoverError(error ?? undefined);
+    if (error) return;
     setCoverFile(file);
+    setValue("hasCoverImage", true);
+    handleBlur("hasCoverImage");
   }
 
   function removeCover() {
+    pendingCoverRef.current = null;
     setCoverError(undefined);
     setCoverFile(null);
+    setValue("hasCoverImage", false);
+    handleBlur("hasCoverImage");
+  }
+
+  // Las filas toman el tipo del modo elegido; el modo y la lista se revalidan juntos (regla de "Mixto").
+  function selectSeatingMode(mode: SeatingMode) {
+    setValue("seatingMode", mode);
+    setValue("ticketTypes", applySeatingMode(values.ticketTypes, mode));
+    revalidateTicketTypes();
+  }
+
+  function changeTicketTypes(rows: TicketTypeRow[]) {
+    setValue("ticketTypes", rows);
+    revalidateTicketTypes();
+  }
+
+  function revalidateTicketTypes() {
+    handleBlur("ticketTypes");
+    handleBlur("seatingMode");
   }
 
   // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y de la ayuda y del error.
@@ -130,7 +162,7 @@ export function OrganizerEventForm() {
       [descriptionId, errors[name] && `organizer-event-${name}-error`].filter(Boolean).join(" ") || undefined,
   });
 
-  const fieldError = (name: TextField) => (
+  const fieldError = (name: TextField | "city") => (
     <FieldError id={`organizer-event-${name}-error`}>{errors[name]}</FieldError>
   );
 
@@ -254,7 +286,31 @@ export function OrganizerEventForm() {
               </Field>
               <Field data-invalid={!!errors.city}>
                 <FieldLabel htmlFor="organizer-event-city">Ciudad</FieldLabel>
-                <Input {...textProps("city")} placeholder="Ej. Lima" maxLength={100} className={INPUT_CLASS} />
+                <Select
+                  items={CITY_ITEMS}
+                  value={values.city}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setValue("city", value);
+                    handleBlur("city");
+                  }}
+                >
+                  <SelectTrigger
+                    id="organizer-event-city"
+                    aria-invalid={!!errors.city}
+                    aria-describedby={errors.city ? "organizer-event-city-error" : undefined}
+                    className={SELECT_TRIGGER_CLASS}
+                  >
+                    <SelectValue placeholder="Elige la ciudad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CITIES.map((city) => (
+                      <SelectItem key={city} value={city} className="min-h-11 cursor-pointer">
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {fieldError("city")}
               </Field>
             </div>
@@ -273,18 +329,32 @@ export function OrganizerEventForm() {
         </FormSection>
 
         <FormSection title="Imagen de portada">
-          <CoverImageField previewUrl={coverUrl} error={coverError} onSelect={selectCover} onRemove={removeCover} />
+          {/* El error del archivo tiene prioridad sobre el de portada obligatoria. */}
+          <CoverImageField
+            previewUrl={coverUrl}
+            error={coverError ?? errors.hasCoverImage}
+            onSelect={selectCover}
+            onRemove={removeCover}
+          />
+        </FormSection>
+
+        <FormSection
+          title="Mapa de asientos"
+          description="Define si quien compra elegirá su asiento en un plano. De esto depende cómo configuras los tipos de entrada."
+        >
+          <SeatingModeField value={values.seatingMode} error={errors.seatingMode} onChange={selectSeatingMode} />
         </FormSection>
 
         <FormSection
           title="Tipos de entrada"
-          description="Cada tipo es una zona con su precio: general (de pie) o numerada (con filas y asientos)."
+          description="Cada tipo de entrada es una zona con su precio y su capacidad."
         >
           <TicketTypesField
+            mode={values.seatingMode}
             rows={values.ticketTypes}
             errors={ticketTypeErrors}
-            onChange={(rows) => setValue("ticketTypes", rows)}
-            onBlur={() => handleBlur("ticketTypes")}
+            onChange={changeTicketTypes}
+            onBlur={revalidateTicketTypes}
           />
         </FormSection>
       </div>

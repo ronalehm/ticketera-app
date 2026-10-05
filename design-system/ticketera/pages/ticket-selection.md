@@ -1,6 +1,6 @@
 # Página: selección de entradas `/eventos/[slug]/entradas`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md`, `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/seating-ticket-selection.md`, `docs/specs/seating-stadium-map.md` (rediseño en dos sub-pasos), `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra) y `docs/specs/seating-all-venue-maps.md` (mapas para todos los eventos posibles).
 
 Paso 1 de 3 de la compra. Solo existe para los eventos con mapa del recinto (`hasVenueMap`); el resto da el 404 del evento ("No encontramos este evento"), que se muestra con el header y el footer del sitio (`app/(purchase)/eventos/[slug]/not-found.tsx` con `SiteShell`): quien llega a un evento inexistente no está comprando.
 
@@ -92,7 +92,7 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
 ## Mapa de zonas (`VenueMapView`)
 
 - **Marco:** `rounded-xl bg-muted p-3 md:p-4` > contenedor `relative mx-auto w-full` con `aspect-ratio` del `viewBox` y `max-width: calc(min(64svh, 600px) * w / h)` (el mapa no pasa de ~600 px de alto en pantallas bajas). Dentro, el `<svg>` (`absolute inset-0 size-full`) y una capa de etiquetas HTML.
-- **Recintos en estadio (los 4 mapas mock):** comparten el centro (300, 54) y el escenario semicircular (sector de radio 90, de −10° a 190°, "ESCENARIO" en (300, 70) y 7 luces). Las zonas son sectores anulares concéntricos, con 8 unidades de separación entre anillos (12 entre el escenario y el primero). Barrido por recinto:
+- **Recintos en estadio (todos los mapas mock):** comparten el centro (300, 54) y el escenario semicircular (sector de radio 90, de −10° a 190°, "ESCENARIO" en (300, 70) y 7 luces). Las zonas son sectores anulares concéntricos, con 8 unidades de separación entre anillos (12 entre el escenario y el primero). Barrido por recinto:
 
   | Recinto | Zonas | Barrido |
   |---|---|---|
@@ -101,6 +101,10 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   | Arena | Tribuna Norte (numerada) | 40° (70°–110°) |
   | Teatro (Gran Teatro Nacional) | Platea y Mezanine (numeradas) | 84° (48°–132°) |
   | Comedia (Arena 1) | Mesa y Preferencial (numeradas) y General de pie | 98° (41°–139°) |
+  | Copa del Norte (Estadio Mansiche, herradura) | Popular y Oriente de pie · Occidente (numerada), las tres en la banda 102–296 | Popular 52° (64°–116°) · Oriente 54° (6°–60°) · Occidente 54° (120°–174°) |
+  | Los Ecos del Sur (Teatro Municipal de Arequipa, agotado) | Platea (numerada, 102–250) y General, la galería, de pie (258–352); las dos agotadas, en gris | 90° (45°–135°) |
+
+- **Deportes (herradura):** la cancha es el sector del escenario (`PITCH_STAGE`: la misma forma y las mismas 7 luces, que hacen de reflectores, con la etiqueta "CANCHA"). Las tribunas laterales van a los lados (Oriente a la derecha, Occidente a la izquierda) y el fondo abajo (Popular), las tres en la misma banda de radios, con 4° entre vecinas. Las laterales del festival (40°, banda de 166) no sirven: a 375 px la fila del precio con la insignia no cabe en su banda; con 54° y radios 102–296 cabe.
 
 - **Escenario:** forma `fill-brand-navy` y, si el layout las trae, luces `<circle r=5 class="fill-highlight">`, en un `<g aria-hidden>`.
 - **Zonas:** forma con la clase `shape` del tono + `stroke-background stroke-3` (separación blanca entre sectores).
@@ -111,6 +115,17 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   - `low-stock`: píldora "Últimas entradas" `rounded-full bg-warning text-warning-foreground`, **solo desde `md`** (a 375 px no cabe; el estado sigue en la tarjeta y en el `aria-label`).
   - Con selección: insignia tras el precio `h-5 rounded-full bg-background ring-1 ring-border text-xs font-bold` con `Check` y el número de entradas o butacas elegidas.
   - **Sitio para las etiquetas en la arena** (`viewBox` 600 × 640): las bandas de pie miden 94–112 unidades (VIP 102–214, Preferencial 222–320, General 328–422) para que nombre y precio, y desde `md` la píldora de VIP, queden a ≥ 3 px del borde visible de su banda (radio ± 1.5 por el trazo blanco), y la insignia de selección a ≥ 0.5 px. Las etiquetas no se encogen: caben por geometría. Holgura mínima medida (Playwright, la menor de VIP, Preferencial y General; "sin selección / con la insignia ✓ 2"): 3.4 px (Preferencial y General) / 1.1 px (VIP y Preferencial) a 375, 20.4 / 18.4 px a 640, 11.6 / 11.6 px a 768, 3.7 / 3.7 px a 1024 (VIP, por la píldora: el mapa mide 461 px, limitado por su columna) y 9.8 / 9.8 px a 1440 (VIP). La píldora de VIP queda entera dentro de su banda: 18.3 px a 768, 6.4 px a 1024 y 15.7 px a 1440.
+  - **Sitio para las etiquetas en los demás recintos:** la holgura se mide igual, añadiendo en los sectores laterales los bordes radiales (rectas a `startAngle` y `endAngle`, menos 1.5 unidades por el trazo), desde las 4 esquinas y los 4 puntos medios de cada pieza (nombre, precio con su insignia y píldora). Holgura mínima medida (Playwright; "sin selección / con la insignia ✓ 2"; la menor de los 5 anchos, a 375 en todos los casos):
+
+    | Recinto | Zona | Holgura (px) | Borde que la limita |
+    |---|---|---|---|
+    | Copa del Norte | Popular | 13.2 / 6.6 | exterior (precio) |
+    | | Oriente | 11.3 / 4.9 | radial de 6° (nombre) / interior (precio con insignia) |
+    | | Occidente | 8.4 / 3.8 | interior (nombre / precio con insignia) |
+    | Los Ecos del Sur | General | 4.8 (agotada, sin insignia) | interior (nombre) |
+    | | Platea | 16.8 (agotada, sin insignia) | interior (nombre) |
+
+    De 640 a 1440 todas superan los 15 px. Ninguna de estas zonas tiene hoy "Últimas entradas", así que no hay píldora que medir.
 
 ### Resaltado sincronizado mapa ↔ tarjetas
 
@@ -161,10 +176,10 @@ Sub-paso 2 de una zona numerada, debajo de `ZoneStepHeader` (que pone el nombre,
 
 Dos variantes según la zona (los datos lo deciden):
 
-- **En arco** (con `planTransform`; las zonas numeradas de los 4 mapas mock): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
+- **En arco** (con `planTransform`; las zonas numeradas de todos los mapas mock): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
 - **En cuadrícula** (sin `planTransform`; mapas sin geometría, hoy ninguno en el mock, y la vista previa del organizer, `SeatGridPreview`): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
 
-**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero).
+**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero), y también los cumple Occidente de Copa del Norte (6 filas de 4 a 9 butacas, `seatViewBox` 365 × 368: medido 27.3 px con el plano entero y 40.9 px tras un "Acercar"). Platea de Los Ecos del Sur (61 butacas, `seatViewBox` 508 × 280) sería un plano grande, pero está agotada y no se abre.
 
 ### Estructura (de arriba abajo)
 
@@ -214,6 +229,7 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
     - **lienzo ancho (≥ 672 px):** sin franja; el margen lateral del 16:10 aloja la pastilla.
     - El minimapa descuenta la franja de su recuadro (alto del lienzo − alto del `<svg>`, en `getVisiblePlanRect({ insetBottom })`).
     - Holgura mínima medida entre la pastilla y la caja de la butaca más cercana (área de toque de 32 × 32), con el plano entero a la vista, en las 6 zonas numeradas de los 4 mapas: 25.5 px a 375 (`norte-A-1`; la pastilla va en la barra), 41.2 px a 640 (`platea-H-5`), 18.8 px a 768 (`platea-H-4`), 31.7 px a 1024 (`norte-F-5`) y 29.2 px a 1440 (`platea-H-4`). Con las letras de fila: 25.7 px a 375 (Platea), 51.4 px a 640, 38.7 px a 768, 40.2 px a 1024 (Oriente) y 58.2 px a 1440. Sin solapes en ningún ancho.
+    - Occidente de Copa del Norte (medido en los 5 anchos de Playwright): 49.1 px a 375 (`occidente-A-4`; en la barra), 106.4 px a 640, 123.2 px a 768, 81.3 px a 1024 y 159.3 px a 1440; con las letras, ≥ 35.6 px. Sin solapes.
     - Coste: con la franja, el plano entero a la vista es más pequeño (butaca de 15.5 px a 1024 y 17.7 px a 640, frente a 19.3 y 21.5 sin ella); se acerca con el zoom.
   - Con zoom, el paneo saca las butacas de debajo.
 - Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
@@ -222,7 +238,7 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
 
 - `<svg class="group/plan block size-full select-none">` con `viewBox` = `seatViewBox` (≤ 400 de ancho en el festival; ≤ 622 en los planos grandes). A 375 px el pitch de 32 unidades (área de toque transparente de 32 × 32) mide ≥ 24 px con el plano entero a la vista en el festival, y tras un "Acercar" en los planos grandes.
 - **En cuadrícula** (zona sin `planTransform`): escenario arriba, barra `fill-foreground rx-8` con `map.stage.label` en mayúsculas `fill-background font-bold tracking-widest`.
-- **En arco** (con `planTransform`: las zonas numeradas de los 4 mapas mock): **sin** barra "ESCENARIO" (contradecía la orientación del sector); el `<svg>` lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo.
+- **En arco** (con `planTransform`: las zonas numeradas de todos los mapas mock): **sin** barra "ESCENARIO" (contradecía la orientación del sector); el `<svg>` lleva `overflow-visible`, así que el fondo del estadio se ve alrededor del sector, recortado por el lienzo.
 - **Letras de fila en los dos extremos** de cada fila, `fill-muted-foreground font-bold`, 13 unidades (`ROW_LABEL_FONT_SIZE`; ≈ la mitad del diámetro de la butaca, con el plano entero a la vista ~16 px en arco con el lienzo ancho (lienzo 16:10; ~8–11 px con el lienzo estrecho y su franja) y 18–22 px en cuadrícula a 1440, y ~10 px a 375: excepción decorativa a MASTER §3, porque la fila va en el `aria-label` y en el tooltip y la letra crece al acercar), `text-anchor="middle"`, `dominant-baseline="central"`, en un `<g aria-hidden>`:
   - en cuadrícula, en los dos márgenes (`x = 20` y `x = ancho − 20`, a la altura de la fila);
   - en arco, siguiendo la curva: en `getRowEdgeLabelPoints(row).start` y `.end` (a 0.8 pitch por fuera de la primera y la última butaca).
@@ -250,6 +266,7 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
     - **Por qué:** el margen lateral del 16:10 no basta en los planos apaisados. Con el minimapa siempre superpuesto, tapaba la esquina superior izquierda de Norte, Mezanine y Preferencial (filas A–C): butacas hasta −23.9 px (`norte-C-13`) y letras hasta −26.9 px a 1024; a 640, −10.8 / −13.7 px; también las letras de Norte de 740 a 800 y de 1180 a 1220 px (medido con la geometría anterior de la arena, Norte de 66°).
     - **Resultado:** el festival (Oriente y Occidente, planos casi cuadrados) lo lleva superpuesto en todos los anchos, igual que antes; Norte, Platea, Mezanine y Preferencial, en la barra desde `sm` (su plano llega a la esquina, aunque en Platea las butacas no la tocaran).
     - Holgura mínima medida con el plano entero a la vista, de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100), frente a la caja de la butaca más cercana (área de toque de 32 × 32) y a la de las letras de fila: superpuesto, 30.7 px (`occidente-J-9` a 1180) y 46.1 px con letras; en la barra queda fuera del lienzo (≥ 40.6 px, `norte-A-12` a 1024, y 41.8 px con letras). Sin solapes en ningún ancho. La pastilla no cambia (mínimo 16.9 px, `platea-H-4` a 1180). Con la Tribuna Norte de 40°, su minimapa (más alto, por el `viewBox` 600 × 640) mide 96 × 102 px y 112 × 119 px, y va en la barra en todos los anchos desde `sm`.
+    - Occidente de Copa del Norte (plano casi cuadrado, como el festival): superpuesto desde `sm` en los 5 anchos de Playwright, con el minimapa de 96 × 61 px (lienzo estrecho) o 112 × 70 px (ancho); holgura mínima 63 px frente a las butacas (`occidente-F-9` a 1024) y 67.2 px frente a las letras. A 375, en la barra (56.3 px). Sin solapes.
   - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
   - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 

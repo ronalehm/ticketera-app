@@ -31,6 +31,8 @@ type TicketTypeInputFieldProps = {
   field: RowField;
   label: string;
   value: string;
+  /** Ayuda bajo el input (`FieldDescription`), enlazada con `aria-describedby`. */
+  description?: string;
   error?: string;
   onValueChange: (value: string) => void;
   onBlur: () => void;
@@ -38,12 +40,13 @@ type TicketTypeInputFieldProps = {
   className?: string;
 };
 
-/** Campo editable de una fila: etiqueta visible, error con id y a11y del error (patrón del formulario). */
+/** Campo editable de una fila: etiqueta visible, ayuda y error con id y su a11y (patrón del formulario). */
 export function TicketTypeInputField({
   rowId,
   field,
   label,
   value,
+  description,
   error,
   onValueChange,
   onBlur,
@@ -61,9 +64,12 @@ export function TicketTypeInputField({
         onChange={(event) => onValueChange(event.target.value)}
         onBlur={onBlur}
         aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
+        aria-describedby={
+          [description && `${id}-description`, error && `${id}-error`].filter(Boolean).join(" ") || undefined
+        }
         className={INPUT_CLASS}
       />
+      {description && <FieldDescription id={`${id}-description`}>{description}</FieldDescription>}
       <FieldError id={`${id}-error`}>{error}</FieldError>
     </Field>
   );
@@ -78,13 +84,21 @@ const COUNT_INPUT_PROPS = { type: "number", inputMode: "numeric", min: 1, step: 
 
 type TicketTypeCapacityFieldsProps = {
   row: TicketTypeRow;
+  /** Muestra el grupo "Ubicación": solo en modo "Mixto"; los demás modos fuerzan el tipo (decisión 3). */
+  showKind: boolean;
   errors?: TicketTypeRowErrors;
   onChange: (patch: Partial<TicketTypeRow>) => void;
   onBlur: () => void;
 };
 
 /** "Ubicación" de un tipo de entrada y lo que depende de ella: la cantidad (general) o filas, asientos y plano (numerada). */
-export function TicketTypeCapacityFields({ row, errors = {}, onChange, onBlur }: TicketTypeCapacityFieldsProps) {
+export function TicketTypeCapacityFields({
+  row,
+  showKind,
+  errors = {},
+  onChange,
+  onBlur,
+}: TicketTypeCapacityFieldsProps) {
   const kindLabelId = `${ticketTypeInputId(row.id, "kind")}-label`;
   const seatCountId = ticketTypeInputId(row.id, "seat-count");
   const size = getSeatGridSize(row);
@@ -104,53 +118,55 @@ export function TicketTypeCapacityFields({ row, errors = {}, onChange, onBlur }:
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <span id={kindLabelId} className="text-sm font-medium">
-          Ubicación
-        </span>
-        <RadioGroup
-          aria-labelledby={kindLabelId}
-          value={row.kind}
-          onValueChange={(value: TicketTypeKind) => {
-            onChange({ kind: value });
-            // Tras un envío, revalida la lista: los errores pasan a ser los del tipo elegido.
-            onBlur();
-          }}
-          className="grid grid-cols-2 gap-3"
-        >
-          {ticketTypeKindSchema.options.map((kind) => {
-            const { title, hint, icon: Icon } = KIND_OPTIONS[kind];
-            const id = `${ticketTypeInputId(row.id, "kind")}-${kind}`;
-            return (
-              <FieldLabel
-                key={kind}
-                htmlFor={id}
-                className="min-h-11 cursor-pointer has-data-checked:border-primary has-data-checked:bg-accent"
-              >
-                <Field orientation="horizontal" className="items-start">
-                  <RadioGroupItem
-                    value={kind}
-                    id={id}
-                    // Nombre "Numerada" y la línea como descripción (no como parte del nombre).
-                    aria-labelledby={`${id}-title`}
-                    aria-describedby={`${id}-hint`}
-                    className={cn("mt-0.5", FORM_CONTROL_SCROLL)}
-                  />
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <FieldTitle id={`${id}-title`} className="font-semibold">
-                      <Icon aria-hidden className="size-4 shrink-0" />
-                      {title}
-                    </FieldTitle>
-                    <span id={`${id}-hint`} className="text-sm text-muted-foreground">
-                      {hint}
-                    </span>
-                  </div>
-                </Field>
-              </FieldLabel>
-            );
-          })}
-        </RadioGroup>
-      </div>
+      {showKind && (
+        <div className="flex flex-col gap-2">
+          <span id={kindLabelId} className="text-sm font-medium">
+            Ubicación
+          </span>
+          <RadioGroup
+            aria-labelledby={kindLabelId}
+            value={row.kind}
+            onValueChange={(value: TicketTypeKind) => {
+              onChange({ kind: value });
+              // Tras un envío, revalida la lista: los errores pasan a ser los del tipo elegido.
+              onBlur();
+            }}
+            className="grid grid-cols-2 gap-3"
+          >
+            {ticketTypeKindSchema.options.map((kind) => {
+              const { title, hint, icon: Icon } = KIND_OPTIONS[kind];
+              const id = `${ticketTypeInputId(row.id, "kind")}-${kind}`;
+              return (
+                <FieldLabel
+                  key={kind}
+                  htmlFor={id}
+                  className="min-h-11 cursor-pointer has-data-checked:border-primary has-data-checked:bg-accent"
+                >
+                  <Field orientation="horizontal" className="items-start">
+                    <RadioGroupItem
+                      value={kind}
+                      id={id}
+                      // Nombre "Numerada" y la línea como descripción (no como parte del nombre).
+                      aria-labelledby={`${id}-title`}
+                      aria-describedby={`${id}-hint`}
+                      className={cn("mt-0.5", FORM_CONTROL_SCROLL)}
+                    />
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <FieldTitle id={`${id}-title`} className="font-semibold">
+                        <Icon aria-hidden className="size-4 shrink-0" />
+                        {title}
+                      </FieldTitle>
+                      <span id={`${id}-hint`} className="text-sm text-muted-foreground">
+                        {hint}
+                      </span>
+                    </div>
+                  </Field>
+                </FieldLabel>
+              );
+            })}
+          </RadioGroup>
+        </div>
+      )}
 
       {row.kind === "general" ? (
         <div className="md:max-w-[calc(50%-0.5rem)]">{inputField("quantity", "Cantidad")}</div>

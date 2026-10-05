@@ -1,7 +1,8 @@
-// Se ejecuta en el cliente: sin valores del barrel de events, solo su entrada `format` y tipos (Decisión 17).
+// Se ejecuta en el cliente: sin valores del barrel de events, solo sus entradas `format` y `purchase` y tipos (Decisión 17).
 import { z } from "zod";
 import type { EventCategory } from "@/modules/events";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import { CITIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 
 // Record<EventCategory, string> garantiza por tipo que estén todas las claves; el test lo compara con EVENT_CATEGORIES.
 export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]];
@@ -35,6 +36,14 @@ export const SEAT_GRID_LIMITS = { maxRows: 30, maxSeatsPerRow: 60 } as const;
 // Mismos valores que `VenueZoneLayout.kind` de seating (decisión 13).
 export const ticketTypeKindSchema = z.enum(["general", "numbered"]);
 
+// Modo de ubicación del evento: los valores de `kind` más "mixed" (sin asientos, con mapa o mixto).
+export const seatingModeSchema = z.enum(["general", "numbered", "mixed"]);
+
+export const TICKET_DESCRIPTION_MAX_LENGTH = 150;
+
+// Reglas de la portada: las usan la validación del archivo (`getCoverImageError`) y los textos de ayuda.
+export const COVER_IMAGE_RULES = { maxBytes: 5 * 1024 * 1024, minWidth: 1200, minHeight: 675 } as const;
+
 /** Texto no vacío (con trim) que es un entero entre 1 y `max`. `abort` deja un único mensaje por campo vacío. */
 function intInRange(empty: string, invalid: string, max: number) {
   return z
@@ -52,6 +61,19 @@ const ticketTypeBase = {
     .trim()
     .min(1, { error: "Ingresa el precio", abort: true })
     .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, "El precio debe ser 0 o mayor"),
+  description: z
+    .string()
+    .trim()
+    .max(
+      TICKET_DESCRIPTION_MAX_LENGTH,
+      `La descripción debe tener como máximo ${TICKET_DESCRIPTION_MAX_LENGTH} caracteres`,
+    ),
+  // Mismo tope que la compra (MAX_TICKETS_PER_ORDER), para no contradecir lo que ve quien compra.
+  maxPerOrder: intInRange(
+    "Ingresa el máximo por compra",
+    `El máximo por compra debe ser un número entero entre 1 y ${MAX_TICKETS_PER_ORDER}`,
+    MAX_TICKETS_PER_ORDER,
+  ),
 };
 
 // Reglas de una fila de tipo de entrada al publicar. Solo se validan los campos del tipo elegido (decisión 7):
@@ -101,7 +123,6 @@ const REQUIRED_ON_PUBLISH = {
   description: "Agrega una descripción del evento",
   organizer: "Indica el nombre del organizador",
   venue: "Indica el lugar del evento",
-  city: "Indica la ciudad",
   address: "Indica la dirección del lugar",
 } as const;
 
@@ -119,8 +140,11 @@ export const organizerEventFormSchema = z
     time: z.string(), // "HH:MM" o ""
     doorsOpen: z.string(), // "HH:MM" o ""; mismo día que el evento (decisión 11)
     venue: z.string(),
-    city: z.string(),
+    city: z.string(), // "" o un valor de CITIES (Select)
     address: z.string(),
+    seatingMode: z.union([z.literal(""), seatingModeSchema]), // "": aún sin elegir (sin valor por defecto)
+    // La portada (File) vive fuera del estado del formulario; esto solo indica si hay una válida.
+    hasCoverImage: z.boolean(),
     // Fila "cruda" del formulario: sus reglas (ticketTypeFormSchema) solo se aplican al publicar.
     ticketTypes: z
       .array(
@@ -128,6 +152,8 @@ export const organizerEventFormSchema = z
           id: z.string(),
           name: z.string(),
           price: z.string(),
+          description: z.string(),
+          maxPerOrder: z.string(),
           kind: ticketTypeKindSchema,
           quantity: z.string(),
           rows: z.string(),
@@ -141,6 +167,29 @@ export const organizerEventFormSchema = z
 
     for (const [field, message] of Object.entries(REQUIRED_ON_PUBLISH)) {
       if (data[field as keyof typeof REQUIRED_ON_PUBLISH].trim() === "") ctx.addIssue({ code: "custom", path: [field], message });
+    }
+
+    // Solo las ciudades del filtro público, para que el evento publicado sea filtrable (decisión 6).
+    if (!(CITIES as readonly string[]).includes(data.city)) {
+      ctx.addIssue({ code: "custom", path: ["city"], message: "Elige la ciudad" });
+    }
+
+    if (!data.hasCoverImage) {
+      ctx.addIssue({ code: "custom", path: ["hasCoverImage"], message: "Sube la imagen de portada" });
+    }
+
+    if (data.seatingMode === "") {
+      ctx.addIssue({ code: "custom", path: ["seatingMode"], message: "Elige cómo se ubica el público" });
+    } else if (
+      data.seatingMode === "mixed" &&
+      !(data.ticketTypes.some((row) => row.kind === "general") && data.ticketTypes.some((row) => row.kind === "numbered"))
+    ) {
+      // El error va en el selector de modo, que recibe el foco y dice cómo corregirlo (decisión 4).
+      ctx.addIssue({
+        code: "custom",
+        path: ["seatingMode"],
+        message: "Un evento mixto necesita al menos una zona general (de pie) y una numerada",
+      });
     }
 
     if (data.date === "") {

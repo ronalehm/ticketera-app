@@ -1,6 +1,6 @@
 {
-  "id": "d42357a0-5cf9-4e5f-a4c8-9ce029810dc3",
-  "prevId": "adcc8b0c-d831-447e-a74f-90176bdfb358",
+  "id": "8dfdc389-97af-481b-913d-a98505179eb1",
+  "prevId": "d42357a0-5cf9-4e5f-a4c8-9ce029810dc3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2351,32 +2351,32 @@
           "name": "buyer_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_email": {
           "name": "buyer_email",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_phone": {
           "name": "buyer_phone",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_document_type": {
           "name": "buyer_document_type",
           "type": "document_type",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_document_number": {
           "name": "buyer_document_number",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -2389,6 +2389,12 @@
         "expires_at": {
           "name": "expires_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_count": {
+          "name": "ticket_count",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -2559,6 +2565,14 @@
         "orders_amounts_check": {
           "name": "orders_amounts_check",
           "value": "\"orders\".\"platform_fee_cents\" + \"orders\".\"organizer_amount_cents\" = \"orders\".\"subtotal_cents\""
+        },
+        "orders_buyer_required_check": {
+          "name": "orders_buyer_required_check",
+          "value": "\"orders\".\"status\" = 'pending' OR (\"orders\".\"buyer_name\" IS NOT NULL AND \"orders\".\"buyer_email\" IS NOT NULL AND \"orders\".\"buyer_phone\" IS NOT NULL AND \"orders\".\"buyer_document_type\" IS NOT NULL AND \"orders\".\"buyer_document_number\" IS NOT NULL)"
+        },
+        "orders_ticket_count_check": {
+          "name": "orders_ticket_count_check",
+          "value": "\"orders\".\"ticket_count\" > 0"
         }
       },
       "isRLSEnabled": false
