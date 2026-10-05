@@ -2079,7 +2079,7 @@ No hay API: son datos mock.
   - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
   - Depende de: T2.
   - En paralelo con T1 y T4.
-- [ ] T4. "Quitar" por línea en "Tu compra" y en la hoja móvil, con el foco (requisito 45, decisión 36).
+- [x] T4. "Quitar" por línea en "Tu compra" y en la hoja móvil, con el foco (requisito 45, decisión 36).
   - Archivos: `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1, T2 y T3.
