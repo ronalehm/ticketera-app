@@ -1,7 +1,7 @@
 # Panel admin + organizador: seguridad, seed limpio, datos reales, usuarios y eventos
 
 - Módulo: panel (con cambios en auth, organizer, events, users y lib/db)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Convertir `/organizador` (hoy casi todo mock, sin control de rol) en un panel de back-office real y compartido por organizadores y administradores, con:
