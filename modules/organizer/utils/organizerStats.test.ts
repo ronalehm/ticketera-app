@@ -1,49 +1,20 @@
 import { describe, expect, it } from "vitest";
-import type { OrganizerEvent } from "../types/organizer.types";
-import {
-  filterOrganizerEvents,
-  formatCount,
-  getDashboardKpis,
-  getEventRevenue,
-  getSoldPercentage,
-} from "./organizerStats";
+import { makeManagedEvent as makeEvent } from "../data/managedEvents.mock";
+import { filterManagedEvents, formatCount, formatRevenue, getDashboardKpis, getSoldPercentage } from "./organizerStats";
 
-const base: Omit<OrganizerEvent, "id" | "title" | "priceFrom" | "sold" | "capacity" | "status"> = {
-  category: "conciertos",
-  startsAt: "2026-11-14T21:00:00-05:00",
-  venue: "Estadio Nacional",
-  city: "Lima",
-  imageUrl: "https://example.com/img.jpg",
-};
-
-// Los 4 eventos del mock del panel (Requisito 11).
-const synth: OrganizerEvent = { ...base, id: "evt-001", title: "Noche de Sintetizadores: Gira Neón 2026", priceFrom: 180, sold: 7420, capacity: 8000, status: "published" };
-const theatre: OrganizerEvent = { ...base, id: "evt-003", title: "La casa de los espejos", priceFrom: 120, sold: 312, capacity: 420, status: "published" };
-const circus: OrganizerEvent = { ...base, id: "evt-011", title: "El circo de las estrellas", priceFrom: 35, sold: 414, capacity: 1200, status: "published" };
-const draft: OrganizerEvent = { ...base, id: "org-draft-001", title: "Feria Familiar de Verano", priceFrom: 40, sold: 0, capacity: 1500, status: "draft" };
-const events = [synth, theatre, circus, draft];
-
-describe("getEventRevenue", () => {
-  it("multiplica vendidas por el precio desde en un evento publicado", () => {
-    expect(getEventRevenue(synth)).toBe(1_335_600);
-  });
-
-  it("da 0 en un borrador", () => {
-    expect(getEventRevenue({ ...draft, sold: 10 })).toBe(0);
-  });
-
-  it("da 0 si no hay precio", () => {
-    expect(getEventRevenue({ ...synth, priceFrom: null })).toBe(0);
-  });
-});
+const published = makeEvent("a", { sold: 120, revenueCents: 1_080_000 });
+const finished = makeEvent("b", { status: "finished", sold: 30, revenueCents: 270_050 });
+const review = makeEvent("c", { status: "pending_review" });
+const draft = makeEvent("d", { status: "draft", startsAt: null, capacity: 1500 });
+const events = [published, finished, review, draft];
 
 describe("getDashboardKpis", () => {
-  it("suma ingresos, vendidas y publicados del mock", () => {
-    expect(getDashboardKpis(events)).toEqual({ revenue: 1_387_530, ticketsSold: 8146, publishedCount: 3 });
+  it("suma los ingresos y las vendidas de la BD y cuenta solo los publicados", () => {
+    expect(getDashboardKpis(events)).toEqual({ revenueCents: 1_350_050, ticketsSold: 150, publishedCount: 1 });
   });
 
   it("da ceros con una lista vacía", () => {
-    expect(getDashboardKpis([])).toEqual({ revenue: 0, ticketsSold: 0, publishedCount: 0 });
+    expect(getDashboardKpis([])).toEqual({ revenueCents: 0, ticketsSold: 0, publishedCount: 0 });
   });
 });
 
@@ -58,22 +29,30 @@ describe("getSoldPercentage", () => {
   });
 });
 
-describe("filterOrganizerEvents", () => {
+describe("filterManagedEvents", () => {
   it("devuelve todos con all", () => {
-    expect(filterOrganizerEvents(events, "all")).toEqual(events);
+    expect(filterManagedEvents(events, "all")).toEqual(events);
   });
 
-  it("devuelve solo los publicados", () => {
-    expect(filterOrganizerEvents(events, "published")).toEqual([synth, theatre, circus]);
-  });
-
-  it("devuelve solo los borradores", () => {
-    expect(filterOrganizerEvents(events, "draft")).toEqual([draft]);
+  it.each([
+    ["published", [published]],
+    ["draft", [draft]],
+    ["pending_review", [review]],
+    ["cancelled", []],
+  ] as const)("devuelve solo los de estado %s", (status, expected) => {
+    expect(filterManagedEvents(events, status)).toEqual(expected);
   });
 });
 
 describe("formatCount", () => {
   it("usa el separador de miles de es-PE", () => {
     expect(formatCount(8146)).toBe("8,146");
+  });
+});
+
+describe("formatRevenue", () => {
+  it("pasa de céntimos a soles", () => {
+    expect(formatRevenue(1_350_050)).toBe("S/ 13,500.50");
+    expect(formatRevenue(0)).toBe("S/ 0.00");
   });
 });

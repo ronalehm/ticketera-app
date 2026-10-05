@@ -20,7 +20,7 @@ const organizerSection = (createEvent: string) => ({
   title: "Organizador",
   items: [
     "Resumen:/organizador",
-    "Mis eventos:coming-soon",
+    "Mis eventos:/organizador/eventos",
     `Crear evento:${createEvent}`,
     "Check-in:coming-soon",
     "Pagos:coming-soon",
@@ -60,6 +60,7 @@ describe("findNavItem", () => {
 
   it.each([
     ["/organizador", "Organizador", "Resumen"],
+    ["/organizador/eventos", "Organizador", "Mis eventos"],
     ["/organizador/eventos/nuevo", "Organizador", "Crear evento"],
     ["/admin/usuarios", "Administración", "Usuarios"],
     ["/admin/usuarios/", "Administración", "Usuarios"],
@@ -68,7 +69,7 @@ describe("findNavItem", () => {
   });
 
   it("devuelve null para rutas fuera del menú o sin página", () => {
-    expect(findNavItem("/organizador/eventos", adminNav)).toBeNull();
+    expect(findNavItem("/organizador/pagos", adminNav)).toBeNull();
     expect(findNavItem("/organizador/eventos/abc/editar", adminNav)).toBeNull();
     expect(findNavItem("/", adminNav)).toBeNull();
   });

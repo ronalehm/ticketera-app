@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Plus } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { OrganizerDashboard, getOrganizerEvents, savedStatusSchema } from "@/modules/organizer";
+import { roleCan } from "@/modules/auth/permissions";
+import { listManagedEvents } from "@/modules/events/server";
+import { CreateEventLink, OrganizerDashboard, savedStatusSchema } from "@/modules/organizer";
 import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
@@ -12,11 +10,12 @@ export const metadata: Metadata = {
 };
 
 export default async function OrganizerPage({ searchParams }: PageProps<"/organizador">) {
-  const { readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador" });
+  const { user, readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador" });
   const { guardado } = await searchParams;
   // Cualquier valor distinto de "publicado" | "borrador" (o repetido) da undefined: sin aviso.
   const saved = savedStatusSchema.parse(guardado);
-  const events = await getOrganizerEvents();
+  // Datos iniciales de la query de Resumen (todos los eventos que gestiona: los suyos o, si es admin, todos).
+  const events = await listManagedEvents(user);
 
   return (
     <div className="flex flex-col gap-8 md:gap-10">
@@ -26,20 +25,14 @@ export default async function OrganizerPage({ searchParams }: PageProps<"/organi
           <p className="text-base leading-relaxed text-muted-foreground">Así van las ventas de tus eventos.</p>
         </div>
         {/* Organizador no aprobado: sin "Crear evento" (el layout muestra el aviso de solo lectura). */}
-        {!readOnly && (
-          <Link
-            href="/organizador/eventos/nuevo"
-            className={cn(
-              buttonVariants(),
-              "h-11 w-full cursor-pointer gap-2 px-5 font-semibold duration-200 hover:bg-primary-strong md:w-auto",
-            )}
-          >
-            <Plus className="size-5" aria-hidden />
-            Crear evento
-          </Link>
-        )}
+        {!readOnly && <CreateEventLink />}
       </header>
-      <OrganizerDashboard initialEvents={events} saved={saved} />
+      <OrganizerDashboard
+        userId={user.id}
+        initialEvents={events}
+        saved={saved}
+        showOrganizer={roleCan(user.role, "events:manageAny")}
+      />
     </div>
   );
 }

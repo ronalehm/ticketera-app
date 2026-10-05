@@ -22,6 +22,7 @@ describe("PanelNav", () => {
     const organizer = screen.getByRole("list", { name: "Organizador" });
     expect(within(admin).getByRole("link", { name: "Usuarios" }).getAttribute("href")).toBe("/admin/usuarios");
     expect(within(organizer).getByRole("link", { name: "Resumen" }).getAttribute("href")).toBe("/organizador");
+    expect(within(organizer).getByRole("link", { name: "Mis eventos" }).getAttribute("href")).toBe("/organizador/eventos");
   });
 
   it("marca el enlace activo con aria-current y solo ese", () => {
@@ -30,6 +31,7 @@ describe("PanelNav", () => {
 
     expect(screen.getByRole("link", { name: "Crear evento" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Resumen" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Mis eventos" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("Próximamente no es un enlace y anuncia su estado (badge y texto sr-only)", () => {
@@ -40,8 +42,9 @@ describe("PanelNav", () => {
     expect(dashboard?.querySelector("a")).toBeNull();
     expect(dashboard?.querySelector("[aria-disabled]")).toBeNull();
     expect(dashboard?.textContent).toBe("DashboardPróximamente(no disponible)");
-    expect(screen.getAllByText("Próximamente")).toHaveLength(5);
-    expect(screen.getAllByText("(no disponible)")).toHaveLength(5);
+    // Dashboard, Organizadores, Check-in y Pagos ("Mis eventos" ya es un enlace desde F3).
+    expect(screen.getAllByText("Próximamente")).toHaveLength(4);
+    expect(screen.getAllByText("(no disponible)")).toHaveLength(4);
   });
 
   it("Crear evento en solo lectura para un organizador no aprobado", () => {

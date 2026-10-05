@@ -236,10 +236,10 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [x] Con el mismo `now`, dos corridas del seed dan el mismo estado.
 
 ### F3
-- [ ] Un organizador solo ve sus eventos y un admin ve todos.
-- [ ] Los KPIs cuentan solo órdenes `paid`.
-- [ ] Un `draft` muestra la capacidad configurada.
-- [ ] No quedan imports de `organizerEvents.mock.ts` para ventas.
+- [x] Un organizador solo ve sus eventos y un admin ve todos.
+- [x] Los KPIs cuentan solo órdenes `paid`.
+- [x] Un `draft` muestra la capacidad configurada.
+- [x] No quedan imports de `organizerEvents.mock.ts` para ventas.
 
 ### F4
 - [ ] Los 4 casos de `inviteUser` cubiertos con Clerk mockeado.
@@ -318,10 +318,10 @@ Coordinación:
 - [x] T4 — README: cómo ejecutar reset + seed
 
 ### F3 — Dashboard real
-- [ ] T1 — `listManagedEvents` con test de integración
-- [ ] T2 — Acción `listManagedEventsAction` + `app/providers.tsx` + `useManagedEvents`, con tests
-- [ ] T3 — `OrganizerDashboard`, `OrganizerKpis`, `OrganizerEventsTable` y `organizerStats` con datos reales; `/organizador/eventos`
-- [ ] T4 — Retiro de mocks y del store de lectura; nav "Mis eventos" activa
+- [x] T1 — `listManagedEvents` con test de integración
+- [x] T2 — Acción `listManagedEventsAction` + `app/providers.tsx` + `useManagedEvents`, con tests
+- [x] T3 — `OrganizerDashboard`, `OrganizerKpis`, `OrganizerEventsTable` y `organizerStats` con datos reales; `/organizador/eventos`
+- [x] T4 — Retiro de mocks y del store de lectura; nav "Mis eventos" activa
 
 ### F4 — Gestión de usuarios
 - [ ] T1 — `APP_URL` en `lib/env.ts` (+ test) y `.env.example`; `npx shadcn@latest add alert-dialog`

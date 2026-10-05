@@ -1,21 +1,19 @@
-import type { DashboardKpis, OrganizerEvent, OrganizerEventFilter } from "../types/organizer.types";
+import type { ManagedEvent } from "@/modules/events";
+import { formatEventPrice } from "@/modules/events/format";
+
+import type { DashboardKpis, ManagedEventsStatusFilter } from "../types/organizer.types";
 
 const countFormatter = new Intl.NumberFormat("es-PE");
 
-// Aproximación de maqueta (Decisión 10): ingresos = vendidas × precio desde. Un borrador no ha vendido nada.
-export function getEventRevenue(event: OrganizerEvent): number {
-  if (event.status === "draft") return 0;
-  return event.sold * (event.priceFrom ?? 0);
-}
-
-export function getDashboardKpis(events: OrganizerEvent[]): DashboardKpis {
+/** Suma ingresos y vendidas (ya calculados en la BD con órdenes `paid`) y cuenta los publicados. */
+export function getDashboardKpis(events: ManagedEvent[]): DashboardKpis {
   return events.reduce<DashboardKpis>(
     (kpis, event) => ({
-      revenue: kpis.revenue + getEventRevenue(event),
+      revenueCents: kpis.revenueCents + event.revenueCents,
       ticketsSold: kpis.ticketsSold + event.sold,
       publishedCount: kpis.publishedCount + (event.status === "published" ? 1 : 0),
     }),
-    { revenue: 0, ticketsSold: 0, publishedCount: 0 },
+    { revenueCents: 0, ticketsSold: 0, publishedCount: 0 },
   );
 }
 
@@ -25,11 +23,16 @@ export function getSoldPercentage(sold: number, capacity: number): number {
   return Math.min(100, Math.round((sold / capacity) * 100));
 }
 
-export function filterOrganizerEvents(events: OrganizerEvent[], filter: OrganizerEventFilter): OrganizerEvent[] {
+export function filterManagedEvents(events: ManagedEvent[], filter: ManagedEventsStatusFilter): ManagedEvent[] {
   if (filter === "all") return events;
   return events.filter((event) => event.status === filter);
 }
 
 export function formatCount(n: number): string {
   return countFormatter.format(n);
+}
+
+/** Céntimos → "S/ 1,234.50". */
+export function formatRevenue(cents: number): string {
+  return formatEventPrice(cents / 100);
 }

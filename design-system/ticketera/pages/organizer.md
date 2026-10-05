@@ -1,11 +1,12 @@
-# Página: panel `/organizador`, `/organizador/eventos/nuevo` y `/admin/usuarios`
+# Página: panel `/organizador`, `/organizador/eventos`, `/organizador/eventos/nuevo` y `/admin/usuarios`
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
+> Datos reales de Resumen y la página "Mis eventos" `/organizador/eventos` (KPIs de ventas brutas, badges de los 5 estados, filtro y búsqueda, TanStack Query): `docs/specs/admin-panel.md` (Fase 3). Prevalece sobre las reglas de ingresos y badges de `organizer-dashboard`.
 > Shell compartido por organizador y admin (route group `app/(panel)`, sidebar por rol de 264/76 px, "Próximamente", breadcrumb, solo lectura, `/admin/usuarios`): `docs/specs/admin-panel.md` (Fase 1). Prevalece sobre el layout, la navegación y la sesión de `layout-fullscreen-shells` (Fase 3) y de `organizer-dashboard`, y sobre su Decisión 2 (ítems sin página).
 > "Mis eventos" (tarjeta con barra de cabecera solo en `lg`) y la vista previa de Crear evento (anatomía de `EventCard`): `docs/specs/design-alignment-account-views.md` (Fase 2). Prevalece sobre el requisito 23 de `layout-fullscreen-shells` F3 y sobre la decisión 4 de `organizer-dashboard` (marcadores y badge "Disponible" de la vista previa).
 > Crear evento, modo de ubicación ("Mapa de asientos"), "Ciudad" como `Select`, portada obligatoria con guía y recortes, y "Descripción (opcional)" / "Máximo por compra" por tipo de entrada: `docs/specs/organizer-event-seating-mode.md` (Fase 1). Prevalece sobre `organizer-event-seating` y `organizer-dashboard` en esos puntos (subtítulo de "Tipos de entrada", ciudad de texto libre, portada opcional, "no se pide descripción por tipo").
 
-Back-office de Mentec Tickets, compartido por organizadores y administradores. El organizador ve cómo van las ventas de sus eventos (KPIs y lista) y crea eventos; el admin gestiona además usuarios. El acceso exige sesión y rol (`panel:access`); los datos de Resumen y Crear evento siguen siendo **mock** hasta las fases F3/F5a de `admin-panel` (los eventos creados solo existen en este navegador, `localStorage`, clave `mentec-organizer-events`). Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`, "Panel · Escritorio/Móvil") se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es el logo de Mentec Tickets con "Panel" debajo (`PanelBrand`, en el sidebar y en la barra móvil).
+Back-office de Mentec Tickets, compartido por organizadores y administradores. El organizador ve cómo van las ventas de sus eventos (KPIs y lista) y crea eventos; el admin gestiona además usuarios. El acceso exige sesión y rol (`panel:access`); Resumen y Mis eventos leen los eventos y sus ventas de la BD (`listManagedEvents`, F3 de `admin-panel`): el organizador ve los suyos y el admin, todos. Crear evento sigue guardando solo en este navegador (`localStorage`, clave `mentec-organizer-events`) hasta F5a, así que lo que se crea ahí todavía no aparece en Resumen ni en Mis eventos. Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`, "Panel · Escritorio/Móvil") se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es el logo de Mentec Tickets con "Panel" debajo (`PanelBrand`, en el sidebar y en la barra móvil).
 
 ## Layout común del panel (`app/(panel)`)
 
@@ -16,7 +17,7 @@ Back-office de Mentec Tickets, compartido por organizadores y administradores. E
 - `app/(panel)/layout.tsx` (Server Component, `LayoutProps<"/">`, metadata `robots: { index: false }`): `getPanelContext("panel:access", { returnTo: "/organizador" })` (`@/modules/panel/server`) exige el permiso y, si el rol es `organizer`, lee su estado (`approved | pending | suspended | null`). Con eso construye `sections = buildPanelNav(role, organizerStatus)` (serializables: clave, etiqueta, clave de icono, estado y `href`) y `roleLabel = getPanelRoleLabel(role)`, y los pasa a `PanelSidebar`, `PanelMobileBar` y `PanelBreadcrumb`.
 - `app/(panel)/admin/layout.tsx`: `requirePermission("users:manage", { returnTo: "/admin/usuarios" })`.
 - Redirecciones: un `customer` en `/organizador` o `/admin/**` va a `/`; un `organizer` en `/admin/**` va a `/organizador`. `proxy.ts` exige sesión en `/organizador(.*)` y `/admin(.*)`.
-- Las páginas que dependen del estado (`/organizador`, `/organizador/eventos/nuevo`) vuelven a llamar a `getPanelContext("events:manageOwn", …)`: layout y página se renderizan en paralelo y cada uno valida por su cuenta.
+- Las páginas del organizador (`/organizador`, `/organizador/eventos`, `/organizador/eventos/nuevo`) vuelven a llamar a `getPanelContext("events:manageOwn", …)`: layout y página se renderizan en paralelo y cada uno valida por su cuenta. Resumen y Mis eventos usan además su `user` para leer los eventos en el servidor.
 
 ### Escritorio (`lg+`)
 
@@ -31,7 +32,7 @@ Back-office de Mentec Tickets, compartido por organizadores y administradores. E
 │ ▥ Organizadores      [Próximamente]   │  │                                          │    │
 │ ORGANIZADOR                           │  │                                          │    │
 │ ▣ Resumen          (activo: bg-accent)│  │                                          │    │
-│ ▦ Mis eventos        [Próximamente]   │  │                                          │    │
+│ ▦ Mis eventos                         │  │                                          │    │
 │ + Crear evento     (o [Solo lectura]) │  │                                          │    │
 │ ⌗ Check-in           [Próximamente]   │  │                                          │    │
 │ ▭ Pagos              [Próximamente]   │  │                                          │    │
@@ -123,7 +124,7 @@ Sheet desde la izquierda (al pulsar ≡):
 | Sección | Visible para | Ítems (icono lucide) |
 |---|---|---|
 | **Administración** | `admin`, `super_admin` (`users:manage`) | Dashboard (`Gauge`, Próximamente) · Usuarios (`Users`, `/admin/usuarios`) · Organizadores (`Building2`, Próximamente) |
-| **Organizador** | `organizer`, `admin`, `super_admin` (`events:manageOwn`) | Resumen (`LayoutDashboard`, `/organizador`) · Mis eventos (`CalendarDays`, Próximamente hasta F3) · Crear evento (`Plus`, `/organizador/eventos/nuevo`; "Solo lectura" para un organizador no aprobado) · Check-in (`ScanLine`, Próximamente) · Pagos (`Wallet`, Próximamente) |
+| **Organizador** | `organizer`, `admin`, `super_admin` (`events:manageOwn`) | Resumen (`LayoutDashboard`, `/organizador`) · Mis eventos (`CalendarDays`, `/organizador/eventos`) · Crear evento (`Plus`, `/organizador/eventos/nuevo`; "Solo lectura" para un organizador no aprobado) · Check-in (`ScanLine`, Próximamente) · Pagos (`Wallet`, Próximamente) |
 
 - Un `customer` no ve ninguna sección (ni entra al panel). El estado de organizador solo afecta al rol `organizer`.
 - **`PanelNav`** (cliente): `<nav aria-label="Panel" className="flex flex-col gap-4">`; por sección, un título `<p>` (`px-3 pb-1 text-xs font-bold tracking-wider text-muted-foreground uppercase`) que nombra su `<ul aria-labelledby className="flex flex-col gap-1">`. Los iconos se resuelven en el cliente con un mapa clave → componente (las secciones llegan serializadas del servidor). Icono `size-5` `aria-hidden`.
@@ -180,7 +181,7 @@ Así van las ventas de tus eventos.
 [Alert de guardado]                                   (Fase 2, solo con ?guardado=)
 ┌──────────────┬──────────────┬──────────────┐
 │ ▥ Ingresos   │ ▤ Entradas   │ ▦ Eventos     │  <dl>; lg: 3 columnas
-│ S/ 1,387,530 │ vendidas 8,146│ publicados 3 │  móvil: Ingresos fila completa,
+│ S/ 13,500.50 │ vendidas 150 │ publicados 1  │  móvil: Ingresos fila completa,
 └──────────────┴──────────────┴──────────────┘  los otros dos en la siguiente
 lg: una sola tarjeta (bg-card rounded-2xl ring-1 ring-border overflow-hidden), sin relleno propio
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -210,28 +211,56 @@ h2 "Mis eventos"
   - **Barra de cabecera:** `<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between lg:border-b lg:px-6 lg:py-4">` con el h2 "Mis eventos" (`text-lg font-bold`, 18 px; antes `text-2xl md:text-3xl`) y el filtro a la derecha desde `md`. En `lg`, su `border-b` la separa de la tabla.
   - **Pista del filtro:** `bg-secondary` por debajo de `lg` (sobre `bg-muted` no se vería) y `bg-muted` en `lg` (dentro de la tarjeta blanca). El segmento elegido es `bg-background`.
 
-- Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`. No se muestra a un organizador no aprobado (solo lectura).
-- **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: el filtro no los cambia.
-- **Filtro**: `ToggleGroup` de selección única, `aria-label="Filtrar eventos por estado"`, control segmentado `rounded-lg bg-secondary p-1 lg:bg-muted`; items `h-11 px-4 text-muted-foreground`, seleccionado (`aria-pressed`) `bg-background font-semibold text-foreground shadow-sm`. Móvil: `grid grid-cols-3 w-full`; desde `md`, `flex w-fit`. Deseleccionar vuelve a "Todos".
+- **Datos** (F3 de `admin-panel`): la página lee en el servidor todos los eventos que gestiona el usuario (`listManagedEvents(user)`: los suyos o, para admin y super_admin, todos) y se los pasa a `OrganizerDashboard` como `initialEvents`. El cliente los gestiona con TanStack Query (`useManagedEvents({ status: "all", q: "" }, initialEvents)`, query key `["managed-events", filtros]`, compartida con Mis eventos): no se vuelven a pedir al hidratar (`staleTime` 30 s en `app/providers.tsx`). Ya no se lee el store de zustand ni hay datos mock.
+- Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" (`CreateEventLink`, compartido con Mis eventos) es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`. No se muestra a un organizador no aprobado (solo lectura).
+- **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: el filtro no los cambia. **Ingresos** = ventas brutas MVP (Decisión 10): suma de las órdenes `paid` (sin `refunded`, `partially_refunded`, `pending` ni `expired`); para un organizador, su parte (`organizer_amount_cents`); para el admin, el subtotal (`subtotal_cents`). **Entradas vendidas** = `ticket_count` de esas órdenes. **Eventos publicados** = eventos en estado `published`.
+- **Filtro** (en el cliente, sobre la lista ya cargada): `ToggleGroup` de selección única, `aria-label="Filtrar eventos por estado"`, control segmentado `rounded-lg bg-secondary p-1 lg:bg-muted`; items `h-11 px-4 text-muted-foreground`, seleccionado (`aria-pressed`) `bg-background font-semibold text-foreground shadow-sm`. Móvil: `grid grid-cols-3 w-full`; desde `md`, `flex w-fit`. Deseleccionar vuelve a "Todos".
 - **Lista** (Decisión 13): tabla en `lg` (`hidden lg:block`) y tarjetas por debajo (`lg:hidden`); `display:none` evita duplicados en el árbol de accesibilidad. Ambas nombradas por el h2 (`aria-labelledby`).
   - **Tabla a sangre** (`lg`): el contenedor es solo `hidden lg:block`, sin anillo, radio ni `overflow-hidden` propios (los pone la sección). `TableHeader` sin fondo; su fila, `hover:bg-transparent`.
   - **Cabecera:** "Evento", "Estado", "Vendidas" e "Ingresos" (esta alineada a la derecha) con `h-11 px-6 text-xs font-semibold tracking-wider text-muted-foreground uppercase`. El `px-6` alinea las columnas con el h2 de la barra de cabecera.
   - **Celdas:** `px-6 py-3.5`. Las filas conservan el `border-b` de shadcn; la última no lo tiene (`TableBody` de shadcn quita el borde a `tr:last-child`), así que la tarjeta termina sin línea doble.
-  - Celda Evento: `<th scope="row">` de peso normal (`h-auto w-full max-w-0`: ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla), miniatura `next/image` `size-12 rounded-lg object-cover` (`alt=""`), título `font-semibold truncate`, "fecha · ciudad" `text-sm text-muted-foreground`.
+  - Celda Evento: `<th scope="row">` de peso normal (`h-auto w-full max-w-0`: ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla), miniatura `next/image` `size-12 rounded-lg object-cover` (`alt=""`), título `font-semibold truncate`, "fecha · ciudad" `text-sm text-muted-foreground` (para admin y super_admin, "fecha · ciudad · organizador": razón social o, sin ella, el nombre del usuario).
   - Celda Vendidas: bloque `w-48 space-y-2` con el conteo y la barra. Celda Ingresos: `text-right font-semibold tabular-nums`.
   - **Tarjetas** (< `lg`): `<ul className="space-y-3 lg:hidden">`; cada `<li>` `space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border` (blanca con anillo sobre el `bg-muted` del panel). Contenido: miniatura + h3 (`line-clamp-2 leading-snug font-bold`) + "fecha · ciudad" + badge; debajo, vendidas e ingresos; al final, la barra.
   - **Sin columna de acción** (Decisión 3): sin "Ver ventas" ni "Editar" hasta que existan esas pantallas.
-- **Vacío por filtro:** `<p>` "No tienes eventos con este estado." con `rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0`. En `lg` es un bloque gris dentro de la tarjeta (con 24 px de margen); por debajo, un bloque blanco con anillo sobre el fondo gris del panel.
+- **Vacío:** `<p>` "Aún no tienes eventos." (filtro "Todos") o "No tienes eventos con este estado." con `rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0`. En `lg` es un bloque gris dentro de la tarjeta (con 24 px de margen); por debajo, un bloque blanco con anillo sobre el fondo gris del panel.
 
 ### Reglas específicas
 
-- **Badges de estado** (texto, nunca solo color): "Publicado" `bg-accent text-accent-foreground`; "Borrador" `bg-secondary text-secondary-foreground`.
-- **Avance de ventas**: "**7,420** / 8,000 vendidas" (`tabular-nums`) + `Progress` de shadcn con `value` = porcentaje entero 0–100, `aria-label="Entradas vendidas de <título>"` y `aria-valuetext` "7,420 de 8,000 vendidas" (`getAriaValueText`). Capacidad 0 → 0 %.
-- **Ingresos**: `formatEventPrice` (`S/ 1,335,600.00`) para publicados (vendidas × precio desde, aproximación de maqueta). Borradores: "—" `aria-hidden` + `sr-only` "Sin ingresos".
+- **Badges de estado** (texto, nunca solo color; `MANAGED_EVENT_STATUS_BADGE`, los 5 valores de `event_status`): "Borrador" `bg-secondary text-secondary-foreground`; "En revisión" `bg-warning text-warning-foreground`; "Publicado" `bg-accent text-accent-foreground`; "Cancelado" `bg-destructive text-foreground` (navy sobre rojo, como "Agotado"); "Finalizado" `border-border bg-background text-muted-foreground`.
+- **Avance de ventas**: "**7,420** / 8,000 vendidas" (`tabular-nums`) + `Progress` de shadcn con `value` = porcentaje entero 0–100, `aria-label="Entradas vendidas de <título>"` y `aria-valuetext` "7,420 de 8,000 vendidas" (`getAriaValueText`). Capacidad 0 → 0 %. **Capacidad**: fuera de `draft`, los `event_seats` sin retirar; en un borrador (aún sin inventario), la configurada: por cada tipo de entrada, la `capacity` de su sección general o los `venue_seats` de su sección numerada.
+- **Ingresos** por evento: `formatRevenue` (céntimos → `S/ 1,335,600.00`) con los ingresos de la BD (mismo cálculo que el KPI). Borradores: "—" `aria-hidden` + `sr-only` "Sin ingresos".
 - **Marcadores**: sin fecha → "Fecha por definir"; sin ciudad → se omite " · ciudad"; sin imagen → bloque `size-12 rounded-lg bg-muted` con `ImageIcon` `aria-hidden`.
 - Formatos: importes `S/ 1,387,530.00`, conteos `Intl.NumberFormat("es-PE")` (`8,146`), fechas `SÁB 14 NOV · 21:00`.
-- **Aviso de guardado** (Fase 2): `?guardado=publicado|borrador` (cualquier otro valor se ignora) muestra un `Alert` (`CircleCheck`) entre el encabezado y los KPIs: "Evento publicado" / "Borrador guardado".
+- **Aviso de guardado** (Fase 2): `?guardado=publicado|borrador` (cualquier otro valor se ignora) muestra un `Alert` (`CircleCheck`) entre el encabezado y los KPIs: "Evento publicado" / "Borrador guardado". Hasta F5a el evento creado solo vive en el navegador y no aparece todavía en la lista.
 - Metadata: `Panel de organizador | Mentec Tickets`.
+
+## Mis eventos `/organizador/eventos` (F3)
+
+```
+h1 "Mis eventos"                                     [+ Crear evento]
+Todos tus eventos, en cualquier estado: busca y filtra para encontrarlos.
+lg: una sola tarjeta (misma sección que Resumen)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ h2 "Listado"                                                        5 eventos   │  barra de cabecera px-6 py-4
+│ Estado                     Buscar                                               │
+│ [Todos los estados   ▾]    [⌕ Título, recinto o ciudad           ] [Buscar]      │
+├─────────────────────────────────────────────────────────────────────────────────┤  border-b
+│ EVENTO                       ESTADO       VENDIDAS              INGRESOS        │  misma tabla que Resumen
+│ …                                                                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+< lg: sin contenedor; controles apilados a todo el ancho y tarjetas como en Resumen
+```
+
+- Metadata: `Mis eventos | Mentec Tickets`. Breadcrumb "Organizador / Mis eventos"; en el menú, "Mis eventos" es un enlace (activo en esta ruta).
+- **Datos:** la página llama a `getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos" })` y a `listManagedEvents(user)` (sin filtros), y pasa el resultado a `OrganizerEventsList` (cliente) como `initialEvents`. Filtros y búsqueda se resuelven **en el servidor**: `useManagedEvents(filtros)` llama a la server action `listManagedEventsAction` (zod + `requirePermission("events:manageOwn")`). Los datos iniciales solo se usan con los filtros por defecto; al cambiar de filtros se mantiene la lista anterior (`aria-busy` en la sección) hasta que llega la nueva.
+- **Encabezado:** igual que Resumen (h1, párrafo y `CreateEventLink`, oculto en solo lectura).
+- **Barra de cabecera:** h2 "Listado" (`text-lg font-bold`) y, a la derecha, el número de resultados ("1 evento" / "N eventos", `text-sm text-muted-foreground tabular-nums`, `aria-live="polite"`). Debajo, en fila desde `md` (apilados por debajo):
+  - **Estado:** `Label` + `NativeSelect` (`h-11`, `md:w-52`, `bg-background`) con "Todos los estados" y los 5 estados (Borrador, En revisión, Publicado, Cancelado, Finalizado). Filtra al cambiar.
+  - **Buscar:** `<form role="search">` con `Label`, `Input type="search"` (`h-11`, lupa `Search` a la izquierda `aria-hidden`, placeholder "Título, recinto o ciudad", `maxLength` 100) y `Button variant="outline"` "Buscar" (`h-11`). Busca al enviar (Enter o botón), no por tecla: las server actions se despachan de una en una. Coincide con el título (sin distinguir mayúsculas) o con el título, recinto y ciudad sin tildes (`search_text`).
+- **Lista:** `OrganizerEventsTable` (misma tabla y tarjetas que Resumen, mismos badges y reglas), nombrada por el h2.
+- **Vacío:** "Aún no tienes eventos." (sin filtros) o "No hay eventos con estos filtros.", con las clases del vacío de Resumen.
+- **Error de carga:** `<p role="alert">` "No pudimos cargar los eventos. Inténtalo de nuevo." (`text-sm text-destructive`, bloque `bg-card rounded-2xl ring-1 ring-border p-4`) sobre la lista.
 
 ## Crear evento `/organizador/eventos/nuevo` (Fases 2 y 3)
 

@@ -45,7 +45,7 @@ export function buildPanelNav(role: PanelRole, organizerStatus: PanelOrganizerSt
       title: "Organizador",
       items: [
         { key: "summary", label: "Resumen", icon: "summary", state: "link", href: "/organizador" },
-        { key: "events", label: "Mis eventos", icon: "events", state: "coming-soon" },
+        { key: "events", label: "Mis eventos", icon: "events", state: "link", href: "/organizador/eventos" },
         readOnly
           ? { key: "create-event", label: "Crear evento", icon: "create", state: "read-only" }
           : { key: "create-event", label: "Crear evento", icon: "create", state: "link", href: "/organizador/eventos/nuevo" },

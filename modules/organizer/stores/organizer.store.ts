@@ -7,7 +7,8 @@ type OrganizerState = {
   addEvent: (event: OrganizerEvent) => void;
 };
 
-// skipHydration: la rehidratación la disparan OrganizerDashboard y OrganizerEventForm al montar, para no romper la hidratación SSR.
+// Solo lo usa el formulario de Crear evento hasta que persista en la BD (spec admin-panel F5a); el panel ya no lo lee.
+// skipHydration: la rehidratación la dispara OrganizerEventForm al montar, para no romper la hidratación SSR.
 export const useOrganizerStore = create<OrganizerState>()(
   persist(
     (set) => ({

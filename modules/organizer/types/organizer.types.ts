@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { ManagedEventsFilters } from "@/modules/events";
 import type {
   organizerEventFormSchema,
   organizerEventSchema,
@@ -10,8 +11,10 @@ import type {
 
 export type OrganizerEvent = z.infer<typeof organizerEventSchema>;
 export type OrganizerEventStatus = z.infer<typeof organizerEventStatusSchema>;
-export type OrganizerEventFilter = "all" | OrganizerEventStatus;
-export type DashboardKpis = { revenue: number; ticketsSold: number; publishedCount: number };
+/** Filtro de estado del panel: `all` o un estado de `event_status`. */
+export type ManagedEventsStatusFilter = ManagedEventsFilters["status"];
+/** KPIs de Resumen: ventas brutas MVP (órdenes `paid`, Decisión 10), entradas vendidas y eventos publicados. */
+export type DashboardKpis = { revenueCents: number; ticketsSold: number; publishedCount: number };
 
 /** "publicado" | "borrador" | undefined */
 export type SavedStatus = z.infer<typeof savedStatusSchema>;

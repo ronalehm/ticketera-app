@@ -1,54 +1,51 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { CircleCheck } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { ManagedEvent } from "@/modules/events";
 
-import { useOrganizerStore } from "../stores/organizer.store";
-import type { OrganizerEvent, OrganizerEventFilter, SavedStatus } from "../types/organizer.types";
-import { filterOrganizerEvents, getDashboardKpis } from "../utils/organizerStats";
+import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
+import type { ManagedEventsStatusFilter, SavedStatus } from "../types/organizer.types";
+import { filterManagedEvents, getDashboardKpis } from "../utils/organizerStats";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 import { OrganizerKpis } from "./OrganizerKpis";
 
-const FILTERS: { value: OrganizerEventFilter; label: string }[] = [
+const FILTERS: { value: ManagedEventsStatusFilter; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "published", label: "Publicados" },
   { value: "draft", label: "Borradores" },
 ];
 
+// Crear evento aún guarda en localStorage (hasta F5a): el evento no está en la BD ni, por tanto, en Mis eventos.
+const SAVED_DESCRIPTION =
+  "Aparecerá en Mis eventos cuando el alta de eventos se conecte a la base de datos (próximamente).";
+
 const SAVED_MESSAGES: Record<NonNullable<SavedStatus>, { title: string; description: string }> = {
-  publicado: {
-    title: "Evento publicado",
-    description: "Ya aparece en Mis eventos con el estado Publicado.",
-  },
-  borrador: {
-    title: "Borrador guardado",
-    description: "Lo encontrarás en Mis eventos con el estado Borrador.",
-  },
+  publicado: { title: "Evento guardado en este navegador", description: SAVED_DESCRIPTION },
+  borrador: { title: "Borrador guardado en este navegador", description: SAVED_DESCRIPTION },
 };
 
 type OrganizerDashboardProps = {
-  initialEvents: OrganizerEvent[];
+  /** Id del usuario de la sesión: separa la caché de cada usuario. */
+  userId: string;
+  /** Todos los eventos que gestiona el usuario (`listManagedEvents` en el servidor). */
+  initialEvents: ManagedEvent[];
   saved?: SavedStatus;
+  /** Muestra el organizador de cada evento (admin, que ve los de todos). */
+  showOrganizer?: boolean;
 };
 
-export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardProps) {
-  const [filter, setFilter] = useState<OrganizerEventFilter>("all");
+export function OrganizerDashboard({ userId, initialEvents, saved, showOrganizer }: OrganizerDashboardProps) {
+  const [filter, setFilter] = useState<ManagedEventsStatusFilter>("all");
   const headingId = useId();
-  const storeEvents = useOrganizerStore((state) => state.events);
+  // Resumen pide todos los eventos una vez: los KPIs los resumen todos y el filtro solo afecta a la lista.
+  const { data: events = initialEvents } = useManagedEvents(userId, DEFAULT_MANAGED_EVENTS_FILTERS, initialEvents);
 
-  // skipHydration: el servidor y el primer render del cliente parten de [] y los eventos guardados llegan tras montar.
-  useEffect(() => {
-    useOrganizerStore.persist.rehydrate();
-  }, []);
-
-  // Los creados (más recientes primero) van antes que los del mock.
-  const events = [...storeEvents, ...initialEvents];
-  // Los KPIs resumen todos los eventos; el filtro solo afecta a la lista.
   const kpis = getDashboardKpis(events);
-  const visible = filterOrganizerEvents(events, filter);
+  const visible = filterManagedEvents(events, filter);
   const savedMessage = saved ? SAVED_MESSAGES[saved] : null;
 
   return (
@@ -76,7 +73,7 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
             aria-label="Filtrar eventos por estado"
             value={[filter]}
             // Selección única: Base UI devuelve [] al deseleccionar; en ese caso vuelve a "Todos".
-            onValueChange={(value) => setFilter((value[0] as OrganizerEventFilter | undefined) ?? "all")}
+            onValueChange={(value) => setFilter((value[0] as ManagedEventsStatusFilter | undefined) ?? "all")}
             spacing={1}
             // La pista es bg-secondary sobre el bg-muted del panel y bg-muted dentro de la tarjeta blanca (lg).
             className="grid w-full grid-cols-3 rounded-lg bg-secondary p-1 md:flex md:w-fit lg:bg-muted"
@@ -94,10 +91,10 @@ export function OrganizerDashboard({ initialEvents, saved }: OrganizerDashboardP
         </div>
 
         {visible.length > 0 ? (
-          <OrganizerEventsTable events={visible} labelledBy={headingId} />
+          <OrganizerEventsTable events={visible} labelledBy={headingId} showOrganizer={showOrganizer} />
         ) : (
           <p className="rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0">
-            No tienes eventos con este estado.
+            {filter === "all" ? "Aún no tienes eventos." : "No tienes eventos con este estado."}
           </p>
         )}
       </section>

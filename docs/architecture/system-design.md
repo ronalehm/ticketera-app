@@ -20,7 +20,7 @@ Hoy la app es solo frontend, con datos mock:
 | Login / registro | `modules/auth` con `users.mock.ts` | `auth-login-register.md` |
 | Pago | **Stripe** (modo test, Payment Element); órdenes y entradas en la BD, confirmadas por el webhook | `checkout-stripe.md` |
 | Mis entradas | Lee las órdenes pagadas del usuario desde la BD; vincula las compras de invitado con su correo verificado | `tickets-my-tickets.md`, `checkout-stripe.md` |
-| Panel de organizador | `modules/organizer/data/organizerEvents.mock.ts` | `organizer-dashboard.md` |
+| Panel de organizador | BD vía `listManagedEvents` (admin-panel F3); Crear evento en localStorage hasta F5a | `organizer-dashboard.md`, `admin-panel.md` |
 
 Los services mantienen su firma; cada fase cambia el mock por la BD sin tocar la UI.
 
