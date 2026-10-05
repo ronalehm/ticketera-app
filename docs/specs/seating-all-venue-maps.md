@@ -929,7 +929,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
   - Archivos: `lib/db/seed/seed.ts`, `lib/db/seed/run.ts`, `lib/db/seed/seed.test.ts`.
   - Depende de: T1 (y T2, por la secuencia de la BD de test). Secuencial.
   - Verificar: `npx vitest run lib/db/seed`, sin BD y con BD.
-- [ ] T4. Cierre:
+- [x] T4. Cierre:
   - sección "Base de datos" del `README.md`;
   - suite completa sin BD y con BD;
   - reproducción de producción en `ticketera_dev` (requisito 25: `b90d48a` → `db:migrate` → `db:seed` ×2, con datos ajenos);
