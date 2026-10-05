@@ -103,6 +103,10 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   | Comedia (Arena 1) | Mesa y Preferencial (numeradas) y General de pie | 98° (41°–139°) |
   | Copa del Norte (Estadio Mansiche, herradura) | Popular y Oriente de pie · Occidente (numerada), las tres en la banda 102–296 | Popular 52° (64°–116°) · Oriente 54° (6°–60°) · Occidente 54° (120°–174°) |
   | Los Ecos del Sur (Teatro Municipal de Arequipa, agotado) | Platea (numerada, 102–250) y General, la galería, de pie (258–352); las dos agotadas, en gris | 90° (45°–135°) |
+  | Sol de Verano (Explanada Costa 21) | Preferencial (102–218, junto al escenario) y General (226–336), de pie · VIP de pie al fondo (344–456: lounge con "vista elevada") | 100° (40°–140°) · VIP 68° (56°–124°) |
+  | Arena y Mar (Playa Colán) | VIP (102–218, techada frente al escenario) y General (226–336), de pie | 100° (40°–140°) |
+  | Micro abierto (Centro Cultural Peruano Norteamericano) | Mesa (numerada, mesas para dos, 102–214) y General de pie (222–328) | 100° (40°–140°) |
+  | Sueños de una noche andina (Teatro Municipal de Cusco) | Preferencial (numerada, "primeras cinco filas", 102–232) y General de pie (240–340) | 90° (45°–135°) |
 
 - **Deportes (herradura):** la cancha es el sector del escenario (`PITCH_STAGE`: la misma forma y las mismas 7 luces, que hacen de reflectores, con la etiqueta "CANCHA"). Las tribunas laterales van a los lados (Oriente a la derecha, Occidente a la izquierda) y el fondo abajo (Popular), las tres en la misma banda de radios, con 4° entre vecinas. Las laterales del festival (40°, banda de 166) no sirven: a 375 px la fila del precio con la insignia no cabe en su banda; con 54° y radios 102–296 cabe.
 
@@ -115,7 +119,7 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
   - `low-stock`: píldora "Últimas entradas" `rounded-full bg-warning text-warning-foreground`, **solo desde `md`** (a 375 px no cabe; el estado sigue en la tarjeta y en el `aria-label`).
   - Con selección: insignia tras el precio `h-5 rounded-full bg-background ring-1 ring-border text-xs font-bold` con `Check` y el número de entradas o butacas elegidas.
   - **Sitio para las etiquetas en la arena** (`viewBox` 600 × 640): las bandas de pie miden 94–112 unidades (VIP 102–214, Preferencial 222–320, General 328–422) para que nombre y precio, y desde `md` la píldora de VIP, queden a ≥ 3 px del borde visible de su banda (radio ± 1.5 por el trazo blanco), y la insignia de selección a ≥ 0.5 px. Las etiquetas no se encogen: caben por geometría. Holgura mínima medida (Playwright, la menor de VIP, Preferencial y General; "sin selección / con la insignia ✓ 2"): 3.4 px (Preferencial y General) / 1.1 px (VIP y Preferencial) a 375, 20.4 / 18.4 px a 640, 11.6 / 11.6 px a 768, 3.7 / 3.7 px a 1024 (VIP, por la píldora: el mapa mide 461 px, limitado por su columna) y 9.8 / 9.8 px a 1440 (VIP). La píldora de VIP queda entera dentro de su banda: 18.3 px a 768, 6.4 px a 1024 y 15.7 px a 1440.
-  - **Sitio para las etiquetas en los demás recintos:** la holgura se mide igual, añadiendo en los sectores laterales los bordes radiales (rectas a `startAngle` y `endAngle`, menos 1.5 unidades por el trazo), desde las 4 esquinas y los 4 puntos medios de cada pieza (nombre, precio con su insignia y píldora). Holgura mínima medida (Playwright; "sin selección / con la insignia ✓ 2"; la menor de los 5 anchos, a 375 en todos los casos):
+  - **Sitio para las etiquetas en los demás recintos:** la holgura se mide igual, añadiendo en los sectores laterales los bordes radiales (rectas a `startAngle` y `endAngle`, menos 1.5 unidades por el trazo), desde las 4 esquinas y los 4 puntos medios de cada pieza (nombre, precio con su insignia y píldora). Holgura mínima medida (Playwright; "sin selección / con la insignia ✓ 2"; la menor de los 5 anchos, a 375 salvo donde se indica):
 
     | Recinto | Zona | Holgura (px) | Borde que la limita |
     |---|---|---|---|
@@ -124,8 +128,17 @@ Barra de color de las tarjetas de zona: `w-1.5 self-stretch rounded-full`, `aria
     | | Occidente | 8.4 / 3.8 | interior (nombre / precio con insignia) |
     | Los Ecos del Sur | General | 4.8 (agotada, sin insignia) | interior (nombre) |
     | | Platea | 16.8 (agotada, sin insignia) | interior (nombre) |
+    | Sol de Verano | General | 6.7 / 3.8 | interior (nombre) / exterior (precio con insignia) |
+    | | Preferencial | 5.5 (a 1024, con la píldora) / 3.0 | interior (nombre) / exterior (precio con insignia) |
+    | | VIP | 8.1 / 5.1 | interior (nombre) / exterior (precio con insignia) |
+    | Arena y Mar | General | 6.7 / 4.1 | interior (nombre) / exterior (precio con insignia) |
+    | | VIP | 5.8 / 3.4 | interior (nombre) / exterior (precio con insignia) |
+    | Micro abierto | General | 5.8 / 3.7 | interior (nombre) / exterior (precio con insignia) |
+    | | Mesa | 4.8 / 2.8 | interior (nombre) |
+    | Sueños de una noche andina | General | 4.3 / 2.3 | interior (nombre) |
+    | | Preferencial | 9.6 / 7.2 | interior (nombre) / exterior (precio con insignia) |
 
-    De 640 a 1440 todas superan los 15 px. Ninguna de estas zonas tiene hoy "Últimas entradas", así que no hay píldora que medir.
+    De 640 a 1440 todas superan los 14 px (la menor, General de Sueños a 1024: 14.3), salvo Preferencial de Sol de Verano a 1024 (5.5 px: el mapa mide 484 px, limitado por su columna, y el nombre sube por la píldora). Copa del Norte y Los Ecos del Sur no tienen "Últimas entradas". La píldora de Preferencial (`low-stock`) de Sol de Verano queda entera dentro de su banda desde `md`: 33.4 px a 768, 12.4 px a 1024 y 34.7 px a 1440 (borde exterior).
 
 ### Resaltado sincronizado mapa ↔ tarjetas
 
@@ -179,7 +192,7 @@ Dos variantes según la zona (los datos lo deciden):
 - **En arco** (con `planTransform`; las zonas numeradas de todos los mapas mock): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
 - **En cuadrícula** (sin `planTransform`; mapas sin geometría, hoy ninguno en el mock, y la vista previa del organizer, `SeatGridPreview`): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
 
-**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero), y también los cumple Occidente de Copa del Norte (6 filas de 4 a 9 butacas, `seatViewBox` 365 × 368: medido 27.3 px con el plano entero y 40.9 px tras un "Acercar"). Platea de Los Ecos del Sur (61 butacas, `seatViewBox` 508 × 280) sería un plano grande, pero está agotada y no se abre.
+**Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`; y Preferencial de Sueños de una noche andina). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero), y también los cumple Occidente de Copa del Norte (6 filas de 4 a 9 butacas, `seatViewBox` 365 × 368: medido 27.3 px con el plano entero y 40.9 px tras un "Acercar"). También los cumple Mesa de Micro abierto (3 filas de 6, 8 y 10 butacas, mesas para dos, `seatViewBox` 389 × 203: medido 25.6 px con el plano entero y 38.4 px tras un "Acercar"). Preferencial de Sueños de una noche andina ("primeras cinco filas": 5 filas de 6 a 13 butacas, 48, `seatViewBox` 470 × 254) es un plano grande: medido 21.2 px con el plano entero y 31.8 px tras un "Acercar". Platea de Los Ecos del Sur (61 butacas, `seatViewBox` 508 × 280) sería un plano grande, pero está agotada y no se abre.
 
 ### Estructura (de arriba abajo)
 
@@ -230,6 +243,8 @@ Tus asientos  [Tribuna Oriente · Fila C · Asiento 4 ×] …
     - El minimapa descuenta la franja de su recuadro (alto del lienzo − alto del `<svg>`, en `getVisiblePlanRect({ insetBottom })`).
     - Holgura mínima medida entre la pastilla y la caja de la butaca más cercana (área de toque de 32 × 32), con el plano entero a la vista, en las 6 zonas numeradas de los 4 mapas: 25.5 px a 375 (`norte-A-1`; la pastilla va en la barra), 41.2 px a 640 (`platea-H-5`), 18.8 px a 768 (`platea-H-4`), 31.7 px a 1024 (`norte-F-5`) y 29.2 px a 1440 (`platea-H-4`). Con las letras de fila: 25.7 px a 375 (Platea), 51.4 px a 640, 38.7 px a 768, 40.2 px a 1024 (Oriente) y 58.2 px a 1440. Sin solapes en ningún ancho.
     - Occidente de Copa del Norte (medido en los 5 anchos de Playwright): 49.1 px a 375 (`occidente-A-4`; en la barra), 106.4 px a 640, 123.2 px a 768, 81.3 px a 1024 y 159.3 px a 1440; con las letras, ≥ 35.6 px. Sin solapes.
+    - Mesa de Micro abierto (ídem): 46.9 px a 375 (`mesa-A-1`; en la barra), 69.1 px a 640, 64.2 px a 768, 54.6 px a 1024 y 86.6 px a 1440; con las letras, ≥ 44.2 px. Sin solapes.
+    - Preferencial de Sueños de una noche andina (ídem): 37.9 px a 375 (`preferencial-A-1`; en la barra), 51.8 px a 640, 38.0 px a 768 (`preferencial-E-4`), 40.0 px a 1024 y 61.7 px a 1440; con las letras, ≥ 36.5 px. Sin solapes.
     - Coste: con la franja, el plano entero a la vista es más pequeño (butaca de 15.5 px a 1024 y 17.7 px a 640, frente a 19.3 y 21.5 sin ella); se acerca con el zoom.
   - Con zoom, el paneo saca las butacas de debajo.
 - Es el mismo elemento en los dos anchos (no se duplica para lectores) y va **antes del plano en el orden de Tab**, en ambos anchos.
@@ -267,6 +282,7 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
     - **Resultado:** el festival (Oriente y Occidente, planos casi cuadrados) lo lleva superpuesto en todos los anchos, igual que antes; Norte, Platea, Mezanine y Preferencial, en la barra desde `sm` (su plano llega a la esquina, aunque en Platea las butacas no la tocaran).
     - Holgura mínima medida con el plano entero a la vista, de 640 a 1440 px (cada 20 px, y cada 4 px de 1000 a 1100), frente a la caja de la butaca más cercana (área de toque de 32 × 32) y a la de las letras de fila: superpuesto, 30.7 px (`occidente-J-9` a 1180) y 46.1 px con letras; en la barra queda fuera del lienzo (≥ 40.6 px, `norte-A-12` a 1024, y 41.8 px con letras). Sin solapes en ningún ancho. La pastilla no cambia (mínimo 16.9 px, `platea-H-4` a 1180). Con la Tribuna Norte de 40°, su minimapa (más alto, por el `viewBox` 600 × 640) mide 96 × 102 px y 112 × 119 px, y va en la barra en todos los anchos desde `sm`.
     - Occidente de Copa del Norte (plano casi cuadrado, como el festival): superpuesto desde `sm` en los 5 anchos de Playwright, con el minimapa de 96 × 61 px (lienzo estrecho) o 112 × 70 px (ancho); holgura mínima 63 px frente a las butacas (`occidente-F-9` a 1024) y 67.2 px frente a las letras. A 375, en la barra (56.3 px). Sin solapes.
+    - Mesa de Micro abierto y Preferencial de Sueños de una noche andina (planos apaisados): en la barra en los 5 anchos de Playwright, con el minimapa de 96 × 65 / 112 × 76 px (Mesa) y 96 × 67 / 112 × 78 px (Preferencial). Holgura mínima de 640 a 1440 frente a las butacas: 83.7 px (`mesa-A-6` a 1024) y 83.2 px (`preferencial-B-8` a 1024); frente a las letras, 72.4 y 74.4 px. A 375: 46.9 y 37.9 px. Sin solapes.
   - Por debajo de `sm`, a la izquierda de la barra sobre el lienzo, frente a la pastilla de zoom (96 × 68 px a 375).
   - `pointer-events-none`: es decorativo, así que con zoom no bloquea el paneo ni las butacas que quedan debajo.
 
