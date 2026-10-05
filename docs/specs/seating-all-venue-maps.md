@@ -976,7 +976,7 @@ Entregable por sí misma: la BD y el seed admiten mapas por evento, verificado c
   - Archivos: `modules/tickets/data/demoOrders.ts`, `modules/tickets/components/TicketCard.test.tsx`, `modules/checkout/services/checkout.service.test.ts`.
   - Depende de: Fase 3. En paralelo con T1.
   - Verificar sin BD `modules/tickets modules/checkout`.
-- [ ] T3. Cierre:
+- [x] T3. Cierre:
   - service con mapa propio por evento (requisito 16);
   - registro en el agregador;
   - tests de cierre (requisito 18);
