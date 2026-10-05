@@ -58,7 +58,7 @@ export const DEMO_ORDERS = [
         name: "Occidente",
         unitPrice: 220,
         quantity: 1,
-        seats: [{ id: "occidente-F-12", label: "Tribuna Occidente · Fila F · Asiento 12" }],
+        seats: [{ id: "occidente-F-4", label: "Occidente · Fila F · Asiento 4" }],
       },
     ],
     ticketCount: 1,
@@ -69,7 +69,7 @@ export const DEMO_ORDERS = [
       {
         code: "MT-3HX9RB-01",
         ticketTypeName: "Occidente",
-        seatLabel: "Tribuna Occidente · Fila F · Asiento 12",
+        seatLabel: "Occidente · Fila F · Asiento 4",
         holderName: "Ana Quispe",
       },
     ],

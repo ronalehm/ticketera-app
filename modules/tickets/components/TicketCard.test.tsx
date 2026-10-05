@@ -85,7 +85,7 @@ describe("TicketCard", () => {
   it("muestra Asiento solo si la entrada tiene seatLabel", () => {
     const seated = renderCard(SEATED);
     expect(detail(seated, "Zona")).toBe("Occidente");
-    expect(detail(seated, "Asiento")).toBe("Tribuna Occidente · Fila F · Asiento 12");
+    expect(detail(seated, "Asiento")).toBe("Occidente · Fila F · Asiento 4");
     cleanup();
 
     const unseated = renderCard(TWO_TICKETS);
@@ -124,7 +124,7 @@ describe("TicketCard", () => {
 
     const input = vi.mocked(downloadTicketsPdf).mock.calls[0][0];
     expect(input.orderCode).toBe("MT-3HX9RB");
-    expect(input.tickets.map(({ locationLabel }) => locationLabel)).toEqual(["Tribuna Occidente · Fila F · Asiento 12"]);
+    expect(input.tickets.map(({ locationLabel }) => locationLabel)).toEqual(["Occidente · Fila F · Asiento 4"]);
     await waitFor(() => expect(card.getByRole("button", { name: "Descargar PDF" }).getAttribute("aria-busy")).toBeNull());
   });
 

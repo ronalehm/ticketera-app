@@ -144,8 +144,8 @@ describeWithDb("checkout.service", () => {
 
     it("asientos en un evento sin mapa → invalid-tickets", async () => {
       expect(
-        await getCheckoutOrder({ evento: "clasico-del-pacifico", popular: "1", asientos: "popular-A-1" }),
-      ).toEqual({ status: "invalid-tickets", eventSlug: "clasico-del-pacifico" });
+        await getCheckoutOrder({ evento: "el-circo-de-las-estrellas", general: "1", asientos: "general-A-1" }),
+      ).toEqual({ status: "invalid-tickets", eventSlug: "el-circo-de-las-estrellas" });
     });
 
     it("resolveCheckoutOrder con seatIds por defecto sigue igual: líneas sin seats", async () => {
