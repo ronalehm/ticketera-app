@@ -36,6 +36,34 @@ npm run dev        # http://localhost:3000
 | `npx vitest run [ruta]` | Ejecuta los tests una vez (todo, un módulo o un archivo) |
 | `npx shadcn@latest add <componente>` | Añade un componente de shadcn/ui a `components/ui/` |
 
+## Base de datos
+
+Postgres con Drizzle. La conexión sale de `DATABASE_URL` (y `DATABASE_URL_UNPOOLED` para migrar y sembrar) en `.env`.
+
+| Comando | Qué hace |
+|---|---|
+| `npm run db:migrate` | Aplica solo las migraciones pendientes de `drizzle/`, cada una en su transacción. Todas son aditivas: no borran ni reescriben datos. |
+| `npm run db:seed` | Crea los datos demo que faltan y actualiza solo lo que el seed posee: la geometría de los mapas y el inventario demo. No borra nada y se puede repetir: una 2.ª ejecución escribe 0 filas. Al terminar imprime un informe por tabla (filas escritas, lugares retirados y lugares obsoletos con venta real, que no se tocan). |
+| `npm run db:generate -- --name <nombre>` | Genera una migración nueva a partir de los cambios en `lib/db/schema/`. |
+
+**En producción** el procedimiento es solo este, **sin vaciar la BD**:
+
+```sh
+npm run db:migrate && npm run db:seed
+```
+
+- El inventario no se borra: los lugares demo que el layout ya no tiene se **retiran** (`event_seats.retired_at`), conservan su historial y dejan de venderse y contarse.
+- El seed nunca toca un lugar vendido o retenido por un pedido real, ni los datos de negocio (títulos, precios, fechas, usuarios, pedidos reales).
+
+**Regla para migraciones nuevas:**
+
+- se generan con `npm run db:generate -- --name <nombre>`; las ya publicadas en `main` no se editan;
+- son **aditivas**: `CREATE`, `ADD COLUMN` nula o con `DEFAULT`, `ADD CONSTRAINT`, índices, `DROP NOT NULL`, y `DROP CONSTRAINT` solo si la misma migración la vuelve a crear;
+- no llevan `DROP TABLE/COLUMN/TYPE/SCHEMA/EXTENSION/SEQUENCE/VIEW`, `TRUNCATE`, `DELETE`, `UPDATE`, `RENAME` ni `ALTER COLUMN … TYPE`;
+- si una restricción nueva no la cumplieran los datos existentes, la migración falla entera (transacción) y no destruye nada.
+
+`lib/db/migrations.test.ts` comprueba esta regla en cada `drizzle/*.sql`.
+
 ## Estructura
 
 ```
