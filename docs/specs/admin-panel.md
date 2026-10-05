@@ -1,7 +1,7 @@
 # Panel admin + organizador: seguridad, seed limpio, datos reales, usuarios y eventos
 
 - Módulo: panel (con cambios en auth, organizer, events, users y lib/db)
-- Estado: aprobado
+- Estado: borrador
 
 ## Objetivo
 Convertir `/organizador` (hoy casi todo mock, sin control de rol) en un panel de back-office real y compartido por organizadores y administradores, con:
@@ -214,6 +214,17 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
    6. `COMMIT`.
    - Un segundo clic espera el lock y no genera nada; un fallo hace rollback de todo.
 3. **Cambios sensibles** (Decisión 11): precio, zonas, recinto y fecha solo sin órdenes `paid` ni `pending` vigentes. Se actualiza `system-design.md`.
+4. **Requisitos para enviar a revisión y para aprobar:** ambos exigen `starts_at > now()` y los campos que pide `events_draft_complete_check` (recinto, descripción, portada, `starts_at`, `doors_open_at`), además de al menos un tipo de entrada. Si falta algo, el mensaje dice qué.
+5. **Orden de los tipos de entrada:** es el de la sección dentro del recinto. El usuario no lo elige.
+6. **Portadas en las vistas públicas** (decisión del usuario): toda imagen de portada de evento se renderiza con `next/image` `unoptimized`, en tarjeta, carrusel, detalle, compra, checkout y "Mis entradas". Así se acepta cualquier URL `https` sin abrir `remotePatterns`. Las imágenes estáticas propias del sitio siguen optimizadas.
+
+### Enmiendas a fases ya implementadas (decisiones del usuario; se implementan en F5b)
+7. **Capacidad (modifica F3.1):** `draft` y `pending_review` muestran la capacidad configurada en secciones y tipos de entrada. Desde `published`, se cuentan los `event_seats` no retirados.
+8. **`db:reset-demo` (modifica F2.1):**
+   - El inventario de los eventos que no son del seed se libera en vez de borrarse: `status 'available'`, `order_id` NULL, `held_until` NULL. Así un evento creado en el panel conserva su inventario.
+   - El inventario de los eventos del seed se borra y se regenera, como hasta ahora.
+   - Se mantiene lo ya implementado y que ahora queda documentado aquí: se vacía también `refund_requests`, por su FK a `orders`, y el reset aborta sin tocar nada si algún `consent` o `complaint` apunta a una orden.
+9. **`db:seed` (modifica F2.3 y F2.4):** no desplaza la fecha de un evento demo que tenga órdenes `paid` o `pending` vigentes, igual que la Decisión 11. El informe del seed lista los eventos que conservaron su fecha.
 
 ## Criterios de aceptación
 
@@ -260,6 +271,11 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [ ] Dos aprobaciones concurrentes dejan el mismo número de `event_seats`, incluidos los generales.
 - [ ] Cancelar con ventas está bloqueado.
 - [ ] Los cambios sensibles están bloqueados con órdenes `pending` vigentes.
+- [ ] Enviar a revisión y aprobar fallan con fecha pasada o con datos incompletos, y el mensaje dice qué falta.
+- [ ] Un evento publicado con portada de un dominio distinto de Unsplash se ve en la tarjeta, el detalle y el checkout.
+- [ ] Un evento `pending_review` muestra la capacidad configurada.
+- [ ] Tras `db:reset-demo`, un evento que no es del seed conserva su inventario, todo `available`.
+- [ ] `db:seed` no cambia la fecha de un evento demo con una orden `paid`.
 
 ## Diseño técnico (F1)
 - **`modules/auth`:**
@@ -337,11 +353,11 @@ Coordinación:
 - [x] T4 — Retiro del store zustand de creación
 
 ### F5b — Moderación, publicación e inventario
-- [ ] T1 — Reglas de transición (util pura) con test tabla
-- [ ] T2 — `submitForReview`, `approveEvent` (transacción con lock e inventario), `rejectEvent` y `cancelEvent`, con tests de integración (incluida la doble aprobación concurrente)
-- [ ] T3 — Bloqueo de cambios sensibles con órdenes `paid` o `pending` vigentes, con test
-- [ ] T4 — UI de moderación (acciones por estado en Mis eventos)
-- [ ] T5 — `system-design.md` (regla de precios y transiciones)
+- [ ] T1 — Reglas de transición (util pura, test tabla) + `submitForReview`, `approveEvent` (transacción con lock e inventario), `rejectEvent` y `cancelEvent`, con tests de integración (incluida la doble aprobación concurrente y los requisitos del punto 4)
+- [ ] T2 — Bloqueo de cambios sensibles con órdenes `paid` o `pending` vigentes, con test
+- [ ] T3 — UI de moderación (acciones por estado en Mis eventos)
+- [ ] T4 — `system-design.md` (regla de precios y transiciones) y portadas `unoptimized` en las vistas públicas
+- [ ] T5 — Enmiendas 7–9: capacidad de `pending_review` en `listManagedEvents`, inventario liberado en `db:reset-demo`, fechas fijas con ventas en `db:seed`; con tests
 
 ## Preguntas abiertas
 Ninguna: el plan quedó aprobado por el usuario antes de redactar la spec.
