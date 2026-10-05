@@ -5,13 +5,13 @@ import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/eve
 import { organizers, users } from "@/lib/db/schema/identity";
 import { legalDocuments } from "@/lib/db/schema/legal";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
+import { normalizeText, slugify } from "@/lib/text";
 // Excepción documentada (spec data-foundation, Decisión 15; auth-clerk, Decisión 13): el seed es tooling y lee
 // internals de los módulos.
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { eventDetailSchema } from "@/modules/events/schemas/events.schema";
-import { normalizeText } from "@/modules/events/utils/eventFilters";
 import { LEGAL_DOCUMENTS_MOCK } from "@/modules/legal/data/legalDocuments.mock";
 import { legalDocumentSchema } from "@/modules/legal/schemas/legal.schema";
 import { ORGANIZER_DRAFTS_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
@@ -67,11 +67,6 @@ export function seedUuid(key: string): string {
   const hex = bytes.toString("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
-
-const toKebab = (text: string) =>
-  normalizeText(text)
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
 
 const toCents = (price: number) => Math.round(price * 100);
 
@@ -340,7 +335,7 @@ export function buildSeedData({ superAdminId, organizers: seedOrganizers, now }:
     if (!draft.startsAt || !draft.imageUrl || draft.priceFrom === null) {
       throw new Error(`El borrador "${draft.title}" necesita fecha, imagen y precio para sembrarse`);
     }
-    const slug = toKebab(draft.title);
+    const slug = slugify(draft.title);
     const eventId = seedUuid(`event:${slug}`);
     const { id: draftVenueId, mapViewBox, mapStage } = venueId(draft.venue, draft.city, "Por confirmar", undefined);
     const startsAt = shiftDate(draft.startsAt);

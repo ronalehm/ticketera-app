@@ -1,9 +1,9 @@
-import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { OrganizerEventForm } from "@/modules/organizer";
+import { roleCan } from "@/modules/auth/permissions";
+import { EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
+import { listApprovedOrganizers, listApprovedVenuesWithSections } from "@/modules/organizer/server";
 import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
@@ -11,23 +11,20 @@ export const metadata: Metadata = {
 };
 
 export default async function CreateOrganizerEventPage() {
-  const { readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos/nuevo" });
+  const { user, readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos/nuevo" });
   // Un organizador pendiente o suspendido no crea eventos.
   if (readOnly) redirect("/organizador");
+  // Admin y super_admin eligen el organizador dueño entre los aprobados.
+  const manageAny = roleCan(user.role, "events:manageAny");
+  const [venues, organizers] = await Promise.all([
+    listApprovedVenuesWithSections(),
+    manageAny ? listApprovedOrganizers() : undefined,
+  ]);
 
   return (
     <div className="flex flex-col gap-8 md:gap-10">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/organizador"
-          className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Volver al resumen
-        </Link>
-        <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">Crear evento</h1>
-      </div>
-      <OrganizerEventForm />
+      <EventFormHeader title="Crear evento" />
+      <OrganizerEventForm userId={user.id} venues={venues} organizers={organizers} />
     </div>
   );
 }

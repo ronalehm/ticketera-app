@@ -1,14 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
-import { CircleCheck } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ManagedEvent } from "@/modules/events";
 
 import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
-import type { ManagedEventsStatusFilter, SavedStatus } from "../types/organizer.types";
+import type { ManagedEventsStatusFilter } from "../types/organizer.types";
 import { filterManagedEvents, getDashboardKpis } from "../utils/organizerStats";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 import { OrganizerKpis } from "./OrganizerKpis";
@@ -19,26 +17,16 @@ const FILTERS: { value: ManagedEventsStatusFilter; label: string }[] = [
   { value: "draft", label: "Borradores" },
 ];
 
-// Crear evento aún guarda en localStorage (hasta F5a): el evento no está en la BD ni, por tanto, en Mis eventos.
-const SAVED_DESCRIPTION =
-  "Aparecerá en Mis eventos cuando el alta de eventos se conecte a la base de datos (próximamente).";
-
-const SAVED_MESSAGES: Record<NonNullable<SavedStatus>, { title: string; description: string }> = {
-  publicado: { title: "Evento guardado en este navegador", description: SAVED_DESCRIPTION },
-  borrador: { title: "Borrador guardado en este navegador", description: SAVED_DESCRIPTION },
-};
-
 type OrganizerDashboardProps = {
   /** Id del usuario de la sesión: separa la caché de cada usuario. */
   userId: string;
   /** Todos los eventos que gestiona el usuario (`listManagedEvents` en el servidor). */
   initialEvents: ManagedEvent[];
-  saved?: SavedStatus;
   /** Muestra el organizador de cada evento (admin, que ve los de todos). */
   showOrganizer?: boolean;
 };
 
-export function OrganizerDashboard({ userId, initialEvents, saved, showOrganizer }: OrganizerDashboardProps) {
+export function OrganizerDashboard({ userId, initialEvents, showOrganizer }: OrganizerDashboardProps) {
   const [filter, setFilter] = useState<ManagedEventsStatusFilter>("all");
   const headingId = useId();
   // Resumen pide todos los eventos una vez: los KPIs los resumen todos y el filtro solo afecta a la lista.
@@ -46,18 +34,9 @@ export function OrganizerDashboard({ userId, initialEvents, saved, showOrganizer
 
   const kpis = getDashboardKpis(events);
   const visible = filterManagedEvents(events, filter);
-  const savedMessage = saved ? SAVED_MESSAGES[saved] : null;
 
   return (
     <div className="space-y-8 md:space-y-10">
-      {savedMessage && (
-        <Alert className="px-4 py-3">
-          <CircleCheck aria-hidden />
-          <AlertTitle className="font-bold">{savedMessage.title}</AlertTitle>
-          <AlertDescription>{savedMessage.description}</AlertDescription>
-        </Alert>
-      )}
-
       <OrganizerKpis {...kpis} />
 
       {/* Tarjeta con barra de cabecera solo en lg; por debajo, h2, filtro y tarjetas van directamente sobre el bg-muted del panel. */}

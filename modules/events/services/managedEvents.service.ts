@@ -8,11 +8,11 @@ import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
+import { normalizeText } from "@/lib/text";
 import { roleCan } from "@/modules/auth/permissions";
 import type { SessionUser } from "@/modules/auth/server";
 import { managedEventSchema } from "../schemas/managedEvents.schema";
 import type { ManagedEvent, ManagedEventsFilters } from "../types/events.types";
-import { normalizeText } from "../utils/eventFilters";
 
 type Actor = Pick<SessionUser, "id" | "role">;
 type Queryable = Pick<typeof db, "select">;

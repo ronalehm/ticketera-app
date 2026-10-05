@@ -251,9 +251,9 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [x] Una invitación manual aterriza en `<APP_URL>/registro`.
 
 ### F5a
-- [ ] Un admin no puede crear un evento sin elegir organizador.
-- [ ] Un organizador `pending` o `suspended` no puede mutar.
-- [ ] Borrar un evento que no es `draft` falla.
+- [x] Un admin no puede crear un evento sin elegir organizador.
+- [x] Un organizador `pending` o `suspended` no puede mutar.
+- [x] Borrar un evento que no es `draft` falla.
 
 ### F5b
 - [ ] Tabla de transiciones cubierta.
@@ -331,10 +331,10 @@ Coordinación:
 - [x] T5 — Correcciones de la revisión de F4 (si las hay)
 
 ### F5a — CRUD de borradores
-- [ ] T1 — Schemas zod del evento (recinto, ticket types por sección, URL de portada) con test
-- [ ] T2 — Servicio y acciones `createEvent`/`updateEvent`/`deleteEvent` con permisos y dueño, con tests de integración
-- [ ] T3 — `OrganizerEventForm` contra la BD (Selects de organizador y recinto); rutas nuevo/editar
-- [ ] T4 — Retiro del store zustand de creación
+- [x] T1 — Schemas zod del evento (recinto, ticket types por sección, URL de portada) con test
+- [x] T2 — Servicio y acciones `createEvent`/`updateEvent`/`deleteEvent` con permisos y dueño, con tests de integración
+- [x] T3 — `OrganizerEventForm` contra la BD (Selects de organizador y recinto); rutas nuevo/editar
+- [x] T4 — Retiro del store zustand de creación
 
 ### F5b — Moderación, publicación e inventario
 - [ ] T1 — Reglas de transición (util pura) con test tabla

@@ -64,16 +64,10 @@ describe("OrganizerDashboard", () => {
     expect(within(finished).getByText("S/ 900.00")).toBeTruthy();
   });
 
-  it.each([
-    ["borrador", "Borrador guardado en este navegador"],
-    ["publicado", "Evento guardado en este navegador"],
-  ] as const)("el aviso de guardado (%s) dice que aún no está en Mis eventos", (saved, title) => {
-    renderDashboard({ saved });
-    const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain(title);
-    expect(alert.textContent).toContain(
-      "Aparecerá en Mis eventos cuando el alta de eventos se conecte a la base de datos (próximamente).",
-    );
+  it("no tiene acciones por fila (se editan desde Mis eventos)", () => {
+    renderDashboard();
+    expect(screen.queryByRole("link", { name: /Editar/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Eliminar/ })).toBeNull();
   });
 
   it("sin eventos lo dice", () => {

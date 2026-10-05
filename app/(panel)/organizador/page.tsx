@@ -2,18 +2,15 @@ import type { Metadata } from "next";
 
 import { roleCan } from "@/modules/auth/permissions";
 import { listManagedEvents } from "@/modules/events/server";
-import { CreateEventLink, OrganizerDashboard, savedStatusSchema } from "@/modules/organizer";
+import { CreateEventLink, OrganizerDashboard } from "@/modules/organizer";
 import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
   title: "Panel de organizador | Mentec Tickets",
 };
 
-export default async function OrganizerPage({ searchParams }: PageProps<"/organizador">) {
+export default async function OrganizerPage() {
   const { user, readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador" });
-  const { guardado } = await searchParams;
-  // Cualquier valor distinto de "publicado" | "borrador" (o repetido) da undefined: sin aviso.
-  const saved = savedStatusSchema.parse(guardado);
   // Datos iniciales de la query de Resumen (todos los eventos que gestiona: los suyos o, si es admin, todos).
   const events = await listManagedEvents(user);
 
@@ -30,7 +27,6 @@ export default async function OrganizerPage({ searchParams }: PageProps<"/organi
       <OrganizerDashboard
         userId={user.id}
         initialEvents={events}
-        saved={saved}
         showOrganizer={roleCan(user.role, "events:manageAny")}
       />
     </div>

@@ -1,14 +1,12 @@
-// Se ejecuta en el cliente: sin valores del barrel de events, solo sus entradas `format` y `purchase` y tipos (Decisión 17).
+// Se ejecuta en el cliente: sin valores del barrel de events, solo su entrada `format` y tipos (Decisión 17).
 import { z } from "zod";
 import type { EventCategory } from "@/modules/events";
-import { CITIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
-import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
+import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 // Record<EventCategory, string> garantiza por tipo que estén todas las claves; el test lo compara con EVENT_CATEGORIES.
 export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]];
 
-export const organizerEventStatusSchema = z.enum(["published", "draft"]);
-
+// Borradores de ejemplo del seed (`ORGANIZER_DRAFTS_MOCK`): los valida `buildSeedData` antes de sembrarlos.
 export const organizerEventSchema = z.object({
   id: z.string(),
   title: z.string().min(1),
@@ -16,101 +14,34 @@ export const organizerEventSchema = z.object({
   startsAt: z.iso.datetime({ offset: true }).nullable(), // null: borrador sin fecha/hora
   venue: z.string(),
   city: z.string(),
-  imageUrl: z.url().nullable(), // null: evento creado (imagen no persistida)
+  imageUrl: z.url().nullable(),
   priceFrom: z.number().nonnegative().nullable(), // null: sin precios válidos
   sold: z.number().int().nonnegative(),
   capacity: z.number().int().nonnegative(),
-  status: organizerEventStatusSchema,
+  status: z.enum(["published", "draft"]),
 });
 
-// Query param `guardado` de /organizador: cualquier otro valor (o un array) se ignora.
-export const savedStatusSchema = z.enum(["publicado", "borrador"]).optional().catch(undefined);
+// Query param `guardado` de Mis eventos (F5a: solo se guardan borradores). Cualquier otro valor (o un array) se ignora.
+export const savedStatusSchema = z.enum(["borrador"]).optional().catch(undefined);
 
 // Valores de `<input type="date">` ("YYYY-MM-DD", fecha de calendario real) y `<input type="time">` ("HH:MM").
 export const formDateSchema = z.iso.date();
 export const formTimeSchema = z.iso.time({ precision: -1 });
 
-// Límites de una zona numerada (decisión 4): los usan el schema, las utils, los textos de ayuda y los `max` de los inputs.
-export const SEAT_GRID_LIMITS = { maxRows: 30, maxSeatsPerRow: 60 } as const;
-
-// Mismos valores que `VenueZoneLayout.kind` de seating (decisión 13).
-export const ticketTypeKindSchema = z.enum(["general", "numbered"]);
-
-// Modo de ubicación del evento: los valores de `kind` más "mixed" (sin asientos, con mapa o mixto).
-export const seatingModeSchema = z.enum(["general", "numbered", "mixed"]);
-
-export const TICKET_DESCRIPTION_MAX_LENGTH = 150;
-
-// Reglas de la portada: las usan la validación del archivo (`getCoverImageError`) y los textos de ayuda.
-export const COVER_IMAGE_RULES = { maxBytes: 5 * 1024 * 1024, minWidth: 1200, minHeight: 675 } as const;
-
-/** Texto no vacío (con trim) que es un entero entre 1 y `max`. `abort` deja un único mensaje por campo vacío. */
-function intInRange(empty: string, invalid: string, max: number) {
-  return z
-    .string()
-    .trim()
-    .min(1, { error: empty, abort: true })
-    .refine((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= max, invalid);
-}
-
-const ticketTypeBase = {
-  id: z.string(),
-  name: z.string().trim().min(1, "Ingresa el nombre del tipo de entrada"),
-  price: z
-    .string()
-    .trim()
-    .min(1, { error: "Ingresa el precio", abort: true })
-    .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, "El precio debe ser 0 o mayor"),
-  description: z
-    .string()
-    .trim()
-    .max(
-      TICKET_DESCRIPTION_MAX_LENGTH,
-      `La descripción debe tener como máximo ${TICKET_DESCRIPTION_MAX_LENGTH} caracteres`,
-    ),
-  // Mismo tope que la compra (MAX_TICKETS_PER_ORDER), para no contradecir lo que ve quien compra.
-  maxPerOrder: intInRange(
-    "Ingresa el máximo por compra",
-    `El máximo por compra debe ser un número entero entre 1 y ${MAX_TICKETS_PER_ORDER}`,
-    MAX_TICKETS_PER_ORDER,
-  ),
-};
-
-// Reglas de una fila de tipo de entrada al publicar. Solo se validan los campos del tipo elegido (decisión 7):
-// una zona general ignora `rows`/`seatsPerRow` y una numerada ignora `quantity`.
-export const ticketTypeFormSchema = z.discriminatedUnion("kind", [
-  z.object({
-    ...ticketTypeBase,
-    kind: z.literal("general"),
-    quantity: z
-      .string()
-      .trim()
-      .min(1, { error: "Ingresa la cantidad", abort: true })
-      .refine((v) => Number.isInteger(Number(v)) && Number(v) >= 1, "La cantidad debe ser un número entero mayor o igual a 1"),
-    rows: z.string(),
-    seatsPerRow: z.string(),
-  }),
-  z.object({
-    ...ticketTypeBase,
-    kind: z.literal("numbered"),
-    quantity: z.string(),
-    rows: intInRange(
-      "Ingresa el número de filas",
-      `Las filas deben ser un número entero entre 1 y ${SEAT_GRID_LIMITS.maxRows}`,
-      SEAT_GRID_LIMITS.maxRows,
-    ),
-    seatsPerRow: intInRange(
-      "Ingresa los asientos por fila",
-      `Los asientos por fila deben ser un número entero entre 1 y ${SEAT_GRID_LIMITS.maxSeatsPerRow}`,
-      SEAT_GRID_LIMITS.maxSeatsPerRow,
-    ),
-  }),
-]);
-
 // Edad mínima (decisión 10): mismo formato que el detalle del evento (`minAge === 0 ? "Todo público" : "+n"`).
 export const MIN_AGE_LABELS = { "0": "Todo público", "12": "+12", "14": "+14", "16": "+16", "18": "+18" } as const;
 type MinAgeOption = keyof typeof MIN_AGE_LABELS;
 export const MIN_AGE_OPTIONS = Object.keys(MIN_AGE_LABELS) as [MinAgeOption, ...MinAgeOption[]];
+const MAX_LISTED_MIN_AGE = Number(MIN_AGE_OPTIONS[MIN_AGE_OPTIONS.length - 1]);
+
+/**
+ * Edad mínima del formulario: una de la lista o, para conservar la de un evento guardado con una restricción mayor que
+ * la última de la lista (p. ej. +21), una edad de dos cifras mayor que ella. Nunca se rebaja una restricción guardada.
+ */
+const minAgeSchema = z.union([
+  z.enum(MIN_AGE_OPTIONS),
+  z.string().regex(/^\d{2}$/).refine((age) => Number(age) > MAX_LISTED_MIN_AGE),
+]);
 
 // "en-CA" formatea como YYYY-MM-DD, comparable como string con el valor del input date.
 const limaDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" });
@@ -119,108 +50,123 @@ export function getTodayInLima(): string {
   return limaDateFormatter.format(new Date());
 }
 
-const REQUIRED_ON_PUBLISH = {
-  description: "Agrega una descripción del evento",
-  organizer: "Indica el nombre del organizador",
-  venue: "Indica el lugar del evento",
-  address: "Indica la dirección del lugar",
+/** Límites de los textos del borrador: los usan el schema y los `maxLength` de los inputs. */
+export const EVENT_DRAFT_LIMITS = {
+  title: 100,
+  description: 2000,
+  imageUrl: 2000,
+  ticketTypeName: 100,
+  /** Precio máximo de un tipo de entrada, en soles. */
+  maxPrice: 100_000,
 } as const;
 
-// Un solo schema para borrador y publicación (Decisión 8): el borrador solo exige el nombre.
-// El superRefine se ejecuta aunque falle el nombre (los checks de zod 4 no abortan), así que se ven todos los errores a la vez.
-export const organizerEventFormSchema = z
-  .object({
-    intent: z.enum(["draft", "publish"]),
-    name: z.string().trim().min(1, "Ingresa el nombre del evento"),
-    category: z.enum(EVENT_CATEGORY_OPTIONS),
-    minAge: z.enum(MIN_AGE_OPTIONS), // se valida también en borrador; desde el Select nunca falla
-    description: z.string(),
-    organizer: z.string(),
-    date: z.string(), // "YYYY-MM-DD" o ""
-    time: z.string(), // "HH:MM" o ""
-    doorsOpen: z.string(), // "HH:MM" o ""; mismo día que el evento (decisión 11)
-    venue: z.string(),
-    city: z.string(), // "" o un valor de CITIES (Select)
-    address: z.string(),
-    seatingMode: z.union([z.literal(""), seatingModeSchema]), // "": aún sin elegir (sin valor por defecto)
-    // La portada (File) vive fuera del estado del formulario; esto solo indica si hay una válida.
-    hasCoverImage: z.boolean(),
-    // Fila "cruda" del formulario: sus reglas (ticketTypeFormSchema) solo se aplican al publicar.
-    ticketTypes: z
-      .array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          price: z.string(),
-          description: z.string(),
-          maxPerOrder: z.string(),
-          kind: ticketTypeKindSchema,
-          quantity: z.string(),
-          rows: z.string(),
-          seatsPerRow: z.string(),
-        }),
-      )
-      .min(1),
-  })
-  .superRefine((data, ctx) => {
-    if (data.intent === "draft") return;
+/** Precio en soles con hasta 2 decimales ("50", "49.9", "120.00"). */
+const PRICE_PATTERN = /^\d+(\.\d{1,2})?$/;
 
-    for (const [field, message] of Object.entries(REQUIRED_ON_PUBLISH)) {
-      if (data[field as keyof typeof REQUIRED_ON_PUBLISH].trim() === "") ctx.addIssue({ code: "custom", path: [field], message });
+const MESSAGES = {
+  title: "Ingresa el nombre del evento",
+  titleTooLong: `El nombre admite hasta ${EVENT_DRAFT_LIMITS.title} caracteres`,
+  descriptionTooLong: `La descripción admite hasta ${EVENT_DRAFT_LIMITS.description} caracteres`,
+  date: "Elige una fecha válida",
+  dateMissing: "Elige la fecha del evento",
+  time: "Indica la hora de inicio",
+  doorsOpen: "Indica una hora de apertura válida",
+  doorsOpenWithoutStart: "Indica primero la fecha y la hora de inicio",
+  doorsOpenAfterStart: "La apertura de puertas debe ser a la hora de inicio o antes",
+  venue: "Elige un recinto de la lista",
+  venueForTickets: "Elige el recinto para vender entradas",
+  organizer: "Elige el organizador del evento",
+  organizerInvalid: "Elige un organizador de la lista",
+  imageUrl: "Ingresa una URL válida que empiece por https://",
+  imageUrlTooLong: `La URL admite hasta ${EVENT_DRAFT_LIMITS.imageUrl} caracteres`,
+  duplicateSection: "Cada sección del recinto solo puede tener un tipo de entrada",
+  ticketTypeName: "Ingresa el nombre del tipo de entrada",
+  ticketTypeNameTooLong: `El nombre admite hasta ${EVENT_DRAFT_LIMITS.ticketTypeName} caracteres`,
+  price: "Ingresa el precio",
+  priceInvalid: "El precio debe ser un número de 0 o más, con hasta 2 decimales",
+  priceTooHigh: `El precio no puede superar S/ ${EVENT_DRAFT_LIMITS.maxPrice.toLocaleString("en-US")}`,
+} as const;
+
+/** Portada (Decisión 5): URL absoluta con protocolo `https`. */
+export const coverImageUrlSchema = z.url({ protocol: /^https$/, hostname: z.regexes.domain, error: MESSAGES.imageUrl });
+
+/** Fila de tipo de entrada: una por sección del recinto. Solo las marcadas (`selected`) se venden y se validan. */
+export const eventDraftTicketTypeSchema = z.object({
+  sectionId: z.uuid("Sección no válida"),
+  selected: z.boolean(),
+  name: z.string().trim(),
+  price: z.string().trim(),
+});
+
+/** Mensajes de una fila marcada para vender, por campo. Vacío si es válida (o si no está marcada). */
+export function getTicketTypeRowErrors(row: z.input<typeof eventDraftTicketTypeSchema>): { name?: string; price?: string } {
+  if (!row.selected) return {};
+  const name = row.name.trim();
+  const price = row.price.trim();
+  const errors: { name?: string; price?: string } = {};
+  if (!name) errors.name = MESSAGES.ticketTypeName;
+  else if (name.length > EVENT_DRAFT_LIMITS.ticketTypeName) errors.name = MESSAGES.ticketTypeNameTooLong;
+  if (!price) errors.price = MESSAGES.price;
+  else if (!PRICE_PATTERN.test(price)) errors.price = MESSAGES.priceInvalid;
+  else if (Number(price) > EVENT_DRAFT_LIMITS.maxPrice) errors.price = MESSAGES.priceTooHigh;
+  return errors;
+}
+
+const eventDraftShape = {
+  title: z.string().trim().min(1, MESSAGES.title).max(EVENT_DRAFT_LIMITS.title, MESSAGES.titleTooLong),
+  category: z.enum(EVENT_CATEGORY_OPTIONS),
+  minAge: minAgeSchema,
+  description: z.string().trim().max(EVENT_DRAFT_LIMITS.description, MESSAGES.descriptionTooLong),
+  date: z.string().trim(), // "YYYY-MM-DD" o ""
+  time: z.string().trim(), // "HH:MM" o ""
+  doorsOpen: z.string().trim(), // "HH:MM" o ""; mismo día que el evento
+  venueId: z.union([z.literal(""), z.uuid(MESSAGES.venue)]),
+  // Solo cuenta para admin y super_admin (lo eligen en un Select); para un organizador se ignora: el dueño es él.
+  organizerId: z.string().trim(),
+  imageUrl: z.string().trim().max(EVENT_DRAFT_LIMITS.imageUrl, MESSAGES.imageUrlTooLong),
+  ticketTypes: z.array(eventDraftTicketTypeSchema),
+};
+
+/**
+ * Borrador de evento (spec admin-panel, F5a): valida el formulario y la entrada de `createEventAction`/`updateEventAction`.
+ * Solo el nombre es obligatorio; el resto puede faltar, pero lo que se indique tiene que ser válido (una fecha sin hora,
+ * una portada `http` o una sección marcada sin precio no se guardan). `requireOrganizer` (admin y super_admin) exige
+ * elegir el organizador dueño. Las comprobaciones de la BD (recinto aprobado, secciones del recinto, organizador
+ * aprobado) las hace el servicio. La salida se convierte con `toEventDraftInput`.
+ */
+export function createEventDraftSchema({ requireOrganizer }: { requireOrganizer: boolean }) {
+  return z.object(eventDraftShape).superRefine((data, ctx) => {
+    const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path, message });
+
+    const isDateValid = data.date !== "" && formDateSchema.safeParse(data.date).success;
+    const isTimeValid = data.time !== "" && formTimeSchema.safeParse(data.time).success;
+    if (data.date !== "" && !isDateValid) issue(["date"], MESSAGES.date);
+    if (data.date === "" && data.time !== "") issue(["date"], MESSAGES.dateMissing);
+    if ((data.date !== "" || data.time !== "") && !isTimeValid) issue(["time"], MESSAGES.time);
+
+    if (data.doorsOpen !== "") {
+      // "HH:MM" se compara como string. La misma hora que el inicio es válida.
+      if (!formTimeSchema.safeParse(data.doorsOpen).success) issue(["doorsOpen"], MESSAGES.doorsOpen);
+      else if (!isDateValid || !isTimeValid) issue(["doorsOpen"], MESSAGES.doorsOpenWithoutStart);
+      else if (data.doorsOpen > data.time) issue(["doorsOpen"], MESSAGES.doorsOpenAfterStart);
     }
 
-    // Solo las ciudades del filtro público, para que el evento publicado sea filtrable (decisión 6).
-    if (!(CITIES as readonly string[]).includes(data.city)) {
-      ctx.addIssue({ code: "custom", path: ["city"], message: "Elige la ciudad" });
+    if (data.imageUrl !== "" && !coverImageUrlSchema.safeParse(data.imageUrl).success) {
+      issue(["imageUrl"], MESSAGES.imageUrl);
     }
 
-    if (!data.hasCoverImage) {
-      ctx.addIssue({ code: "custom", path: ["hasCoverImage"], message: "Sube la imagen de portada" });
+    if (requireOrganizer) {
+      if (data.organizerId === "") issue(["organizerId"], MESSAGES.organizer);
+      else if (!z.uuid().safeParse(data.organizerId).success) issue(["organizerId"], MESSAGES.organizerInvalid);
     }
 
-    if (data.seatingMode === "") {
-      ctx.addIssue({ code: "custom", path: ["seatingMode"], message: "Elige cómo se ubica el público" });
-    } else if (
-      data.seatingMode === "mixed" &&
-      !(data.ticketTypes.some((row) => row.kind === "general") && data.ticketTypes.some((row) => row.kind === "numbered"))
-    ) {
-      // El error va en el selector de modo, que recibe el foco y dice cómo corregirlo (decisión 4).
-      ctx.addIssue({
-        code: "custom",
-        path: ["seatingMode"],
-        message: "Un evento mixto necesita al menos una zona general (de pie) y una numerada",
-      });
-    }
-
-    if (data.date === "") {
-      ctx.addIssue({ code: "custom", path: ["date"], message: "Elige la fecha del evento" });
-    } else if (!formDateSchema.safeParse(data.date).success) {
-      ctx.addIssue({ code: "custom", path: ["date"], message: "Elige una fecha válida" });
-    } else if (data.date < getTodayInLima()) {
-      ctx.addIssue({ code: "custom", path: ["date"], message: "La fecha no puede ser anterior a hoy" });
-    }
-
-    const isTimeValid = formTimeSchema.safeParse(data.time).success;
-    if (!isTimeValid) {
-      ctx.addIssue({ code: "custom", path: ["time"], message: "Indica la hora de inicio" });
-    }
-
-    // "HH:MM" se compara como string. La misma hora que el inicio es válida.
-    if (!formTimeSchema.safeParse(data.doorsOpen).success) {
-      ctx.addIssue({ code: "custom", path: ["doorsOpen"], message: "Indica la hora de apertura de puertas" });
-    } else if (isTimeValid && data.doorsOpen > data.time) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["doorsOpen"],
-        message: "La apertura de puertas debe ser a la hora de inicio o antes",
-      });
-    }
-
+    const sectionIds = data.ticketTypes.map((row) => row.sectionId);
+    if (new Set(sectionIds).size !== sectionIds.length) issue(["ticketTypes"], MESSAGES.duplicateSection);
+    if (data.venueId === "" && data.ticketTypes.some((row) => row.selected)) issue(["venueId"], MESSAGES.venueForTickets);
     data.ticketTypes.forEach((row, index) => {
-      const result = ticketTypeFormSchema.safeParse(row);
-      if (result.success) return;
-      for (const issue of result.error.issues) {
-        ctx.addIssue({ code: "custom", path: ["ticketTypes", index, ...issue.path], message: issue.message });
+      for (const [field, message] of Object.entries(getTicketTypeRowErrors(row))) {
+        issue(["ticketTypes", index, field], message);
       }
     });
   });
+}

@@ -1,31 +1,65 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import type { ComponentProps } from "react";
 
-import { Button } from "@/components/ui/button";
-import { FieldLegend, FieldSet } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
-import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 
-import { TICKET_DESCRIPTION_MAX_LENGTH } from "../schemas/organizer.schema";
-import type { SeatingMode, TicketTypeRow, TicketTypeRowErrors } from "../types/organizer.types";
-import { createTicketTypeRow, formatTicketCount, getNewRowKind, getTicketCapacity } from "../utils/organizerEventForm";
-import {
-  FORM_CONTROL_SCROLL,
-  TicketTypeCapacityFields,
-  TicketTypeInputField,
-  ticketTypeInputId,
-} from "./TicketTypeCapacityFields";
+import { EVENT_DRAFT_LIMITS } from "../schemas/organizer.schema";
+import type { TicketTypeRow, TicketTypeRowErrors, VenueSectionOption } from "../types/organizer.types";
+import { formatTicketCount, getSelectedCapacity } from "../utils/organizerEventForm";
+import { FORM_CONTROL_SCROLL, FORM_INPUT_CLASS } from "./formStyles";
 
-// Se define junto a los campos de la fila (sin import circular) y se reexporta para el resto del formulario.
-export { FORM_CONTROL_SCROLL };
+type RowField = keyof TicketTypeRowErrors;
 
-const ROW_GRID_CLASS = "grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]";
+/** Id de un control de la fila; el mismo esquema para sus campos (y su `-error`). */
+const rowControlId = (sectionId: string, field: RowField | "selected") => `ticket-type-${sectionId}-${field}`;
+
+type RowInputProps = {
+  sectionId: string;
+  field: RowField;
+  label: string;
+  value: string;
+  error?: string;
+  disabled: boolean;
+  onValueChange: (value: string) => void;
+  onBlur: () => void;
+  inputProps: ComponentProps<"input">;
+};
+
+/** Campo editable de una fila: etiqueta visible y error con id y su a11y (patrón del formulario). */
+function RowInput({ sectionId, field, label, value, error, disabled, onValueChange, onBlur, inputProps }: RowInputProps) {
+  const id = rowControlId(sectionId, field);
+  return (
+    <Field data-invalid={!!error} data-disabled={disabled}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        {...inputProps}
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onValueChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={FORM_INPUT_CLASS}
+      />
+      <FieldError id={`${id}-error`}>{error}</FieldError>
+    </Field>
+  );
+}
+
+function capacityLabel({ seating, capacity }: VenueSectionOption): string {
+  return seating === "general" ? `${formatCount(capacity)} lugares de pie` : `${formatCount(capacity)} asientos numerados`;
+}
 
 type TicketTypesFieldProps = {
-  /** Modo de ubicación del evento: sin elegir no hay filas; "Mixto" muestra "Ubicación" en cada fila. */
-  mode: SeatingMode | "";
+  /** Secciones del recinto elegido, en orden; `null` mientras no haya recinto. */
+  sections: VenueSectionOption[] | null;
+  /** Una fila por sección (mismo orden que `sections`). */
   rows: TicketTypeRow[];
   /** Errores por fila; `null` mientras el formulario no tenga errores en los tipos de entrada. */
   errors: TicketTypeRowErrors[] | null;
@@ -33,147 +67,89 @@ type TicketTypesFieldProps = {
   onBlur: () => void;
 };
 
-export function TicketTypesField({ mode, rows, errors, onChange, onBlur }: TicketTypesFieldProps) {
-  const addButtonRef = useRef<HTMLButtonElement>(null);
-  // Fila recién agregada: su campo "Nombre" recibe el foco cuando ya está en el DOM.
-  const rowToFocusRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!rowToFocusRef.current) return;
-    document.getElementById(ticketTypeInputId(rowToFocusRef.current, "name"))?.focus();
-    rowToFocusRef.current = null;
-  }, [rows]);
-
-  function updateRow(id: string, patch: Partial<TicketTypeRow>) {
-    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+/**
+ * Tipos de entrada por sección del recinto (spec admin-panel, F5a): cada sección se vende o no ("Vender entradas en
+ * esta sección") con su nombre (por defecto, el de la sección) y su precio. La capacidad la fija el recinto.
+ */
+export function TicketTypesField({ sections, rows, errors, onChange, onBlur }: TicketTypesFieldProps) {
+  if (!sections) {
+    return <p className="text-sm text-muted-foreground">Elige el recinto para configurar los tipos de entrada.</p>;
+  }
+  if (sections.length === 0) {
+    return <p className="text-sm text-muted-foreground">Este recinto aún no tiene secciones configuradas.</p>;
   }
 
-  function addRow() {
-    const row = createTicketTypeRow(getNewRowKind(mode));
-    rowToFocusRef.current = row.id;
-    onChange([...rows, row]);
-  }
-
-  function removeRow(id: string) {
-    addButtonRef.current?.focus();
-    onChange(rows.filter((row) => row.id !== id));
-  }
-
-  // Sin modo, las filas siguen en el estado pero no se muestran: el modo decide su tipo (decisión 2).
-  if (mode === "") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Elige arriba cómo se ubica el público para configurar los tipos de entrada.
-      </p>
-    );
+  function updateRow(sectionId: string, patch: Partial<TicketTypeRow>) {
+    onChange(rows.map((row) => (row.sectionId === sectionId ? { ...row, ...patch } : row)));
   }
 
   return (
     <div className="flex flex-col gap-4">
       {rows.map((row, index) => {
-        const number = index + 1;
+        const section = sections.find((candidate) => candidate.id === row.sectionId);
+        if (!section) return null;
         const rowErrors = errors?.[index] ?? {};
+        const headingId = `ticket-type-${row.sectionId}-heading`;
+        const selectedId = rowControlId(row.sectionId, "selected");
         return (
-          // `min-w-0`: un <fieldset> tiene `min-inline-size: min-content` y se ensancharía hasta el plano.
-          <FieldSet key={row.id} className="relative min-w-0 gap-4 rounded-xl p-4 ring-1 ring-border">
-            {/* Absoluto: un <legend> en flujo se dibuja sobre el borde del fieldset e ignora su padding. */}
-            <FieldLegend variant="label" className="absolute top-4 left-4 mb-0 flex h-11 items-center font-semibold">
-              Tipo {number}
-            </FieldLegend>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Quitar tipo de entrada ${number}`}
-              disabled={rows.length === 1}
-              onClick={() => removeRow(row.id)}
-              className={cn(
-                "size-11 cursor-pointer self-end text-muted-foreground hover:text-destructive",
-                FORM_CONTROL_SCROLL,
-              )}
-            >
-              <Trash2 aria-hidden className="size-5" />
-            </Button>
-
-            <div className={ROW_GRID_CLASS}>
-              <TicketTypeInputField
-                rowId={row.id}
+          // Grupo con nombre (la sección): los campos de cada fila se distinguen para lectores de pantalla.
+          <div
+            key={row.sectionId}
+            role="group"
+            aria-labelledby={headingId}
+            className="flex min-w-0 flex-col gap-4 rounded-xl p-4 ring-1 ring-border has-data-checked:ring-primary/40"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 id={headingId} className="font-semibold">
+                {section.name}
+              </h3>
+              <p className="text-sm text-muted-foreground tabular-nums">{capacityLabel(section)}</p>
+            </div>
+            <Field orientation="horizontal" className="min-h-11 items-center">
+              <Checkbox
+                id={selectedId}
+                checked={row.selected}
+                onCheckedChange={(selected) => {
+                  updateRow(row.sectionId, { selected });
+                  onBlur();
+                }}
+                className={cn("cursor-pointer", FORM_CONTROL_SCROLL)}
+              />
+              <FieldLabel htmlFor={selectedId} className="cursor-pointer font-normal">
+                Vender entradas en esta sección
+              </FieldLabel>
+            </Field>
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]">
+              <RowInput
+                sectionId={row.sectionId}
                 field="name"
-                label="Nombre"
+                label="Nombre del tipo de entrada"
                 value={row.name}
                 error={rowErrors.name}
-                onValueChange={(name) => updateRow(row.id, { name })}
+                disabled={!row.selected}
+                onValueChange={(name) => updateRow(row.sectionId, { name })}
                 onBlur={onBlur}
-                inputProps={{ placeholder: "Ej. General", maxLength: 100 }}
+                inputProps={{ placeholder: section.name, maxLength: EVENT_DRAFT_LIMITS.ticketTypeName }}
               />
-              <TicketTypeInputField
-                rowId={row.id}
+              <RowInput
+                sectionId={row.sectionId}
                 field="price"
                 label="Precio (S/)"
                 value={row.price}
                 error={rowErrors.price}
-                onValueChange={(price) => updateRow(row.id, { price })}
+                disabled={!row.selected}
+                onValueChange={(price) => updateRow(row.sectionId, { price })}
                 onBlur={onBlur}
-                inputProps={{ type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0" }}
+                inputProps={{ type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0.00" }}
               />
             </div>
-
-            <div className={ROW_GRID_CLASS}>
-              <TicketTypeInputField
-                rowId={row.id}
-                field="description"
-                label="Descripción (opcional)"
-                value={row.description}
-                description="Se muestra bajo el nombre al elegir entradas."
-                error={rowErrors.description}
-                onValueChange={(description) => updateRow(row.id, { description })}
-                onBlur={onBlur}
-                inputProps={{
-                  placeholder: "Ej. Campo de pie, sin ubicación asignada.",
-                  maxLength: TICKET_DESCRIPTION_MAX_LENGTH,
-                }}
-              />
-              <TicketTypeInputField
-                rowId={row.id}
-                field="maxPerOrder"
-                label="Máximo por compra"
-                value={row.maxPerOrder}
-                description={`Entradas de este tipo en una misma compra (1 a ${MAX_TICKETS_PER_ORDER}).`}
-                error={rowErrors.maxPerOrder}
-                onValueChange={(maxPerOrder) => updateRow(row.id, { maxPerOrder })}
-                onBlur={onBlur}
-                inputProps={{ type: "number", inputMode: "numeric", min: 1, max: MAX_TICKETS_PER_ORDER, step: 1 }}
-              />
-            </div>
-
-            <TicketTypeCapacityFields
-              row={row}
-              showKind={mode === "mixed"}
-              errors={rowErrors}
-              onChange={(patch) => updateRow(row.id, patch)}
-              onBlur={onBlur}
-            />
-          </FieldSet>
+          </div>
         );
       })}
 
-      <Button
-        ref={addButtonRef}
-        type="button"
-        variant="outline"
-        onClick={addRow}
-        className={cn(
-          "h-11 w-full cursor-pointer border-dashed border-primary/40 font-semibold text-primary-strong duration-200 sm:w-fit",
-          FORM_CONTROL_SCROLL,
-        )}
-      >
-        <Plus aria-hidden className="size-5" />
-        Agregar tipo de entrada
-      </Button>
-
       <div className="flex items-center justify-between border-t pt-4 text-sm">
-        <span className="text-muted-foreground">Capacidad total</span>
-        <span className="font-semibold tabular-nums">{formatTicketCount(getTicketCapacity(rows))}</span>
+        <span className="text-muted-foreground">Capacidad a la venta</span>
+        <span className="font-semibold tabular-nums">{formatTicketCount(getSelectedCapacity(rows, sections))}</span>
       </div>
     </div>
   );

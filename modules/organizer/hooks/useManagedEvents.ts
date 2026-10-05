@@ -8,11 +8,13 @@ import { listManagedEventsAction } from "../actions/managedEvents.actions";
 export const DEFAULT_MANAGED_EVENTS_FILTERS: ManagedEventsFilters = { status: "all", q: "" };
 
 /**
- * Query key de los eventos del panel: única para Resumen y Mis eventos (comparten caché con los mismos filtros). Incluye
+ * Query keys de los eventos del panel: única para Resumen y Mis eventos (comparten caché con los mismos filtros). Incluye
  * el usuario: tras cerrar sesión y entrar con otra cuenta en la misma pestaña, nunca se sirven los datos del anterior.
+ * Las mutaciones de borradores invalidan todas las del usuario (`managedEventsBaseKey`).
  */
+export const managedEventsBaseKey = (userId: string) => ["managed-events", userId] as const;
 export const managedEventsQueryKey = (userId: string, filters: ManagedEventsFilters) =>
-  ["managed-events", userId, filters] as const;
+  [...managedEventsBaseKey(userId), filters] as const;
 
 /**
  * Eventos que gestiona el usuario `userId` con `filters`. `initialData` (los que trae el servidor) solo debe pasarse

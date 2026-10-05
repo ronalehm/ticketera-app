@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { ImageIcon } from "lucide-react";
 
@@ -18,6 +19,8 @@ type OrganizerEventsTableProps = {
   labelledBy: string;
   /** Muestra el organizador de cada evento (admin, que ve los de todos). */
   showOrganizer?: boolean;
+  /** Acciones de cada fila (Mis eventos); sin ella no hay columna de acciones. `null` para una fila sin acciones. */
+  rowActions?: (event: ManagedEvent) => ReactNode;
 };
 
 // Cabecera en mayúsculas pequeñas, sin fondo; px-6 alinea las columnas con la barra de cabecera de la sección.
@@ -36,8 +39,16 @@ function EventThumbnail({ imageUrl }: { imageUrl: string | null }) {
       </div>
     );
   }
+  // `unoptimized`: la portada es una URL https de cualquier dominio (F5a), fuera de `images.remotePatterns`.
   return (
-    <Image src={imageUrl} alt="" width={48} height={48} sizes="48px" className="size-12 shrink-0 rounded-lg object-cover" />
+    <Image
+      src={imageUrl}
+      alt=""
+      width={48}
+      height={48}
+      unoptimized
+      className="size-12 shrink-0 rounded-lg object-cover"
+    />
   );
 }
 
@@ -86,7 +97,7 @@ function Revenue({ status, revenueCents }: Pick<ManagedEvent, "status" | "revenu
 }
 
 // Tabla en lg y tarjetas por debajo; la versión oculta usa display:none, así que no se duplica en el árbol de accesibilidad.
-export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false }: OrganizerEventsTableProps) {
+export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false, rowActions }: OrganizerEventsTableProps) {
   return (
     <>
       {/* Tabla a sangre dentro de la tarjeta de la sección: sin anillo ni radio propios. */}
@@ -98,6 +109,7 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
               <TableHead className={HEADER_CELL}>Estado</TableHead>
               <TableHead className={HEADER_CELL}>Vendidas</TableHead>
               <TableHead className={cn(HEADER_CELL, "text-right")}>Ingresos</TableHead>
+              {rowActions && <TableHead className={cn(HEADER_CELL, "text-right")}>Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -130,6 +142,11 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
                 <TableCell className="px-6 py-3.5 text-right font-semibold tabular-nums">
                   <Revenue status={event.status} revenueCents={event.revenueCents} />
                 </TableCell>
+                {rowActions && (
+                  <TableCell className="px-6 py-3.5">
+                    <div className="flex justify-end gap-2">{rowActions(event)}</div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -137,30 +154,34 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
       </div>
 
       <ul aria-labelledby={labelledBy} className="space-y-3 lg:hidden">
-        {events.map((event) => (
-          <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
-            <div className="flex items-start gap-3">
-              <EventThumbnail imageUrl={event.imageUrl} />
-              <div className="min-w-0 flex-1">
-                <h3 className="line-clamp-2 leading-snug font-bold">{event.title}</h3>
-                <EventMeta
-                  startsAt={event.startsAt}
-                  city={event.city}
-                  organizer={event.organizer}
-                  showOrganizer={showOrganizer}
-                />
+        {events.map((event) => {
+          const actions = rowActions?.(event);
+          return (
+            <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
+              <div className="flex items-start gap-3">
+                <EventThumbnail imageUrl={event.imageUrl} />
+                <div className="min-w-0 flex-1">
+                  <h3 className="line-clamp-2 leading-snug font-bold">{event.title}</h3>
+                  <EventMeta
+                    startsAt={event.startsAt}
+                    city={event.city}
+                    organizer={event.organizer}
+                    showOrganizer={showOrganizer}
+                  />
+                </div>
+                <StatusBadge status={event.status} />
               </div>
-              <StatusBadge status={event.status} />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <SoldCount sold={event.sold} capacity={event.capacity} />
-              <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
-                <Revenue status={event.status} revenueCents={event.revenueCents} />
-              </p>
-            </div>
-            <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
-          </li>
-        ))}
+              <div className="flex items-center justify-between gap-3">
+                <SoldCount sold={event.sold} capacity={event.capacity} />
+                <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
+                  <Revenue status={event.status} revenueCents={event.revenueCents} />
+                </p>
+              </div>
+              <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
+              {actions && <div className="flex gap-2 border-t pt-3 *:flex-1">{actions}</div>}
+            </li>
+          );
+        })}
       </ul>
     </>
   );

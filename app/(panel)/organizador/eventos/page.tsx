@@ -2,15 +2,18 @@ import type { Metadata } from "next";
 
 import { roleCan } from "@/modules/auth/permissions";
 import { listManagedEvents } from "@/modules/events/server";
-import { CreateEventLink, OrganizerEventsList } from "@/modules/organizer";
+import { CreateEventLink, OrganizerEventsList, savedStatusSchema } from "@/modules/organizer";
 import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
   title: "Mis eventos | Mentec Tickets",
 };
 
-export default async function OrganizerEventsPage() {
+export default async function OrganizerEventsPage({ searchParams }: PageProps<"/organizador/eventos">) {
   const { user, readOnly } = await getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos" });
+  const { guardado } = await searchParams;
+  // Cualquier valor distinto de "borrador" (o repetido) da undefined: sin aviso.
+  const saved = savedStatusSchema.parse(guardado);
   // Datos iniciales del listado sin filtros (los suyos o, si es admin, todos).
   const events = await listManagedEvents(user);
 
@@ -29,6 +32,8 @@ export default async function OrganizerEventsPage() {
         userId={user.id}
         initialEvents={events}
         showOrganizer={roleCan(user.role, "events:manageAny")}
+        canMutate={!readOnly}
+        saved={saved}
       />
     </div>
   );
