@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { EventCategory, EventDetail } from "@/modules/events";
-import type { checkoutFormSchema, PAYMENT_METHODS } from "../schemas/payment.schema";
+import type { checkoutBuyerSchema, checkoutFormSchema, PAYMENT_METHODS } from "../schemas/payment.schema";
 
 export type CheckoutOrderItem = {
   ticketTypeId: string;
@@ -31,6 +31,15 @@ export type PendingCheckoutResult =
   | { status: "expired"; eventSlug: string }
   | { status: "closed"; orderId: string } // paid | refunded (desde F4)
   | { status: "ok"; orderId: string; amountCents: number; remainingMs: number; order: CheckoutOrder };
+
+/** Estado de `useActionState` del botón "Continuar": `null` al inicio; si la reserva falla, el mensaje. */
+export type StartCheckoutState = { error: string } | null;
+
+export type CheckoutBuyer = z.output<typeof checkoutBuyerSchema>;
+
+export type PayOrderResult =
+  | { ok: true; clientSecret: string }
+  | { ok: false; error: "invalid-input" | "order-expired" | "order-unavailable" | "payment-error" };
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 

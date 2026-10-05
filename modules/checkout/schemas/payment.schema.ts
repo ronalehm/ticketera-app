@@ -36,27 +36,41 @@ export const cardDetailsSchema = z.object({
   cardName: nameField("Ingresa el nombre que figura en la tarjeta", "Ingresa un nombre válido"),
 });
 
+// Datos del comprador: los comparten el formulario y la acción de pago (`payOrder`).
+const buyerShape = {
+  firstName: nameField("Ingresa tus nombres", "Ingresa un nombre válido"),
+  lastName: nameField("Ingresa tus apellidos", "Ingresa un apellido válido"),
+  email: emailField,
+  phone: phoneField,
+  documentType: z.enum(DOCUMENT_TYPES),
+  documentNumber: requiredText("Ingresa tu número de documento"),
+  acceptTerms: acceptTermsField,
+};
+
+type BuyerDocument = { documentType: (typeof DOCUMENT_TYPES)[number]; documentNumber: string };
+
+function checkDocumentNumber(data: BuyerDocument, ctx: z.RefinementCtx) {
+  const message = getDocumentNumberError(data.documentType, data.documentNumber);
+  if (message) ctx.addIssue({ code: "custom", path: ["documentNumber"], message });
+}
+
+export const checkoutBuyerSchema = z.object(buyerShape).superRefine(checkDocumentNumber);
+
+// `z.object` descarta las claves extra (`amount`, `total`…): el importe sale siempre de la BD.
+export const payOrderInputSchema = z.object({ orderId: z.uuid(), buyer: checkoutBuyerSchema });
+
 export const checkoutFormSchema = z
   .object({
-    firstName: nameField("Ingresa tus nombres", "Ingresa un nombre válido"),
-    lastName: nameField("Ingresa tus apellidos", "Ingresa un apellido válido"),
-    email: emailField,
-    phone: phoneField,
-    documentType: z.enum(DOCUMENT_TYPES),
-    documentNumber: requiredText("Ingresa tu número de documento"),
+    ...buyerShape,
     paymentMethod: z.enum(PAYMENT_METHODS),
     // Solo dígitos en la salida (el campo se muestra en grupos de 4); se valida en `superRefine`.
     cardNumber: z.string().transform(removeSpaces),
     cardExpiry: z.string(),
     cardCvv: z.string(),
     cardName: z.string(),
-    acceptTerms: acceptTermsField,
   })
   .superRefine((data, ctx) => {
-    const documentNumberError = getDocumentNumberError(data.documentType, data.documentNumber);
-    if (documentNumberError) {
-      ctx.addIssue({ code: "custom", path: ["documentNumber"], message: documentNumberError });
-    }
+    checkDocumentNumber(data, ctx);
     if (data.paymentMethod !== "card") return;
     const card = cardDetailsSchema.safeParse(data);
     for (const issue of card.error?.issues ?? []) {

@@ -4,12 +4,14 @@ import { redirect } from "next/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSessionUser, type SessionUser } from "@/modules/auth/server";
 import { getCheckoutOrder } from "../services/checkout.service";
+import { createOrderPayment } from "../services/orderPayment.service";
 import { releaseOrder, reserveCheckoutOrder } from "../services/reservation.service";
 import type { CheckoutOrder } from "../types/checkout.types";
-import { startCheckout } from "./checkout.actions";
+import { payOrder, startCheckout } from "./checkout.actions";
 
 vi.mock("@/modules/auth/server", () => ({ getSessionUser: vi.fn() }));
 vi.mock("../services/checkout.service", () => ({ getCheckoutOrder: vi.fn() }));
+vi.mock("../services/orderPayment.service", () => ({ createOrderPayment: vi.fn() }));
 vi.mock("../services/reservation.service", () => ({ releaseOrder: vi.fn(), reserveCheckoutOrder: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -142,5 +144,69 @@ describe("startCheckout", () => {
     vi.mocked(getSessionUser).mockRejectedValue(new Error("clerk caído"));
     await expect(startCheckout(null, form(SELECTION))).rejects.toThrow("NEXT_REDIRECT");
     expect(reserveCheckoutOrder).toHaveBeenCalledWith(ORDER, null);
+  });
+});
+
+describe("payOrder", () => {
+  const BUYER = {
+    firstName: "Ana",
+    lastName: "Quispe",
+    email: "ana@correo.pe",
+    phone: "912345678",
+    documentType: "dni",
+    documentNumber: "12345678",
+    acceptTerms: true,
+  } as const;
+  const INPUT = { orderId: ORDER_ID, buyer: BUYER };
+
+  beforeEach(() => {
+    vi.mocked(createOrderPayment).mockResolvedValue({ ok: true, clientSecret: "pi_123_secret_456" });
+  });
+
+  it("input válido con sesión → llama al servicio con el id de sesión y devuelve su resultado", async () => {
+    expect(await payOrder(INPUT)).toEqual({ ok: true, clientSecret: "pi_123_secret_456" });
+    expect(createOrderPayment).toHaveBeenCalledWith(ORDER_ID, BUYER, USER.id);
+  });
+
+  it("importes del cliente → se descartan antes del servicio", async () => {
+    await payOrder({ ...INPUT, amount: 1, total: 1, buyer: { ...BUYER, amount: 1 } });
+    expect(createOrderPayment).toHaveBeenCalledWith(ORDER_ID, BUYER, USER.id);
+  });
+
+  it.each([
+    ["no es objeto", "x"],
+    ["orderId no UUID", { ...INPUT, orderId: "abc" }],
+    ["sin comprador", { orderId: ORDER_ID }],
+    ["términos sin aceptar", { ...INPUT, buyer: { ...BUYER, acceptTerms: false } }],
+    ["celular inválido", { ...INPUT, buyer: { ...BUYER, phone: "12" } }],
+  ])("input inválido (%s) → invalid-input sin llamar al servicio", async (_case, input) => {
+    expect(await payOrder(input)).toEqual({ ok: false, error: "invalid-input" });
+    expect(createOrderPayment).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión → invitado (null)", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+    await payOrder(INPUT);
+    expect(createOrderPayment).toHaveBeenCalledWith(ORDER_ID, BUYER, null);
+  });
+
+  it("getSessionUser lanza → invitado (null)", async () => {
+    vi.mocked(getSessionUser).mockRejectedValue(new Error("clerk caído"));
+    await payOrder(INPUT);
+    expect(createOrderPayment).toHaveBeenCalledWith(ORDER_ID, BUYER, null);
+  });
+
+  it.each(["order-expired", "order-unavailable", "payment-error"] as const)("servicio → %s se propaga", async (error) => {
+    vi.mocked(createOrderPayment).mockResolvedValue({ ok: false, error });
+    expect(await payOrder(INPUT)).toEqual({ ok: false, error });
+  });
+
+  it("el servicio lanza → payment-error y log sin datos personales", async () => {
+    vi.mocked(createOrderPayment).mockRejectedValue(
+      new Error("insert ana@correo.pe 12345678", { cause: { code: "40001" } }),
+    );
+    expect(await payOrder(INPUT)).toEqual({ ok: false, error: "payment-error" });
+    expect(console.error).toHaveBeenCalledWith("payOrder", { name: "Error", code: "40001" });
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toMatch(/ana@correo|12345678|Quispe/);
   });
 });

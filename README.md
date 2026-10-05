@@ -36,6 +36,35 @@ npm run dev        # http://localhost:3000
 | `npx vitest run [ruta]` | Ejecuta los tests una vez (todo, un módulo o un archivo) |
 | `npx shadcn@latest add <componente>` | Añade un componente de shadcn/ui a `components/ui/` |
 
+## Pagos con Stripe (modo test)
+
+La app solo acepta claves de **test** de Stripe y no arranca sin ellas (`lib/env.ts` las valida). Cópialas de [Dashboard → Developers → API keys](https://dashboard.stripe.com/test/apikeys) a `.env`:
+
+| Variable | Valor |
+|---|---|
+| `STRIPE_SECRET_KEY` | Clave secreta `sk_test_…` (solo servidor, `lib/stripe.ts`) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Clave publicable `pk_test_…` (Payment Element en el navegador) |
+| `STRIPE_WEBHOOK_SECRET` | Secreto `whsec_…` que imprime `stripe listen` (ver abajo) |
+
+Para recibir los webhooks en local, con el [Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```sh
+stripe login
+stripe listen --forward-to localhost:3000/api/webhooks/stripe   # imprime whsec_… → cópialo a STRIPE_WEBHOOK_SECRET
+npm run dev
+```
+
+Deja `stripe listen` abierto mientras pruebas: sin él, el pago se aprueba pero las entradas no se emiten hasta que Stripe reenvía el evento.
+
+Tarjetas de prueba (cualquier fecha futura y cualquier CVC):
+
+| Tarjeta | Resultado |
+|---|---|
+| `4242 4242 4242 4242` | Aprobada |
+| `4000 0000 0000 0002` | Rechazada |
+| `4000 0000 0000 9995` | Fondos insuficientes |
+| `4000 0025 0000 3155` | Pide autenticación 3D Secure |
+
 ## Estructura
 
 ```

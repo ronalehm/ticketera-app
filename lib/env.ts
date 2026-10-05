@@ -14,6 +14,9 @@ export const serverEnvSchema = z.object({
   DATABASE_URL_TEST: optional(z.url()),
   SUPER_ADMIN_EMAIL: optional(z.email().transform((email) => email.toLowerCase())),
   CLERK_SECRET_KEY: z.string().startsWith("sk_"),
+  // Solo claves de test de Stripe en todos los entornos (las live llegan en F8).
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_test_"),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -38,6 +41,7 @@ export const publicEnvSchema = z.object({
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: appPath,
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: appPath,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_test_"),
 });
 
 // Acceso literal a process.env.NEXT_PUBLIC_* para que Next lo incruste en el build.
@@ -47,4 +51,5 @@ export const publicEnv = publicEnvSchema.parse({
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 });

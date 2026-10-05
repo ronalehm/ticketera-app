@@ -4,11 +4,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSessionUser } from "@/modules/auth/server";
+import { payOrderInputSchema } from "../schemas/payment.schema";
 import { getCheckoutOrder } from "../services/checkout.service";
+import { createOrderPayment } from "../services/orderPayment.service";
 import { releaseOrder, reserveCheckoutOrder } from "../services/reservation.service";
-
-/** Estado de `useActionState` del botón "Continuar": `null` al inicio; si la reserva falla, el mensaje. */
-export type StartCheckoutState = { error: string } | null;
+import type { PayOrderResult, StartCheckoutState } from "../types/checkout.types";
 
 const CHECKOUT_COOKIE = "mentec_checkout";
 const SELECTION_PREFIX = "/checkout?";
@@ -53,6 +53,22 @@ export async function startCheckout(_prev: StartCheckoutState, formData: FormDat
   }
   // Fuera del try: `redirect` lanza para cortar la acción.
   redirect(`/checkout?orden=${orderId}`);
+}
+
+/**
+ * Pagar: valida orden y comprador (las claves extra, como importes, se descartan) y crea el PaymentIntent
+ * con el importe de la BD. Devuelve el `clientSecret` o un error tipado.
+ */
+export async function payOrder(input: unknown): Promise<PayOrderResult> {
+  const parsed = payOrderInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid-input" };
+
+  try {
+    return await createOrderPayment(parsed.data.orderId, parsed.data.buyer, await getSessionUserId());
+  } catch (error) {
+    console.error("payOrder", describeError(error));
+    return { ok: false, error: "payment-error" };
+  }
 }
 
 /** Query de `selection` → params de `getCheckoutOrder` (claves repetidas → array). */
