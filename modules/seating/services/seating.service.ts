@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
@@ -58,7 +58,7 @@ async function loadLayout(slug: string): Promise<RawLayout | null> {
       .from(eventSeats)
       .innerJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
       .innerJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
-      .where(eq(eventSeats.eventId, venue.eventId))
+      .where(and(eq(eventSeats.eventId, venue.eventId), isNull(eventSeats.retiredAt)))
       .orderBy(sql`length(${venueSeats.rowLabel})`, venueSeats.rowLabel, venueSeats.number),
   ]);
 

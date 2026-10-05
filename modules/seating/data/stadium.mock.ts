@@ -22,6 +22,9 @@ export const STADIUM_STAGE: z.input<typeof venueLayoutSchema>["stage"] = {
   lights: getArcPoints(STADIUM_CENTER.cx, STADIUM_CENTER.cy, 76, 40, 140, 7),
 };
 
+/** Escenario de los recintos deportivos: la misma forma y luces, con la etiqueta "CANCHA". */
+export const PITCH_STAGE: z.input<typeof venueLayoutSchema>["stage"] = { ...STADIUM_STAGE, label: "CANCHA" };
+
 export type MockVenue = {
   layout: z.input<typeof venueLayoutSchema>;
   /** `stage` + un sector por id de zona, en coordenadas del mapa. */

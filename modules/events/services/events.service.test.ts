@@ -1,10 +1,16 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { and, eq, inArray } from "drizzle-orm";
+import { describe, expect, it, vi } from "vitest";
+import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { describeWithDb } from "@/lib/db/testDb";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { EVENTS_MOCK } from "../data/events.mock";
 import { eventDetailSchema, eventSchema } from "../schemas/events.schema";
 import type { Event } from "../types/events.types";
 import { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./events.service";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -65,6 +71,35 @@ describeWithDb("events.service (BD)", () => {
     it("con limit 1 devuelve el de la misma categoría aunque haya otros antes en fecha", async () => {
       const [related] = await getRelatedEvents("festival-vive-latino-lima", 1);
       expect(related.slug).toBe("festival-sol-de-verano");
+    });
+  });
+});
+
+describeWithDb("events.service con lugares retirados (BD)", () => {
+  const slug = "copa-del-norte-trujillo";
+
+  async function getOccidenteStatus() {
+    const event = await getEventBySlug(slug);
+    return event?.ticketTypes.find((type) => type.id === "occidente")?.status;
+  }
+
+  it("no cuenta los lugares retirados", async () => {
+    await inRolledBackTransaction(async (tx) => {
+      expect(await getOccidenteStatus()).toBe("available"); // 22 libres de 39
+
+      const occidente = tx
+        .select({ id: ticketTypes.id })
+        .from(ticketTypes)
+        .innerJoin(events, eq(events.id, ticketTypes.eventId))
+        .where(and(eq(events.slug, slug), eq(ticketTypes.slug, "occidente")));
+      const retired = await tx
+        .update(eventSeats)
+        .set({ retiredAt: new Date() })
+        .where(and(inArray(eventSeats.ticketTypeId, occidente), eq(eventSeats.status, "available")))
+        .returning({ id: eventSeats.id });
+
+      expect(retired).toHaveLength(22);
+      expect(await getOccidenteStatus()).toBe("sold-out"); // sin el filtro seguiría `available`
     });
   });
 });
