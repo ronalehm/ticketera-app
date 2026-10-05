@@ -107,32 +107,33 @@ describe("buildSeedData", () => {
     }
   });
 
-  it("un solo Estadio Nacional con geometría y 8 secciones en su orden", () => {
+  it("un solo Estadio Nacional con el mapa de la arena, 8 secciones con geometría y el Clásico con mapa propio", () => {
     const stadiums = data.venues.filter((venue) => venue.name === "Estadio Nacional");
     expect(stadiums).toHaveLength(1);
-    expect(stadiums[0]).toMatchObject({
-      city: "Lima",
-      mapViewBox: layoutBySlug("noche-de-sintetizadores-lima").viewBox,
-      createdBy: SUPER_ADMIN_ID,
-    });
-    expect(stadiums[0].stage).toMatchObject({ label: "ESCENARIO" });
+    const arena = layoutBySlug(ARENA);
+    expect(stadiums[0]).toMatchObject({ city: "Lima", mapViewBox: arena.viewBox, createdBy: SUPER_ADMIN_ID });
+    expect(stadiums[0].stage).toEqual(arena.stage);
+    // Primero las de la arena y después las del Clásico, cada grupo en su orden.
+    const arenaZoneIds = arena.zones.map((zone) => zone.id);
     const sections = data.venueSections
       .filter((section) => section.venueId === stadiums[0].id)
-      .sort((a, b) => Number(!a.mapPath) - Number(!b.mapPath) || a.sortOrder - b.sortOrder);
+      .sort(
+        (a, b) =>
+          Number(!arenaZoneIds.includes(a.slug)) - Number(!arenaZoneIds.includes(b.slug)) || a.sortOrder - b.sortOrder,
+      );
     expect(sections.map((section) => [section.slug, section.sortOrder, section.seating])).toEqual([
       ["vip", 0, "general"],
       ["preferencial", 1, "general"],
       ["general", 2, "general"],
       ["norte", 3, "numbered"],
       ["popular", 0, "general"],
-      ["oriente", 1, "general"],
-      ["occidente", 2, "general"],
+      ["oriente", 1, "numbered"],
+      ["occidente", 2, "numbered"],
       ["palco", 3, "general"],
     ]);
-    expect(sections.slice(0, 4).every((section) => section.mapPath)).toBe(true);
-    expect(sections.slice(4).every((section) => !section.mapPath && section.capacity === DEMO_GENERAL_CAPACITY)).toBe(
-      true,
-    );
+    expect(sections.every((section) => section.mapPath)).toBe(true);
+    expect(sections.some((section) => section.capacity === DEMO_GENERAL_CAPACITY)).toBe(false);
+    expect(eventBySlug("clasico-del-pacifico")).toMatchObject({ mapViewBox: "0 0 600 392", mapStage: PITCH_STAGE });
   });
 
   it("cada evento con layout tiene el viewBox y el escenario de su layout, propios o de su recinto", () => {
