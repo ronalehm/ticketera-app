@@ -87,6 +87,7 @@ describe("buildOrderView", () => {
     ticketTypeName: "General",
     unitPriceCents: 5000,
     holderName: "Ana Quispe",
+    qrToken: `qr-${code}`,
     ...place,
   });
 
@@ -124,17 +125,34 @@ describe("buildOrderView", () => {
     expect(view.ticketCount).toBe(4);
   });
 
-  it("devuelve las entradas en el orden recibido, con seatLabel solo en las numeradas", () => {
+  it("devuelve las entradas en el orden recibido, con su qrToken y seatLabel solo en las numeradas", () => {
     expect(view.tickets).toEqual([
-      { code: "TK-1042-01", ticketTypeName: "General", holderName: "Ana Quispe" },
-      { code: "TK-1042-02", ticketTypeName: "General", holderName: "Ana Quispe" },
-      { code: "TK-1042-03", ticketTypeName: "Platea", seatLabel: "Platea · Fila A · Asiento 10", holderName: "Ana Quispe" },
-      { code: "TK-1042-04", ticketTypeName: "Platea", seatLabel: "Platea · Fila B · Asiento 4", holderName: "Ana Quispe" },
+      { code: "TK-1042-01", ticketTypeName: "General", holderName: "Ana Quispe", qrToken: "qr-TK-1042-01" },
+      { code: "TK-1042-02", ticketTypeName: "General", holderName: "Ana Quispe", qrToken: "qr-TK-1042-02" },
+      {
+        code: "TK-1042-03",
+        ticketTypeName: "Platea",
+        seatLabel: "Platea · Fila A · Asiento 10",
+        holderName: "Ana Quispe",
+        qrToken: "qr-TK-1042-03",
+      },
+      {
+        code: "TK-1042-04",
+        ticketTypeName: "Platea",
+        seatLabel: "Platea · Fila B · Asiento 4",
+        holderName: "Ana Quispe",
+        qrToken: "qr-TK-1042-04",
+      },
     ]);
     expect(view.tickets[0]).not.toHaveProperty("seatLabel");
   });
 
   it("total = subtotalCents / 100", () => {
     expect(view.total).toBe(341);
+  });
+
+  it("no expone ownerEmail ni paymentMethod", () => {
+    expect(view).not.toHaveProperty("ownerEmail");
+    expect(view).not.toHaveProperty("paymentMethod");
   });
 });

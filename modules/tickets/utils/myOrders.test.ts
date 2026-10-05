@@ -8,7 +8,6 @@ function makeOrder(overrides: { code: string; ownerEmail?: string; startsAt?: st
   return {
     code,
     createdAt,
-    ownerEmail,
     event: {
       slug: "evento",
       title: "Evento",
@@ -21,9 +20,8 @@ function makeOrder(overrides: { code: string; ownerEmail?: string; startsAt?: st
     items: [{ ticketTypeId: "general", name: "General", unitPrice: 100, quantity: 1 }],
     ticketCount: 1,
     total: 100,
-    paymentMethod: "card",
     buyer: { name: "Ana Pérez", email: ownerEmail },
-    tickets: [{ code: `${code}-01`, ticketTypeName: "General", holderName: "Ana Pérez" }],
+    tickets: [{ code: `${code}-01`, qrToken: `qTok${code}`, ticketTypeName: "General", holderName: "Ana Pérez" }],
   };
 }
 

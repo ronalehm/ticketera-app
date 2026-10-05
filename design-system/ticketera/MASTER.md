@@ -229,9 +229,9 @@ Anatomía de cada página (mm; A4 210 × 297, margen 20). La entrada ocupa la mi
 │ Estadio Nacional, Lima                           (12 pt, mutedForeground)                  │
 │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ (línea discontinua, border) ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌│
 │ ┌─────────────┐   ZONA / ASIENTO                (9 pt bold, mutedForeground, mayúsculas)  │
-│ │   QR 63 mm  │   Tribuna Norte · Fila B · Asiento 4   (12 pt bold, foreground; envuelve)│
-│ │ (21 × 3 mm) │   TITULAR                                                                 │
-│ │  marco rect │   Ana Quispe                           (12 pt bold, foreground; envuelve) │
+│ │   QR 75 mm  │   Tribuna Norte · Fila B · Asiento 4   (12 pt bold, foreground; envuelve)│
+│ │ (25 × 3 mm) │   TITULAR                                                                 │
+│ │ marco 87 mm │   Ana Quispe                           (12 pt bold, foreground; envuelve) │
 │ │   border    │   CÓDIGO DE ENTRADA                                                       │
 │ └─────────────┘   TK-1042-01                           (14 pt bold, foreground)           │
 │                   PEDIDO                                                                  │
@@ -241,7 +241,7 @@ Anatomía de cada página (mm; A4 210 × 297, margen 20). La entrada ocupa la mi
 ```
 
 - Los textos largos se envuelven y desplazan hacia abajo lo que sigue; nada sale del marco a lo ancho.
-- QR: el mismo patrón decorativo de `TicketQr` (`getQrModules`), vectorial (un `rect` relleno por tramo horizontal de módulos oscuros), módulo de 3 mm (63 mm en total), en `foreground` sobre blanco, con marco `border` a 3 mm.
+- QR: el QR real de la entrada, la misma matriz que `TicketQr` (`getQrModules`: `qrcode` con corrección de errores M). Codifica **solo** el `qr_token` opaco de la entrada (nunca nombre, correo, datos de pago, ids internos ni el código `TK-…`). Su tamaño depende de la longitud del token: un token de 22 caracteres da ~25 módulos; con módulo de 3 mm, ~75 mm. Vectorial (un `rect` relleno por tramo horizontal de módulos oscuros), en `foreground` sobre blanco, con una zona tranquila blanca de 2 módulos (6 mm, como el margen del SVG) hasta su marco `border` (~87 mm en total). La columna de datos ocupa el resto (~59 mm).
 - Texto real y seleccionable (códigos de entrada y pedido). Mínimo 9 pt (= 12 px, §3). El texto blanco sobre `primary` va en bold y a ≥ 11 pt (§2: blanco sobre azul solo ≥ 14 px semibold).
 - Marca como texto ("Mentec Tickets"), sin logo SVG ni imagen del evento.
 

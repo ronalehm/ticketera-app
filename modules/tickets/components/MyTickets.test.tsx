@@ -8,7 +8,6 @@ function makeOrder(code: string, title: string, startsAt: string, ticketCount: n
   return {
     code,
     createdAt: "2026-09-20T18:42:00-05:00",
-    ownerEmail: "ana@correo.pe",
     event: {
       slug: code.toLowerCase(),
       title,
@@ -21,10 +20,10 @@ function makeOrder(code: string, title: string, startsAt: string, ticketCount: n
     items: [{ ticketTypeId: "general", name: "General", unitPrice: 180, quantity: ticketCount }],
     ticketCount,
     total: 180 * ticketCount,
-    paymentMethod: "card",
     buyer: { name: "Ana Quispe", email: "ana@correo.pe" },
     tickets: Array.from({ length: ticketCount }, (_, i) => ({
       code: `${code}-0${i + 1}`,
+      qrToken: `qTok${code}x${i + 1}`,
       ticketTypeName: "General",
       holderName: "Ana Quispe",
     })),

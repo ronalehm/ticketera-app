@@ -12,6 +12,10 @@ import {
 } from "./ticketPdf";
 
 vi.mock("./download", () => ({ downloadBlob: vi.fn() }));
+vi.mock("@/components/shared/TicketQr", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/shared/TicketQr")>();
+  return { getQrModules: vi.fn(actual.getQrModules) };
+});
 
 const input: TicketPdfInput = {
   orderCode: "MT-7Q4K2P",
@@ -22,9 +26,14 @@ const input: TicketPdfInput = {
     venueLabel: "Estadio Nacional, Lima",
   },
   tickets: [
-    { code: "MT-7Q4K2P-01", locationLabel: "Tribuna Norte · Fila B · Asiento 4", holderName: "Ana Quispe" },
-    { code: "MT-7Q4K2P-02", locationLabel: "General", holderName: "Nguyễn Văn An" },
-    { code: "MT-7Q4K2P-03", locationLabel: "General", holderName: "Łukasz O’Brien" },
+    {
+      code: "MT-7Q4K2P-01",
+      locationLabel: "Tribuna Norte · Fila B · Asiento 4",
+      holderName: "Ana Quispe",
+      qrToken: "q3Zk9x_Lr8Tn2Yb-Pw4MvA",
+    },
+    { code: "MT-7Q4K2P-02", locationLabel: "General", holderName: "Nguyễn Văn An", qrToken: "Hc7uJ0aQe5WmX2pR-sN9tg" },
+    { code: "MT-7Q4K2P-03", locationLabel: "General", holderName: "Łukasz O’Brien", qrToken: "Zr2bN8vK_x4QwT1yLm0eUA" },
   ],
 };
 
@@ -82,7 +91,7 @@ describe("getQrRuns", () => {
   });
 
   it("cubre exactamente los módulos oscuros de un QR sin solaparse", () => {
-    const modules = getQrModules("MT-7Q4K2P-01");
+    const modules = getQrModules("q3Zk9x_Lr8Tn2Yb-Pw4MvA");
     const runs = getQrRuns(modules);
     const darkCount = modules.flat().filter(Boolean).length;
     const covered = new Set<string>();
@@ -127,7 +136,9 @@ describe("buildTicketsPdf", () => {
       "TITULAR",
       "CÓDIGO DE ENTRADA",
       "PEDIDO",
-      "Tribuna Norte · Fila B · Asiento 4",
+      // Con el QR real (~87 mm de marco) la columna de datos mide ~59 mm y la ubicación se envuelve.
+      "(Tribuna Norte · Fila B ·) Tj",
+      "(Asiento 4) Tj",
       "Ana Quispe",
       "Nguyen Van An",
       "?ukasz O'Brien",
@@ -145,11 +156,36 @@ describe("buildTicketsPdf", () => {
   it("dibuja al menos un rectángulo por tramo del QR de cada entrada", async () => {
     const pdf = await readPdf(await buildTicketsPdf(input));
     const qrRuns = input.tickets.reduce(
-      (sum, { code }) => sum + getQrRuns(getQrModules(code)).length,
+      (sum, { qrToken }) => sum + getQrRuns(getQrModules(qrToken)).length,
       0,
     );
 
     expect(pdf.match(/ re\n/g)?.length ?? 0).toBeGreaterThanOrEqual(qrRuns);
+  });
+
+  it("deja una zona tranquila blanca de 2 módulos (6 mm) entre el marco y el QR", async () => {
+    const pdf = await readPdf(await buildTicketsPdf({ ...input, tickets: [input.tickets[0]] }));
+    const num = String.raw`(-?[\d.]+)`;
+    // Marco: el único `re` relleno y trazado (B); luego, el primer tramo del QR (esquina del patrón de posición).
+    const match = pdf.match(
+      new RegExp(String.raw`${num} ${num} ${num} ${num} re\nB\n[^\n]+ rg\n${num} ${num} [\d.]+ -[\d.]+ re\nf`),
+    );
+    expect(match).not.toBeNull();
+    const [frameX, frameY, frameSize, , qrX, qrY] = match!.slice(1).map((value) => Number(value) / 72 * 25.4);
+    const modules = getQrModules(input.tickets[0].qrToken).length;
+
+    expect(qrX - frameX).toBeCloseTo(6);
+    expect(frameY - qrY).toBeCloseTo(6);
+    expect(frameSize).toBeCloseTo(modules * 3 + 2 * 6);
+  });
+
+  it("el QR de cada entrada sale de su qrToken y no de otros datos", async () => {
+    vi.mocked(getQrModules).mockClear();
+    await buildTicketsPdf(input);
+
+    expect(vi.mocked(getQrModules).mock.calls).toEqual(input.tickets.map(({ qrToken }) => [qrToken]));
+    const [first, second] = input.tickets.map(({ qrToken }) => getQrModules(qrToken));
+    expect(second).not.toEqual(first);
   });
 
   it("rechaza con RangeError si no hay entradas", async () => {

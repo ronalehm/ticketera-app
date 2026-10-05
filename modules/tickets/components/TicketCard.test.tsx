@@ -21,7 +21,6 @@ const imageUrl = (id: string) => `https://images.unsplash.com/photo-${id}?auto=f
 const TWO_TICKETS: Order = {
   code: "TK-1001",
   createdAt: "2026-09-20T18:42:00-05:00",
-  ownerEmail: BUYER.email,
   event: {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores: Gira Neón 2026",
@@ -34,11 +33,10 @@ const TWO_TICKETS: Order = {
   items: [{ ticketTypeId: "general", name: "General", unitPrice: 180, quantity: 2 }],
   ticketCount: 2,
   total: 360,
-  paymentMethod: "card",
   buyer: BUYER,
   tickets: [
-    { code: "TK-1001-01", ticketTypeName: "General", holderName: "Ana Quispe" },
-    { code: "TK-1001-02", ticketTypeName: "General", holderName: "Carlos Quispe" },
+    { code: "TK-1001-01", qrToken: "k3Vb8x_Qm2Tn7Yp-Lw4A01", ticketTypeName: "General", holderName: "Ana Quispe" },
+    { code: "TK-1001-02", qrToken: "k3Vb8x_Qm2Tn7Yp-Lw4A02", ticketTypeName: "General", holderName: "Carlos Quispe" },
   ],
 };
 
@@ -46,7 +44,6 @@ const TWO_TICKETS: Order = {
 const SEATED: Order = {
   code: "TK-1002",
   createdAt: "2026-09-28T10:15:00-05:00",
-  ownerEmail: BUYER.email,
   event: {
     slug: "clasico-del-pacifico",
     title: "Clásico del Pacífico: final de temporada",
@@ -67,11 +64,11 @@ const SEATED: Order = {
   ],
   ticketCount: 1,
   total: 220,
-  paymentMethod: "card",
   buyer: BUYER,
   tickets: [
     {
       code: "TK-1002-01",
+      qrToken: "k3Vb8x_Qm2Tn7Yp-Lw4B01",
       ticketTypeName: "Occidente",
       seatLabel: "Tribuna Occidente · Fila F · Asiento 12",
       holderName: "Ana Quispe",

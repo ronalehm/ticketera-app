@@ -92,7 +92,7 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
 
       <div className="flex flex-col items-center gap-6 p-5 sm:flex-row sm:items-center sm:gap-8 md:p-8">
         <div className="size-52 shrink-0 rounded-2xl bg-background p-3 ring-1 ring-border">
-          <TicketQr value={ticket.code} className="size-full" />
+          <TicketQr value={ticket.qrToken} ticketCode={ticket.code} className="size-full" />
         </div>
 
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
