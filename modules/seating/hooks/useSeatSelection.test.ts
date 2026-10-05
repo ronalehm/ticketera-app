@@ -131,11 +131,13 @@ describe("useSeatSelection", () => {
     expect(result.current.ticketCount).toBe(2);
   });
 
-  it("changeQuantity activa la zona, sube y baja sin pasar de 0", () => {
+  it("changeQuantity no cambia la zona activa, sube y baja sin pasar de 0", () => {
     const { result } = renderSelection();
     act(() => result.current.changeQuantity("campo", 1));
-    expect(result.current.activeZoneId).toBe("campo");
+    expect(result.current.activeZoneId).toBeNull();
+    act(() => result.current.selectZone("norte"));
     act(() => result.current.changeQuantity("campo", 1));
+    expect(result.current.activeZoneId).toBe("norte");
     expect(result.current.quantities.campo).toBe(2);
     expect(result.current.ticketCount).toBe(2);
 
@@ -164,7 +166,7 @@ describe("useSeatSelection", () => {
 
     act(() => result.current.changeQuantity("campo", 1));
     expect(result.current.quantities).toEqual({ campo: 6, vip: 4 });
-    expect(result.current.activeZoneId).toBe("vip");
+    expect(result.current.activeZoneId).toBeNull();
 
     act(() => result.current.changeQuantity("campo", -1));
     expect(result.current.ticketCount).toBe(9);
@@ -183,6 +185,101 @@ describe("useSeatSelection", () => {
       { zoneId: "campo", name: "Campo", quantity: 2, amount: 360, seatLabels: [] },
     ]);
     expect(result.current.checkoutHref).toBe("/checkout?evento=evento-prueba&vip-pass=1&campo-pass=2");
+  });
+
+  describe("clearZone", () => {
+    it("de una zona de pie con cantidad borra su clave y actualiza líneas, total y checkoutHref", () => {
+      const { result } = renderSelection();
+      act(() => result.current.changeQuantity("vip", 1));
+      act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.toggleSeat("norte-B-1"));
+
+      act(() => result.current.clearZone("campo"));
+      expect(result.current.quantities).toEqual({ vip: 1 });
+      expect(result.current.seatIds).toEqual(["norte-B-1"]);
+      expect(result.current.ticketCount).toBe(2);
+      expect(result.current.total).toBe(770);
+      expect(result.current.lines).toEqual([
+        { zoneId: "vip", name: "VIP", quantity: 1, amount: 550, seatLabels: [] },
+        { zoneId: "norte", name: "Tribuna Norte", quantity: 1, amount: 220, seatLabels: ["Fila B · Asiento 1"] },
+      ]);
+      expect(result.current.checkoutHref).toBe(
+        "/checkout?evento=evento-prueba&vip-pass=1&tribuna-norte=1&asientos=norte-B-1",
+      );
+    });
+
+    it("de una numerada quita solo sus butacas y conserva las de otra zona, en orden", () => {
+      const { result } = renderSelection();
+      act(() => result.current.toggleSeat("norte-B-3"));
+      act(() => result.current.toggleSeat("sur-A-1"));
+      act(() => result.current.toggleSeat("norte-A-2"));
+      act(() => result.current.changeQuantity("campo", 1));
+
+      act(() => result.current.clearZone("norte"));
+      expect(result.current.seatIds).toEqual(["sur-A-1"]);
+      expect(result.current.quantities).toEqual({ campo: 1 });
+      expect(result.current.ticketCount).toBe(2);
+      expect(result.current.lines.map((line) => line.zoneId)).toEqual(["campo", "sur"]);
+    });
+
+    it("de la última zona con entradas deja checkoutHref en null", () => {
+      const { result } = renderSelection();
+      act(() => result.current.toggleSeat("norte-B-1"));
+      act(() => result.current.toggleSeat("norte-B-2"));
+
+      act(() => result.current.clearZone("norte"));
+      expect(result.current).toMatchObject({ seatIds: [], ticketCount: 0, lines: [], total: 0, checkoutHref: null });
+    });
+
+    it("limpia el aviso cuando cambia la selección", () => {
+      const { result } = renderSelection();
+      for (let i = 0; i < 9; i++) act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.toggleSeat("norte-B-1"));
+      act(() => result.current.toggleSeat("norte-B-2"));
+      expect(result.current.notice).toBe("Máximo 10 entradas por compra");
+
+      act(() => result.current.clearZone("campo"));
+      expect(result.current.notice).toBeNull();
+      expect(result.current.quantities).toEqual({});
+      expect(result.current.atLimit).toBe(false);
+    });
+
+    it.each([
+      ["de pie sin cantidad", "vip"],
+      ["de pie con cantidad 0", "campo"],
+      ["numerada sin butacas", "sur"],
+      ["inexistente", "inexistente"],
+    ])("con una zona %s no cambia el estado", (_, zoneId) => {
+      const { result } = renderSelection();
+      act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.changeQuantity("campo", -1));
+      act(() => result.current.toggleSeat("norte-B-1"));
+      act(() => {
+        result.current.pickBestSeats("sur", 1);
+      });
+      const { quantities, seatIds, notice } = result.current;
+      expect(notice).toBe("No quedan asientos disponibles en esta zona.");
+
+      act(() => result.current.clearZone(zoneId));
+      expect(result.current.quantities).toBe(quantities);
+      expect(result.current.seatIds).toBe(seatIds);
+      expect(result.current.notice).toBe(notice);
+    });
+
+    it("no cambia la zona activa", () => {
+      const { result } = renderSelection();
+      act(() => result.current.changeQuantity("campo", 1));
+      act(() => result.current.toggleSeat("norte-B-1"));
+
+      act(() => result.current.clearZone("campo"));
+      expect(result.current.activeZoneId).toBeNull();
+
+      act(() => result.current.selectZone("norte"));
+      act(() => result.current.clearZone("norte"));
+      expect(result.current.activeZoneId).toBe("norte");
+      expect(result.current.ticketCount).toBe(0);
+    });
   });
 
   describe("estado inicial", () => {

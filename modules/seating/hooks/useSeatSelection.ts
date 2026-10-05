@@ -76,13 +76,15 @@ export function useSeatSelection(map: VenueMap, initial?: InitialSeatSelection) 
     setActiveZoneId(null);
   }
 
-  /** Solo zonas de pie no agotadas; "+" no hace nada en el límite y "−" no baja de 0. */
+  /**
+   * Solo zonas de pie no agotadas; "+" no hace nada en el límite y "−" no baja de 0. No cambia la
+   * zona activa: el stepper de la tarjeta está en el sub-paso 1 y no debe sacar al usuario de él.
+   */
   function changeQuantity(zoneId: string, delta: 1 | -1) {
     const zone = map.zones.find((candidate) => candidate.id === zoneId);
     if (!zone || zone.kind !== "general" || zone.status === "sold-out") return;
     if (delta > 0 && atLimit) return;
 
-    setActiveZoneId(zoneId);
     setState((current) => {
       const quantity = current.selection.quantities[zoneId] ?? 0;
       const next = Math.max(0, quantity + delta);
@@ -110,6 +112,22 @@ export function useSeatSelection(map: VenueMap, initial?: InitialSeatSelection) 
     setState((current) => {
       const { seatIds } = current.selection;
       return seatIds.includes(seatId) ? withSeatIds(current, seatIds.filter((id) => id !== seatId)) : current;
+    });
+  }
+
+  /**
+   * Quita todas las entradas de la zona: su cantidad (borra la clave) y sus butacas, conservando el
+   * orden del resto. Sin entradas en la zona (o si no existe) no cambia el estado. No toca la zona activa.
+   */
+  function clearZone(zoneId: string) {
+    setState((current) => {
+      const { quantities, seatIds } = current.selection;
+      const keptSeatIds = seatIds.filter((id) => parseSeatId(id)?.zoneId !== zoneId);
+      if (!quantities[zoneId] && keptSeatIds.length === seatIds.length) return current;
+      return withSelection(current, {
+        quantities: Object.fromEntries(Object.entries(quantities).filter(([id]) => id !== zoneId)),
+        seatIds: keptSeatIds,
+      });
     });
   }
 
@@ -161,5 +179,6 @@ export function useSeatSelection(map: VenueMap, initial?: InitialSeatSelection) 
     toggleSeat,
     removeSeat,
     pickBestSeats,
+    clearZone,
   };
 }

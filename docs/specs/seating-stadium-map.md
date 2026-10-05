@@ -2067,23 +2067,23 @@ No hay API: son datos mock.
   - Mientras no termine T5, `TicketSelection.tsx` no compila con las props nuevas de T3 y T4 y `TicketSelection.test.tsx` falla: es lo esperado. Los developers de T1–T4 verifican solo con `npx vitest run <sus tests>` (T1) y `npx eslint <sus archivos>`.
   - T5 y el reviewer ejecutan `npx vitest run`, `npm run lint` y `npm run build`, y el reviewer, el Playwright de F7 a 375, 768 y 1440 contra `npm run start`.
 
-- [ ] T1. Hook: `changeQuantity` sin activar la zona y `clearZone`, con tests (requisito 44, decisiones 36 y 37).
+- [x] T1. Hook: `changeQuantity` sin activar la zona y `clearZone`, con tests (requisito 44, decisiones 36 y 37).
   - Archivos: `modules/seating/hooks/useSeatSelection.ts`, `modules/seating/hooks/useSeatSelection.test.ts`.
   - Depende de: Fase 6.
   - En paralelo con T2 y T4. Verificar `npx vitest run modules/seating/hooks`.
-- [ ] T2. `QuantityStepper` y su uso en `ZoneQuantityPanel` y `BestSeatsPicker`, sin cambios visibles (requisito 41, decisión 40).
+- [x] T2. `QuantityStepper` y su uso en `ZoneQuantityPanel` y `BestSeatsPicker`, sin cambios visibles (requisito 41, decisión 40).
   - Archivos: `modules/seating/components/QuantityStepper.tsx` (nuevo), `modules/seating/components/ZoneQuantityPanel.tsx`, `modules/seating/components/BestSeatsPicker.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1 y T4. Es la base de T3.
-- [ ] T3. Mapa como ilustración y tarjetas con el control en línea (requisitos 40 y 42, decisiones 34 y 38).
+- [x] T3. Mapa como ilustración y tarjetas con el control en línea (requisitos 40 y 42, decisiones 34 y 38).
   - Archivos: `modules/seating/components/VenueMapView.tsx`, `modules/seating/components/ZoneCards.tsx`.
   - Depende de: T2.
   - En paralelo con T1 y T4.
-- [ ] T4. "Quitar" por línea en "Tu compra" y en la hoja móvil, con el foco (requisito 45, decisión 36).
+- [x] T4. "Quitar" por línea en "Tu compra" y en la hoja móvil, con el foco (requisito 45, decisión 36).
   - Archivos: `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1, T2 y T3.
-- [ ] T5. `TicketSelection` (indicador, props nuevas, pie "Agregar otra zona" y `onRemoveLine`), test reescrito y página de diseño (requisitos 43, 46 y 47).
+- [x] T5. `TicketSelection` (indicador, props nuevas, pie "Agregar otra zona" y `onRemoveLine`), test reescrito y página de diseño (requisitos 43, 46 y 47).
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1, T2, T3 y T4.
   - Secuencial. Verificar `npx vitest run`, `npm run lint` y `npm run build`.

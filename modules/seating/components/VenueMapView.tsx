@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
 import { formatEventPrice } from "@/modules/events/purchase";
@@ -7,7 +7,6 @@ import { formatEventPrice } from "@/modules/events/purchase";
 import type { Point, VenueMap, VenueZone, ZoneTone } from "../types/seating.types";
 import { parseViewBox } from "../utils/viewBox";
 import { ZONE_TONE_CLASSES } from "../utils/zoneTone";
-import { formatSelectedCount } from "./ZoneCards";
 
 type VenueMapViewProps = Pick<VenueMap, "viewBox" | "stage" | "venue"> & {
   zones: VenueZone[];
@@ -15,20 +14,10 @@ type VenueMapViewProps = Pick<VenueMap, "viewBox" | "stage" | "venue"> & {
   highlightedZoneId: string | null;
   /** Entradas de pie o butacas elegidas por zona (las zonas sin selección pueden faltar). */
   selectedCountByZone: Record<string, number>;
-  onOpenZone: (zoneId: string) => void;
-  onHighlightZone: (zoneId: string | null) => void;
 };
 
 /** Radio de las luces del escenario, en unidades del viewBox. */
 const STAGE_LIGHT_RADIUS = 5;
-
-function getZoneAriaLabel(zone: VenueZone, selectedCount: number): string {
-  const parts = [zone.name, zone.status === "sold-out" ? "agotado" : formatEventPrice(zone.price)];
-  if (zone.kind === "numbered") parts.push("asientos numerados");
-  if (zone.status === "low-stock") parts.push("últimas entradas");
-  if (selectedCount > 0) parts.push(formatSelectedCount(zone.kind, selectedCount));
-  return parts.join(", ");
-}
 
 /** Posición de una etiqueta HTML en % del viewBox, para que no escale con el ancho (decisión 18). */
 function getLabelStyle({ x, y }: Point, width: number, height: number): CSSProperties {
@@ -58,22 +47,10 @@ export function VenueMapView({
   tones,
   highlightedZoneId,
   selectedCountByZone,
-  onOpenZone,
-  onHighlightZone,
 }: VenueMapViewProps) {
   const { width, height } = parseViewBox(viewBox);
   const highlightedZone = zones.find((zone) => zone.id === highlightedZoneId && zone.status !== "sold-out");
   const isDimmed = (zoneId: string) => highlightedZone !== undefined && zoneId !== highlightedZone.id;
-
-  const handleKeyDown = (event: KeyboardEvent<SVGPathElement>, zone: VenueZone) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    if (zone.status !== "sold-out") onOpenZone(zone.id);
-  };
-
-  const highlight = (zone: VenueZone) => {
-    if (zone.status !== "sold-out") onHighlightZone(zone.id);
-  };
 
   return (
     <div className="rounded-xl bg-muted p-3 md:p-4">
@@ -81,7 +58,7 @@ export function VenueMapView({
         className="relative mx-auto w-full"
         style={{ aspectRatio: `${width} / ${height}`, maxWidth: `calc(min(64svh, 600px) * ${width} / ${height})` }}
       >
-        <svg viewBox={viewBox} className="absolute inset-0 size-full" role="group" aria-label={`Mapa de zonas de ${venue}`}>
+        <svg viewBox={viewBox} className="absolute inset-0 size-full" role="img" aria-label={`Mapa de zonas de ${venue}`}>
           <g aria-hidden>
             <path d={stage.path} className="fill-brand-navy" />
             {stage.lights?.map((light) => (
@@ -89,35 +66,19 @@ export function VenueMapView({
             ))}
           </g>
 
-          {zones.map((zone) => {
-            const soldOut = zone.status === "sold-out";
-
-            return (
-              <path
-                key={zone.id}
-                d={zone.path}
-                role="button"
-                tabIndex={0}
-                aria-label={getZoneAriaLabel(zone, selectedCountByZone[zone.id] ?? 0)}
-                aria-disabled={soldOut || undefined}
-                className={cn(
-                  "stroke-background stroke-3 outline-none transition-opacity duration-200",
-                  ZONE_TONE_CLASSES[tones[zone.id]].shape,
-                  soldOut ? "cursor-not-allowed" : "cursor-pointer",
-                  isDimmed(zone.id) && "opacity-40",
-                  "focus-visible:stroke-ring focus-visible:stroke-4 focus-visible:[stroke-dasharray:8_6]",
-                )}
-                onClick={() => {
-                  if (!soldOut) onOpenZone(zone.id);
-                }}
-                onKeyDown={(event) => handleKeyDown(event, zone)}
-                onPointerEnter={() => highlight(zone)}
-                onPointerLeave={() => onHighlightZone(null)}
-                onFocus={() => highlight(zone)}
-                onBlur={() => onHighlightZone(null)}
-              />
-            );
-          })}
+          {/* Ilustración: las formas no son controles; la acción y el resaltado llegan desde las tarjetas (decisión 38). */}
+          {zones.map((zone) => (
+            <path
+              key={zone.id}
+              d={zone.path}
+              data-zone-id={zone.id}
+              className={cn(
+                "stroke-background stroke-3 transition-opacity duration-200",
+                ZONE_TONE_CLASSES[tones[zone.id]].shape,
+                isDimmed(zone.id) && "opacity-40",
+              )}
+            />
+          ))}
 
           {/* Trazo superpuesto (no un halo detrás): las formas translúcidas dejarían verlo por dentro (decisión 28). */}
           {highlightedZone && (

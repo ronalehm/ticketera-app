@@ -145,23 +145,41 @@ const ARC_MAP: VenueMap = {
 
 const renderSelection = () => render(<TicketSelection map={MAP} />);
 
-const mapGroup = () => screen.queryByRole("group", { name: "Mapa de zonas de Recinto de prueba" });
-const mapZone = (name: string) => within(mapGroup()!).getByRole("button", { name: new RegExp(`^${name},`) });
-const mapLabelLayer = () => mapGroup()!.parentElement!.querySelector<HTMLElement>(':scope > div[aria-hidden="true"]')!;
+/** El mapa es una ilustración (`role="img"`), sin controles dentro (decisión 38). */
+const mapImage = () => screen.queryByRole("img", { name: "Mapa de zonas de Recinto de prueba" });
+const mapShape = (id: string) => mapImage()!.querySelector<SVGPathElement>(`path[data-zone-id="${id}"]`)!;
+const mapLabelLayer = () => mapImage()!.parentElement!.querySelector<HTMLElement>(':scope > div[aria-hidden="true"]')!;
 const mapLabel = (name: string) => within(mapLabelLayer()).getByText(name).closest("div")!;
-const highlightStroke = () => mapGroup()!.querySelector('path[aria-hidden="true"].stroke-brand-navy');
+const highlightStroke = () => mapImage()!.querySelector('path[aria-hidden="true"].stroke-brand-navy');
 const zoneCardList = () => screen.queryByRole("list", { name: "Zonas" });
-const zoneCard = (name: string) => within(zoneCardList()!).getByRole("button", { name: new RegExp(`^${name},`) });
+/** La tarjeta no es un botón: es un grupo nombrado por el nombre visible de la zona. */
+const zoneCard = (name: string) => within(zoneCardList()!).getByRole("group", { name });
+const highlightedCards = () => zoneCardList()!.querySelectorAll('[data-highlighted="true"]');
+const stepper = (name: string) => screen.getByRole("group", { name: `Cantidad de ${name}` });
+const stepperValue = (name: string) => stepper(name).querySelector("[aria-live]")!.textContent;
+const seatsButton = (name: string) => screen.getByRole("button", { name: new RegExp(`^(Elegir|Cambiar) butacas de ${name}$`) });
 const stepIndicator = () => screen.getByText(/^Paso \d de 2 · /);
 const zoneHeading = (name: string) => screen.getByRole("heading", { level: 3, name });
 const backButton = () => screen.getByRole("button", { name: "Todas las zonas" });
+const addAnotherZone = () => screen.queryByRole("button", { name: "Agregar otra zona" });
 const add = (name: string) => screen.getByRole("button", { name: `Agregar una entrada de ${name}` });
 const remove = (name: string) => screen.getByRole("button", { name: `Quitar una entrada de ${name}` });
 const quantityGroup = () => screen.getByRole("group", { name: "Cantidad" });
 const subtotal = () => screen.getByText("Subtotal").parentElement!;
 const summary = () => screen.getByRole("complementary", { name: "Resumen de la compra" });
+/** "n × <zona>" de cada línea de "Tu compra" (aside), en orden. */
+const summaryLines = () =>
+  within(summary())
+    .queryAllByRole("listitem")
+    .map((item) => item.querySelector("span")!.textContent);
+const removeLine = (name: string) => within(summary()).getByRole("button", { name: `Quitar ${name} de tu compra` });
+const emptySummaryText = "Todavía no elegiste entradas. Empieza eligiendo una zona.";
 const continueLinks = () => screen.queryAllByRole("link", { name: "Continuar" });
 const continueButtons = () => screen.queryAllByRole("button", { name: "Continuar" });
+const expectCheckoutHref = (href: string) => {
+  expect(continueLinks()).toHaveLength(2);
+  for (const link of continueLinks()) expect(link.getAttribute("href")).toBe(href);
+};
 const seatCounter = () => screen.getByText(/^\d+ de \d+ butacas$/);
 const seatAt = (row: string, number: number) =>
   screen.getByRole("checkbox", { name: new RegExp(`^Fila ${row}, asiento ${number},`) });
@@ -183,17 +201,23 @@ const minimap = (map: VenueMap = MAP) => document.querySelector<SVGSVGElement>(`
 /** Fondo del estadio: el grupo decorativo con la transformación estadio → plano. */
 const planBackdrop = (name: string) => planGroup(name).querySelector<SVGGElement>(':scope > g[aria-hidden="true"][transform]');
 const animatedStep = (zoomClass: string) => document.querySelector<HTMLElement>(`[class*="${zoomClass}"]`);
+const NORTE_BAND_Y = MAP.zones[2].labelPos.y;
 const NORTE_A1 = "Tribuna Norte · Fila A · Asiento 1";
 const NORTE_B1 = "Tribuna Norte · Fila B · Asiento 1";
 
+/** "Elegir butacas de Tribuna Norte" (o "Cambiar butacas…"): abre su plano. */
 function openNorte() {
-  fireEvent.click(zoneCard("Tribuna Norte"));
+  fireEvent.click(seatsButton("Tribuna Norte"));
+}
+
+function clickTimes(button: () => HTMLElement, times: number) {
+  for (let i = 0; i < times; i++) fireEvent.click(button());
 }
 
 afterEach(cleanup);
 
 describe("TicketSelection · sub-paso 1", () => {
-  it("muestra una sola tarjeta 'Elige tus entradas' con el indicador 'Paso 1 de 2', el mapa y las tarjetas", () => {
+  it("muestra una sola tarjeta 'Elige tus entradas' con 'Paso 1 de 2 · Elige tus zonas', el mapa y las tarjetas", () => {
     renderSelection();
 
     expect(screen.getByRole("region", { name: "Elige tus entradas" })).toBeTruthy();
@@ -201,30 +225,88 @@ describe("TicketSelection · sub-paso 1", () => {
       "Elige tus entradas",
       "Tu compra",
     ]);
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
     expect(stepIndicator().getAttribute("aria-live")).toBe("polite");
-    expect(within(mapGroup()!).getAllByRole("button")).toHaveLength(4);
-    expect(within(zoneCardList()!).getAllByRole("button")).toHaveLength(4);
+    expect(mapImage()).toBeTruthy();
+    expect(within(zoneCardList()!).getAllByRole("listitem")).toHaveLength(4);
+    for (const zone of MAP.zones) expect(zoneCard(zone.name)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Todas las zonas" })).toBeNull();
     // Primer render sin animación.
     expect(animatedStep("zoom-in")).toBeNull();
   });
 
-  it("anuncia cada zona del mapa y cada tarjeta con nombre, precio y estado", () => {
+  it("encima de las tarjetas avisa que se pueden combinar zonas, solo con 2 o más zonas comprables", () => {
+    renderSelection();
+    const help = screen.getByText("Puedes combinar varias zonas en una misma compra.");
+    expect(help.compareDocumentPosition(zoneCardList()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+
+    // VIP y Mesa (agotada): una sola zona comprable.
+    render(<TicketSelection map={{ ...MAP, zones: [MAP.zones[0], MAP.zones[3]] }} />);
+    expect(screen.queryByText("Puedes combinar varias zonas en una misma compra.")).toBeNull();
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+  });
+
+  it("el mapa es una imagen sin controles: ningún descendiente con rol, tabindex, aria-label ni aria-disabled", () => {
     renderSelection();
 
-    expect(mapZone("VIP").getAttribute("aria-label")).toBe(`VIP, ${formatEventPrice(550)}, últimas entradas`);
-    expect(mapZone("Tribuna Norte").getAttribute("aria-label")).toBe(
-      `Tribuna Norte, ${formatEventPrice(220)}, asientos numerados`,
-    );
-    expect(mapZone("Mesa").getAttribute("aria-label")).toBe("Mesa, agotado, asientos numerados");
+    const map = mapImage()!;
+    expect(map.tagName.toLowerCase()).toBe("svg");
+    expect(map.querySelectorAll("[role], [tabindex], [aria-label], [aria-disabled]")).toHaveLength(0);
+    const shapes = map.querySelectorAll("path[data-zone-id]");
+    expect([...shapes].map((shape) => shape.getAttribute("data-zone-id"))).toEqual(MAP.zones.map((zone) => zone.id));
+    for (const shape of shapes) {
+      expect(shape.getAttribute("class")).not.toMatch(/cursor-|focus-visible:|pointer-events-none/);
+    }
+    // La agotada sigue en gris en el mapa.
+    expect(mapShape("mesa").getAttribute("class")).toContain("fill-secondary");
+  });
 
-    expect(zoneCard("VIP").getAttribute("aria-label")).toBe(
-      `VIP, ${formatEventPrice(550)} c/u, general sin butaca, últimas entradas`,
-    );
-    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toBe(
-      `Tribuna Norte, ${formatEventPrice(220)} c/u, numerada, elige tu butaca`,
-    );
+  it("cada tarjeta lleva su control: stepper en las de pie, 'Elegir butacas' en la numerada y nada en la agotada", () => {
+    renderSelection();
+
+    for (const name of ["VIP", "General"]) {
+      expect(within(zoneCard(name)).getByRole("group", { name: `Cantidad de ${name}` })).toBe(stepper(name));
+      expect(stepperValue(name)).toBe("0");
+      expect(remove(name).getAttribute("aria-disabled")).toBe("true");
+      expect(add(name).getAttribute("aria-disabled")).not.toBe("true");
+    }
+
+    const norteButton = within(zoneCard("Tribuna Norte")).getByRole("button");
+    expect(norteButton).toBe(seatsButton("Tribuna Norte"));
+    expect(norteButton.getAttribute("aria-label")).toBe("Elegir butacas de Tribuna Norte");
+    expect(norteButton.textContent).toBe("Elegir butacas");
+
+    expect(within(zoneCard("Mesa")).queryAllByRole("button")).toHaveLength(0);
+    expect(within(zoneCard("Mesa")).getByText("Agotado")).toBeTruthy();
+    expect(within(zoneCard("Mesa")).queryByText("c/u", { exact: false })).toBeNull();
+    expect(zoneCard("Mesa").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("las tarjetas se nombran por su nombre visible y muestran tipo, precio y estado; no son botones", () => {
+    renderSelection();
+
+    const vip = zoneCard("VIP");
+    expect(vip.getAttribute("aria-label")).toBeNull();
+    expect(vip.getAttribute("tabindex")).toBe("-1");
+    expect(within(vip).getByText("Últimas entradas")).toBeTruthy();
+    expect(within(vip).getByText("General · sin butaca")).toBeTruthy();
+    expect(within(vip).getByText(formatEventPrice(550))).toBeTruthy();
+    expect(within(zoneCard("Tribuna Norte")).getByText("Numerada · elige tu butaca")).toBeTruthy();
+
+    // Ningún botón ni enlace junta el nombre y el precio de una zona.
+    for (const zone of MAP.zones) {
+      expect(screen.queryByRole("button", { name: new RegExp(`^${zone.name},`) })).toBeNull();
+      expect(screen.queryByRole("link", { name: new RegExp(`^${zone.name},`) })).toBeNull();
+    }
+  });
+
+  it("el primer control de la tarjeta 'Elige tus entradas' es el primero de la primera tarjeta de zona", () => {
+    renderSelection();
+
+    const region = screen.getByRole("region", { name: "Elige tus entradas" });
+    const firstControl = region.querySelector('button, a[href], [tabindex="0"]');
+    expect(firstControl).toBe(remove("VIP"));
   });
 
   it("pinta la etiqueta HTML de cada zona con su nombre y su precio (o 'Agotado')", () => {
@@ -241,196 +323,279 @@ describe("TicketSelection · sub-paso 1", () => {
   it("sin entradas muestra el resumen vacío y los 'Continuar' deshabilitados", () => {
     renderSelection();
 
-    expect(
-      within(summary()).getByText("Todavía no elegiste entradas. Empieza eligiendo una zona."),
-    ).toBeTruthy();
+    expect(within(summary()).getByText(emptySummaryText)).toBeTruthy();
     expect(continueLinks()).toHaveLength(0);
     expect(continueButtons()).toHaveLength(2);
     for (const button of continueButtons()) expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
-describe("TicketSelection · resaltado sincronizado", () => {
+describe("TicketSelection · mapa sin efecto", () => {
+  it.each(["vip", "mesa"])("clic, Enter, Espacio y el puntero sobre la forma '%s' no hacen nada", (zoneId) => {
+    renderSelection();
+    const shape = mapShape(zoneId);
+
+    fireEvent.click(shape);
+    fireEvent.keyDown(shape, { key: "Enter" });
+    fireEvent.keyDown(shape, { key: " " });
+    fireEvent.pointerEnter(shape);
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(screen.queryByRole("button", { name: "Todas las zonas" })).toBeNull();
+    expect(highlightStroke()).toBeNull();
+    expect(highlightedCards()).toHaveLength(0);
+    expect(within(summary()).getByText(emptySummaryText)).toBeTruthy();
+    expect(stepperValue("VIP")).toBe("0");
+  });
+});
+
+describe("TicketSelection · resaltado desde la tarjeta", () => {
   it("el puntero sobre una tarjeta delinea su zona en el mapa y atenúa las demás; al salir se quita", () => {
     renderSelection();
     fireEvent.pointerEnter(zoneCard("General"));
 
     expect(highlightStroke()?.getAttribute("d")).toBe(MAP.zones[1].path);
     expect(zoneCard("General").getAttribute("data-highlighted")).toBe("true");
-    expect(mapZone("General").getAttribute("class")).not.toContain("opacity-40");
-    for (const other of ["VIP", "Tribuna Norte", "Mesa"]) {
-      expect(mapZone(other).getAttribute("class")).toContain("opacity-40");
-      expect(mapLabel(other).className).toContain("opacity-40");
+    expect(mapShape("general").getAttribute("class")).not.toContain("opacity-40");
+    for (const [id, name] of [
+      ["vip", "VIP"],
+      ["norte", "Tribuna Norte"],
+      ["mesa", "Mesa"],
+    ]) {
+      expect(mapShape(id).getAttribute("class")).toContain("opacity-40");
+      expect(mapLabel(name).className).toContain("opacity-40");
     }
 
     fireEvent.pointerLeave(zoneCard("General"));
     expect(highlightStroke()).toBeNull();
     expect(zoneCard("General").getAttribute("data-highlighted")).toBe("false");
-    expect(mapZone("VIP").getAttribute("class")).not.toContain("opacity-40");
+    expect(mapShape("vip").getAttribute("class")).not.toContain("opacity-40");
   });
 
-  it("el puntero sobre una zona del mapa resalta su tarjeta", () => {
-    renderSelection();
-    fireEvent.pointerEnter(mapZone("VIP"));
-
-    expect(zoneCard("VIP").getAttribute("data-highlighted")).toBe("true");
-    expect(zoneCard("General").getAttribute("data-highlighted")).toBe("false");
-    expect(highlightStroke()?.getAttribute("d")).toBe(VIP_BAND.path);
-
-    fireEvent.pointerLeave(mapZone("VIP"));
-    expect(zoneCard("VIP").getAttribute("data-highlighted")).toBe("false");
-  });
-
-  it("el foco en una tarjeta o en una zona resalta igual que el puntero; al perderlo se quita", () => {
+  it("el foco en un control de la tarjeta la resalta; pasar de '−' a '+' lo mantiene y salir de la tarjeta lo quita", () => {
     renderSelection();
 
-    act(() => zoneCard("Tribuna Norte").focus());
-    expect(highlightStroke()?.getAttribute("d")).toBe(MAP.zones[2].path);
-    act(() => zoneCard("Tribuna Norte").blur());
-    expect(highlightStroke()).toBeNull();
-
-    act(() => mapZone("General").focus());
+    act(() => add("General").focus());
+    expect(highlightStroke()?.getAttribute("d")).toBe(MAP.zones[1].path);
     expect(zoneCard("General").getAttribute("data-highlighted")).toBe("true");
-    act(() => mapZone("General").blur());
+
+    fireEvent.blur(add("General"), { relatedTarget: remove("General") });
+    fireEvent.focus(remove("General"));
+    expect(zoneCard("General").getAttribute("data-highlighted")).toBe("true");
+
+    fireEvent.blur(remove("General"), { relatedTarget: add("VIP") });
+    fireEvent.focus(add("VIP"));
     expect(zoneCard("General").getAttribute("data-highlighted")).toBe("false");
+    expect(zoneCard("VIP").getAttribute("data-highlighted")).toBe("true");
+
+    fireEvent.blur(add("VIP"), { relatedTarget: document.body });
+    expect(highlightStroke()).toBeNull();
+    expect(highlightedCards()).toHaveLength(0);
   });
 
-  it("una zona agotada no se resalta ni desde su tarjeta ni desde el mapa", () => {
+  it("el botón 'Elegir butacas' también resalta su tarjeta", () => {
+    renderSelection();
+
+    act(() => seatsButton("Tribuna Norte").focus());
+    expect(highlightStroke()?.getAttribute("d")).toBe(MAP.zones[2].path);
+    expect(zoneCard("Tribuna Norte").getAttribute("data-highlighted")).toBe("true");
+  });
+
+  it("una zona agotada no se resalta", () => {
     renderSelection();
 
     fireEvent.pointerEnter(zoneCard("Mesa"));
-    act(() => mapZone("Mesa").focus());
+    fireEvent.focus(zoneCard("Mesa"));
 
     expect(highlightStroke()).toBeNull();
     expect(zoneCard("Mesa").getAttribute("data-highlighted")).toBe("false");
-    expect(mapZone("VIP").getAttribute("class")).not.toContain("opacity-40");
+    expect(mapShape("vip").getAttribute("class")).not.toContain("opacity-40");
   });
 });
 
-describe("TicketSelection · zona de pie", () => {
-  it("clic en una zona del mapa abre el sub-paso 2: indicador, cabecera, foco en el h3 y sin mapa ni tarjetas", () => {
+describe("TicketSelection · stepper en la tarjeta", () => {
+  it("'+' suma en el sub-paso 1: stepper, insignia del mapa, 'Tu compra' y 'Continuar'; '−' resta", () => {
     renderSelection();
-    fireEvent.click(mapZone("VIP"));
+    clickTimes(() => add("VIP"), 2);
 
-    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
-    expect(document.activeElement).toBe(zoneHeading("VIP"));
-    expect(screen.getByRole("navigation", { name: "Ruta de selección" }).textContent).toContain("Todas las zonas");
-    expect(screen.getByText(`· ${formatEventPrice(550)} c/u`)).toBeTruthy();
-    expect(screen.getByText("General · sin butaca")).toBeTruthy();
-    expect(within(quantityGroup()).getByText("0")).toBeTruthy();
-    expect(subtotal().textContent).toContain(formatEventPrice(0));
-    expect(mapGroup()).toBeNull();
-    expect(zoneCardList()).toBeNull();
-  });
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(mapImage()).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Todas las zonas" })).toBeNull();
+    expect(stepperValue("VIP")).toBe("2");
+    expect(stepperValue("General")).toBe("0");
+    expect(remove("VIP").getAttribute("aria-disabled")).not.toBe("true");
+    expect(within(mapLabel("VIP")).getByText("2")).toBeTruthy();
+    // Las de pie no repiten la cantidad en texto: ya está en el stepper.
+    expect(within(zoneCard("VIP")).queryByText(/elegidas?$/)).toBeNull();
 
-  it("el sub-paso 2 entra creciendo desde la etiqueta de la zona", () => {
-    renderSelection();
-    fireEvent.click(mapZone("VIP"));
-
-    const step = animatedStep("zoom-in-95");
-    expect(step?.className).toContain("motion-safe:animate-in");
-    expect(step?.style.transformOrigin).toBe(`50% ${(VIP_BAND.labelPos.y / 520) * 100}%`);
-  });
-
-  it("Enter o Espacio sobre una zona del mapa la abren sin desplazar la página", () => {
-    renderSelection();
-
-    // fireEvent devuelve false cuando el handler llamó a preventDefault.
-    expect(fireEvent.keyDown(mapZone("General"), { key: " " })).toBe(false);
-    expect(document.activeElement).toBe(zoneHeading("General"));
-
-    fireEvent.click(backButton());
-    expect(fireEvent.keyDown(mapZone("VIP"), { key: "Enter" })).toBe(false);
-    expect(document.activeElement).toBe(zoneHeading("VIP"));
-  });
-
-  it("−/+ actualizan la cantidad, el subtotal, el total y el enlace de 'Continuar'", () => {
-    renderSelection();
-    fireEvent.click(zoneCard("VIP"));
-    expect(remove("VIP").getAttribute("aria-disabled")).toBe("true");
-
-    fireEvent.click(add("VIP"));
-    fireEvent.click(add("VIP"));
-
-    expect(within(quantityGroup()).getByText("2")).toBeTruthy();
-    expect(subtotal().textContent).toContain(formatEventPrice(1100));
     const aside = within(summary());
-    expect(aside.getByText("2 × VIP")).toBeTruthy();
+    expect(summaryLines()).toEqual(["2 × VIP"]);
     expect(aside.getByText("(2 entradas)")).toBeTruthy();
     expect(aside.getAllByText(formatEventPrice(1100))).toHaveLength(2); // línea y total
     expect(screen.getByText("Total · 2 entradas")).toBeTruthy();
     expect(continueButtons()).toHaveLength(0);
-    for (const link of continueLinks()) {
-      expect(link.getAttribute("href")).toBe("/checkout?evento=evento-prueba&vip=2");
-    }
+    expectCheckoutHref("/checkout?evento=evento-prueba&vip=2");
 
     fireEvent.click(remove("VIP"));
-    expect(within(quantityGroup()).getByText("1")).toBeTruthy();
-    expect(subtotal().textContent).toContain(formatEventPrice(550));
+    expect(stepperValue("VIP")).toBe("1");
     expect(screen.getByText("Total · 1 entrada")).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
   });
 
-  it("'Todas las zonas' vuelve al sub-paso 1, enfoca la tarjeta y conserva la selección", () => {
+  it("combina zonas de pie y butacas: 3 líneas en el orden del mapa, total y enlace con 'asientos'", () => {
     renderSelection();
-    fireEvent.click(zoneCard("VIP"));
-    fireEvent.click(add("VIP"));
-    fireEvent.click(add("VIP"));
-    fireEvent.click(backButton());
+    clickTimes(() => add("VIP"), 2);
+    clickTimes(() => add("General"), 3);
 
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(document.activeElement).toBe(zoneCard("VIP"));
-    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
-    expect(within(zoneCard("VIP")).getByText("2 entradas elegidas")).toBeTruthy();
-    expect(mapZone("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
-    expect(within(mapLabel("VIP")).getByText("2")).toBeTruthy();
-    expect(within(summary()).getByText("2 × VIP")).toBeTruthy();
+    openNorte();
+    expect(seatCounter().textContent).toBe("0 de 5 butacas");
+    fireEvent.click(seatAt("A", 1));
+    fireEvent.click(seatAt("B", 1));
+    expect(seatCounter().textContent).toBe("2 de 5 butacas");
+    fireEvent.click(addAnotherZone()!);
 
-    // Vuelve "alejándose" desde la zona que se cerró.
-    const step = animatedStep("zoom-in-105");
-    expect(step?.contains(mapGroup())).toBe(true);
-    expect(step?.style.transformOrigin).toBe(`50% ${(VIP_BAND.labelPos.y / 520) * 100}%`);
+    expect(stepperValue("VIP")).toBe("2");
+    expect(stepperValue("General")).toBe("3");
+    for (const [name, count] of [
+      ["VIP", "2"],
+      ["General", "3"],
+      ["Tribuna Norte", "2"],
+    ]) {
+      expect(within(mapLabel(name)).getByText(count)).toBeTruthy();
+    }
+    expect(summaryLines()).toEqual(["2 × VIP", "3 × General", "2 × Tribuna Norte"]);
+    const aside = within(summary());
+    expect(aside.getByText("Fila A · Asiento 1, Fila B · Asiento 1")).toBeTruthy();
+    expect(aside.getByText("(7 entradas)")).toBeTruthy();
+    expect(aside.getByText(formatEventPrice(2080))).toBeTruthy();
+    expect(screen.getByText("Total · 7 entradas")).toBeTruthy();
+    expectCheckoutHref("/checkout?evento=evento-prueba&vip=2&general=3&norte=2&asientos=norte-A-1%2Cnorte-B-1");
   });
+});
 
-  it("al llegar a 10 entradas en total deshabilita '+' y avisa en el pie", () => {
+describe("TicketSelection · límite de 10 combinado", () => {
+  it("con 10 entre VIP y General todos los '+' quedan deshabilitados pero enfocables y el pie avisa", () => {
     renderSelection();
-    fireEvent.click(zoneCard("General"));
-    expect(screen.getByText("Máximo 10 entradas por compra.").getAttribute("role")).toBe("status");
+    expect(screen.getByRole("status").textContent).toBe("Máximo 10 entradas por compra.");
 
-    for (let i = 0; i < 11; i++) fireEvent.click(add("General"));
+    clickTimes(() => add("VIP"), 4);
+    clickTimes(() => add("General"), 7);
 
-    expect(within(quantityGroup()).getByText("10")).toBeTruthy();
-    expect(add("General").getAttribute("aria-disabled")).toBe("true");
+    expect(stepperValue("VIP")).toBe("4");
+    expect(stepperValue("General")).toBe("6");
+    for (const name of ["VIP", "General"]) {
+      expect(add(name).getAttribute("aria-disabled")).toBe("true");
+      expect((add(name) as HTMLButtonElement).disabled).toBe(false);
+    }
     expect(screen.getByRole("status").textContent).toBe("Llegaste al máximo de 10 entradas por compra.");
     expect(within(summary()).getByText("(10 entradas)")).toBeTruthy();
 
+    // "Elegir butacas" sigue habilitado en el límite.
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-disabled")).not.toBe("true");
+    openNorte();
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige tus butacas");
+    expect(seatCounter().textContent).toBe("0 de 0 butacas");
+  });
+
+  it("con butacas: la que pasa de 10 no se elige; al volver avisa en el pie y 'Quitar' libera los '+'", () => {
+    renderSelection();
+    clickTimes(() => add("VIP"), 4);
+    clickTimes(() => add("General"), 4);
+
+    openNorte();
+    expect(seatCounter().textContent).toBe("0 de 2 butacas");
+    fireEvent.click(seatAt("A", 1));
+    fireEvent.click(seatAt("A", 2));
+    expect(seatCounter().textContent).toBe("2 de 2 butacas");
+    fireEvent.click(seatAt("B", 1));
+    expect(seatAt("B", 1).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("Máximo 10 entradas por compra")).toBeTruthy();
+
+    fireEvent.click(addAnotherZone()!);
+    for (const name of ["VIP", "General"]) expect(add(name).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("status").textContent).toBe("Llegaste al máximo de 10 entradas por compra.");
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-label")).toBe("Cambiar butacas de Tribuna Norte");
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-disabled")).not.toBe("true");
+
+    fireEvent.click(removeLine("VIP"));
+    for (const name of ["VIP", "General"]) expect(add(name).getAttribute("aria-disabled")).not.toBe("true");
+    expect(screen.getByRole("status").textContent).toBe("Máximo 10 entradas por compra.");
+  });
+});
+
+describe("TicketSelection · 'Quitar' en 'Tu compra'", () => {
+  it("quitar una línea borra la zona y lleva el foco al 'Quitar' de la siguiente, o de la anterior", () => {
+    renderSelection();
+    clickTimes(() => add("VIP"), 2);
+    clickTimes(() => add("General"), 3);
+    expect(removeLine("VIP").getAttribute("aria-label")).toBe("Quitar VIP de tu compra");
+
+    fireEvent.click(removeLine("VIP"));
+    expect(summaryLines()).toEqual(["3 × General"]);
+    expect(stepperValue("VIP")).toBe("0");
+    expect(within(mapLabel("VIP")).queryByText("2")).toBeNull();
+    expect(document.activeElement).toBe(removeLine("General"));
+    expectCheckoutHref("/checkout?evento=evento-prueba&general=3");
+
+    fireEvent.click(add("VIP"));
+    fireEvent.click(removeLine("General"));
+    expect(summaryLines()).toEqual(["1 × VIP"]);
+    expect(document.activeElement).toBe(removeLine("VIP"));
+  });
+
+  it("quitar la última línea lleva el foco al texto vacío y deshabilita 'Continuar'", () => {
+    renderSelection();
+    fireEvent.click(add("General"));
+
+    fireEvent.click(removeLine("General"));
+
+    const empty = within(summary()).getByText(emptySummaryText);
+    expect(document.activeElement).toBe(empty);
+    expect(empty.getAttribute("tabindex")).toBe("-1");
+    expect(continueLinks()).toHaveLength(0);
+    for (const button of continueButtons()) expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("quitar Tribuna Norte desmarca sus butacas, también con su plano abierto, y su tarjeta vuelve a 'Elegir butacas'", () => {
+    renderSelection();
+    fireEvent.click(add("VIP"));
+    openNorte();
+    fireEvent.click(seatAt("A", 1));
+    fireEvent.click(seatAt("B", 1));
+    expect(addAnotherZone()).toBeTruthy();
+
+    fireEvent.click(removeLine("Tribuna Norte"));
+
+    expect(checkedSeatIds()).toEqual([]);
+    expect(seatCounter().textContent).toBe("0 de 9 butacas");
+    expect(screen.getByText("Aún no elegiste asientos.")).toBeTruthy();
+    expect(addAnotherZone()).toBeNull();
+    expect(summaryLines()).toEqual(["1 × VIP"]);
+    expect(document.activeElement).toBe(removeLine("VIP"));
+
     fireEvent.click(backButton());
-    fireEvent.click(zoneCard("VIP"));
-    expect(add("VIP").getAttribute("aria-disabled")).toBe("true");
+    expect(within(zoneCard("Tribuna Norte")).queryByText(/butacas? elegidas?$/)).toBeNull();
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-label")).toBe("Elegir butacas de Tribuna Norte");
   });
 });
 
 describe("TicketSelection · zona agotada", () => {
-  it("ni el clic ni Enter en el mapa ni en la tarjeta abren el sub-paso 2", () => {
+  it("la tarjeta Mesa no tiene controles ni recibe nada al pulsarla, y su forma no reacciona", () => {
     renderSelection();
 
-    expect(mapZone("Mesa").getAttribute("aria-disabled")).toBe("true");
-    expect(zoneCard("Mesa").getAttribute("aria-disabled")).toBe("true");
-    expect(zoneCard("Mesa").getAttribute("aria-label")).toBe("Mesa, agotado, numerada, elige tu butaca");
-    expect(within(zoneCard("Mesa")).getByText("Agotado")).toBeTruthy();
-    expect(within(zoneCard("Mesa")).queryByText("c/u")).toBeNull();
-
-    fireEvent.click(mapZone("Mesa"));
-    expect(fireEvent.keyDown(mapZone("Mesa"), { key: "Enter" })).toBe(false);
+    expect(within(zoneCard("Mesa")).queryAllByRole("button")).toHaveLength(0);
+    expect(within(zoneCard("Mesa")).queryByRole("group")).toBeNull();
     fireEvent.click(zoneCard("Mesa"));
+    fireEvent.click(mapShape("mesa"));
 
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(mapGroup()).toBeTruthy();
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(mapImage()).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Todas las zonas" })).toBeNull();
   });
 });
 
 describe("TicketSelection · zona numerada", () => {
-  it("la tarjeta abre el plano con el contador 'n de m butacas' y enfoca el h3", () => {
+  it("'Elegir butacas' abre el plano con el contador 'n de m butacas' y enfoca el h3", () => {
     renderSelection();
     openNorte();
 
@@ -451,15 +616,62 @@ describe("TicketSelection · zona numerada", () => {
     expect(screen.getByRole("list", { name: "Leyenda del plano" })).toBeTruthy();
     expect(screen.getByText("Aún no elegiste asientos.")).toBeTruthy();
     expect(screen.getAllByRole("checkbox")).toHaveLength(6);
-    expect(mapGroup()).toBeNull();
+    expect(mapImage()).toBeNull();
+    expect(zoneCardList()).toBeNull();
+    // Sin butacas en la zona no hay "Agregar otra zona": para volver están las migas.
+    expect(addAnotherZone()).toBeNull();
+  });
+
+  it("el sub-paso 2 entra creciendo desde la etiqueta de la zona", () => {
+    renderSelection();
+    openNorte();
+
+    const step = animatedStep("zoom-in-95");
+    expect(step?.className).toContain("motion-safe:animate-in");
+    expect(step?.style.transformOrigin).toBe(`50% ${(NORTE_BAND_Y / 520) * 100}%`);
+  });
+
+  it("con butacas aparece 'Agregar otra zona', que vuelve al sub-paso 1 con el foco en la tarjeta resaltada", () => {
+    renderSelection();
+    openNorte();
+    fireEvent.click(seatAt("A", 1));
+
+    const button = addAnotherZone()!;
+    expect(button.className).toContain("h-11");
+    const footer = button.parentElement!;
+    expect(within(footer).getByText("Puedes combinar varias zonas en una misma compra.")).toBeTruthy();
+
+    fireEvent.click(button);
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(document.activeElement).toBe(zoneCard("Tribuna Norte"));
+    expect(zoneCard("Tribuna Norte").getAttribute("data-highlighted")).toBe("true");
+    expect(highlightStroke()?.getAttribute("d")).toBe(MAP.zones[2].path);
+    expect(within(zoneCard("Tribuna Norte")).getByText("1 butaca elegida")).toBeTruthy();
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-label")).toBe("Cambiar butacas de Tribuna Norte");
+    expect(seatsButton("Tribuna Norte").textContent).toBe("Cambiar butacas");
+    expect(within(mapLabel("Tribuna Norte")).getByText("1")).toBeTruthy();
+
+    // Vuelve "alejándose" desde la zona que se cerró.
+    const step = animatedStep("zoom-in-105");
+    expect(step?.contains(mapImage())).toBe(true);
+    expect(step?.style.transformOrigin).toBe(`50% ${(NORTE_BAND_Y / 520) * 100}%`);
+  });
+
+  it("'Todas las zonas' también vuelve con el foco en la tarjeta y conserva la selección", () => {
+    renderSelection();
+    openNorte();
+    fireEvent.click(seatAt("B", 1));
+    fireEvent.click(backButton());
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(document.activeElement).toBe(zoneCard("Tribuna Norte"));
+    expect(summaryLines()).toEqual(["1 × Tribuna Norte"]);
   });
 
   it("el contador descuenta las entradas de otras zonas y se actualiza al elegir", () => {
     renderSelection();
-    fireEvent.click(zoneCard("VIP"));
-    fireEvent.click(add("VIP"));
-    fireEvent.click(add("VIP"));
-    fireEvent.click(backButton());
+    clickTimes(() => add("VIP"), 2);
     openNorte();
 
     expect(seatCounter().textContent).toBe("0 de 8 butacas");
@@ -491,7 +703,6 @@ describe("TicketSelection · zona numerada", () => {
     fireEvent.click(backButton());
     expect(document.activeElement).toBe(zoneCard("Tribuna Norte"));
     expect(within(zoneCard("Tribuna Norte")).getByText("1 butaca elegida")).toBeTruthy();
-    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toMatch(/, 1 butaca elegida$/);
   });
 
   it("Espacio y Enter alternan el asiento sin desplazar la página", () => {
@@ -535,6 +746,7 @@ describe("TicketSelection · zona numerada", () => {
     expect(seatAt("A", 3).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("Aún no elegiste asientos.")).toBeTruthy();
     expect(continueLinks()).toHaveLength(0);
+    expect(addAnotherZone()).toBeNull();
   });
 
   it("quitar un chip deselecciona el asiento y mueve el foco al chip siguiente o, con el último, al h3", () => {
@@ -553,23 +765,20 @@ describe("TicketSelection · zona numerada", () => {
     expect(seatAt("B", 1).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("Aún no elegiste asientos.")).toBeTruthy();
     expect(document.activeElement).toBe(zoneHeading("Tribuna Norte"));
+    expect(addAnotherZone()).toBeNull();
   });
 
-  it("cambiar de zona conserva los asientos y el enlace de 'Continuar' incluye 'asientos'", () => {
+  it("volver y sumar entradas de pie conserva los asientos y el enlace de 'Continuar' incluye 'asientos'", () => {
     renderSelection();
     openNorte();
     fireEvent.click(seatAt("A", 1));
-    fireEvent.click(backButton());
-    fireEvent.click(zoneCard("General"));
+    fireEvent.click(addAnotherZone()!);
     fireEvent.click(add("General"));
 
     expect(screen.getByText("Total · 2 entradas")).toBeTruthy();
-    for (const link of continueLinks()) {
-      expect(link.getAttribute("href")).toBe("/checkout?evento=evento-prueba&general=1&norte=1&asientos=norte-A-1");
-    }
-
-    fireEvent.click(backButton());
+    expectCheckoutHref("/checkout?evento=evento-prueba&general=1&norte=1&asientos=norte-A-1");
     expect(within(mapLabel("Tribuna Norte")).getByText("1")).toBeTruthy();
+
     openNorte();
     expect(seatAt("A", 1).getAttribute("aria-checked")).toBe("true");
     expect(removeChip(NORTE_A1)).toBeTruthy();
@@ -646,7 +855,7 @@ describe("TicketSelection · plano renovado", () => {
 describe("TicketSelection · plano en arco", () => {
   function openOriente() {
     render(<TicketSelection map={ARC_MAP} />);
-    fireEvent.click(zoneCard("Tribuna Oriente"));
+    fireEvent.click(seatsButton("Tribuna Oriente"));
   }
 
   it("pinta debajo de las butacas el fondo del estadio con la zona abierta en lila y el resto en gris", () => {
@@ -925,9 +1134,7 @@ describe("TicketSelection · mejores butacas", () => {
 
   it("sustituye las butacas de la zona por el bloque y conserva las demás entradas", () => {
     renderSelection();
-    fireEvent.click(zoneCard("VIP"));
     fireEvent.click(add("VIP"));
-    fireEvent.click(backButton());
     openNorte();
     fireEvent.click(seatAt("B", 1));
 
@@ -935,8 +1142,7 @@ describe("TicketSelection · mejores butacas", () => {
 
     expect(checkedSeatIds()).toEqual(["norte-A-1", "norte-A-2"]);
     expect(screen.queryByRole("button", { name: `Quitar ${NORTE_B1}` })).toBeNull();
-    expect(within(summary()).getByText("1 × VIP")).toBeTruthy();
-    expect(within(summary()).getByText("2 × Tribuna Norte")).toBeTruthy();
+    expect(summaryLines()).toEqual(["1 × VIP", "2 × Tribuna Norte"]);
     expect(seatCounter().textContent).toBe("2 de 9 butacas");
   });
 
@@ -969,9 +1175,7 @@ describe("TicketSelection · mejores butacas", () => {
 
   it("con 10 entradas en otras zonas el stepper y el botón quedan deshabilitados pero enfocables", () => {
     renderSelection();
-    fireEvent.click(zoneCard("General"));
-    for (let i = 0; i < 10; i++) fireEvent.click(add("General"));
-    fireEvent.click(backButton());
+    clickTimes(() => add("General"), 10);
     openNorte();
 
     expect(seatCounter().textContent).toBe("0 de 0 butacas");
@@ -991,9 +1195,7 @@ describe("TicketSelection · mejores butacas", () => {
 
   it("el '+' no pasa de las butacas que caben en la compra", () => {
     renderSelection();
-    fireEvent.click(zoneCard("General"));
-    for (let i = 0; i < 7; i++) fireEvent.click(add("General"));
-    fireEvent.click(backButton());
+    clickTimes(() => add("General"), 7);
     openNorte();
 
     fireEvent.click(screen.getByRole("button", { name: "Agregar una butaca" }));
@@ -1003,21 +1205,112 @@ describe("TicketSelection · mejores butacas", () => {
 });
 
 describe("TicketSelection · resumen móvil", () => {
+  async function openSheet() {
+    fireEvent.click(screen.getByRole("button", { name: "Ver resumen de la compra" }));
+    return screen.findByRole("dialog", { name: "Tu compra" });
+  }
+
   it("'Ver resumen de la compra' abre la hoja 'Tu compra' con las líneas y el total", async () => {
     renderSelection();
-    fireEvent.click(zoneCard("General"));
-    fireEvent.click(add("General"));
-    fireEvent.click(add("General"));
+    clickTimes(() => add("General"), 2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ver resumen de la compra" }));
-
-    const sheet = await screen.findByRole("dialog", { name: "Tu compra" });
+    const sheet = await openSheet();
     expect(within(sheet).getByText("2 × General")).toBeTruthy();
     expect(within(sheet).getByText("(2 entradas)")).toBeTruthy();
     expect(within(sheet).getAllByText(formatEventPrice(360))).toHaveLength(2); // línea y total
     expect(within(sheet).getByRole("link", { name: "Continuar" }).getAttribute("href")).toBe(
       "/checkout?evento=evento-prueba&general=2",
     );
+  });
+
+  it("la hoja también tiene 'Quitar' por línea, con el mismo foco", async () => {
+    renderSelection();
+    fireEvent.click(add("VIP"));
+    clickTimes(() => add("General"), 2);
+
+    const sheet = await openSheet();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Quitar VIP de tu compra" }));
+    expect(within(sheet).queryByText("1 × VIP")).toBeNull();
+    expect(document.activeElement).toBe(within(sheet).getByRole("button", { name: "Quitar General de tu compra" }));
+    expect(stepperValue("VIP")).toBe("0");
+
+    fireEvent.click(within(sheet).getByRole("button", { name: "Quitar General de tu compra" }));
+    expect(document.activeElement).toBe(within(sheet).getByText(emptySummaryText));
+    expect(within(sheet).getByRole("button", { name: "Continuar" })).toHaveProperty("disabled", true);
+  });
+});
+
+describe("TicketSelection · zona de pie abierta con ?zona= (F6)", () => {
+  it("abre su panel en 0 sin mover el foco ni 'Agregar otra zona'; con una entrada aparece y vuelve a su tarjeta", () => {
+    render(<TicketSelection map={MAP} initialZoneId="vip" />);
+
+    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
+    expect(zoneHeading("VIP")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Ruta de selección" }).textContent).toContain("Todas las zonas");
+    expect(screen.getByText(`· ${formatEventPrice(550)} c/u`)).toBeTruthy();
+    expect(screen.getByText("General · sin butaca")).toBeTruthy();
+    expect(within(quantityGroup()).getByText("0")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(0));
+    expect(mapImage()).toBeNull();
+    expect(zoneCardList()).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+    for (const button of continueButtons()) expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(addAnotherZone()).toBeNull();
+
+    fireEvent.click(add("VIP"));
+    expect(within(quantityGroup()).getByText("1")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(550));
+    expect(screen.getByText("Puedes combinar varias zonas en una misma compra.")).toBeTruthy();
+
+    fireEvent.click(addAnotherZone()!);
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(document.activeElement).toBe(zoneCard("VIP"));
+    expect(zoneCard("VIP").getAttribute("data-highlighted")).toBe("true");
+    expect(stepperValue("VIP")).toBe("1");
+
+    fireEvent.click(add("General"));
+    expect(summaryLines()).toEqual(["1 × VIP", "1 × General"]);
+  });
+
+  it("el panel sube y baja la cantidad con el subtotal, el total y el enlace de 'Continuar'", () => {
+    render(<TicketSelection map={MAP} initialZoneId="vip" />);
+    expect(remove("VIP").getAttribute("aria-disabled")).toBe("true");
+
+    clickTimes(() => add("VIP"), 2);
+
+    expect(within(quantityGroup()).getByText("2")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(1100));
+    expect(summaryLines()).toEqual(["2 × VIP"]);
+    expect(within(summary()).getByText("(2 entradas)")).toBeTruthy();
+    expect(screen.getByText("Total · 2 entradas")).toBeTruthy();
+    expectCheckoutHref("/checkout?evento=evento-prueba&vip=2");
+
+    fireEvent.click(remove("VIP"));
+    expect(within(quantityGroup()).getByText("1")).toBeTruthy();
+    expect(subtotal().textContent).toContain(formatEventPrice(550));
+  });
+
+  it("'Todas las zonas' vuelve al sub-paso 1 con el foco en la tarjeta y la cantidad en su stepper", () => {
+    render(<TicketSelection map={MAP} initialZoneId="vip" />);
+    clickTimes(() => add("VIP"), 2);
+    fireEvent.click(backButton());
+
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(document.activeElement).toBe(zoneCard("VIP"));
+    expect(stepperValue("VIP")).toBe("2");
+    expect(within(mapLabel("VIP")).getByText("2")).toBeTruthy();
+  });
+
+  it("al llegar a 10 entradas en total deshabilita '+' y avisa en el pie del panel", () => {
+    render(<TicketSelection map={MAP} initialZoneId="general" />);
+    expect(screen.getByText("Máximo 10 entradas por compra.").getAttribute("role")).toBe("status");
+
+    clickTimes(() => add("General"), 11);
+
+    expect(within(quantityGroup()).getByText("10")).toBeTruthy();
+    expect(add("General").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("status").textContent).toBe("Llegaste al máximo de 10 entradas por compra.");
+    expect(within(summary()).getByText("(10 entradas)")).toBeTruthy();
   });
 });
 
@@ -1026,18 +1319,17 @@ describe("TicketSelection · estado inicial (F6)", () => {
   const PRESELECTED_HREF = "/checkout?evento=evento-prueba&vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1";
 
   function expectPreselection() {
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
-    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toMatch(/, 2 butacas elegidas$/);
-    expect(mapZone("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(stepperValue("VIP")).toBe("2");
+    expect(within(zoneCard("Tribuna Norte")).getByText("2 butacas elegidas")).toBeTruthy();
+    expect(seatsButton("Tribuna Norte").getAttribute("aria-label")).toBe("Cambiar butacas de Tribuna Norte");
+    expect(within(mapLabel("VIP")).getByText("2")).toBeTruthy();
+    expect(summaryLines()).toEqual(["2 × VIP", "2 × Tribuna Norte"]);
     const aside = within(summary());
-    expect(aside.getByText("2 × VIP")).toBeTruthy();
-    expect(aside.getByText("2 × Tribuna Norte")).toBeTruthy();
     expect(aside.getByText("(4 entradas)")).toBeTruthy();
     expect(aside.getByText(formatEventPrice(1540))).toBeTruthy(); // total: 1100 + 440
     expect(screen.getByText("Total · 4 entradas")).toBeTruthy();
-    expect(continueLinks()).toHaveLength(2);
-    for (const link of continueLinks()) expect(link.getAttribute("href")).toBe(PRESELECTED_HREF);
+    expectCheckoutHref(PRESELECTED_HREF);
   }
 
   it("con initialSelection abre el sub-paso 1 con las tarjetas, el resumen y 'Continuar' precargados", () => {
@@ -1049,28 +1341,7 @@ describe("TicketSelection · estado inicial (F6)", () => {
     openNorte();
     expect(checkedSeatIds()).toEqual(["norte-A-1", "norte-B-1"]);
     expect(seatCounter().textContent).toBe("2 de 8 butacas");
-  });
-
-  it("con initialZoneId de una zona de pie abre su panel en 0 sin mover el foco; 'Todas las zonas' vuelve al sub-paso 1", () => {
-    render(<TicketSelection map={MAP} initialZoneId="vip" />);
-
-    expect(stepIndicator().textContent).toBe("Paso 2 de 2 · Elige la cantidad");
-    expect(zoneHeading("VIP")).toBeTruthy();
-    expect(within(quantityGroup()).getByText("0")).toBeTruthy();
-    expect(subtotal().textContent).toContain(formatEventPrice(0));
-    expect(mapGroup()).toBeNull();
-    expect(zoneCardList()).toBeNull();
-    expect(document.activeElement).toBe(document.body);
-    for (const button of continueButtons()) expect((button as HTMLButtonElement).disabled).toBe(true);
-
-    fireEvent.click(add("VIP"));
-    expect(within(quantityGroup()).getByText("1")).toBeTruthy();
-    expect(subtotal().textContent).toContain(formatEventPrice(550));
-
-    fireEvent.click(backButton());
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(document.activeElement).toBe(zoneCard("VIP"));
-    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 1 entrada elegida$/);
+    expect(addAnotherZone()).toBeTruthy();
   });
 
   it("con initialZoneId de una zona numerada abre su plano con '0 de 10 butacas'", () => {
@@ -1080,7 +1351,7 @@ describe("TicketSelection · estado inicial (F6)", () => {
     expect(zoneHeading("Tribuna Norte")).toBeTruthy();
     expect(seatCounter().textContent).toBe("0 de 10 butacas");
     expect(planGroup()).toBeTruthy();
-    expect(mapGroup()).toBeNull();
+    expect(mapImage()).toBeNull();
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -1091,6 +1362,7 @@ describe("TicketSelection · estado inicial (F6)", () => {
     expect(within(quantityGroup()).getByText("2")).toBeTruthy();
     expect(subtotal().textContent).toContain(formatEventPrice(1100));
     expect(within(summary()).getByText("2 × Tribuna Norte")).toBeTruthy();
+    expect(addAnotherZone()).toBeTruthy();
   });
 });
 
@@ -1103,12 +1375,10 @@ describe("PreselectedTicketSelection", () => {
     searchParams.current = "vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1";
     render(<PreselectedTicketSelection map={MAP} />);
 
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(zoneCard("VIP").getAttribute("aria-label")).toMatch(/, 2 entradas elegidas$/);
-    expect(zoneCard("Tribuna Norte").getAttribute("aria-label")).toMatch(/, 2 butacas elegidas$/);
-    for (const link of continueLinks()) {
-      expect(link.getAttribute("href")).toBe("/checkout?evento=evento-prueba&vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1");
-    }
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(stepperValue("VIP")).toBe("2");
+    expect(within(zoneCard("Tribuna Norte")).getByText("2 butacas elegidas")).toBeTruthy();
+    expectCheckoutHref("/checkout?evento=evento-prueba&vip=2&norte=2&asientos=norte-A-1%2Cnorte-B-1");
   });
 
   it("con zona=<de pie> abre su panel, combinable con la precarga", () => {
@@ -1125,8 +1395,8 @@ describe("PreselectedTicketSelection", () => {
     searchParams.current = query;
     render(<PreselectedTicketSelection map={MAP} />);
 
-    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige una zona");
-    expect(mapGroup()).toBeTruthy();
+    expect(stepIndicator().textContent).toBe("Paso 1 de 2 · Elige tus zonas");
+    expect(mapImage()).toBeTruthy();
     expect(zoneCardList()).toBeTruthy();
   });
 });
