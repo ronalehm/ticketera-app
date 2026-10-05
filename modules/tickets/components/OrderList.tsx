@@ -1,5 +1,4 @@
-import Image from "next/image";
-
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/modules/checkout/orders";
 import { formatEventDate } from "@/modules/events/format";
@@ -32,7 +31,7 @@ export function OrderList({ orders, selectedCode, onSelect }: OrderListProps) {
               )}
             >
               <span className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted lg:size-18">
-                <Image src={order.event.imageUrl} alt="" fill sizes="72px" className="object-cover" />
+                <EventCoverImage src={order.event.imageUrl} alt="" fill sizes="72px" className="object-cover" />
               </span>
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate text-base font-bold">{order.event.title}</span>

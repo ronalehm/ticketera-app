@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { z } from "zod";
+import { buildEventSeatRows, generalSeatPlan } from "@/lib/db/eventInventory";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { legalDocuments } from "@/lib/db/schema/legal";
@@ -46,7 +47,6 @@ export type SeedData = {
 
 type VenueLayout = z.infer<typeof venueLayoutSchema>;
 type Zone = VenueLayout["zones"][number];
-type SeatPlan = { venueSeatId: string | null; key: string };
 
 /** Organizador real de prueba: su fila de `users` (`id` existente o `seedUuid`) y su correo. */
 export type SeedOrganizer = { id: string; email: string };
@@ -69,10 +69,6 @@ export function seedUuid(key: string): string {
 }
 
 const toCents = (price: number) => Math.round(price * 100);
-
-/** Lugares de una zona general: todos disponibles (el seed no siembra ventas). */
-const generalSeatPlan = (key: string, capacity: number): SeatPlan[] =>
-  Array.from({ length: capacity }, (_, index) => ({ venueSeatId: null, key: `${key}:${index}` }));
 
 /** Primeros 32 bits de sha256(key): base del reparto y de los datos fiscales demo. */
 const hash32 = (key: string) => createHash("sha256").update(key).digest().readUInt32BE(0);
@@ -318,16 +314,8 @@ export function buildSeedData({ superAdminId, organizers: seedOrganizers, now }:
       });
 
       // Todo el inventario queda disponible: el seed no siembra ventas (spec admin-panel, F2).
-      for (const seat of section.seats) {
-        data.eventSeats.push({
-          id: seedUuid(`event-seat:${event.slug}:${ticketType.id}:${seat.key}`),
-          eventId,
-          ticketTypeId,
-          venueSeatId: seat.venueSeatId,
-          status: "available",
-          orderId: null,
-        });
-      }
+      const seatId = (key: string) => seedUuid(`event-seat:${event.slug}:${ticketType.id}:${key}`);
+      for (const row of buildEventSeatRows(eventId, ticketTypeId, section.seats, seatId)) data.eventSeats.push(row);
     });
   });
 

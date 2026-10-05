@@ -1,6 +1,6 @@
-import Image from "next/image";
 import { useId, useState } from "react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
       className="flex w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border md:flex-row"
     >
       <div className="relative h-32 w-full shrink-0 bg-muted md:h-auto md:w-48">
-        <Image src={event.imageUrl} alt="" fill sizes="(min-width: 768px) 192px, 100vw" className="object-cover" />
+        <EventCoverImage src={event.imageUrl} alt="" fill sizes="(min-width: 768px) 192px, 100vw" className="object-cover" />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-5 md:p-6">

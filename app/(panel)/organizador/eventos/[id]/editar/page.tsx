@@ -4,7 +4,7 @@ import { FilePen } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
-import { EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
+import { EDIT_IN_REVIEW_MESSAGE, EventEditNotice, EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
 import {
   getEventForEdit,
   listApprovedOrganizers,
@@ -13,7 +13,7 @@ import {
 import { getPanelContext } from "@/modules/panel/server";
 
 export const metadata: Metadata = {
-  title: "Editar borrador | Mentec Tickets",
+  title: "Editar evento | Mentec Tickets",
 };
 
 export default async function EditOrganizerEventPage({ params }: PageProps<"/organizador/eventos/[id]/editar">) {
@@ -28,14 +28,20 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
   const event = await getEventForEdit(user, id);
   if (!event) notFound();
 
-  if (event.status !== "draft") {
+  // En revisión, cancelado y finalizado no se editan (Decisión 11); borrador y publicado sí, con los límites de su estado.
+  if (event.status === "pending_review" || event.status === "cancelled" || event.status === "finished") {
+    const inReview = event.status === "pending_review";
     return (
       <div className="flex flex-col gap-8 md:gap-10">
         <EventFormHeader title="Editar evento" />
         <EmptyState
           icon={FilePen}
-          title="Este evento ya no es un borrador"
-          description="Solo se pueden editar borradores. En Mis eventos ves su estado actual."
+          title={inReview ? "Este evento está en revisión" : "Este evento ya no se puede editar"}
+          description={
+            inReview
+              ? EDIT_IN_REVIEW_MESSAGE
+              : "Los eventos cancelados o finalizados no se editan. En Mis eventos ves su estado actual."
+          }
           actionLabel="Volver a Mis eventos"
           actionHref="/organizador/eventos"
         />
@@ -51,7 +57,10 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
 
   return (
     <div className="flex flex-col gap-8 md:gap-10">
-      <EventFormHeader title="Editar borrador" />
+      <div className="flex flex-col gap-6">
+        <EventFormHeader title={event.status === "draft" ? "Editar borrador" : "Editar evento"} />
+        <EventEditNotice status={event.status} reviewNote={event.reviewNote} hasSales={event.hasSales} />
+      </div>
       <OrganizerEventForm userId={user.id} venues={venues} organizers={organizers} event={event} />
     </div>
   );

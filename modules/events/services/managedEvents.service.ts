@@ -24,12 +24,12 @@ function paidOrdersSum(column: AnyPgColumn) {
   );
 }
 
-/** Lugares del inventario del evento, sin los retirados. */
+/** Lugares del inventario del evento, sin los retirados (desde `published`, cuando ya se generó al aprobar). */
 const inventoryCapacity = sql`(select count(*) from ${eventSeats} where ${eventSeats.eventId} = ${events.id} and ${eventSeats.retiredAt} is null)`;
 
 /**
- * Capacidad configurada de un borrador (aún sin inventario, que se genera al publicar): por cada tipo de entrada, su
- * sección del recinto; una general aporta su `capacity` y una numerada sus `venue_seats`.
+ * Capacidad configurada de un evento aún sin inventario (`draft` o `pending_review`: se genera al aprobar): por cada
+ * tipo de entrada, su sección del recinto; una general aporta su `capacity` y una numerada sus `venue_seats`.
  */
 const configuredCapacity = sql`(select coalesce(sum(case when ${venueSections.seating} = 'general' then ${venueSections.capacity} else (select count(*) from ${venueSeats} where ${venueSeats.sectionId} = ${venueSections.id}) end), 0) from ${ticketTypes} inner join ${venueSections} on ${venueSections.id} = ${ticketTypes.sectionId} where ${ticketTypes.eventId} = ${events.id})`;
 
@@ -70,7 +70,7 @@ export async function listManagedEvents(
       organizer: sql<string>`coalesce(${organizers.legalName}, trim(${users.firstName} || ' ' || ${users.lastName}))`,
       sold: paidOrdersSum(orders.ticketCount),
       revenueCents: paidOrdersSum(manageAny ? orders.subtotalCents : orders.organizerAmountCents),
-      capacity: sql<number>`case when ${events.status} = 'draft' then ${configuredCapacity} else ${inventoryCapacity} end`.mapWith(
+      capacity: sql<number>`case when ${events.status} in ('draft', 'pending_review') then ${configuredCapacity} else ${inventoryCapacity} end`.mapWith(
         Number,
       ),
     })

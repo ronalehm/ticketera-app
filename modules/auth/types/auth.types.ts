@@ -3,8 +3,11 @@ import type { completeProfileSchema } from "../schemas/auth.schema";
 
 export type CompleteProfileInput = z.infer<typeof completeProfileSchema>;
 
-/** Usuario de la sesión de Clerk en el cliente (nombres ausentes → ""). */
-export type SessionIdentity = { firstName: string; lastName: string; email: string };
+/**
+ * Usuario de la sesión de Clerk en el cliente (nombres ausentes → ""). `role` sale de `publicMetadata.role` (copia del
+ * rol de la BD): solo sirve para mostrar u ocultar enlaces, nunca para autorizar.
+ */
+export type SessionIdentity = { firstName: string; lastName: string; email: string; role: SessionUser["role"] };
 
 /** Usuario de Clerk que recibe `ensureUser` (nombres ausentes → ""). */
 export type ClerkIdentity = {

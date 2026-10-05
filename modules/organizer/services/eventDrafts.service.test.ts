@@ -1,16 +1,14 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { orders } from "@/lib/db/schema/sales";
-import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
-import { db, inRolledBackTransaction, type Tx } from "@/lib/db/testTransaction";
+import { db, inRolledBackTransaction, openTransaction, type Tx, waitForLockWait } from "@/lib/db/testTransaction";
 import { OrganizerNotApprovedError } from "@/modules/auth/server";
 import type { EventDraftInput } from "../types/organizer.types";
-import { EventDraftError, type EventDraftErrorCode } from "../utils/eventDraftError";
 import {
   createEvent,
   deleteEvent,
@@ -19,94 +17,25 @@ import {
   listApprovedVenuesWithSections,
   updateEvent,
 } from "./eventDrafts.service";
+import {
+  type Actor,
+  createUser,
+  createVenue,
+  domainError,
+  draftInput,
+  insertOrder,
+  type OrganizerStatus,
+  setupDraft,
+} from "./eventTestHelpers";
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
-type OrganizerStatus = "approved" | "pending" | "suspended";
-type Actor = { id: string; role: "organizer" | "admin" | "super_admin" | "customer" };
-
 const ADMIN: Actor = { id: randomUUID(), role: "admin" };
 const SUPER_ADMIN: Actor = { id: randomUUID(), role: "super_admin" };
 
-/** Usuario de prueba; con `status`, también su fila de `organizers` (aprobado con datos fiscales completos). */
-async function createUser(tx: Tx, status?: OrganizerStatus, overrides: Partial<typeof users.$inferInsert> = {}) {
-  const suffix = randomUUID().slice(0, 8);
-  const [{ id }] = await tx
-    .insert(users)
-    .values({
-      email: `draft.${suffix}@example.com`,
-      firstName: "Ana",
-      lastName: `Prueba ${suffix}`,
-      role: status ? "organizer" : "customer",
-      ...overrides,
-    })
-    .returning({ id: users.id });
-  if (status) {
-    await tx.insert(organizers).values({
-      userId: id,
-      status,
-      legalName: status === "approved" ? `Productora ${suffix} S.A.C.` : null,
-      taxIdType: status === "approved" ? "ruc" : null,
-      taxId: status === "approved" ? `test-${suffix}` : null,
-      commissionBps: 1000,
-    });
-  }
-  return { id, role: status ? "organizer" : "customer" } as Actor;
-}
-
 async function setOrganizerStatus(tx: Tx, userId: string, status: OrganizerStatus) {
   await tx.update(organizers).set({ status }).where(eq(organizers.userId, userId));
-}
-
-/** Recinto con una sección general ("Campo", 300 lugares) y una numerada ("Platea", 2 × 3 asientos). */
-async function createVenue(tx: Tx, createdBy: string, status: "approved" | "pending_review" = "approved") {
-  const suffix = randomUUID().slice(0, 8);
-  const [{ id }] = await tx
-    .insert(venues)
-    .values({
-      name: `Recinto ${suffix}`,
-      address: "Av. Prueba 123",
-      city: "Lima",
-      status,
-      organizerId: status === "approved" ? null : createdBy,
-      createdBy,
-    })
-    .returning({ id: venues.id });
-  const [platea] = await tx
-    .insert(venueSections)
-    .values({ venueId: id, slug: "platea", name: "Platea", sortOrder: 1, seating: "numbered" })
-    .returning({ id: venueSections.id });
-  const [campo] = await tx
-    .insert(venueSections)
-    .values({ venueId: id, slug: "campo", name: "Campo", sortOrder: 0, seating: "general", capacity: 300 })
-    .returning({ id: venueSections.id });
-  await tx.insert(venueSeats).values(
-    ["A", "B"].flatMap((rowLabel, y) =>
-      [1, 2, 3].map((number) => ({ sectionId: platea.id, rowLabel, number, x: number, y })),
-    ),
-  );
-  return { id, name: `Recinto ${suffix}`, campoId: campo.id, plateaId: platea.id };
-}
-
-/** Borrador completo (cumple `events_draft_complete_check` aunque se pase a otro estado). */
-function draftInput(venue: { id: string; campoId: string; plateaId: string }, overrides: Partial<EventDraftInput> = {}) {
-  return {
-    title: "Festival de prueba",
-    category: "festivales",
-    description: "Tres escenarios.",
-    startsAt: new Date("2027-01-16T01:00:00Z"),
-    doorsOpenAt: new Date("2027-01-15T23:00:00Z"),
-    minAge: 18,
-    venueId: venue.id,
-    imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
-    organizerId: null,
-    ticketTypes: [
-      { sectionId: venue.campoId, name: "General", priceCents: 5000, sortOrder: 0 },
-      { sectionId: venue.plateaId, name: "Platea VIP", priceCents: 12000, sortOrder: 1 },
-    ],
-    ...overrides,
-  } satisfies EventDraftInput;
 }
 
 /** Borrador sin recinto ni tipos de entrada: solo el nombre. */
@@ -149,49 +78,6 @@ async function getTicketTypeIds(tx: Tx, eventId: string) {
   return tx.select({ id: ticketTypes.id }).from(ticketTypes).where(eq(ticketTypes.eventId, eventId));
 }
 
-/** Organizador aprobado con un recinto aprobado y un borrador suyo. */
-async function setupDraft(tx: Tx, overrides: Partial<EventDraftInput> = {}) {
-  const owner = await createUser(tx, "approved");
-  const venue = await createVenue(tx, owner.id);
-  const { id } = await createEvent(owner, draftInput(venue, overrides));
-  return { owner, venue, eventId: id };
-}
-
-/**
- * Transacción real (confirmada en `commit`, que se puede llamar varias veces) que queda abierta tras ejecutar `run`:
- * hasta entonces, lo que escribe no lo ven las demás conexiones, que se bloquean si esperan sus locks.
- */
-async function openTransaction(run: (tx: Tx) => Promise<void>): Promise<{ commit: () => Promise<void> }> {
-  let release!: () => void;
-  const released = new Promise<void>((resolve) => (release = resolve));
-  let ready!: () => void;
-  const started = new Promise<void>((resolve) => (ready = resolve));
-  const done = db.transaction(async (tx) => {
-    await run(tx);
-    ready();
-    await released;
-  });
-  await Promise.race([started, done]);
-  return {
-    commit: () => {
-      release();
-      return done;
-    },
-  };
-}
-
-/** Espera a que alguna conexión quede bloqueada esperando un lock en una consulta que contenga `fragment`. */
-async function waitForLockWait(fragment: string): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const { rows } = await db.execute(
-      sql`select 1 from pg_stat_activity where wait_event_type = 'Lock' and query like ${`%${fragment}%`}`,
-    );
-    if (rows.length > 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`Ninguna consulta con "${fragment}" llegó a esperar un lock`);
-}
-
 /** Organizador aprobado confirmado en la BD (fuera de `inRolledBackTransaction`) y la limpieza de él y sus eventos. */
 async function createCommittedOrganizer() {
   const owner = await db.transaction((tx) => createUser(tx, "approved"));
@@ -203,9 +89,6 @@ async function createCommittedOrganizer() {
     });
   return { owner, cleanup };
 }
-
-const domainError = (code: EventDraftErrorCode) =>
-  expect.objectContaining({ name: "EventDraftError", code }) as unknown as EventDraftError;
 
 describeWithDb("eventDrafts.service", () => {
   describe("createEvent", () => {
@@ -389,7 +272,7 @@ describeWithDb("eventDrafts.service", () => {
         const { owner, venue, eventId } = await setupDraft(tx);
         const suffix = randomUUID().slice(0, 8);
         const title = `Nuevo título ${suffix}`;
-        await updateEvent(
+        const result = await updateEvent(
           owner,
           eventId,
           draftInput(venue, {
@@ -399,6 +282,7 @@ describeWithDb("eventDrafts.service", () => {
             ticketTypes: [{ sectionId: venue.plateaId, name: "Platea", priceCents: 9000, sortOrder: 0 }],
           }),
         );
+        expect(result).toEqual({ status: "draft", slug: `nuevo-titulo-${suffix}` });
 
         expect(await getEvent(tx, eventId)).toMatchObject({
           title,
@@ -443,16 +327,6 @@ describeWithDb("eventDrafts.service", () => {
         await expect(updateEvent(owner, eventId, draftInput(venue))).rejects.toBeInstanceOf(OrganizerNotApprovedError);
       }));
 
-    it.each(["pending_review", "published"] as const)("no edita un evento %s", (status) =>
-      inRolledBackTransaction(async (tx) => {
-        const { owner, venue, eventId } = await setupDraft(tx);
-        await tx.update(events).set({ status }).where(eq(events.id, eventId));
-        await expect(updateEvent(owner, eventId, draftInput(venue))).rejects.toEqual(domainError("edit_not_draft"));
-        await expect(updateEvent(ADMIN, eventId, draftInput(venue, { organizerId: owner.id }))).rejects.toEqual(
-          domainError("edit_not_draft"),
-        );
-      }));
-
     it("rechaza una sección de otro recinto y no cambia nada", () =>
       inRolledBackTransaction(async (tx) => {
         const { owner, venue, eventId } = await setupDraft(tx);
@@ -464,6 +338,156 @@ describeWithDb("eventDrafts.service", () => {
         await expect(updateEvent(owner, eventId, input)).rejects.toEqual(domainError("section_not_in_venue"));
         expect((await getEvent(tx, eventId)).title).toBe("Festival de prueba");
         expect(await getTicketTypes(tx, eventId)).toHaveLength(2);
+      }));
+  });
+
+  describe("updateEvent fuera de borrador (F5b, Decisión 11)", () => {
+    /** Borrador completo pasado a `status` (cumple `events_draft_complete_check`). */
+    async function setupEvent(tx: Tx, status: "pending_review" | "published" | "cancelled" | "finished") {
+      const setup = await setupDraft(tx);
+      await tx.update(events).set({ status }).where(eq(events.id, setup.eventId));
+      return setup;
+    }
+
+    it("un evento en revisión no se edita (ni el dueño ni un admin): sigue en revisión, sin cambios", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "pending_review");
+        const locked = expect.objectContaining({ code: "edit_locked", status: "pending_review" });
+        await expect(updateEvent(owner, eventId, draftInput(venue, { description: "Corregida" }))).rejects.toEqual(locked);
+        await expect(
+          updateEvent(ADMIN, eventId, draftInput(venue, { organizerId: owner.id, minAge: 0 })),
+        ).rejects.toEqual(locked);
+        expect(await getEvent(tx, eventId)).toMatchObject({
+          status: "pending_review",
+          description: "Tres escenarios.",
+          minAge: 18,
+        });
+      }));
+
+    it.each(["cancelled", "finished"] as const)("un evento %s no se edita", (status) =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, status);
+        await expect(updateEvent(owner, eventId, draftInput(venue))).rejects.toEqual(domainError("edit_locked"));
+        await expect(updateEvent(ADMIN, eventId, draftInput(venue, { organizerId: owner.id }))).rejects.toEqual(
+          domainError("edit_locked"),
+        );
+      }));
+
+    it("publicado sin ventas: cambia textos, categoría, fecha, nombre y precio; conserva slug, estado y orden", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        const { slug } = await getEvent(tx, eventId);
+        const startsAt = new Date("2027-02-20T01:00:00Z");
+        const result = await updateEvent(
+          owner,
+          eventId,
+          draftInput(venue, {
+            title: "Título nuevo",
+            category: "conciertos",
+            startsAt,
+            doorsOpenAt: startsAt,
+            ticketTypes: [
+              { sectionId: venue.campoId, name: "Campo", priceCents: 6000, sortOrder: 0 },
+              { sectionId: venue.plateaId, name: "Platea VIP", priceCents: 15000, sortOrder: 1 },
+            ],
+          }),
+        );
+
+        // El slug (su URL pública) no cambia aunque cambie el título: la acción invalida esas páginas.
+        expect(result).toEqual({ status: "published", slug });
+        expect(await getEvent(tx, eventId)).toMatchObject({ status: "published", slug, title: "Título nuevo", startsAt });
+        expect(await getTicketTypes(tx, eventId)).toEqual([
+          { sectionId: venue.campoId, slug: "campo", name: "Campo", priceCents: 6000, sortOrder: 0, maxPerOrder: 10 },
+          { sectionId: venue.plateaId, slug: "platea", name: "Platea VIP", priceCents: 15000, sortOrder: 1, maxPerOrder: 10 },
+        ]);
+      }));
+
+    it("publicado: nunca cambian el recinto, las secciones a la venta ni el organizador", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        const other = await createVenue(tx, owner.id);
+        await expect(updateEvent(owner, eventId, draftInput(other))).rejects.toEqual(domainError("structure_locked"));
+        const onlyCampo = draftInput(venue, {
+          ticketTypes: [{ sectionId: venue.campoId, name: "General", priceCents: 5000, sortOrder: 0 }],
+        });
+        await expect(updateEvent(owner, eventId, onlyCampo)).rejects.toEqual(domainError("structure_locked"));
+        const newOwner = await createUser(tx, "approved");
+        await expect(updateEvent(ADMIN, eventId, draftInput(venue, { organizerId: newOwner.id }))).rejects.toEqual(
+          domainError("structure_locked"),
+        );
+        expect(await getEvent(tx, eventId)).toMatchObject({ venueId: venue.id, organizerId: owner.id });
+      }));
+
+    const activeSales = [
+      ["una orden paid", "paid", new Date(Date.now() - 60_000)],
+      ["una orden partially_refunded", "partially_refunded", new Date(Date.now() - 60_000)],
+      ["una orden pending vigente", "pending", new Date(Date.now() + 10 * 60_000)],
+    ] as const;
+
+    it.each(activeSales)("publicado con %s: bloquea precio, fecha, nombre y categoría", (_label, status, expiresAt) =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        await insertOrder(tx, eventId, status, expiresAt);
+        const sensitive: Partial<EventDraftInput>[] = [
+          { ticketTypes: draftInput(venue).ticketTypes.map((type) => ({ ...type, priceCents: type.priceCents + 100 })) },
+          { ticketTypes: draftInput(venue).ticketTypes.map((type) => ({ ...type, name: `${type.name} 2` })) },
+          { startsAt: new Date("2027-03-01T01:00:00Z") },
+          { doorsOpenAt: new Date("2027-01-16T00:00:00Z") },
+          { category: "teatro" },
+        ];
+        for (const overrides of sensitive) {
+          await expect(updateEvent(owner, eventId, draftInput(venue, overrides))).rejects.toEqual(
+            domainError("sensitive_locked"),
+          );
+        }
+        expect(await getTicketTypes(tx, eventId)).toEqual(
+          expect.arrayContaining([expect.objectContaining({ name: "General", priceCents: 5000 })]),
+        );
+      }));
+
+    it.each(activeSales)("publicado con %s: sí cambian título, descripción, portada y edad", (_label, status, expiresAt) =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        await insertOrder(tx, eventId, status, expiresAt);
+        const changes = {
+          title: "Nuevo nombre",
+          description: "Nueva descripción",
+          imageUrl: "https://cdn.example.com/portada.jpg",
+          minAge: 0,
+        };
+        await updateEvent(owner, eventId, draftInput(venue, changes));
+        expect(await getEvent(tx, eventId)).toMatchObject({ ...changes, status: "published" });
+      }));
+
+    it("una orden pending vencida o reembolsada no bloquea los cambios sensibles", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        await insertOrder(tx, eventId, "pending", new Date(Date.now() - 60_000));
+        await insertOrder(tx, eventId, "refunded", new Date(Date.now() - 60_000));
+        const ticketTypes = draftInput(venue).ticketTypes.map((type) => ({ ...type, priceCents: 9900 }));
+        await updateEvent(owner, eventId, draftInput(venue, { ticketTypes }));
+        expect((await getTicketTypes(tx, eventId)).map((type) => type.priceCents)).toEqual([9900, 9900]);
+      }));
+
+    it("publicado: sigue exigiendo los requisitos para publicar y una fecha nueva futura", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        await expect(
+          updateEvent(owner, eventId, draftInput(venue, { description: null, imageUrl: null })),
+        ).rejects.toEqual(expect.objectContaining({ code: "incomplete", issues: ["description", "image"] }));
+        const past = new Date("2026-01-01T01:00:00Z");
+        await expect(
+          updateEvent(owner, eventId, draftInput(venue, { startsAt: past, doorsOpenAt: past })),
+        ).rejects.toEqual(expect.objectContaining({ code: "incomplete", issues: ["startsAtPast"] }));
+      }));
+
+    it("publicado ya empezado: se puede editar el título sin tocar la fecha", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupEvent(tx, "published");
+        const past = new Date("2026-01-01T01:00:00Z");
+        await tx.update(events).set({ startsAt: past, doorsOpenAt: past }).where(eq(events.id, eventId));
+        await updateEvent(owner, eventId, draftInput(venue, { title: "Edición 2026", startsAt: past, doorsOpenAt: past }));
+        expect((await getEvent(tx, eventId)).title).toBe("Edición 2026");
       }));
   });
 
@@ -556,10 +580,20 @@ describeWithDb("eventDrafts.service", () => {
             { sectionId: venue.campoId, name: "General", priceCents: 5000 },
             { sectionId: venue.plateaId, name: "Platea VIP", priceCents: 12000 },
           ],
+          reviewNote: null,
+          hasSales: false,
         };
         expect(await getEventForEdit(owner, eventId)).toEqual(expected);
         expect(await getEventForEdit(ADMIN, eventId)).toEqual(expected);
         expect(await getEventForEdit(await createUser(tx, "approved"), eventId)).toBeNull();
+      }));
+
+    it("incluye la nota del último rechazo y si tiene ventas vigentes", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, eventId } = await setupDraft(tx);
+        await tx.update(events).set({ reviewNote: "Falta la portada" }).where(eq(events.id, eventId));
+        await insertOrder(tx, eventId, "pending", new Date(Date.now() + 10 * 60_000));
+        expect(await getEventForEdit(owner, eventId)).toMatchObject({ reviewNote: "Falta la portada", hasSales: true });
       }));
 
     it("un id que no es uuid o un cliente dan null", () =>

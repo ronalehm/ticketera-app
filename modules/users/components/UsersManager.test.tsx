@@ -351,6 +351,22 @@ describe("UsersManager: acciones", () => {
     expect(screen.getByRole("alertdialog")).toBeTruthy();
   });
 
+  it("mientras elimina, Cancelar y Eliminar quedan deshabilitados", async () => {
+    let resolve!: (result: { ok: true }) => void;
+    vi.mocked(deleteUserAction).mockReturnValue(new Promise((done) => (resolve = done)));
+    renderDefault();
+
+    fireEvent.click(card("Carla Cliente").getByRole("button", { name: "Eliminar a Carla Cliente" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Eliminar" }));
+
+    const pending = await within(dialog).findByRole("button", { name: "Eliminando…" });
+    expect(pending.hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: "Cancelar" }).hasAttribute("disabled")).toBe(true);
+    resolve({ ok: true });
+    expect(await screen.findByText("Carla Cliente fue eliminado.")).toBeTruthy();
+  });
+
   it("Invitar abre el diálogo y avisa del resultado", async () => {
     vi.mocked(inviteUserAction).mockResolvedValue({ ok: true, outcome: "invited" });
     renderDefault();

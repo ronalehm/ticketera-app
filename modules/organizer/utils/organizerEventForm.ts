@@ -9,6 +9,7 @@ import {
 import type {
   EditableEvent,
   EventDraftFormValues,
+  EventFormLock,
   EventDraftInput,
   EventDraftValues,
   TicketTypeRow,
@@ -138,6 +139,16 @@ export function toEventDraftInput(values: EventDraftValues, { requireOrganizer }
       .filter((row) => row.selected)
       .map((row, sortOrder) => ({ sectionId: row.sectionId, name: row.name, priceCents: toCents(row.price), sortOrder })),
   };
+}
+
+/**
+ * Qué bloquea el formulario de Editar: nada en un borrador; en un evento publicado, la estructura o, con ventas, todo
+ * salvo título, descripción, portada y edad (mismas reglas que `updateEvent`, que es quien las garantiza). Un evento en
+ * revisión, cancelado o finalizado no llega al formulario.
+ */
+export function getEventFormLock(event?: Pick<EditableEvent, "status" | "hasSales">): EventFormLock | null {
+  if (event?.status !== "published") return null;
+  return event.hasSales ? "sales" : "structure";
 }
 
 /** Primer mensaje por campo de cada fila (solo las marcadas para vender), con las mismas reglas que el schema. */

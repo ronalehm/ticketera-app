@@ -59,7 +59,17 @@ export type EditableEvent = {
   venueId: string | null;
   imageUrl: string | null;
   ticketTypes: { sectionId: string; name: string; priceCents: number }[];
+  /** Motivo del último rechazo (lo ve el organizador en su borrador); `null` si no lo hay. */
+  reviewNote: string | null;
+  /** Ventas activas (órdenes `paid`, `partially_refunded` o `pending` vigentes, `lib/db/activeSales.ts`): bloquean los cambios sensibles de un evento publicado (Decisión 11). */
+  hasSales: boolean;
 };
+
+/**
+ * Campos bloqueados al editar un evento publicado (Decisión 11): `structure` (recinto, secciones a la venta y
+ * organizador) o, con ventas, `sales` (además categoría, fecha, nombres y precios de los tipos de entrada).
+ */
+export type EventFormLock = "structure" | "sales";
 
 /** Fallo de una acción de borradores: mensaje en español y `code` si es un error de dominio. */
 export type EventDraftActionFailure = { ok: false; error: string; code?: EventDraftErrorCode };

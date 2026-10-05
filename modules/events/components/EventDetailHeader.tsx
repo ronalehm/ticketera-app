@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Clock, MapPin } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
@@ -82,7 +82,7 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
 
       <div className="grid overflow-hidden rounded-3xl bg-brand-navy text-primary-foreground lg:min-h-[28rem] lg:grid-cols-2">
         <div className="relative aspect-[16/9] lg:order-last lg:aspect-auto">
-          <Image
+          <EventCoverImage
             src={event.imageUrl}
             alt={`${event.title} en ${event.venue}, ${event.city}`}
             fill

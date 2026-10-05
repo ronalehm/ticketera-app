@@ -7,6 +7,7 @@ import {
   EMPTY_EVENT_DRAFT,
   formatPriceInput,
   formatTicketCount,
+  getEventFormLock,
   getMinAgeLabels,
   getMinTicketPrice,
   getSelectedCapacity,
@@ -107,6 +108,8 @@ describe("toEventDraftFormValues", () => {
     venueId: VENUE.id,
     imageUrl: null,
     ticketTypes: [{ sectionId: SECTION_A, name: "General", priceCents: 5000 }],
+    reviewNote: null,
+    hasSales: false,
   };
 
   it("pasa fechas a Lima, nulos a vacíos y precios a soles", () => {
@@ -234,5 +237,17 @@ describe("filas de tipos de entrada", () => {
   it("formatTicketCount usa singular y separador de miles", () => {
     expect(formatTicketCount(1)).toBe("1 entrada");
     expect(formatTicketCount(1500)).toBe("1,500 entradas");
+  });
+});
+
+describe("getEventFormLock", () => {
+  it.each([
+    [undefined, null],
+    [{ status: "draft", hasSales: false }, null],
+    [{ status: "pending_review", hasSales: false }, null],
+    [{ status: "published", hasSales: false }, "structure"],
+    [{ status: "published", hasSales: true }, "sales"],
+  ] as const)("%j → %s", (event, expected) => {
+    expect(getEventFormLock(event)).toBe(expected);
   });
 });

@@ -1,9 +1,11 @@
 import { and, eq, getTableColumns, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { legalDocuments } from "@/lib/db/schema/legal";
+import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { buildSeedData, seedUuid, type SeedData } from "./buildSeedData";
 import { parseSeedRoles, SeedConfigError } from "./env";
@@ -33,13 +35,20 @@ export const SEED_OWNED_COLUMNS: { [K in Exclude<keyof SeedData, "users">]: (key
   ],
   venueSeats: ["x", "y", "accessible"],
   // Mapa propio del evento (`NULL` = el del recinto): así un evento recibe el suyo en una BD ya sembrada.
-  // Organizador (reparto por hash del slug) y fechas (relativas a `now`): se reasignan y desplazan en cada ejecución.
+  // Organizador (reparto por hash del slug) y fechas (relativas a `now`): se reasignan y desplazan en cada ejecución,
+  // salvo las fechas de un evento con ventas (ver `EVENT_DATE_COLUMNS`).
   events: ["organizerId", "startsAt", "doorsOpenAt", "mapViewBox", "mapStage"],
   ticketTypes: ["sectionId", "sortOrder"],
   eventSeats: ["status", "orderId", "retiredAt"],
   // Documentos legales publicados: identidad y negocio, como `users`; solo se insertan los que faltan.
   legalDocuments: [],
 };
+
+/**
+ * Fechas que el seed no desplaza en un evento con ventas activas (`isActiveSaleOrder`; spec admin-panel, enmienda 9,
+ * como la Decisión 11: con ventas no se cambia la fecha).
+ */
+const EVENT_DATE_COLUMNS: readonly (keyof SeedData["events"][number])[] = ["startsAt", "doorsOpenAt"];
 
 export type SeedOptions = {
   superAdminEmail: string;
@@ -61,6 +70,8 @@ export type SeedReport = {
    * `pending` o `suspended`): el seed respeta ese estado y no lo aprueba, aunque les reparte eventos igual.
    */
   nonApprovedOrganizers: { email: string; status: (typeof organizers.$inferSelect)["status"] }[];
+  /** Slugs (ordenados) de los eventos del seed con ventas activas (`isActiveSaleOrder`): conservan su fecha. */
+  eventsWithKeptDates: string[];
 };
 
 /** Un array como un único parámetro `uuid[]` (no como lista de parámetros). */
@@ -73,7 +84,9 @@ export type SeedDatabase = Pick<NodePgDatabase, "transaction">;
  * Siembra los mocks en una transacción, sin borrar nada:
  * - inserta lo que falta y actualiza solo las columnas de `SEED_OWNED_COLUMNS` que cambian (ids deterministas);
  * - todo el inventario que escribe queda disponible, y nunca toca un lugar retenido o vendido (con pedido);
- * - retira (`retired_at`) el inventario demo que el layout ya no tiene.
+ * - retira (`retired_at`) el inventario demo que el layout ya no tiene;
+ * - no desplaza la fecha (`starts_at`, `doors_open_at`) de un evento con ventas activas (`isActiveSaleOrder`: órdenes
+ *   `paid`, `partially_refunded` o `pending` vigentes): lo informa en `eventsWithKeptDates`.
  * El super admin y los organizadores se buscan por correo y conservan su `id`, su `clerk_id` y sus datos de perfil
  * si ya existían; tampoco cambia el `status` de un organizador que ya tenía fila (un admin pudo dejarlo `pending` o
  * `suspended`): lo informa en `nonApprovedOrganizers`. Lanza `SeedConfigError`, sin escribir nada, si el super admin está entre los organizadores o si un
@@ -172,6 +185,33 @@ export async function seed(db: SeedDatabase, options: SeedOptions): Promise<Seed
       return result.rowCount ?? 0;
     }
 
+    /** Eventos del seed con ventas activas (`isActiveSaleOrder`): el seed no desplaza su fecha. */
+    async function eventsWithSales(): Promise<{ id: string; slug: string }[]> {
+      return tx
+        .selectDistinct({ id: events.id, slug: events.slug })
+        .from(events)
+        .innerJoin(orders, eq(orders.eventId, events.id))
+        .where(
+          and(
+            sql`${events.id} = ANY(${uuidArray(data.events.flatMap((row) => row.id ?? []))})`,
+            isActiveSaleOrder,
+          ),
+        )
+        .orderBy(events.slug);
+    }
+
+    /** Eventos: los que tienen ventas se actualizan sin sus columnas de fecha. */
+    async function upsertEvents(keptDateIds: ReadonlySet<string>): Promise<number> {
+      const hasSales = (row: SeedData["events"][number]) => keptDateIds.has(row.id as string);
+      const withoutDates = SEED_OWNED_COLUMNS.events.filter((column) => !EVENT_DATE_COLUMNS.includes(column));
+      return (
+        (await upsertAll(events, data.events.filter((row) => !hasSales(row)), SEED_OWNED_COLUMNS.events)) +
+        (await upsertAll(events, data.events.filter(hasSales), withoutDates))
+      );
+    }
+
+    const keptDates = await eventsWithSales();
+
     // En orden de dependencias.
     const written: SeedReport["written"] = {
       users: await upsertOrganizerUsers(),
@@ -180,7 +220,7 @@ export async function seed(db: SeedDatabase, options: SeedOptions): Promise<Seed
       venues: await upsertAll(venues, data.venues, SEED_OWNED_COLUMNS.venues),
       venueSections: await upsertAll(venueSections, data.venueSections, SEED_OWNED_COLUMNS.venueSections),
       venueSeats: await upsertAll(venueSeats, data.venueSeats, SEED_OWNED_COLUMNS.venueSeats),
-      events: await upsertAll(events, data.events, SEED_OWNED_COLUMNS.events),
+      events: await upsertEvents(new Set(keptDates.map((event) => event.id))),
       ticketTypes: await upsertAll(ticketTypes, data.ticketTypes, SEED_OWNED_COLUMNS.ticketTypes),
       eventSeats: await upsertAll(
         eventSeats,
@@ -218,6 +258,12 @@ export async function seed(db: SeedDatabase, options: SeedOptions): Promise<Seed
       )
       .orderBy(users.email);
 
-    return { written, retiredEventSeats: retired.rowCount ?? 0, obsoleteWithSales, nonApprovedOrganizers };
+    return {
+      written,
+      retiredEventSeats: retired.rowCount ?? 0,
+      obsoleteWithSales,
+      nonApprovedOrganizers,
+      eventsWithKeptDates: keptDates.map((event) => event.slug),
+    };
   });
 }

@@ -1,7 +1,7 @@
 # Panel admin + organizador: seguridad, seed limpio, datos reales, usuarios y eventos
 
 - Módulo: panel (con cambios en auth, organizer, events, users y lib/db)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Convertir `/organizador` (hoy casi todo mock, sin control de rol) en un panel de back-office real y compartido por organizadores y administradores, con:
@@ -273,18 +273,18 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [x] Borrar un evento que no es `draft` falla.
 
 ### F5b
-- [ ] Tabla de transiciones cubierta.
-- [ ] Dos aprobaciones concurrentes dejan el mismo número de `event_seats`, incluidos los generales.
-- [ ] Cancelar con ventas está bloqueado.
-- [ ] Los cambios sensibles están bloqueados con órdenes `pending` vigentes.
-- [ ] Enviar a revisión y aprobar fallan con fecha pasada o con datos incompletos, y el mensaje dice qué falta.
-- [ ] Un evento publicado con portada de un dominio distinto de Unsplash se ve en la tarjeta, el detalle y el checkout.
-- [ ] Un evento `pending_review` muestra la capacidad configurada.
-- [ ] Tras `db:reset-demo`, un evento que no es del seed conserva su inventario, todo `available`.
-- [ ] `db:seed` no cambia la fecha de un evento demo con una orden `paid`.
-- [ ] Un evento `pending_review` no se puede editar; en un publicado no se cambian recinto, secciones ni organizador.
-- [ ] Una reserva no puede quedar `pending` sobre un evento cancelado (prueba concurrente cancelar/reservar), y una orden de un evento no publicado no se paga.
-- [ ] Al aprobar, cancelar o editar un publicado, las páginas públicas muestran el cambio.
+- [x] Tabla de transiciones cubierta.
+- [x] Dos aprobaciones concurrentes dejan el mismo número de `event_seats`, incluidos los generales.
+- [x] Cancelar con ventas está bloqueado.
+- [x] Los cambios sensibles están bloqueados con órdenes `pending` vigentes.
+- [x] Enviar a revisión y aprobar fallan con fecha pasada o con datos incompletos, y el mensaje dice qué falta.
+- [x] Un evento publicado con portada de un dominio distinto de Unsplash se ve en la tarjeta, el detalle y el checkout.
+- [x] Un evento `pending_review` muestra la capacidad configurada.
+- [x] Tras `db:reset-demo`, un evento que no es del seed conserva su inventario, todo `available`.
+- [x] `db:seed` no cambia la fecha de un evento demo con una orden `paid`.
+- [x] Un evento `pending_review` no se puede editar; en un publicado no se cambian recinto, secciones ni organizador.
+- [x] Una reserva no puede quedar `pending` sobre un evento cancelado (prueba concurrente cancelar/reservar), y una orden de un evento no publicado no se paga.
+- [x] Al aprobar, cancelar o editar un publicado, las páginas públicas muestran el cambio.
 
 ## Diseño técnico (F1)
 - **`modules/auth`:**
@@ -362,11 +362,11 @@ Coordinación:
 - [x] T4 — Retiro del store zustand de creación
 
 ### F5b — Moderación, publicación e inventario
-- [ ] T1 — Reglas de transición (util pura, test tabla) + `submitForReview`, `approveEvent` (transacción con lock e inventario), `rejectEvent` y `cancelEvent`, con tests de integración (incluida la doble aprobación concurrente y los requisitos del punto 4)
-- [ ] T2 — Bloqueo de cambios sensibles con órdenes `paid` o `pending` vigentes, con test
-- [ ] T3 — UI de moderación (acciones por estado en Mis eventos)
-- [ ] T4 — `system-design.md` (regla de precios y transiciones) y portadas `unoptimized` en las vistas públicas
-- [ ] T5 — Enmiendas 7–9: capacidad de `pending_review` en `listManagedEvents`, inventario liberado en `db:reset-demo`, fechas fijas con ventas en `db:seed`; con tests
+- [x] T1 — Reglas de transición (util pura, test tabla) + `submitForReview`, `approveEvent` (transacción con lock e inventario), `rejectEvent` y `cancelEvent`, con tests de integración (incluida la doble aprobación concurrente y los requisitos del punto 4)
+- [x] T2 — Bloqueo de cambios sensibles con órdenes `paid` o `pending` vigentes, con test
+- [x] T3 — UI de moderación (acciones por estado en Mis eventos)
+- [x] T4 — `system-design.md` (regla de precios y transiciones) y portadas `unoptimized` en las vistas públicas
+- [x] T5 — Enmiendas 7–9: capacidad de `pending_review` en `listManagedEvents`, inventario liberado en `db:reset-demo`, fechas fijas con ventas en `db:seed`; con tests
 
 ## Preguntas abiertas
 Ninguna: el plan quedó aprobado por el usuario antes de redactar la spec.

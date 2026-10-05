@@ -26,6 +26,11 @@ async function main() {
       `Aviso: ${report.obsoleteWithSales} lugares obsoletos tienen una venta o retención real; no se retiran ni se tocan.`,
     );
   }
+  if (report.eventsWithKeptDates.length > 0) {
+    console.log(
+      `  eventos que conservaron su fecha (ventas activas: pagadas, parcialmente reembolsadas o pendientes vigentes): ${report.eventsWithKeptDates.join(", ")}`,
+    );
+  }
   for (const { email, status } of report.nonApprovedOrganizers) {
     console.warn(
       `Aviso: el organizador ${email} está ${status}; el seed respeta el estado que puso un admin y no lo aprueba, pero le reparte eventos.`,

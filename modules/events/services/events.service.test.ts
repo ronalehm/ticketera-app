@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { buildSeedData, seedUuid } from "@/lib/db/seed/buildSeedData";
 import { describeWithDb } from "@/lib/db/testDb";
+import { TEST_EVENT_SLUG_PREFIX } from "@/lib/db/testFixtures";
 import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { EVENTS_MOCK } from "../data/events.mock";
@@ -58,7 +59,8 @@ function expectSameAsMock<T extends Event & { doorsOpenAt?: string }>(actual: T,
 
 describeWithDb("events.service (BD)", () => {
   it("getEvents devuelve los eventos publicados del mock, en su orden", async () => {
-    const events = await getEvents();
+    // Sin los eventos de prueba publicados que los tests de checkout crean y borran en paralelo.
+    const events = (await getEvents()).filter((event) => !event.slug.startsWith(TEST_EVENT_SLUG_PREFIX));
     expect(events.map((event) => event.slug)).toEqual(EVENTS_MOCK.map((event) => event.slug));
     events.forEach((event, index) => expectSameAsMock(event, seededEvent(eventSchema.parse(EVENTS_MOCK[index]))));
   });

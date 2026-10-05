@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { cva } from "class-variance-authority";
 import { CalendarDays, MapPin } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -173,7 +173,7 @@ export function EventCard({ event, layout = "grid", surface = "background", clas
     <Card className={cn(cardVariants({ layout }), className)}>
       <div className={mediaVariants({ layout })}>
         <Link href={href} tabIndex={-1} aria-hidden className="absolute inset-0 block overflow-hidden">
-          <Image
+          <EventCoverImage
             src={event.imageUrl}
             alt={`${event.title} en ${event.venue}, ${event.city}`}
             fill

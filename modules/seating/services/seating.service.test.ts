@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { eventSeats, events } from "@/lib/db/schema/events";
 import { venueSeats, venueSections } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
-import { sellTestSeats } from "@/lib/db/testFixtures";
+import { sellTestSeats, TEST_EVENT_SLUG_PREFIX } from "@/lib/db/testFixtures";
 import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug, getEvents } from "@/modules/events";
 import { VIVE_LATINO_SECTORS } from "../data/festivalViveLatino.mock";
@@ -149,7 +149,10 @@ describe("seating.service", () => {
     });
 
     it("todo evento publicado tiene mapa salvo los excluidos (el circo y la aventura)", async () => {
-      const slugs = (await getEvents()).map((event) => event.slug).filter((slug) => !NO_MAP_SLUGS.includes(slug));
+      // Sin los eventos de prueba publicados que los tests de checkout crean y borran en paralelo.
+      const slugs = (await getEvents())
+        .map((event) => event.slug)
+        .filter((slug) => !NO_MAP_SLUGS.includes(slug) && !slug.startsWith(TEST_EVENT_SLUG_PREFIX));
       expect(slugs.sort()).toEqual([...MAP_SLUGS].sort());
     });
   });

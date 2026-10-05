@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getFirstName, getFullName } from "@/lib/userName";
 import { cn } from "@/lib/utils";
-import { ACCOUNT_LINKS } from "./accountLinks";
+import { getAccountLinks } from "./accountLinks";
 import { UserSummary } from "@/components/shared/UserSummary";
+import type { SessionUser } from "../types/auth.types";
 
 const TRIGGER = cn(
   buttonVariants({ variant: "ghost" }),
@@ -30,11 +31,12 @@ type UserMenuProps = {
   firstName: string;
   lastName: string;
   email: string;
+  role: SessionUser["role"];
   pathname: string;
   onSignOut: () => void;
 };
 
-export function UserMenu({ firstName, lastName, email, pathname, onSignOut }: UserMenuProps) {
+export function UserMenu({ firstName, lastName, email, role, pathname, onSignOut }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label={`Cuenta de ${getFullName(firstName, lastName)}`} className={TRIGGER}>
@@ -47,7 +49,7 @@ export function UserMenu({ firstName, lastName, email, pathname, onSignOut }: Us
           <DropdownMenuLabel className="px-2 pt-1 pb-3 text-sm text-foreground">
             <UserSummary firstName={firstName} lastName={lastName} email={email} />
           </DropdownMenuLabel>
-          {ACCOUNT_LINKS.map(({ href, label, icon: Icon }) => (
+          {getAccountLinks(role).map(({ href, label, icon: Icon }) => (
             <DropdownMenuItem
               key={href}
               className={ITEM}

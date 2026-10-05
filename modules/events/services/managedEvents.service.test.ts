@@ -33,12 +33,17 @@ async function createEvent(tx: Tx, options: TestEventOptions = {}) {
   return { ...event, organizer: { id: organizerId, role: "organizer" } as const };
 }
 
-/** Pasa el evento a `published` con los campos que exige `events_draft_complete_check`. */
-async function publish(tx: Tx, eventId: string, startsAt = new Date("2027-01-15T01:00:00Z")) {
+/** Pasa el evento a `status` (`published` por defecto) con los campos que exige `events_draft_complete_check`. */
+async function publish(
+  tx: Tx,
+  eventId: string,
+  startsAt = new Date("2027-01-15T01:00:00Z"),
+  status: "published" | "pending_review" = "published",
+) {
   await tx
     .update(events)
     .set({
-      status: "published",
+      status,
       description: "Evento de prueba",
       imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
       startsAt,
@@ -155,6 +160,20 @@ describeWithDb("listManagedEvents (Postgres)", () => {
 
       expect(byId(await listManagedEvents(event.organizer), event.eventId)).toMatchObject({
         status: "draft",
+        capacity: 20,
+      });
+    });
+  });
+
+  it("un pending_review muestra la capacidad configurada en sus secciones, no su inventario", async () => {
+    await inRolledBackTransaction(async (tx) => {
+      const event = await createEvent(tx, { general: 10, numbered: { rows: ["A", "B"], seatsPerRow: 5 } });
+      await publish(tx, event.eventId, undefined, "pending_review");
+      // En revisión aún no hay inventario (se genera al aprobar): aunque se retire todo, cuenta lo configurado.
+      await tx.update(eventSeats).set({ retiredAt: new Date() }).where(eq(eventSeats.eventId, event.eventId));
+
+      expect(byId(await listManagedEvents(event.organizer), event.eventId)).toMatchObject({
+        status: "pending_review",
         capacity: 20,
       });
     });

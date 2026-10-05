@@ -32,6 +32,7 @@ export default async function OrganizerEventsPage({ searchParams }: PageProps<"/
         userId={user.id}
         initialEvents={events}
         showOrganizer={roleCan(user.role, "events:manageAny")}
+        role={user.role}
         canMutate={!readOnly}
         saved={saved}
       />

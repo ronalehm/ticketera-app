@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { DrizzleQueryError } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
 import { createEvent, deleteEvent, updateEvent } from "../services/eventDrafts.service";
@@ -11,6 +12,7 @@ vi.mock("@/modules/auth/server", async (importOriginal) => {
   const { OrganizerNotApprovedError } = await importOriginal<typeof import("@/modules/auth/server")>();
   return { requirePermission: vi.fn(), OrganizerNotApprovedError };
 });
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("../services/eventDrafts.service", () => ({
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
@@ -53,6 +55,7 @@ const VALUES: EventDraftFormValues = {
 beforeEach(() => {
   vi.mocked(requirePermission).mockResolvedValue(ORGANIZER);
   vi.mocked(createEvent).mockResolvedValue({ id: EVENT_ID });
+  vi.mocked(updateEvent).mockResolvedValue({ status: "draft", slug: "festival" });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -151,9 +154,28 @@ describe("createEventAction", () => {
 });
 
 describe("updateEventAction", () => {
-  it("guarda con el id validado", async () => {
+  it("guarda con el id validado; un borrador no invalida páginas públicas", async () => {
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
     expect(updateEvent).toHaveBeenCalledWith(ORGANIZER, EVENT_ID, expect.objectContaining({ title: "Festival" }));
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("un evento publicado invalida el inicio, el catálogo, su detalle y su compra", async () => {
+    vi.mocked(updateEvent).mockResolvedValue({ status: "published", slug: "festival" });
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
+    expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path).sort()).toEqual(
+      ["/", "/eventos", "/eventos/festival", "/eventos/festival/entradas"].sort(),
+    );
+  });
+
+  it("un evento en revisión no se edita: pide al admin que lo rechace", async () => {
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("edit_locked", [], "pending_review"));
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({
+      ok: false,
+      error: "Está en revisión: si necesitas cambios, pide al administrador que lo rechace.",
+      code: "edit_locked",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("rechaza un id que no es un uuid", async () => {
@@ -161,12 +183,22 @@ describe("updateEventAction", () => {
     expect(updateEvent).not.toHaveBeenCalled();
   });
 
-  it("un evento que no es borrador → \"Solo se pueden editar borradores.\"", async () => {
-    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("edit_not_draft"));
+  it("un cambio sensible con ventas → su mensaje y su code", async () => {
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("sensitive_locked"));
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({
       ok: false,
-      error: "Solo se pueden editar borradores.",
-      code: "edit_not_draft",
+      error:
+        "El evento tiene ventas o reservas en curso: solo puedes cambiar el título, la descripción, la portada y la edad mínima.",
+      code: "sensitive_locked",
+    });
+  });
+
+  it("un evento publicado incompleto → el mensaje dice qué falta", async () => {
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("incomplete", ["image"]));
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({
+      ok: false,
+      error: "Faltan datos para publicar el evento: la portada.",
+      code: "incomplete",
     });
   });
 });

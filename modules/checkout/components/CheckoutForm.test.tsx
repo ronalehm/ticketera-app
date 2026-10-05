@@ -380,6 +380,17 @@ describe("CheckoutForm", () => {
     for (const button of payButtons()) expect(button.disabled).toBe(false);
   });
 
+  it("portada de otro dominio: las img del resumen usan la URL tal cual, sin pasar por /_next/image", () => {
+    const cover = "https://cdn.example.org/x.jpg";
+    const { container } = renderForm({ ...ORDER, event: { ...ORDER.event, imageUrl: cover } });
+    const images = [...container.querySelectorAll("img")];
+    expect(images.length).toBeGreaterThan(0);
+    for (const img of images) {
+      expect(img.getAttribute("src")).toBe(cover);
+      expect(img.getAttribute("srcset")).toBeNull();
+    }
+  });
+
   it("con sesión precarga Nombres, Apellidos y Correo", () => {
     session.user = SESSION_USER;
     renderForm();

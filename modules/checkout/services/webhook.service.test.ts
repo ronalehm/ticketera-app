@@ -108,7 +108,7 @@ async function isEventRecorded(id: string): Promise<boolean> {
 
 describeWithDb("handleStripeWebhook", () => {
   beforeAll(async () => {
-    testEvent = await createTestEvent({ general: 20, numbered: { rows: ["A", "B", "C"], seatsPerRow: 3 }, priceCents: 5000 });
+    testEvent = await createTestEvent({ general: 20, numbered: { rows: ["A", "B", "C"], seatsPerRow: 3 }, priceCents: 5000, status: "published" });
   });
 
   afterAll(async () => {

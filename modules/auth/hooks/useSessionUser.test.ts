@@ -46,14 +46,35 @@ describe("useSessionUser", () => {
     });
   });
 
-  it("convierte los nombres nulos en cadena vacía", () => {
+  it("convierte los nombres nulos en cadena vacía y, sin rol en publicMetadata, usa customer", () => {
     clerkMock.useUser.mockReturnValue({
       isLoaded: true,
       isSignedIn: true,
       user: { firstName: null, lastName: null, primaryEmailAddress: { emailAddress: "ana@example.com" } },
     });
     const { result } = renderHook(() => useSessionUser());
-    expect(result.current.user).toEqual({ firstName: "", lastName: "", email: "ana@example.com" });
+    expect(result.current.user).toEqual({ firstName: "", lastName: "", email: "ana@example.com", role: "customer" });
+  });
+
+  it.each([
+    ["organizer", "organizer"],
+    ["admin", "admin"],
+    ["super_admin", "super_admin"],
+    ["root", "customer"],
+    [42, "customer"],
+  ])("publicMetadata.role %j → %s", (value, expected) => {
+    clerkMock.useUser.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      user: {
+        firstName: "Ana",
+        lastName: "Quispe",
+        primaryEmailAddress: { emailAddress: "ana@example.com" },
+        publicMetadata: { role: value },
+      },
+    });
+    const { result } = renderHook(() => useSessionUser());
+    expect(result.current.user?.role).toBe(expected);
   });
 
   it("signOut cierra la sesión de Clerk y lleva a /", async () => {

@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createEventAction, deleteEventAction, updateEventAction } from "../actions/eventDrafts.actions";
-import type { EventDraftFormValues } from "../types/organizer.types";
+import type { EventDraftActionResult, EventDraftFormValues } from "../types/organizer.types";
 import type { EventDraftErrorCode } from "../utils/eventDraftError";
 import { managedEventsBaseKey } from "./useManagedEvents";
 
@@ -23,8 +23,24 @@ export function useSaveEventDraft(userId: string) {
   });
 }
 
-/** Fallos que significan que el listado está desactualizado (otro usuario lo eliminó o cambió su estado). */
-const STALE_LIST_CODES: readonly EventDraftErrorCode[] = ["not_found", "delete_not_draft", "has_activity"];
+/**
+ * Fallos que significan que el listado está desactualizado: otro usuario eliminó el evento, cambió su estado o le
+ * entraron ventas.
+ */
+const STALE_LIST_CODES: readonly EventDraftErrorCode[] = [
+  "not_found",
+  "delete_not_draft",
+  "has_activity",
+  "submit_not_draft",
+  "not_pending_review",
+  "cancel_not_published",
+  "has_sales",
+];
+
+/** Hay que recargar los listados tras una mutación: fue bien o falló porque el listado está desactualizado. */
+export function shouldReloadManagedEvents(result: EventDraftActionResult): boolean {
+  return result.ok || (result.code !== undefined && STALE_LIST_CODES.includes(result.code));
+}
 
 /**
  * Elimina un borrador. Si fue bien, o si falló porque el listado está desactualizado, invalida y espera la recarga de
@@ -35,7 +51,7 @@ export function useDeleteEventDraft(userId: string) {
   return useMutation({
     mutationFn: (eventId: string) => deleteEventAction(eventId),
     onSuccess: async (result) => {
-      if (result.ok || (result.code && STALE_LIST_CODES.includes(result.code))) {
+      if (shouldReloadManagedEvents(result)) {
         await queryClient.invalidateQueries({ queryKey: managedEventsBaseKey(userId) });
       }
     },

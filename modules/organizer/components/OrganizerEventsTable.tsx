@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { ImageIcon } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -39,17 +39,7 @@ function EventThumbnail({ imageUrl }: { imageUrl: string | null }) {
       </div>
     );
   }
-  // `unoptimized`: la portada es una URL https de cualquier dominio (F5a), fuera de `images.remotePatterns`.
-  return (
-    <Image
-      src={imageUrl}
-      alt=""
-      width={48}
-      height={48}
-      unoptimized
-      className="size-12 shrink-0 rounded-lg object-cover"
-    />
-  );
+  return <EventCoverImage src={imageUrl} alt="" width={48} height={48} className="size-12 shrink-0 rounded-lg object-cover" />;
 }
 
 type EventMetaProps = Pick<ManagedEvent, "startsAt" | "city" | "organizer"> & { showOrganizer: boolean };
@@ -144,7 +134,8 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
                 </TableCell>
                 {rowActions && (
                   <TableCell className="px-6 py-3.5">
-                    <div className="flex justify-end gap-2">{rowActions(event)}</div>
+                    {/* flex-wrap: con tres acciones la columna no ensancha la tabla, se apilan. */}
+                    <div className="flex flex-wrap items-start justify-end gap-2">{rowActions(event)}</div>
                   </TableCell>
                 )}
               </TableRow>
@@ -178,7 +169,7 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
                 </p>
               </div>
               <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
-              {actions && <div className="flex gap-2 border-t pt-3 *:flex-1">{actions}</div>}
+              {actions && <div className="flex flex-wrap gap-2 border-t pt-3 *:flex-1">{actions}</div>}
             </li>
           );
         })}

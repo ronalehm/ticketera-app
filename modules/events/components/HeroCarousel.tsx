@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import Autoplay from "embla-carousel-autoplay";
 import { CalendarDays, MapPin } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -73,7 +73,7 @@ export function HeroCarousel({ events }: { events: Event[] }) {
           {events.map((event, index) => (
             <CarouselItem key={event.id} aria-label={`${index + 1} de ${events.length}`}>
               <div className="relative isolate flex aspect-[4/5] min-h-[26rem] items-end overflow-hidden rounded-2xl sm:aspect-[16/9] lg:aspect-[21/8]">
-                <Image
+                <EventCoverImage
                   src={event.imageUrl}
                   alt={`${event.title} en ${event.venue}, ${event.city}`}
                   fill

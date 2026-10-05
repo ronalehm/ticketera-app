@@ -37,6 +37,7 @@ import { buildEventPreview } from "../utils/eventPreview";
 import {
   createTicketTypeRows,
   EMPTY_EVENT_DRAFT,
+  getEventFormLock,
   getMinAgeLabels,
   getTicketTypeErrors,
   toEventDraftFormValues,
@@ -50,8 +51,9 @@ type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
 const IMAGE_URL_DESCRIPTION_ID = "organizer-event-imageUrl-description";
-/** Tras guardar, Mis eventos muestra el aviso "Borrador guardado". */
+/** Tras guardar, Mis eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
 const SAVED_HREF = "/organizador/eventos?guardado=borrador";
+const SAVED_CHANGES_HREF = "/organizador/eventos?guardado=cambios";
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
 const subscribeToToday = () => () => {};
@@ -76,13 +78,14 @@ type OrganizerEventFormProps = {
   venues: VenueOption[];
   /** Organizadores aprobados (`listApprovedOrganizers`): solo para admin y super_admin, que eligen el dueño. */
   organizers?: OrganizerOption[];
-  /** Borrador que se edita (`getEventForEdit`); sin él, se crea uno nuevo. */
+  /** Evento que se edita (`getEventForEdit`); sin él, se crea un borrador nuevo. */
   event?: EditableEvent;
 };
 
 /**
- * Crear o editar un borrador (spec admin-panel, F5a): se guarda en la BD (`createEventAction`/`updateEventAction`) y
- * vuelve a Mis eventos. Solo el nombre es obligatorio; publicar llega con la moderación (F5b).
+ * Crear o editar un evento (spec admin-panel, F5a y F5b): se guarda en la BD (`createEventAction`/`updateEventAction`) y
+ * vuelve a Mis eventos. En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
+ * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Mis eventos.
  */
 export function OrganizerEventForm({ userId, venues, organizers, event }: OrganizerEventFormProps) {
   const router = useRouter();
@@ -98,6 +101,10 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   const [serverError, setServerError] = useState<string | null>(null);
   // Guardado: el botón sigue deshabilitado hasta que llega Mis eventos (un segundo clic crearía otro borrador).
   const [saved, setSaved] = useState(false);
+  const lock = getEventFormLock(event);
+  const structureLocked = lock !== null;
+  const salesLocked = lock === "sales";
+  const published = event?.status === "published";
 
   const venue = venues.find((candidate) => candidate.id === values.venueId);
   const minAgeLabels = getMinAgeLabels(values.minAge);
@@ -111,7 +118,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
         return;
       }
       setSaved(true);
-      router.push(SAVED_HREF);
+      router.push(published ? SAVED_CHANGES_HREF : SAVED_HREF);
     } catch {
       setServerError(EVENT_DRAFT_GENERIC_ERROR);
     }
@@ -189,6 +196,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
                 <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
                 <Select
                   items={EVENT_CATEGORY_LABELS}
+                  disabled={salesLocked}
                   value={values.category}
                   onValueChange={(value) => selectValue("category", value)}
                 >
@@ -240,6 +248,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
                 <FieldLabel htmlFor="organizer-event-organizerId">Organizador</FieldLabel>
                 <Select
                   items={organizers.map(({ id, name }) => ({ value: id, label: name }))}
+                  disabled={structureLocked}
                   value={values.organizerId}
                   onValueChange={(value) => selectValue("organizerId", value)}
                 >
@@ -267,17 +276,23 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               <Field data-invalid={!!errors.date}>
                 <FieldLabel htmlFor="organizer-event-date">Fecha</FieldLabel>
-                <Input {...textProps("date")} type="date" min={today} className={FORM_INPUT_CLASS} />
+                <Input
+                  {...textProps("date")}
+                  type="date"
+                  min={today}
+                  disabled={salesLocked}
+                  className={FORM_INPUT_CLASS}
+                />
                 {fieldError("date")}
               </Field>
               <Field data-invalid={!!errors.time}>
                 <FieldLabel htmlFor="organizer-event-time">Hora de inicio</FieldLabel>
-                <Input {...textProps("time")} type="time" className={FORM_INPUT_CLASS} />
+                <Input {...textProps("time")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
                 {fieldError("time")}
               </Field>
               <Field data-invalid={!!errors.doorsOpen}>
                 <FieldLabel htmlFor="organizer-event-doorsOpen">Apertura de puertas</FieldLabel>
-                <Input {...textProps("doorsOpen")} type="time" className={FORM_INPUT_CLASS} />
+                <Input {...textProps("doorsOpen")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
                 {fieldError("doorsOpen")}
               </Field>
             </div>
@@ -286,6 +301,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
               <FieldLabel htmlFor="organizer-event-venueId">Recinto</FieldLabel>
               <Select
                 items={venues.map(({ id, name, city }) => ({ value: id, label: `${name} · ${city}` }))}
+                disabled={structureLocked}
                 value={values.venueId}
                 onValueChange={selectVenue}
               >
@@ -335,6 +351,8 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
             errors={ticketTypeErrors}
             onChange={changeTicketTypes}
             onBlur={revalidateTicketTypes}
+            selectionLocked={structureLocked}
+            valuesLocked={salesLocked}
           />
         </FormSection>
       </div>
@@ -378,7 +396,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
           )}
         >
           {isSubmitting && <Spinner aria-hidden className="motion-reduce:animate-none" />}
-          {isSubmitting ? "Guardando…" : "Guardar borrador"}
+          {isSubmitting ? "Guardando…" : published ? "Guardar cambios" : "Guardar borrador"}
         </Button>
       </div>
     </form>

@@ -40,6 +40,11 @@ const selectText = (element: HTMLElement) => element.querySelector("[data-slot=s
 const section = (name: string) => within(screen.getByRole("group", { name }));
 const sectionInput = (name: string, label: string) => section(name).getByLabelText(label) as HTMLInputElement;
 const sellCheckbox = (name: string) => section(name).getByRole("checkbox", { name: "Vender entradas en esta sección" });
+/** Deshabilitado como control nativo o como control de Base UI. */
+const isDisabled = (element: Element) =>
+  element.hasAttribute("disabled") ||
+  element.getAttribute("aria-disabled") === "true" ||
+  element.hasAttribute("data-disabled");
 
 /** Elige una opción de un `Select` de Base UI. */
 async function choose(name: string, option: string) {
@@ -259,6 +264,8 @@ describe("OrganizerEventForm", () => {
       venueId: STADIUM.id,
       imageUrl: "https://images.unsplash.com/a.jpg",
       ticketTypes: [{ sectionId: STADIUM.sections[1].id, name: "Platea VIP", priceCents: 12050 }],
+      reviewNote: null,
+      hasSales: false,
     };
 
     it("precarga el borrador y guarda los cambios sobre él", async () => {
@@ -300,6 +307,38 @@ describe("OrganizerEventForm", () => {
       fireEvent.click(saveButton());
       await waitFor(() => expect(updateEventAction).toHaveBeenCalled());
       expect(vi.mocked(updateEventAction).mock.calls[0][1]).toMatchObject({ organizerId: ORGANIZERS[1].id });
+    });
+
+    it("un evento publicado sin ventas bloquea recinto, organizador y secciones; guarda como «cambios»", async () => {
+      renderForm({ event: { ...event, status: "published" }, organizers: ORGANIZERS });
+
+      for (const name of ["Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
+      expect(isDisabled(sellCheckbox("Campo"))).toBe(true);
+      expect(isDisabled(sellCheckbox("Occidente"))).toBe(true);
+      // Fecha, categoría y precios siguen editables.
+      expect(isDisabled(input("Fecha"))).toBe(false);
+      expect(isDisabled(combobox("Categoría"))).toBe(false);
+      expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(false);
+
+      type(sectionInput("Occidente", "Precio (S/)"), "99");
+      fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador/eventos?guardado=cambios"));
+      expect(vi.mocked(updateEventAction).mock.calls[0][1]).toMatchObject({
+        ticketTypes: expect.arrayContaining([expect.objectContaining({ price: "99" })]),
+      });
+    });
+
+    it("un evento publicado con ventas solo deja cambiar título, descripción, portada y edad", () => {
+      renderForm({ event: { ...event, status: "published", hasSales: true }, organizers: ORGANIZERS });
+
+      for (const label of ["Fecha", "Hora de inicio", "Apertura de puertas"]) expect(isDisabled(input(label))).toBe(true);
+      for (const name of ["Categoría", "Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
+      expect(isDisabled(sectionInput("Occidente", "Nombre del tipo de entrada"))).toBe(true);
+      expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(true);
+      for (const label of ["Nombre del evento", "Descripción", "URL de la imagen"]) {
+        expect(isDisabled(input(label))).toBe(false);
+      }
+      expect(isDisabled(combobox("Edad mínima"))).toBe(false);
     });
 
     it("conserva una edad mínima mayor que las de la lista (+21) y la guarda igual", async () => {

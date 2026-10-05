@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import Image from "next/image";
 import Link from "next/link";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { TEXT_LINK } from "@/lib/linkStyles";
@@ -25,7 +25,7 @@ export function OrderSummary({ order, changeHref, footer }: OrderSummaryProps) {
         <h2 className="sr-only">Resumen del pedido</h2>
 
         <div className="flex items-center gap-3">
-          <Image
+          <EventCoverImage
             src={event.imageUrl}
             alt=""
             width={64}

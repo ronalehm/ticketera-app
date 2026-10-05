@@ -29,6 +29,8 @@ async function main() {
   console.log("Filas borradas:");
   for (const [table, deleted] of Object.entries(report.deleted)) console.log(`  ${table}: ${deleted}`);
   console.log("  order_code_seq reiniciada");
+  console.log(`Inventario liberado (eventos que no son del seed): ${report.releasedEventSeats} lugares`);
+  for (const slug of report.releasedEvents) console.log(`  ${slug}`);
   console.log("Seed:");
   for (const [table, written] of Object.entries(report.seed.written)) console.log(`  ${table}: ${written} escritas`);
   console.log(`Organizadores sintéticos borrados: ${report.removedOrganizers.length}`);

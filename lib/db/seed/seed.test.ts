@@ -177,12 +177,14 @@ const PRE_F1_REPORT: SeedReport = {
   retiredEventSeats: 400,
   obsoleteWithSales: 0,
   nonApprovedOrganizers: [],
+  eventsWithKeptDates: [],
 };
 const EMPTY_REPORT: SeedReport = {
   written: Object.fromEntries(SEED_TABLE_NAMES.map((name) => [name, 0])) as SeedReport["written"],
   retiredEventSeats: 0,
   obsoleteWithSales: 0,
   nonApprovedOrganizers: [],
+  eventsWithKeptDates: [],
 };
 const NO_IDS = Object.fromEntries(SEED_TABLE_NAMES.map((name) => [name, []])) as unknown as TableIds;
 
@@ -521,6 +523,85 @@ describeWithDb("seed: organizadores reales, fechas desde now y sin ventas (admin
           expect(row.doorsOpenAt!.getTime() - seeded!.doorsOpenAt!.getTime(), seeded?.slug).toBe(10 * DAY_MS);
           expect(row.startsAt!.getTime()).toBeGreaterThan(later.getTime());
         }
+      });
+    },
+    SEED_TIMEOUT_MS,
+  );
+
+  it(
+    "no desplaza la fecha de un evento demo con una orden paid, partially_refunded o pending vigente, y lo lista en el informe",
+    async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const data = await seedDataFor(tx);
+        const [paidEvent, pendingEvent, expiredEvent, partialEvent] = data.events;
+        const MINUTE_MS = 60_000;
+        const baseOrder = { ticketCount: 1, subtotalCents: 1000, platformFeeCents: 100, organizerAmountCents: 900 };
+        await tx.insert(orders).values([
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PAID",
+            eventId: paidEvent.id as string,
+            buyerName: "Cliente Pagado",
+            buyerEmail: "kept.paid@example.com",
+            buyerPhone: "+51911111111",
+            buyerDocumentType: "dni",
+            buyerDocumentNumber: "12345678",
+            status: "paid",
+            // Una orden pagada protege la fecha aunque su reserva ya haya expirado.
+            expiresAt: new Date(Date.now() - 60 * MINUTE_MS),
+            paidAt: new Date(),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PARTIAL",
+            eventId: partialEvent.id as string,
+            buyerName: "Cliente Reembolsado",
+            buyerEmail: "kept.partial@example.com",
+            buyerPhone: "+51922222222",
+            buyerDocumentType: "dni",
+            buyerDocumentNumber: "87654321",
+            // Reembolso parcial: aún tiene entradas válidas, así que cuenta como venta.
+            status: "partially_refunded",
+            expiresAt: new Date(Date.now() - 60 * MINUTE_MS),
+            paidAt: new Date(),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PENDING",
+            eventId: pendingEvent.id as string,
+            expiresAt: new Date(Date.now() + 10 * MINUTE_MS),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-EXPIRED-PENDING",
+            eventId: expiredEvent.id as string,
+            expiresAt: new Date(Date.now() - MINUTE_MS),
+          },
+        ]);
+
+        const later = new Date(NOW.getTime() + 10 * DAY_MS);
+        const report = await seed(db, { ...TEST_SEED_OPTIONS, now: later });
+
+        expect(report).toEqual({
+          ...EMPTY_REPORT,
+          written: { ...EMPTY_REPORT.written, events: data.events.length - 3 },
+          eventsWithKeptDates: [paidEvent.slug, pendingEvent.slug, partialEvent.slug].sort(),
+        });
+        const rows = await tx
+          .select({ id: events.id, startsAt: events.startsAt, doorsOpenAt: events.doorsOpenAt })
+          .from(events)
+          .where(inArray(events.id, idsOf([paidEvent, pendingEvent, expiredEvent, partialEvent])));
+        const shiftOf = (event: SeedData["events"][number]) => {
+          const row = rows.find((candidate) => candidate.id === event.id)!;
+          return [
+            row.startsAt!.getTime() - event.startsAt!.getTime(),
+            row.doorsOpenAt!.getTime() - event.doorsOpenAt!.getTime(),
+          ];
+        };
+        expect(shiftOf(paidEvent)).toEqual([0, 0]);
+        expect(shiftOf(pendingEvent)).toEqual([0, 0]);
+        expect(shiftOf(partialEvent)).toEqual([0, 0]);
+        expect(shiftOf(expiredEvent)).toEqual([10 * DAY_MS, 10 * DAY_MS]);
       });
     },
     SEED_TIMEOUT_MS,

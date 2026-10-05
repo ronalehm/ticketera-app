@@ -1,7 +1,7 @@
-import Image from "next/image";
 import { CalendarDays, ImageIcon, MapPin } from "lucide-react";
 
 import { DateChip } from "@/components/shared/DateChip";
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ export function EventPreviewCard({ title, categoryLabel, dateLabel, dateChip, pl
       <div className="relative h-44 shrink-0 max-lg:h-auto max-lg:w-27">
         {imageUrl ? (
           // Decorativa: la misma imagen ya está descrita en "Imagen de portada".
-          <Image src={imageUrl} alt="" fill unoptimized sizes="(min-width: 1024px) 340px, 108px" className="object-cover" />
+          <EventCoverImage src={imageUrl} alt="" fill sizes="(min-width: 1024px) 340px, 108px" className="object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-muted">
             <ImageIcon aria-hidden className="size-8 text-muted-foreground" />

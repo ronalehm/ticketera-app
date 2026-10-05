@@ -1,5 +1,5 @@
-// Solo para tests de integración (describeWithDb): eventos `draft` propios que no tocan el seed ni el catálogo, y
-// ventas de prueba (el seed no siembra ventas: spec admin-panel, F2).
+// Solo para tests de integración (describeWithDb): eventos propios que no tocan el seed (en `draft` no llegan al
+// catálogo; `published`, para comprar, sí), y ventas de prueba (el seed no siembra ventas: spec admin-panel, F2).
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
@@ -17,7 +17,18 @@ export type TestEventOptions = {
   priceCents?: number;
   /** Comisión del organizador. Por defecto 10 %. */
   commissionBps?: number;
+  /**
+   * Estado del evento. Por defecto `draft`; `published` (con los datos que exige `events_draft_complete_check` y una
+   * fecha lejana) para reservar y pagar, porque el checkout solo vende eventos publicados.
+   */
+  status?: "draft" | "published";
 };
+
+/** Prefijo del slug de los eventos de `createTestEvent`: los tests del catálogo los ignoran (pueden estar publicados). */
+export const TEST_EVENT_SLUG_PREFIX = "test-checkout-";
+
+/** Fecha de los eventos de prueba publicados: lejana, para quedar al final del catálogo y de los relacionados. */
+const PUBLISHED_TEST_EVENT_STARTS_AT = new Date("2099-12-31T01:00:00Z");
 
 export type TestEvent = {
   eventId: string;
@@ -34,11 +45,11 @@ export type TestEvent = {
 const GENERAL_SLUG = "general";
 const NUMBERED_SLUG = "numbered";
 
-/** Crea un evento `draft` de prueba con sufijo aleatorio, sus `ticket_types` y `event_seats` disponibles. */
+/** Crea un evento de prueba (`draft` por defecto) con sufijo aleatorio, sus `ticket_types` y `event_seats` disponibles. */
 export async function createTestEvent(options: TestEventOptions = {}): Promise<TestEvent> {
-  const { general, numbered, priceCents = 5000, commissionBps = 1000 } = options;
+  const { general, numbered, priceCents = 5000, commissionBps = 1000, status = "draft" } = options;
   const suffix = randomUUID().slice(0, 8);
-  const slug = `test-checkout-${suffix}`;
+  const slug = `${TEST_EVENT_SLUG_PREFIX}${suffix}`;
 
   const created = await db.transaction(async (tx) => {
     const [{ id: userId }] = await tx
@@ -66,8 +77,14 @@ export async function createTestEvent(options: TestEventOptions = {}): Promise<T
         categoryId,
         title: `Evento de prueba ${suffix}`,
         minAge: 0,
-        status: "draft",
+        status,
         searchText: slug,
+        ...(status === "published" && {
+          description: "Evento de prueba",
+          imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
+          startsAt: PUBLISHED_TEST_EVENT_STARTS_AT,
+          doorsOpenAt: PUBLISHED_TEST_EVENT_STARTS_AT,
+        }),
       })
       .returning({ id: events.id });
 

@@ -43,7 +43,7 @@ Postgres con Drizzle. La conexión sale de `DATABASE_URL` (y `DATABASE_URL_UNPOO
 | Comando | Qué hace |
 |---|---|
 | `npm run db:migrate` | Aplica solo las migraciones pendientes de `drizzle/`, cada una en su transacción. Todas son aditivas: no borran ni reescriben datos. |
-| `npm run db:seed` | Crea los datos demo que faltan y actualiza solo lo que el seed posee: la geometría de los mapas, el inventario demo y el organizador y las fechas de cada evento. No borra nada y se puede repetir: una 2.ª ejecución el mismo día escribe 0 filas (otro día solo desplaza las fechas). Al terminar imprime un informe por tabla (filas escritas, lugares retirados y lugares obsoletos con venta real, que no se tocan). |
+| `npm run db:seed` | Crea los datos demo que faltan y actualiza solo lo que el seed posee: la geometría de los mapas, el inventario demo y el organizador y las fechas de cada evento. No borra nada y se puede repetir: una 2.ª ejecución el mismo día escribe 0 filas (otro día solo desplaza las fechas, salvo las de un evento con ventas activas —órdenes pagadas, parcialmente reembolsadas o pendientes vigentes—, que conserva su fecha). Al terminar imprime un informe por tabla (filas escritas, lugares retirados, lugares obsoletos con venta real, que no se tocan, y eventos que conservaron su fecha por tener ventas). |
 | `npm run db:reset-demo` | **Destructivo.** Borra todas las ventas y deja la BD como un seed limpio. Exige `ALLOW_DEMO_RESET=true` y `--confirm=<host>`; ver [Reset de datos demo](#reset-de-datos-demo). |
 | `npm run db:generate -- --name <nombre>` | Genera una migración nueva a partir de los cambios en `lib/db/schema/`. |
 
@@ -83,9 +83,10 @@ npm run db:migrate && npm run db:seed
 
 En una sola transacción (si algo falla no cambia nada):
 
-1. vacía `check_in_scans`, `refund_requests`, `tickets`, `refunds`, `event_seats`, `orders`, `payouts` y `stripe_events`, y reinicia `order_code_seq` (la próxima orden vuelve a `TK-1`);
-2. ejecuta el seed: regenera todo el inventario disponible y reasigna los eventos a `SEED_ORGANIZER_EMAILS`;
-3. borra los organizadores sintéticos `@example.com` de seeds anteriores (los que creó el seed, sin `clerk_id`) que ya nada referencia. Si otra fila sigue apuntando a uno (p. ej. un evento guardado, un registro de auditoría o una solicitud), lo conserva en vez de abortar el reset.
+1. libera el inventario de los eventos que **no** son del seed (p. ej. los creados en el panel): todos sus lugares pasan a `available`, sin pedido ni retención, y el evento conserva su inventario;
+2. vacía `check_in_scans`, `refund_requests`, `tickets`, `refunds`, `orders`, `payouts` y `stripe_events`, borra el `event_seats` de los eventos del seed y reinicia `order_code_seq` (la próxima orden vuelve a `TK-1`);
+3. ejecuta el seed: regenera el inventario disponible de sus eventos y los reasigna a `SEED_ORGANIZER_EMAILS`;
+4. borra los organizadores sintéticos `@example.com` de seeds anteriores (los que creó el seed, sin `clerk_id`) que ya nada referencia. Si otra fila sigue apuntando a uno (p. ej. un evento guardado, un registro de auditoría o una solicitud), lo conserva en vez de abortar el reset.
 
 Conserva a los usuarios con `clerk_id` y al super admin. Si un consentimiento o un reclamo apunta a una orden, aborta sin tocar nada (son registros legales).
 
@@ -100,7 +101,7 @@ y listo: no hace falta un `db:seed` después (el reset ya lo ejecuta). `npm run 
 
 - `<host de la BD>` es el host de `DATABASE_URL_UNPOOLED` (o de `DATABASE_URL` si no hay), sin usuario, puerto ni base de datos: p. ej. `ep-cool-name-123.us-east-2.aws.neon.tech` o `127.0.0.1`. Si no coincide, o falta `ALLOW_DEMO_RESET=true`, el comando aborta sin conectarse.
 - Necesita `SUPER_ADMIN_EMAIL` y `SEED_ORGANIZER_EMAILS` en `.env`, como `db:seed`. `ALLOW_DEMO_RESET` va en la misma línea del comando, no en `.env`.
-- Al terminar imprime las filas borradas por tabla, lo que escribió el seed, los organizadores sintéticos borrados y los conservados por estar referenciados.
+- Al terminar imprime las filas borradas por tabla, los lugares liberados y los eventos que no son del seed a los que pertenecen, lo que escribió el seed, los organizadores sintéticos borrados y los conservados por estar referenciados.
 
 ## URL de la app (`APP_URL`)
 

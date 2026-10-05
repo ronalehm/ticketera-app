@@ -21,8 +21,22 @@ export const organizerEventSchema = z.object({
   status: z.enum(["published", "draft"]),
 });
 
-// Query param `guardado` de Mis eventos (F5a: solo se guardan borradores). Cualquier otro valor (o un array) se ignora.
-export const savedStatusSchema = z.enum(["borrador"]).optional().catch(undefined);
+// Query param `guardado` de Mis eventos: "borrador" (se guardó un borrador) o
+// "cambios" (se editó un evento publicado, F5b). Cualquier otro valor (o un array) se ignora.
+export const savedStatusSchema = z.enum(["borrador", "cambios"]).optional().catch(undefined);
+
+/** Límite del motivo de rechazo (`review_note`). */
+export const REVIEW_NOTE_MAX_LENGTH = 1000;
+
+/** Motivo de rechazo de un evento en revisión (F5b): obligatorio; lo ve el organizador en su borrador. */
+export const reviewNoteSchema = z
+  .string("Escribe el motivo del rechazo")
+  .trim()
+  .min(1, "Escribe el motivo del rechazo")
+  .max(REVIEW_NOTE_MAX_LENGTH, `El motivo admite hasta ${REVIEW_NOTE_MAX_LENGTH} caracteres`);
+
+/** Formulario del diálogo "Rechazar": solo el motivo. */
+export const rejectEventFormSchema = z.object({ note: reviewNoteSchema });
 
 // Valores de `<input type="date">` ("YYYY-MM-DD", fecha de calendario real) y `<input type="time">` ("HH:MM").
 export const formDateSchema = z.iso.date();

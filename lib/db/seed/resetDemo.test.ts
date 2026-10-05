@@ -6,10 +6,11 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { eventSeats, events, savedEvents } from "@/lib/db/schema/events";
+import { categories, eventSeats, events, savedEvents, ticketTypes } from "@/lib/db/schema/events";
 import { auditLogs, organizers, users } from "@/lib/db/schema/identity";
 import { refundRequests } from "@/lib/db/schema/requests";
 import { checkInScans, orders, payouts, refunds, stripeEvents, tickets } from "@/lib/db/schema/sales";
+import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
 import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 import { buildSeedData, organizerIndexForSlug, seedUuid } from "./buildSeedData";
@@ -446,6 +447,110 @@ describeWithDb("db:reset-demo contra una BD aislada (Postgres)", () => {
         .leftJoin(organizers, eq(organizers.userId, users.id))
         .where(inArray(users.email, [referencedEmail, unreferencedEmail]));
       expect(remaining).toEqual([{ email: referencedEmail, status: "pending" }]);
+    },
+    DB_TIMEOUT_MS,
+  );
+
+  it(
+    "libera, sin borrarlo, el inventario de un evento que no es del seed: todo available y sin sus órdenes",
+    async () => {
+      const [organizer] = await database
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, TEST_SEED_OPTIONS.organizerEmails[0]));
+      const [venue] = await database
+        .insert(venues)
+        .values({ name: "Recinto del panel", address: "Av. Panel 123", city: "Lima", status: "approved", createdBy: organizer.id })
+        .returning({ id: venues.id });
+      const [section] = await database
+        .insert(venueSections)
+        .values({ venueId: venue.id, slug: "general", name: "General", sortOrder: 0, seating: "general", capacity: 6 })
+        .returning({ id: venueSections.id });
+      const [{ id: categoryId }] = await database.select({ id: categories.id }).from(categories).limit(1);
+      const startsAt = new Date(RESET_NOW.getTime() + 30 * 86_400_000);
+      const slug = `evento-del-panel-${randomUUID().slice(0, 8)}`;
+      const [panelEvent] = await database
+        .insert(events)
+        .values({
+          slug,
+          organizerId: organizer.id,
+          venueId: venue.id,
+          categoryId,
+          title: "Evento creado en el panel",
+          description: "Creado fuera del seed",
+          imageUrl: "https://cdn.example.org/x.jpg",
+          startsAt,
+          doorsOpenAt: startsAt,
+          minAge: 0,
+          status: "published",
+          searchText: slug,
+        })
+        .returning({ id: events.id });
+      const [type] = await database
+        .insert(ticketTypes)
+        .values({ eventId: panelEvent.id, sectionId: section.id, slug: "general", name: "General", priceCents: 1000, sortOrder: 0 })
+        .returning({ id: ticketTypes.id });
+      const seats = await database
+        .insert(eventSeats)
+        .values(Array.from({ length: 6 }, () => ({ eventId: panelEvent.id, ticketTypeId: type.id })))
+        .returning({ id: eventSeats.id });
+
+      const amounts = { subtotalCents: 2000, platformFeeCents: 200, organizerAmountCents: 1800 };
+      const [paidOrder, pendingOrder] = await database
+        .insert(orders)
+        .values([
+          {
+            code: "TK-TEST-PANEL-PAID",
+            eventId: panelEvent.id,
+            buyerName: "Cliente Panel",
+            buyerEmail: "cliente.panel@ticketera.test",
+            buyerPhone: "+51911111111",
+            buyerDocumentType: "dni",
+            buyerDocumentNumber: "12345678",
+            status: "paid",
+            expiresAt: new Date(),
+            paidAt: new Date(),
+            ticketCount: 2,
+            ...amounts,
+          },
+          { code: "TK-TEST-PANEL-PENDING", eventId: panelEvent.id, status: "pending", expiresAt: new Date(), ticketCount: 1, ...amounts },
+        ])
+        .returning();
+      await database
+        .update(eventSeats)
+        .set({ status: "sold", orderId: paidOrder.id })
+        .where(inArray(eventSeats.id, [seats[0].id, seats[1].id]));
+      await database
+        .update(eventSeats)
+        .set({ status: "held", orderId: pendingOrder.id, heldUntil: new Date() })
+        .where(eq(eventSeats.id, seats[2].id));
+      await database.insert(tickets).values({
+        orderId: paidOrder.id,
+        eventSeatId: seats[0].id,
+        code: "TK-TEST-PANEL-PAID-01",
+        holderName: "Cliente Panel",
+        unitPriceCents: 1000,
+        qrToken: `qr-test-${randomUUID()}`,
+      });
+
+      const report = await resetDemo(database, { ...TEST_SEED_OPTIONS, now: RESET_NOW, guard });
+
+      expect(report).toMatchObject({ releasedEventSeats: 3, releasedEvents: [slug] });
+      expect(report.deleted).toMatchObject({ orders: 2, tickets: 1 });
+      const inventory = await database
+        .select({ id: eventSeats.id, status: eventSeats.status, orderId: eventSeats.orderId, heldUntil: eventSeats.heldUntil })
+        .from(eventSeats)
+        .where(eq(eventSeats.eventId, panelEvent.id))
+        .orderBy(eventSeats.id);
+      expect(inventory).toEqual(
+        seats
+          .map((seat) => ({ id: seat.id, status: "available", orderId: null, heldUntil: null }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      );
+      expect(await database.select().from(orders).where(eq(orders.eventId, panelEvent.id))).toEqual([]);
+      expect(await database.select({ status: events.status }).from(events).where(eq(events.id, panelEvent.id))).toEqual([
+        { status: "published" },
+      ]);
     },
     DB_TIMEOUT_MS,
   );

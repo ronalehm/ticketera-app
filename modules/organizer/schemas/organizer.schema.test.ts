@@ -9,6 +9,8 @@ import {
   MIN_AGE_LABELS,
   MIN_AGE_OPTIONS,
   organizerEventSchema,
+  REVIEW_NOTE_MAX_LENGTH,
+  reviewNoteSchema,
   savedStatusSchema,
 } from "./organizer.schema";
 
@@ -273,11 +275,28 @@ describe("MIN_AGE_OPTIONS", () => {
 describe("savedStatusSchema", () => {
   it.each([
     ["borrador", "borrador"],
+    ["cambios", "cambios"],
     ["publicado", undefined],
     ["x", undefined],
     [undefined, undefined],
     [["borrador", "borrador"], undefined],
   ])("%j → %j", (input, expected) => {
     expect(savedStatusSchema.parse(input)).toBe(expected);
+  });
+});
+
+describe("reviewNoteSchema", () => {
+  it("exige un motivo, sin espacios sobrantes", () => {
+    expect(reviewNoteSchema.parse("  Falta la portada  ")).toBe("Falta la portada");
+    for (const input of ["", "   ", undefined, 3]) {
+      expect(reviewNoteSchema.safeParse(input).error?.issues[0]?.message).toBe("Escribe el motivo del rechazo");
+    }
+  });
+
+  it(`admite hasta ${REVIEW_NOTE_MAX_LENGTH} caracteres`, () => {
+    expect(reviewNoteSchema.safeParse("a".repeat(REVIEW_NOTE_MAX_LENGTH)).success).toBe(true);
+    expect(reviewNoteSchema.safeParse("a".repeat(REVIEW_NOTE_MAX_LENGTH + 1)).error?.issues[0]?.message).toBe(
+      `El motivo admite hasta ${REVIEW_NOTE_MAX_LENGTH} caracteres`,
+    );
   });
 });

@@ -65,13 +65,25 @@ type TicketTypesFieldProps = {
   errors: TicketTypeRowErrors[] | null;
   onChange: (rows: TicketTypeRow[]) => void;
   onBlur: () => void;
+  /** Evento publicado: las secciones a la venta no cambian (el inventario ya se generó). */
+  selectionLocked?: boolean;
+  /** Evento publicado con ventas: tampoco cambian nombres ni precios (Decisión 11). */
+  valuesLocked?: boolean;
 };
 
 /**
  * Tipos de entrada por sección del recinto (spec admin-panel, F5a): cada sección se vende o no ("Vender entradas en
  * esta sección") con su nombre (por defecto, el de la sección) y su precio. La capacidad la fija el recinto.
  */
-export function TicketTypesField({ sections, rows, errors, onChange, onBlur }: TicketTypesFieldProps) {
+export function TicketTypesField({
+  sections,
+  rows,
+  errors,
+  onChange,
+  onBlur,
+  selectionLocked = false,
+  valuesLocked = false,
+}: TicketTypesFieldProps) {
   if (!sections) {
     return <p className="text-sm text-muted-foreground">Elige el recinto para configurar los tipos de entrada.</p>;
   }
@@ -109,13 +121,14 @@ export function TicketTypesField({ sections, rows, errors, onChange, onBlur }: T
               <Checkbox
                 id={selectedId}
                 checked={row.selected}
+                disabled={selectionLocked}
                 onCheckedChange={(selected) => {
                   updateRow(row.sectionId, { selected });
                   onBlur();
                 }}
                 className={cn("cursor-pointer", FORM_CONTROL_SCROLL)}
               />
-              <FieldLabel htmlFor={selectedId} className="cursor-pointer font-normal">
+              <FieldLabel htmlFor={selectedId} className={cn("font-normal", !selectionLocked && "cursor-pointer")}>
                 Vender entradas en esta sección
               </FieldLabel>
             </Field>
@@ -126,7 +139,7 @@ export function TicketTypesField({ sections, rows, errors, onChange, onBlur }: T
                 label="Nombre del tipo de entrada"
                 value={row.name}
                 error={rowErrors.name}
-                disabled={!row.selected}
+                disabled={!row.selected || valuesLocked}
                 onValueChange={(name) => updateRow(row.sectionId, { name })}
                 onBlur={onBlur}
                 inputProps={{ placeholder: section.name, maxLength: EVENT_DRAFT_LIMITS.ticketTypeName }}
@@ -137,7 +150,7 @@ export function TicketTypesField({ sections, rows, errors, onChange, onBlur }: T
                 label="Precio (S/)"
                 value={row.price}
                 error={rowErrors.price}
-                disabled={!row.selected}
+                disabled={!row.selected || valuesLocked}
                 onValueChange={(price) => updateRow(row.sectionId, { price })}
                 onBlur={onBlur}
                 inputProps={{ type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0.00" }}

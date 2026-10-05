@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type ComponentProps, type FormEvent } from "react";
 import { CircleCheck, Search, X } from "lucide-react";
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,8 +14,8 @@ import type { ManagedEvent, ManagedEventsFilters } from "@/modules/events";
 import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
 import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
 import type { ManagedEventsStatusFilter, SavedStatus } from "../types/organizer.types";
-import { DeleteEventDialog } from "./DeleteEventDialog";
-import { DraftEventActions } from "./DraftEventActions";
+import { EventActionDialog, type EventActionNotice, type EventActionTarget } from "./EventActionDialog";
+import { EventRowActions, hasEventRowActions } from "./EventRowActions";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 
 const STATUS_OPTIONS = Object.entries(MANAGED_EVENT_STATUS_BADGE).map(([value, { label }]) => ({ value, label }));
@@ -31,19 +31,21 @@ type OrganizerEventsListProps = {
   initialEvents: ManagedEvent[];
   /** Muestra el organizador de cada evento (admin, que ve los de todos). */
   showOrganizer?: boolean;
-  /** Puede editar y eliminar borradores (no es un organizador en solo lectura). */
+  /** Rol de la sesión: decide las acciones de moderación de cada fila. */
+  role: ComponentProps<typeof EventRowActions>["role"];
+  /** Puede editar, eliminar y moderar (no es un organizador en solo lectura). */
   canMutate?: boolean;
-  /** Aviso tras guardar en el formulario (`?guardado=borrador`). */
+  /** Aviso tras guardar en el formulario (`?guardado=borrador` o `?guardado=cambios`). */
   saved?: SavedStatus;
 };
 
-/** Diálogo de eliminar abierto sobre un borrador; al cerrarlo se conserva el evento para la animación de salida. */
-type DeleteTarget = { event: ManagedEvent | null; open: boolean };
-
-/** Aviso tras guardar: el borrador ya está en la BD y, por tanto, en este listado. */
-const SAVED_NOTICE = {
-  title: "Borrador guardado",
-  description: "Está en el listado con el estado «Borrador». Aún no es visible para el público.",
+/** Aviso tras guardar: el evento ya está en la BD y, por tanto, en este listado. */
+const SAVED_NOTICES: Record<NonNullable<SavedStatus>, EventActionNotice> = {
+  borrador: {
+    title: "Borrador guardado",
+    description: "Está en el listado con el estado «Borrador». Aún no es visible para el público.",
+  },
+  cambios: { title: "Cambios guardados", description: "El evento publicado ya muestra los cambios." },
 };
 
 /**
@@ -54,13 +56,15 @@ export function OrganizerEventsList({
   userId,
   initialEvents,
   showOrganizer,
+  role,
   canMutate = false,
   saved,
 }: OrganizerEventsListProps) {
   const [filters, setFilters] = useState<ManagedEventsFilters>(DEFAULT_MANAGED_EVENTS_FILTERS);
-  const [showSaved, setShowSaved] = useState(saved !== undefined);
-  const [deleted, setDeleted] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<DeleteTarget>({ event: null, open: false });
+  const [notice, setNotice] = useState<EventActionNotice | null>(saved ? SAVED_NOTICES[saved] : null);
+  // Acción en curso; al cerrar el diálogo se conserva para la animación de salida.
+  const [target, setTarget] = useState<EventActionTarget | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const headingId = useId();
   const statusId = useId();
   const searchId = useId();
@@ -79,16 +83,17 @@ export function OrganizerEventsList({
     setFilters((current) => ({ ...current, q }));
   }
 
-  // Solo los borradores se editan o eliminan (F5a); la moderación (F5b) añadirá acciones para el resto de estados.
+  // Acciones por estado y rol (F5b); un organizador en solo lectura no tiene ninguna.
   const rowActions = canMutate
     ? (event: ManagedEvent) =>
-        event.status === "draft" ? (
-          <DraftEventActions
+        hasEventRowActions(event.status, role) ? (
+          <EventRowActions
             event={event}
-            onDelete={() => {
-              setShowSaved(false);
-              setDeleted(null);
-              setDeleting({ event, open: true });
+            role={role}
+            onAction={(action) => {
+              setNotice(null);
+              setTarget({ action, event });
+              setDialogOpen(true);
             }}
           />
         ) : null
@@ -96,24 +101,21 @@ export function OrganizerEventsList({
 
   return (
     <div className="flex flex-col">
-      {/* Región viva siempre presente: el aviso de eliminar se anuncia al aparecer. */}
+      {/* Región viva siempre presente: el aviso de cada acción se anuncia al aparecer. */}
       <div aria-live="polite" aria-atomic="true">
-        {(showSaved || deleted) && (
+        {notice && (
           // Sin role="alert": la región viva ya lo anuncia.
           <Alert role={undefined} className="mb-4 py-3 pr-14 pl-4 md:mb-5">
             <CircleCheck aria-hidden />
-            <AlertTitle className="font-bold">{deleted ? `Borrador «${deleted}» eliminado` : SAVED_NOTICE.title}</AlertTitle>
-            {!deleted && <AlertDescription>{SAVED_NOTICE.description}</AlertDescription>}
+            <AlertTitle className="font-bold">{notice.title}</AlertTitle>
+            {notice.description && <AlertDescription>{notice.description}</AlertDescription>}
             <AlertAction className="top-1 right-1">
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-11 cursor-pointer"
                 aria-label="Cerrar aviso"
-                onClick={() => {
-                  setShowSaved(false);
-                  setDeleted(null);
-                }}
+                onClick={() => setNotice(null)}
               >
                 <X className="size-5" aria-hidden />
               </Button>
@@ -203,14 +205,14 @@ export function OrganizerEventsList({
         )}
       </section>
 
-      <DeleteEventDialog
+      <EventActionDialog
         userId={userId}
-        event={deleting.event}
-        open={deleting.open}
-        onOpenChange={(open) => setDeleting((current) => ({ ...current, open }))}
-        onDeleted={(title) => {
-          setDeleting((current) => ({ ...current, open: false }));
-          setDeleted(title);
+        target={target}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onDone={(done) => {
+          setDialogOpen(false);
+          setNotice(done);
         }}
       />
     </div>
