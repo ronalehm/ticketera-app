@@ -925,7 +925,7 @@ Entregable por sí misma: producción se actualiza con `npm run db:migrate && np
   - Archivos: `modules/events/services/events.service.ts`, `modules/events/services/events.service.test.ts`, `modules/seating/services/seating.service.ts`, `modules/seating/services/seating.service.test.ts`.
   - Depende de: T1. Secuencial.
   - Verificar: `npx vitest run modules/events/services modules/seating/services`, sin BD y con BD.
-- [ ] T3. Seed incremental: `SEED_OWNED_COLUMNS`, `upsertAll` con guarda de ventas reales, retiro, `SeedReport` en `run.ts`, y el test de convergencia desde producción (requisitos 21, 22 y 24).
+- [x] T3. Seed incremental: `SEED_OWNED_COLUMNS`, `upsertAll` con guarda de ventas reales, retiro, `SeedReport` en `run.ts`, y el test de convergencia desde producción (requisitos 21, 22 y 24).
   - Archivos: `lib/db/seed/seed.ts`, `lib/db/seed/run.ts`, `lib/db/seed/seed.test.ts`.
   - Depende de: T1 (y T2, por la secuencia de la BD de test). Secuencial.
   - Verificar: `npx vitest run lib/db/seed`, sin BD y con BD.
