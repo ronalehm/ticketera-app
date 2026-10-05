@@ -138,6 +138,8 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 2. **Variables del seed** en `lib/db/seed/env.ts` (no en `lib/env.ts`):
    - `SEED_ORGANIZER_EMAILS` (lista separada por comas, al menos 1 correo) y `SUPER_ADMIN_EMAIL`.
    - `.env.example` documenta `SEED_ORGANIZER_EMAILS=linderhassinger02@gmail.com,linderhassingerwotdev@gmail.com`.
+   - **Roles de las cuentas reales:** el super admin es `ronalehm@gmail.com` (`SUPER_ADMIN_EMAIL` en el `.env` local, no se commitea). Los dos correos de Linder son **solo organizadores** y nunca super admin.
+   - **Validación:** si `SUPER_ADMIN_EMAIL` aparece en `SEED_ORGANIZER_EMAILS`, el seed aborta sin escribir nada; el seed nunca degrada al super admin a organizador. Lleva test.
 3. **`db:seed`** (no destructivo):
    - **Organizadores:** cada correo pasa a `users` con rol `organizer` y `clerk_id NULL` (lo vincula `ensureUser`) + `organizers` `approved` con datos fiscales demo completos.
    - **Reparto:** cada evento elige organizador por un hash determinista de su slug.
@@ -229,6 +231,7 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 
 ### F2
 - [ ] `db:reset-demo` aborta sin `ALLOW_DEMO_RESET=true` o sin un `--confirm` correcto, y no lo invoca ningún otro script.
+- [ ] El seed aborta si `SUPER_ADMIN_EMAIL` está en `SEED_ORGANIZER_EMAILS`.
 - [ ] Tras reset + seed (BD de test): `orders`, `tickets`, `refunds` y `stripe_events` en 0; 2 organizadores `approved`; todos los eventos con `starts_at > now`; los usuarios con `clerk_id` y el super admin intactos; ningún organizador `@example.com`.
 - [ ] Con el mismo `now`, dos corridas del seed dan el mismo estado.
 
