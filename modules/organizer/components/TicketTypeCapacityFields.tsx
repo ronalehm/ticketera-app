@@ -7,13 +7,13 @@ import type { LucideIcon } from "lucide-react";
 import { Field, FieldDescription, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
 import { SeatGridPreview } from "@/modules/seating/preview";
 
 import { SEAT_GRID_LIMITS, ticketTypeKindSchema } from "../schemas/organizer.schema";
 import type { TicketTypeKind, TicketTypeRow, TicketTypeRowErrors } from "../types/organizer.types";
 import { formatSeatGridSummary, getMinTicketPrice, getSeatGridSize } from "../utils/organizerEventForm";
-import { formatCount } from "../utils/organizerStats";
 
 /** Margen de scroll de los controles: en móvil, la barra de acciones `sticky` no tapa el campo enfocado. */
 export const FORM_CONTROL_SCROLL = "scroll-mt-24 scroll-mb-28 lg:scroll-mb-0";

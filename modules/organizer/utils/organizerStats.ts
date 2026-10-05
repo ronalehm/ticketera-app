@@ -3,8 +3,6 @@ import { formatEventPrice } from "@/modules/events/format";
 
 import type { DashboardKpis, ManagedEventsStatusFilter } from "../types/organizer.types";
 
-const countFormatter = new Intl.NumberFormat("es-PE");
-
 /** Suma ingresos y vendidas (ya calculados en la BD con órdenes `paid`) y cuenta los publicados. */
 export function getDashboardKpis(events: ManagedEvent[]): DashboardKpis {
   return events.reduce<DashboardKpis>(
@@ -26,10 +24,6 @@ export function getSoldPercentage(sold: number, capacity: number): number {
 export function filterManagedEvents(events: ManagedEvent[], filter: ManagedEventsStatusFilter): ManagedEvent[] {
   if (filter === "all") return events;
   return events.filter((event) => event.status === filter);
-}
-
-export function formatCount(n: number): string {
-  return countFormatter.format(n);
 }
 
 /** Céntimos → "S/ 1,234.50". */

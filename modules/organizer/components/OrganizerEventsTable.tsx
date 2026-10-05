@@ -4,12 +4,13 @@ import { ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
 import type { ManagedEvent, ManagedEventStatus } from "@/modules/events";
 import { formatEventDate } from "@/modules/events/format";
 
 import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
-import { formatCount, formatRevenue, getSoldPercentage } from "../utils/organizerStats";
+import { formatRevenue, getSoldPercentage } from "../utils/organizerStats";
 
 type OrganizerEventsTableProps = {
   events: ManagedEvent[];

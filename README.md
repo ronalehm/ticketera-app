@@ -102,6 +102,20 @@ y listo: no hace falta un `db:seed` después (el reset ya lo ejecuta). `npm run 
 - Necesita `SUPER_ADMIN_EMAIL` y `SEED_ORGANIZER_EMAILS` en `.env`, como `db:seed`. `ALLOW_DEMO_RESET` va en la misma línea del comando, no en `.env`.
 - Al terminar imprime las filas borradas por tabla, lo que escribió el seed, los organizadores sintéticos borrados y los conservados por estar referenciados.
 
+## URL de la app (`APP_URL`)
+
+`APP_URL` es obligatoria y solo de servidor (`lib/env.ts`): sin ella la app no arranca. Es la URL pública de la app, `http(s)` y sin query; la barra final se quita sola. Con ella se construyen las URLs absolutas que salen del servidor, como el enlace de las invitaciones de Clerk que envía `/admin/usuarios` (`<APP_URL>/registro`).
+
+| Entorno | Valor |
+|---|---|
+| Local | `http://localhost:3000` |
+| Preview (Vercel) | La URL de la rama del despliegue |
+| Producción (Vercel) | `https://ticketera-app-x6xq.vercel.app` |
+
+En Vercel se define en Project Settings → Environment Variables (Production y Preview) antes de desplegar: el build valida el entorno.
+
+Las invitaciones enviadas desde el Dashboard de Clerk (sin `redirectUrl`) siguen cayendo en el Account Portal (`*.accounts.dev`); para ellas, en el Clerk Dashboard → Paths → Sign-up, elige el dominio de la app con `/registro`.
+
 ## Pagos con Stripe (modo test)
 
 La app solo acepta claves de **test** de Stripe y no arranca sin ellas (`lib/env.ts` las valida). Cópialas de [Dashboard → Developers → API keys](https://dashboard.stripe.com/test/apikeys) a `.env`:

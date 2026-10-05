@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { formatCount } from "@/lib/formatNumber";
 import type { ManagedEvent, ManagedEventsFilters } from "@/modules/events";
 
 import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
 import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
 import type { ManagedEventsStatusFilter } from "../types/organizer.types";
-import { formatCount } from "../utils/organizerStats";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 
 const STATUS_OPTIONS = Object.entries(MANAGED_EVENT_STATUS_BADGE).map(([value, { label }]) => ({ value, label }));

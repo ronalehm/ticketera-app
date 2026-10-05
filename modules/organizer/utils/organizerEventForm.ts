@@ -1,3 +1,4 @@
+import { formatCount } from "@/lib/formatNumber";
 import { formatEventPrice } from "@/modules/events/format";
 import { getSeatRowLabels } from "@/modules/seating/preview";
 import { COVER_IMAGE_RULES, formDateSchema, formTimeSchema, ticketTypeFormSchema } from "../schemas/organizer.schema";
@@ -10,7 +11,6 @@ import type {
   TicketTypeRow,
   TicketTypeRowErrors,
 } from "../types/organizer.types";
-import { formatCount } from "./organizerStats";
 
 // Perú no tiene horario de verano: el offset de America/Lima es siempre -05:00.
 const LIMA_OFFSET = "-05:00";

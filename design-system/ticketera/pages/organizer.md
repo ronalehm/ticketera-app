@@ -2,6 +2,7 @@
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
 > Datos reales de Resumen y la página "Mis eventos" `/organizador/eventos` (KPIs de ventas brutas, badges de los 5 estados, filtro y búsqueda, TanStack Query): `docs/specs/admin-panel.md` (Fase 3). Prevalece sobre las reglas de ingresos y badges de `organizer-dashboard`.
+> Gestión de usuarios `/admin/usuarios` (tabla, filtros, paginación, diálogos Invitar/Editar/Eliminar): `docs/specs/admin-panel.md` (Fase 4). Reemplaza el estado vacío de F1.
 > Shell compartido por organizador y admin (route group `app/(panel)`, sidebar por rol de 264/76 px, "Próximamente", breadcrumb, solo lectura, `/admin/usuarios`): `docs/specs/admin-panel.md` (Fase 1). Prevalece sobre el layout, la navegación y la sesión de `layout-fullscreen-shells` (Fase 3) y de `organizer-dashboard`, y sobre su Decisión 2 (ítems sin página).
 > "Mis eventos" (tarjeta con barra de cabecera solo en `lg`) y la vista previa de Crear evento (anatomía de `EventCard`): `docs/specs/design-alignment-account-views.md` (Fase 2). Prevalece sobre el requisito 23 de `layout-fullscreen-shells` F3 y sobre la decisión 4 de `organizer-dashboard` (marcadores y badge "Disponible" de la vista previa).
 > Crear evento, modo de ubicación ("Mapa de asientos"), "Ciudad" como `Select`, portada obligatoria con guía y recortes, y "Descripción (opcional)" / "Máximo por compra" por tipo de entrada: `docs/specs/organizer-event-seating-mode.md` (Fase 1). Prevalece sobre `organizer-event-seating` y `organizer-dashboard` en esos puntos (subtítulo de "Tipos de entrada", ciudad de texto libre, portada opcional, "no se pide descripción por tipo").
@@ -166,10 +167,53 @@ Con sesión                                Sin sesión
 - Un único `<main>` (el del layout) y un único `<h1>` por página. El `<header>` interno de Resumen (h1 + "Crear evento") queda dentro de `<main>`, así que no es un `banner`.
 - Todo lo interactivo mide 44 px o más (`h-11`, `min-h-11`, `size-11`) y muestra foco visible. La transición de ancho del sidebar se desactiva con `prefers-reduced-motion`.
 
-## Usuarios y roles `/admin/usuarios` (F1)
+## Usuarios y roles `/admin/usuarios` (F4)
 
-- Solo admin y super_admin. Metadata: `Usuarios y roles | Mentec Tickets`.
-- h1 "Usuarios y roles" (`text-3xl md:text-4xl font-extrabold tracking-tight`) y, debajo, un estado vacío (`Empty` de shadcn, `rounded-2xl border-2 border-dashed border-border bg-background px-6 py-14 md:py-20`, icono `Users` en `bg-accent text-accent-foreground`) con el h2 "La gestión de usuarios llega en la siguiente fase". Se reemplaza por la tabla de usuarios en F4.
+```
+h1 "Usuarios y roles"                                   [+ Invitar usuario]
+8 usuarios registrados
+[✓ Ana Quispe fue aprobado.                                          ✕]   aviso descartable (solo tras una acción)
+lg: una sola tarjeta (misma sección que Mis eventos)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ h2 "Listado"                                                                        │  barra de cabecera px-6 py-4
+│ Buscar                                         Rol              Estado de organizador│
+│ [⌕ Nombre o correo                ] [Buscar]   [Todos los roles▾] [Todos        ▾] [Limpiar] │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│ USUARIO                          ROL            ORGANIZADOR  REGISTRO     ACCIONES  │
+│ (AQ) Ana Quispe  [Tú]            [Administrador]             1 oct 2026   Tu cuenta │
+│      ana@correo.pe                                                                  │
+│ (OP) Olga Pérez                  [Organizador]  [Pendiente]  3 oct 2026   [Aprobar] ✎ ⌫ │
+│      olga@correo.pe                                                       Faltan datos fiscales │
+├─────────────────────────────────────────────────────────────────────────────────────┤  border-t
+│ Mostrando 1–8 de 20   Filas [8▾]                          ‹  [1] 2 3  ›             │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+< lg: sin contenedor; controles apilados y una tarjeta por usuario (identidad, badges + registro, acciones)
+```
+
+- Solo admin y super_admin. Metadata: `Usuarios y roles | Mentec Tickets`. Breadcrumb "Administración / Usuarios".
+- **Datos:** la página llama a `getPanelContext("users:manage", { returnTo: "/admin/usuarios" })` (valida el permiso por su cuenta, además del layout de `/admin`) y a `listUsers(DEFAULT_USERS_FILTERS)`, y pasa `actor` (`id`, `role`) e `initialData` a `UsersManager` (cliente, `modules/users`). Filtros, búsqueda y paginación se resuelven **en el servidor** con `useUsers` (server action `listUsersAction`); los datos iniciales solo valen para los filtros por defecto. Al cambiar de filtros o de página se mantiene la anterior (`aria-busy` en la sección) hasta que llega la nueva. Cada mutación recarga el listado.
+- **Encabezado** (`UsersManager`): h1 `text-3xl md:text-4xl font-extrabold tracking-tight`; debajo "N usuarios registrados" (`text-muted-foreground tabular-nums`; total sin filtros, de la misma query que la primera página por defecto). "Invitar usuario" (`UserPlus`) es un botón primario `h-11 font-semibold hover:bg-primary-strong`, a todo el ancho en móvil y a la derecha desde `md`.
+- **Aviso de resultado:** región `aria-live="polite"` siempre presente bajo el encabezado; tras cada acción muestra un `Alert` (`CircleCheck`; `destructive` con `CircleAlert` si falló Aprobar/Suspender) con un botón `size-11` "Cerrar aviso" (`X`). Textos: "Invitación enviada a <correo>." (`invited`), "Invitación reenviada a <correo>." (`reinvited`), "<correo> ya tenía cuenta: ahora es organizador/administrador." (`roleUpdated`), "<nombre> fue aprobado." / "fue suspendido." / "fue eliminado.", "Cambios guardados para <nombre>.". Se borra al empezar otra acción.
+- **Sección** (`UsersTable`): mismas clases que "Mis eventos" (tarjeta solo en `lg`, barra de cabecera `lg:border-b lg:px-6 lg:py-4`, h2 "Listado" `text-lg font-bold`).
+  - **Buscar:** `<form role="search">` con `Label`, `Input type="search"` (`h-11`, lupa `aria-hidden`, placeholder "Nombre o correo", `maxLength` 100) y `Button` outline "Buscar". Busca al enviar, no por tecla.
+  - **Rol:** `NativeSelect` (`h-11`, `md:w-48`) "Todos los roles", Super admin, Administrador, Organizador, Cliente. **Estado de organizador:** "Todos", Aprobado, Pendiente, Suspendido. Filtran al cambiar y vuelven a la página 1.
+  - **"Limpiar"** (`Button` ghost `h-11`) solo con búsqueda o filtro activos; quita ambos y vacía el campo (conserva las filas por página).
+- **Lista** (`UsersTableRows`): tabla en `lg` y tarjetas por debajo (`display:none` en la otra), nombradas por el h2. Cabecera "Usuario", "Rol", "Organizador", "Registro", "Acciones" con las clases de Mis eventos.
+  - **Usuario** (`<th scope="row">`, `w-full max-w-0`): `UserAvatar size="lg"` + nombre completo `font-semibold truncate` (un invitado sin nombre muestra su correo y no repite la línea del correo) + `Badge` "Tú" (`bg-accent text-accent-foreground`) en la fila del actor + correo `text-sm text-muted-foreground`.
+  - **Rol** (`Badge h-6 px-2.5 font-semibold`, etiqueta de `getPanelRoleLabel`): Super admin `bg-brand-navy text-primary-foreground`; Administrador `bg-highlight text-highlight-foreground`; Organizador `bg-secondary text-secondary-foreground`; Cliente `border-border bg-background text-muted-foreground`.
+  - **Organizador:** badge de estado solo si el rol es `organizer` (un ex organizador conserva su fila `suspended`, pero no la muestra): Aprobado `bg-accent text-accent-foreground`; Pendiente `bg-warning text-warning-foreground`; Suspendido `bg-destructive text-foreground` (mismos tokens que Publicado / En revisión / Cancelado).
+  - **Registro:** fecha corta es-PE en hora de Lima, "1 oct 2026" (`formatUserDate`).
+  - **Acciones:** si `getManageBlockReason(actor, usuario)` da un motivo, en su lugar el texto `text-sm text-muted-foreground` "Tu cuenta", "Cuenta protegida" o "Solo el super admin" (`MANAGE_BLOCK_REASON_LABELS`). Si no:
+    - **Aprobar / Suspender** (solo organizadores): `Button` outline `h-11 font-semibold`, "Suspender" si está aprobado y "Aprobar" si está pendiente o suspendido; nombre accesible "Aprobar a <nombre>". Sin razón social, tipo o número fiscal, "Aprobar" queda deshabilitado (`focusableWhenDisabled`) con "Faltan datos fiscales" (`text-xs text-muted-foreground`, `aria-describedby`) debajo. Se deshabilita mientras su cambio está en curso. No pide confirmación.
+    - **Editar** (`Pencil`) y **Eliminar** (`Trash2`, `text-destructive`): botones ghost solo icono `size-11` con `aria-label` "Editar a <nombre>" / "Eliminar a <nombre>".
+  - **Tarjetas** (< `lg`): `<li>` `space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border` con la identidad (h3), los badges y "Registro: <fecha>", y las acciones.
+- **Vacío:** `Empty` (`rounded-2xl border-2 border-dashed`, `bg-card`; en `lg` `bg-muted` con 24 px de margen; icono `Users` en `bg-accent`) con h3 "Sin resultados", "Ningún usuario coincide con los filtros." y "Limpiar filtros" (outline `h-11`). Sin filtros: "Aún no hay usuarios registrados.".
+- **Error de carga:** `<p role="alert">` "No pudimos cargar los usuarios. Inténtalo de nuevo." (clases del error de Mis eventos); no se muestra el vacío ni la paginación.
+- **Pie** (`UsersPagination`, `lg:border-t lg:px-6 lg:py-4`): "Mostrando a–b de N" (`aria-live="polite"`, `tabular-nums`), `Label` "Filas" + `NativeSelect` 8 / 16 / 24 (`USERS_PAGE_SIZES`, vuelve a la página 1) y `<nav aria-label="Paginación de usuarios">` con anterior (`ChevronLeft`, "Página anterior"), hasta 5 números consecutivos centrados en la actual (`getPageWindow`; `aria-label` "Página n", la actual con `aria-current="page"` y `bg-accent font-semibold text-accent-foreground`) y siguiente ("Página siguiente"); todos ghost `size-11`, anterior y siguiente deshabilitados (`focusableWhenDisabled`) en los extremos. Si se elimina el último usuario de la última página, se pasa a la anterior.
+- **Diálogos** (`Dialog` / `AlertDialog` de shadcn, `p-5`, título `text-xl font-bold`, sin botón ✕: cierran con Cancelar o Escape; pie a sangre con Cancelar outline y la acción, ambos `h-11 font-semibold`). El formulario vive dentro del popup, así que cada apertura empieza de cero. Errores del servidor: general en `Alert destructive` arriba; de campo bajo su campo (`FieldError`, `aria-invalid`, `aria-describedby`); el foco va al primer campo inválido.
+  - **Invitar usuario** (`InviteUserDialog`, `sm:max-w-md`, `useZodForm` + `inviteUserSchema`): "Si el correo ya tiene cuenta, se cambia su rol. Si no, recibe una invitación."; Correo (`type="email"`) y Rol (`NativeSelect`: Organizador; Administrador solo si `getAssignRoleBlockReason` lo permite, es decir, para un super admin). "Cancelar" / "Enviar invitación" ("Enviando…" con `Spinner`).
+  - **Editar usuario** (`EditUserDialog`, `sm:max-w-lg`, con scroll interno si no cabe): Nombre y Apellido (2 columnas desde `sm`), Correo deshabilitado con "El correo viene de la cuenta y no se edita.", Rol (Cliente, Organizador y, para un super admin, Administrador). Con rol Organizador aparece un `FieldSet` `rounded-xl bg-muted p-4` "Datos del organizador": Razón social, Tipo de documento fiscal ("Elige el tipo", RUC, DNI), RUC/DNI y Estado de organizador (Aprobado, Pendiente, Suspendido; quien pasa a organizador empieza en Pendiente) con la ayuda "Para aprobar hacen falta la razón social, el tipo y el número fiscal.". Valida con `updateUserSchema` en el cliente y muestra los errores por ruta (`organizer.taxId`…), igual que los `fieldErrors` de la acción. "Cancelar" / "Guardar cambios".
+  - **Eliminar** (`DeleteUserDialog`, `AlertDialog`): "¿Eliminar a <nombre>?" / "Perderá el acceso a Mentec Tickets. Esta acción no se puede deshacer." / Cancelar / "Eliminar" (`bg-destructive text-foreground`, navy sobre rojo como "Cancelado"). Si falla, el error se muestra en el diálogo, que sigue abierto para reintentar.
 
 ## Resumen `/organizador`
 

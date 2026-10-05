@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
+import { escapeLike } from "@/lib/db/escapeLike";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { orders } from "@/lib/db/schema/sales";
@@ -31,9 +32,6 @@ const inventoryCapacity = sql`(select count(*) from ${eventSeats} where ${eventS
  * sección del recinto; una general aporta su `capacity` y una numerada sus `venue_seats`.
  */
 const configuredCapacity = sql`(select coalesce(sum(case when ${venueSections.seating} = 'general' then ${venueSections.capacity} else (select count(*) from ${venueSeats} where ${venueSeats.sectionId} = ${venueSections.id}) end), 0) from ${ticketTypes} inner join ${venueSections} on ${venueSections.id} = ${ticketTypes.sectionId} where ${ticketTypes.eventId} = ${events.id})`;
-
-/** Escapa los comodines de LIKE (`\` es el carácter de escape por defecto en Postgres). */
-const escapeLike = (text: string) => text.replace(/[\\%_]/g, "\\$&");
 
 /** Título (tal cual) o `search_text` (título, recinto y ciudad normalizados) contienen `q`. */
 function matchesQuery(q: string): SQL | undefined {

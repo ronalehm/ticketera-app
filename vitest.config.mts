@@ -15,8 +15,9 @@ if (testDatabaseUrl && [fileEnv.DATABASE_URL, fileEnv.DATABASE_URL_UNPOOLED].inc
 // Sin BD de test: URL inerte para que importar los services no falle al validar el entorno; esos tests se saltan.
 const INERT_DATABASE_URL = "postgres://unused@127.0.0.1:1/unused";
 
-// Valores inertes de Clerk y Stripe: importar lib/env en los tests no necesita claves reales.
+// Valores inertes de Clerk, Stripe y APP_URL: importar lib/env en los tests no necesita claves reales.
 const INERT_KEYS_ENV = {
+  APP_URL: "http://localhost:3000",
   CLERK_SECRET_KEY: "sk_test_unused",
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_unused",
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/login",

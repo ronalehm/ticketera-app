@@ -150,7 +150,7 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `CRON_SECRET` | Autenticación de `/api/jobs/*`. |
 | `GCS_BUCKET` | Imágenes de portada. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional) | Mapa del recinto; sin clave no se muestra el mapa. |
-| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://ticketera-mentec.dev`. |
+| `APP_URL` | Obligatoria, solo servidor: URL pública `http(s)` sin barra final (se normaliza). URLs absolutas que salen del servidor: `redirectUrl` de las invitaciones de Clerk (`<APP_URL>/registro`), correos, `return_url` de Stripe. Local `http://localhost:3000`; preview, la URL de la rama en Vercel; producción `https://ticketera-app-x6xq.vercel.app`. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Errores de servidor y cliente. |
 
 Variables solo del seed (`lib/db/seed/env.ts`, no las lee la app): `SUPER_ADMIN_EMAIL`, `SEED_ORGANIZER_EMAILS`; y `ALLOW_DEMO_RESET` para `npm run db:reset-demo`.

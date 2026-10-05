@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeManagedEvent as makeEvent } from "../data/managedEvents.mock";
-import { filterManagedEvents, formatCount, formatRevenue, getDashboardKpis, getSoldPercentage } from "./organizerStats";
+import { filterManagedEvents, formatRevenue, getDashboardKpis, getSoldPercentage } from "./organizerStats";
 
 const published = makeEvent("a", { sold: 120, revenueCents: 1_080_000 });
 const finished = makeEvent("b", { status: "finished", sold: 30, revenueCents: 270_050 });
@@ -41,12 +41,6 @@ describe("filterManagedEvents", () => {
     ["cancelled", []],
   ] as const)("devuelve solo los de estado %s", (status, expected) => {
     expect(filterManagedEvents(events, status)).toEqual(expected);
-  });
-});
-
-describe("formatCount", () => {
-  it("usa el separador de miles de es-PE", () => {
-    expect(formatCount(8146)).toBe("8,146");
   });
 });
 

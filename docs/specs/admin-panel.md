@@ -242,13 +242,13 @@ Diseños de referencia (artifacts de Linder Hassinger): "Panel · Escritorio/Mó
 - [x] No quedan imports de `organizerEvents.mock.ts` para ventas.
 
 ### F4
-- [ ] Los 4 casos de `inviteUser` cubiertos con Clerk mockeado.
-- [ ] Reglas de objetivo aplicadas en el servidor.
-- [ ] Aprobar sin datos fiscales falla.
-- [ ] Quitar el rol organizer con eventos activos falla.
-- [ ] `deleteUser` es reintentable tras un fallo de Clerk.
-- [ ] El payload de `audit_logs` no lleva PII ni `clerk_id`.
-- [ ] Una invitación manual aterriza en `<APP_URL>/registro`.
+- [x] Los 4 casos de `inviteUser` cubiertos con Clerk mockeado.
+- [x] Reglas de objetivo aplicadas en el servidor.
+- [x] Aprobar sin datos fiscales falla.
+- [x] Quitar el rol organizer con eventos activos falla.
+- [x] `deleteUser` es reintentable tras un fallo de Clerk.
+- [x] El payload de `audit_logs` no lleva PII ni `clerk_id`.
+- [x] Una invitación manual aterriza en `<APP_URL>/registro`.
 
 ### F5a
 - [ ] Un admin no puede crear un evento sin elegir organizador.
@@ -324,11 +324,11 @@ Coordinación:
 - [x] T4 — Retiro de mocks y del store de lectura; nav "Mis eventos" activa
 
 ### F4 — Gestión de usuarios
-- [ ] T1 — `APP_URL` en `lib/env.ts` (+ test) y `.env.example`; `npx shadcn@latest add alert-dialog`
-- [ ] T2 — `users.service.ts`: `listUsers`, `inviteUser`, `updateUser` y `deleteUser` + `audit_logs`, con tests (Clerk mockeado)
-- [ ] T3 — Acciones con zod + hook `useUsers`, con tests
-- [ ] T4 — `UsersTable`, diálogos Invitar/Editar/Eliminar y `/admin/usuarios`, con tests
-- [ ] T5 — Correcciones de la revisión de F4 (si las hay)
+- [x] T1 — `APP_URL` en `lib/env.ts` (+ test) y `.env.example`; `npx shadcn@latest add alert-dialog`
+- [x] T2 — `users.service.ts`: `listUsers`, `inviteUser`, `updateUser` y `deleteUser` + `audit_logs`, con tests (Clerk mockeado)
+- [x] T3 — Acciones con zod + hook `useUsers`, con tests
+- [x] T4 — `UsersTable`, diálogos Invitar/Editar/Eliminar y `/admin/usuarios`, con tests
+- [x] T5 — Correcciones de la revisión de F4 (si las hay)
 
 ### F5a — CRUD de borradores
 - [ ] T1 — Schemas zod del evento (recinto, ticket types por sección, URL de portada) con test

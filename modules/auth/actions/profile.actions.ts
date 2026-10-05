@@ -1,9 +1,9 @@
 "use server";
 
 import { isIP } from "node:net";
-import { DrizzleQueryError } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { describeError } from "@/lib/describeError";
 import { completeProfileSchema } from "../schemas/auth.schema";
 import { getSessionUser } from "../services/session.service";
 import { completeProfile } from "../services/users.service";
@@ -31,16 +31,4 @@ export async function completeProfileAction(input: unknown, redirectUrl: unknown
     return { error: "No pudimos completar la solicitud. Inténtalo de nuevo." };
   }
   redirect(getSafeRedirect(typeof redirectUrl === "string" ? redirectUrl : null));
-}
-
-/**
- * Datos del error sin información personal: de un error de BD solo el nombre y el SQLSTATE (`query`, `params` y el
- * `message` llevan los valores del usuario); de un error propio de la app, su mensaje.
- */
-function describeError(error: unknown) {
-  // `DrizzleQueryError` no fija `name` (queda "Error"), por eso va literal.
-  if (error instanceof DrizzleQueryError) {
-    return { name: "DrizzleQueryError", code: (error.cause as { code?: unknown } | undefined)?.code };
-  }
-  return error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error };
 }

@@ -1,9 +1,10 @@
 import { CalendarDays, ChartColumn, Ticket, type LucideIcon } from "lucide-react";
 
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
 
 import type { DashboardKpis } from "../types/organizer.types";
-import { formatCount, formatRevenue } from "../utils/organizerStats";
+import { formatRevenue } from "../utils/organizerStats";
 
 type Kpi = { label: string; value: string; icon: LucideIcon; className?: string };
 
