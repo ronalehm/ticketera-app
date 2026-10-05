@@ -8,6 +8,7 @@ const navigation = vi.hoisted(() => ({ pathname: "/" }));
 const clerk = vi.hoisted(() => ({
   isLoaded: true,
   user: null as null | {
+    id: string;
     firstName: string;
     lastName: string;
     primaryEmailAddress: { emailAddress: string };
@@ -21,8 +22,14 @@ vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
   useClerk: () => ({ signOut: clerk.signOut }),
 }));
+vi.mock("../actions/session.actions", () => ({ syncSessionRoleAction: vi.fn(async () => ({ changed: false })) }));
 
-const clerkUser = { firstName: "Ana", lastName: "Quispe", primaryEmailAddress: { emailAddress: "demo@mentectickets.pe" } };
+const clerkUser = {
+  id: "user_1",
+  firstName: "Ana",
+  lastName: "Quispe",
+  primaryEmailAddress: { emailAddress: "demo@mentectickets.pe" },
+};
 
 function signIn(role = "organizer") {
   clerk.user = { ...clerkUser, publicMetadata: { role } };
@@ -170,11 +177,11 @@ describe("AuthHeaderActions (sheet)", () => {
     }
   });
 
-  it("un admin ve el enlace como Panel", async () => {
-    signIn("admin");
+  it.each(["admin", "super_admin"])("un %s ve el enlace Panel → /admin/usuarios", async (role) => {
+    signIn(role);
     renderSheet();
     const nav = await screen.findByRole("navigation", { name: "Tu cuenta" });
-    expect(within(nav).getByRole("button", { name: "Panel" }).getAttribute("href")).toBe("/organizador");
+    expect(within(nav).getByRole("button", { name: "Panel" }).getAttribute("href")).toBe("/admin/usuarios");
   });
 
   it("sin usuario muestra Iniciar sesión y Crear cuenta, sin Tu cuenta ni Mis entradas", async () => {
