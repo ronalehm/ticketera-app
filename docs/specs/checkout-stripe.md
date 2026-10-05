@@ -1,7 +1,7 @@
 # Compra real: reserva en BD, pago con Stripe, webhook y "Mis entradas" desde la BD
 
 - Módulo: checkout (con cambios en tickets y seating)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Convertir el checkout simulado (`checkout-mock-payment.md`: pago falso, órdenes en el navegador con el store `mentec-orders`) en una compra real de la fase F3 de `docs/architecture/system-design.md`: el comprador reserva sus asientos en Postgres al pulsar "Continuar", paga con tarjeta mediante Stripe (modo test) sin salir del checkout, un webhook de Stripe emite las entradas con QR real y "Mis entradas" las lee de la base de datos. Para compradores (con o sin cuenta) y, de forma indirecta, para organizadores (comisión y neto congelados en cada orden).
@@ -385,11 +385,11 @@ Unitarios junto al archivo; los de BD con `describeWithDb` (se omiten sin `DATAB
 Coordinación: no hay otra spec abierta sobre estos archivos. Nunca dos `npm install` a la vez. Las tareas con BD no ejecutan `db:migrate` contra `dev` en paralelo. Cada fase termina con `npx vitest run`, `npm run lint` y `npm run build` del reviewer.
 
 ### Fase 1 — Reserva en la BD (servidor) · F3.1, parte 1 · 18 archivos (3 generados/doc)
-- [ ] T1 — Migración de `orders` (decisión 12), `ticketCount` en el seed, `seed.test.ts` que cuenta solo filas del seed y ERD actualizado; aplicar con `npm run db:migrate` · archivos: `lib/db/schema/sales.ts`, `drizzle/0005_<nombre>.sql` (generado y editado), `drizzle/meta/0005_snapshot.json`, `drizzle/meta/_journal.json` (generados), `lib/db/seed/buildSeedData.ts`, `lib/db/seed/seed.test.ts`, `docs/architecture/erd.md` · depende de: — · secuencial (base)
-- [ ] T2 — Fixtures de test (`createTestEvent`) y `parseSeatId`/`formatSeatId` en la entrada de seating · archivos: `lib/db/testFixtures.ts`, `modules/seating/seats.ts` · depende de: T1 · secuencial (lib/ y entrada pública)
-- [ ] T3 — `orderRules` (`RESERVATION_MINUTES`, `computeOrderAmounts`) con test y tipos `ReservationResult`/`PendingCheckoutResult` · archivos: `modules/checkout/utils/orderRules.ts`, `modules/checkout/utils/orderRules.test.ts`, `modules/checkout/types/checkout.types.ts` · depende de: T1 · paralelo con T2
-- [ ] T4 — `reserveCheckoutOrder` y `releaseOrder` con test de integración · archivos: `modules/checkout/services/reservation.service.ts`, `modules/checkout/services/reservation.service.test.ts` · depende de: T2, T3 · secuencial
-- [ ] T5 — `buildPendingCheckoutOrder` y `getPendingCheckout` con tests · archivos: `modules/checkout/utils/orderViews.ts`, `modules/checkout/utils/orderViews.test.ts`, `modules/checkout/services/orders.service.ts`, `modules/checkout/services/orders.service.test.ts` · depende de: T4 (su test crea órdenes con la reserva) · secuencial
+- [x] T1 — Migración de `orders` (decisión 12), `ticketCount` en el seed, `seed.test.ts` que cuenta solo filas del seed y ERD actualizado; aplicar con `npm run db:migrate` · archivos: `lib/db/schema/sales.ts`, `drizzle/0005_<nombre>.sql` (generado y editado), `drizzle/meta/0005_snapshot.json`, `drizzle/meta/_journal.json` (generados), `lib/db/seed/buildSeedData.ts`, `lib/db/seed/seed.test.ts`, `docs/architecture/erd.md` · depende de: — · secuencial (base)
+- [x] T2 — Fixtures de test (`createTestEvent`) y `parseSeatId`/`formatSeatId` en la entrada de seating · archivos: `lib/db/testFixtures.ts`, `modules/seating/seats.ts` · depende de: T1 · secuencial (lib/ y entrada pública)
+- [x] T3 — `orderRules` (`RESERVATION_MINUTES`, `computeOrderAmounts`) con test y tipos `ReservationResult`/`PendingCheckoutResult` · archivos: `modules/checkout/utils/orderRules.ts`, `modules/checkout/utils/orderRules.test.ts`, `modules/checkout/types/checkout.types.ts` · depende de: T1 · paralelo con T2
+- [x] T4 — `reserveCheckoutOrder` y `releaseOrder` con test de integración · archivos: `modules/checkout/services/reservation.service.ts`, `modules/checkout/services/reservation.service.test.ts` · depende de: T2, T3 · secuencial
+- [x] T5 — `buildPendingCheckoutOrder` y `getPendingCheckout` con tests · archivos: `modules/checkout/utils/orderViews.ts`, `modules/checkout/utils/orderViews.test.ts`, `modules/checkout/services/orders.service.ts`, `modules/checkout/services/orders.service.test.ts` · depende de: T4 (su test crea órdenes con la reserva) · secuencial
 
 ### Fase 2 — "Continuar" reserva y `/checkout` lee la orden · F3.1, parte 2 · 16 archivos
 - [ ] T1 — `startCheckout`, `StartCheckoutButton` con tests y entrada `start.ts` · archivos: `modules/checkout/actions/checkout.actions.ts`, `modules/checkout/actions/checkout.actions.test.ts`, `modules/checkout/components/StartCheckoutButton.tsx`, `modules/checkout/components/StartCheckoutButton.test.tsx`, `modules/checkout/start.ts` · depende de: Fase 1 · secuencial (base: entrada pública)

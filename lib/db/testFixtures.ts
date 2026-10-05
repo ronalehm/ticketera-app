@@ -1,0 +1,145 @@
+// Solo para tests de integración (describeWithDb): eventos `draft` propios que no tocan el seed ni el catálogo.
+import { randomUUID } from "node:crypto";
+import { eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
+import { organizers, users } from "@/lib/db/schema/identity";
+import { orders, tickets } from "@/lib/db/schema/sales";
+import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
+
+export type TestEventOptions = {
+  /** Lugares de la zona general (sección `general`). */
+  general?: number;
+  /** Asientos de la sección `numbered`: `seatsPerRow` por cada fila (1–2 letras mayúsculas). */
+  numbered?: { rows: string[]; seatsPerRow: number };
+  /** Precio de cada tipo de entrada. Por defecto S/ 50. */
+  priceCents?: number;
+  /** Comisión del organizador. Por defecto 10 %. */
+  commissionBps?: number;
+};
+
+export type TestEvent = {
+  eventId: string;
+  slug: string;
+  generalTicketTypeId?: string;
+  numberedTicketTypeId?: string;
+  generalSlug?: string;
+  numberedSlug?: string;
+  numberedSectionSlug?: string;
+  /** Borra el evento, sus órdenes (y entradas), el recinto, el organizador y su usuario. */
+  cleanup: () => Promise<void>;
+};
+
+const GENERAL_SLUG = "general";
+const NUMBERED_SLUG = "numbered";
+
+/** Crea un evento `draft` de prueba con sufijo aleatorio, sus `ticket_types` y `event_seats` disponibles. */
+export async function createTestEvent(options: TestEventOptions = {}): Promise<TestEvent> {
+  const { general, numbered, priceCents = 5000, commissionBps = 1000 } = options;
+  const suffix = randomUUID().slice(0, 8);
+  const slug = `test-checkout-${suffix}`;
+
+  const created = await db.transaction(async (tx) => {
+    const [{ id: userId }] = await tx
+      .insert(users)
+      .values({ email: `fixture.${suffix}@example.com`, firstName: "Prueba", lastName: suffix, role: "organizer" })
+      .returning({ id: users.id });
+    await tx.insert(organizers).values({
+      userId,
+      legalName: `Organizador de prueba ${suffix}`,
+      taxIdType: "ruc",
+      taxId: `test-${suffix}`,
+      commissionBps,
+    });
+    const [{ id: venueId }] = await tx
+      .insert(venues)
+      .values({ name: `Recinto ${suffix}`, address: "Av. Prueba 123", city: "Lima", status: "approved", createdBy: userId })
+      .returning({ id: venues.id });
+    const [{ id: categoryId }] = await tx.select({ id: categories.id }).from(categories).limit(1);
+    const [{ id: eventId }] = await tx
+      .insert(events)
+      .values({
+        slug,
+        organizerId: userId,
+        venueId,
+        categoryId,
+        title: `Evento de prueba ${suffix}`,
+        minAge: 0,
+        status: "draft",
+        searchText: slug,
+      })
+      .returning({ id: events.id });
+
+    const result: Omit<TestEvent, "cleanup"> & { userId: string; venueId: string } = { eventId, slug, userId, venueId };
+
+    if (general !== undefined) {
+      const [section] = await tx
+        .insert(venueSections)
+        .values({ venueId, slug: GENERAL_SLUG, name: "General", sortOrder: 0, seating: "general", capacity: general })
+        .returning({ id: venueSections.id });
+      const [type] = await tx
+        .insert(ticketTypes)
+        .values({ eventId, sectionId: section.id, slug: GENERAL_SLUG, name: "General", priceCents, sortOrder: 0 })
+        .returning({ id: ticketTypes.id });
+      await tx
+        .insert(eventSeats)
+        .values(Array.from({ length: general }, () => ({ eventId, ticketTypeId: type.id })));
+      Object.assign(result, { generalTicketTypeId: type.id, generalSlug: GENERAL_SLUG });
+    }
+
+    if (numbered) {
+      const [section] = await tx
+        .insert(venueSections)
+        .values({ venueId, slug: NUMBERED_SLUG, name: "Platea", sortOrder: 1, seating: "numbered" })
+        .returning({ id: venueSections.id });
+      const seats = await tx
+        .insert(venueSeats)
+        .values(
+          numbered.rows.flatMap((rowLabel, rowIndex) =>
+            Array.from({ length: numbered.seatsPerRow }, (_, index) => ({
+              sectionId: section.id,
+              rowLabel,
+              number: index + 1,
+              x: index * 10,
+              y: rowIndex * 10,
+            })),
+          ),
+        )
+        .returning({ id: venueSeats.id });
+      const [type] = await tx
+        .insert(ticketTypes)
+        .values({ eventId, sectionId: section.id, slug: NUMBERED_SLUG, name: "Platea", priceCents, sortOrder: 1 })
+        .returning({ id: ticketTypes.id });
+      await tx
+        .insert(eventSeats)
+        .values(seats.map((seat) => ({ eventId, ticketTypeId: type.id, venueSeatId: seat.id })));
+      Object.assign(result, {
+        numberedTicketTypeId: type.id,
+        numberedSlug: NUMBERED_SLUG,
+        numberedSectionSlug: NUMBERED_SLUG,
+      });
+    }
+
+    return result;
+  });
+
+  const { userId, venueId, ...testEvent } = created;
+  return { ...testEvent, cleanup: () => deleteTestEvent(testEvent.eventId, venueId, userId) };
+}
+
+async function deleteTestEvent(eventId: string, venueId: string, userId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const orderIds = tx.select({ id: orders.id }).from(orders).where(eq(orders.eventId, eventId));
+    await tx.delete(tickets).where(inArray(tickets.orderId, orderIds));
+    await tx.delete(eventSeats).where(eq(eventSeats.eventId, eventId));
+    await tx.delete(orders).where(eq(orders.eventId, eventId));
+    await tx.delete(ticketTypes).where(eq(ticketTypes.eventId, eventId));
+    await tx.delete(events).where(eq(events.id, eventId));
+    const sectionIds = tx.select({ id: venueSections.id }).from(venueSections).where(eq(venueSections.venueId, venueId));
+    await tx.delete(venueSeats).where(inArray(venueSeats.sectionId, sectionIds));
+    await tx.delete(venueSections).where(eq(venueSections.venueId, venueId));
+    await tx.delete(venues).where(eq(venues.id, venueId));
+    await tx.delete(organizers).where(eq(organizers.userId, userId));
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+}

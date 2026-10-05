@@ -300,6 +300,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
 
     const orderId = seedUuid(`order:${event.slug}`);
     let subtotalCents = 0;
+    let ticketCount = 0;
     const eventSeatRows: Insert<typeof eventSeats>[] = [];
 
     /** Sección y plan de lugares de cada tipo de entrada (las secciones y asientos se registran una sola vez). */
@@ -350,7 +351,10 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
       });
 
       for (const seat of section.seats) {
-        if (seat.sold) subtotalCents += priceCents;
+        if (seat.sold) {
+          subtotalCents += priceCents;
+          ticketCount += 1;
+        }
         eventSeatRows.push({
           id: seedUuid(`event-seat:${event.slug}:${ticketType.id}:${seat.key}`),
           eventId,
@@ -362,7 +366,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
       }
     });
 
-    if (eventSeatRows.some((seat) => seat.status === "sold")) {
+    if (ticketCount > 0) {
       const platformFeeCents = Math.round((subtotalCents * COMMISSION_BPS) / 10000);
       const demoDate = new Date(SEED_EPOCH);
       // ponytail: orden `paid` sin `tickets`; en F3 se decide si el seed los emite (Preguntas abiertas 2 y 5).
@@ -375,6 +379,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
         status: "paid",
         expiresAt: demoDate,
         paidAt: demoDate,
+        ticketCount,
         subtotalCents,
         platformFeeCents,
         organizerAmountCents: subtotalCents - platformFeeCents,

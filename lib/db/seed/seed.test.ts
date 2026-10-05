@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { count, eq, inArray } from "drizzle-orm";
+import { count, eq, inArray, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
@@ -16,49 +17,57 @@ const SUPER_ADMIN_EMAIL = "super.admin@example.com";
 /** Un seed completo contra Neon tarda decenas de segundos. */
 const SEED_TIMEOUT_MS = 120_000;
 
-/** Sin `users`: se cuenta aparte, solo los del seed, porque otros tests de integración crean usuarios en paralelo. */
-const TABLES = {
-  organizers,
-  categories,
-  venues,
-  venueSections,
-  venueSeats,
-  events,
-  ticketTypes,
-  orders,
-  eventSeats,
-  legalDocuments,
-};
+type SeedData = ReturnType<typeof buildSeedData>;
+const idsOf = (rows: { id?: string }[]) => rows.map((row) => row.id as string);
 
-async function countRows(seedEmails: string[]) {
-  const [{ value: seedUsers }] = await db
-    .select({ value: count() })
-    .from(users)
-    .where(inArray(users.email, seedEmails));
+/**
+ * Cuenta solo las filas del seed: otros tests de integración crean usuarios, eventos `draft` y órdenes en paralelo.
+ * Las tablas grandes se filtran por su padre del seed para no mandar miles de ids.
+ */
+async function countSeedRows(data: SeedData, seedEmails: string[]) {
+  const sectionIds = idsOf(data.venueSections);
+  const eventIds = idsOf(data.events);
+  const filters: [string, PgTable, SQL][] = [
+    ["users", users, inArray(users.email, seedEmails)],
+    ["organizers", organizers, inArray(organizers.userId, data.organizers.map((row) => row.userId))],
+    ["categories", categories, inArray(categories.id, idsOf(data.categories))],
+    ["venues", venues, inArray(venues.id, idsOf(data.venues))],
+    ["venueSections", venueSections, inArray(venueSections.id, sectionIds)],
+    ["venueSeats", venueSeats, inArray(venueSeats.sectionId, sectionIds)],
+    ["events", events, inArray(events.id, eventIds)],
+    ["ticketTypes", ticketTypes, inArray(ticketTypes.eventId, eventIds)],
+    ["orders", orders, inArray(orders.id, idsOf(data.orders))],
+    ["eventSeats", eventSeats, inArray(eventSeats.eventId, eventIds)],
+    ["legalDocuments", legalDocuments, inArray(legalDocuments.id, idsOf(data.legalDocuments))],
+  ];
   const entries = await Promise.all(
-    Object.entries(TABLES).map(async ([name, table]) => {
-      const [{ value }] = await db.select({ value: count() }).from(table);
+    filters.map(async ([name, table, where]) => {
+      const [{ value }] = await db.select({ value: count() }).from(table).where(where);
       return [name, value] as const;
     }),
   );
-  return { users: seedUsers, ...Object.fromEntries(entries) };
+  return Object.fromEntries(entries);
 }
 
 describeWithDb("seed (Postgres)", () => {
+  const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
+
   it("volver a ejecutarlo no falla y deja los conteos de buildSeedData", async () => {
     await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
 
-    const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
     const expected = Object.fromEntries(Object.entries(data).map(([name, rows]) => [name, rows.length]));
     const seedEmails = [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
-    expect(await countRows(seedEmails)).toEqual({ ...expected, users: seedEmails.length });
+    expect(await countSeedRows(data, seedEmails)).toEqual({ ...expected, users: seedEmails.length });
   }, SEED_TIMEOUT_MS);
 
   it("el super admin tiene el correo en minúsculas, rol super_admin, sin clerk_id y es el creador de los recintos", async () => {
     const admins = await db.select().from(users).where(eq(users.email, SUPER_ADMIN_EMAIL));
     expect(admins).toEqual([expect.objectContaining({ role: "super_admin", clerkId: null })]);
 
-    const creators = await db.selectDistinct({ createdBy: venues.createdBy }).from(venues);
+    const creators = await db
+      .selectDistinct({ createdBy: venues.createdBy })
+      .from(venues)
+      .where(inArray(venues.id, idsOf(data.venues)));
     expect(creators).toEqual([{ createdBy: admins[0].id }]);
   });
 

@@ -24,6 +24,14 @@ export type CheckoutOrderResult =
   | { status: "not-found" }
   | { status: "sold-out" | "invalid-tickets" | "free"; eventSlug: string };
 
+export type ReservationResult = { status: "reserved"; orderId: string } | { status: "invalid" | "unavailable" };
+
+export type PendingCheckoutResult =
+  | { status: "not-found" }
+  | { status: "expired"; eventSlug: string }
+  | { status: "closed"; orderId: string } // paid | refunded (desde F4)
+  | { status: "ok"; orderId: string; amountCents: number; remainingMs: number; order: CheckoutOrder };
+
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export type CheckoutFormValues = z.input<typeof checkoutFormSchema>;
