@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div className="flex w-full max-w-md flex-col gap-6">
-      <SignIn />
+      <SignIn fallbackRedirectUrl="/" />
     </div>
   );
 }

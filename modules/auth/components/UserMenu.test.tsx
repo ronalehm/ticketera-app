@@ -76,12 +76,12 @@ describe("UserMenu", () => {
     ]);
   });
 
-  it.each(["admin", "super_admin"] as const)("%s ve el enlace como Panel", async (role) => {
+  it.each(["admin", "super_admin"] as const)("%s ve el enlace Panel → /admin/usuarios", async (role) => {
     const { trigger } = renderMenu({ role });
     await openMenu(trigger);
 
     const panel = screen.getByRole("menuitem", { name: "Panel" });
-    expect(panel.getAttribute("href")).toBe("/organizador");
+    expect(panel.getAttribute("href")).toBe("/admin/usuarios");
     expect(screen.queryByRole("menuitem", { name: "Panel de organizador" })).toBeNull();
   });
 

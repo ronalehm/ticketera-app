@@ -552,3 +552,30 @@ Reemplaza el punto "Panel de organizador se muestra a toda sesión" y resuelve l
    - [x] Un `organizer` ve "Panel de organizador" → `/organizador`.
    - [x] `admin` y `super_admin` ven "Panel" → `/organizador`.
    - [x] Tests: `useSessionUser.test.ts`, `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.
+
+### Enmienda 2 — "Panel" del admin a `/admin/usuarios` y rol de Clerk sincronizado con la BD (pedido del usuario)
+Corrige la Enmienda 1. Caso real: `ronalehm@gmail.com` es `super_admin` en la BD y entra a `/admin/usuarios`, pero el menú no muestra "Panel". **Causa:** el seed lo promovió a `super_admin` por SQL con la fila ya vinculada (`clerk_id` presente), y `getSessionUser` solo replica el rol en `publicMetadata.role` al **crear o vincular** la fila. Clerk se quedó con `customer` (o sin rol) y el cliente lo trata como `customer`.
+
+Los roles no excluyen la compra: todos ven "Mi perfil" y "Mis entradas" y compran igual. El rol privilegiado solo añade el enlace al panel.
+
+1. **Destino del enlace al panel** (reemplaza el último punto del 2 de la Enmienda 1):
+   - `organizer` → "Panel de organizador" → `/organizador`. También con `organizers.status` `pending` o `suspended` (entran en modo lectura; mutar sigue exigiendo `requireApprovedOrganizer`).
+   - `admin` y `super_admin` → "Panel" → `/admin/usuarios`. El criterio es `users:manage`; no hay menú aparte para `super_admin`.
+   - `customer`, o rol ausente o desconocido → sin enlace.
+2. **Sincronización BD → Clerk** (reemplaza la "Limitación conocida" de la Enmienda 1):
+   - `syncClerkRole()` en `session.service.ts`: lee el usuario con `getSessionUser()` (BD) y `currentUser()` (Clerk). Si `publicMetadata.role` difiere de `users.role`, llama a `updateUserMetadata` con el rol de la BD y devuelve `{ changed: true }`. Sin sesión, o si coincide, devuelve `{ changed: false }`. La comparación y la escritura se comparten con la vinculación de `findOrCreateUser` (sin duplicar).
+   - `syncSessionRoleAction()` en `modules/auth/actions/session.actions.ts`: server action **sin parámetros** que llama a `syncClerkRole()`. Best effort: un error se registra y devuelve `{ changed: false }`. No recibe ni devuelve un rol: el cliente no puede elegir el suyo.
+   - `useSessionUser`: con sesión cargada, llama a la acción **una vez por usuario y carga de página** (un `Set` en memoria del módulo, sin `localStorage`). Si devuelve `changed`, ejecuta `user.reload()` para que `publicMetadata` llegue actualizado y el menú se vuelva a pintar.
+   - El rol del cliente sigue saliendo solo de `publicMetadata.role`, y un valor ausente o desconocido sigue contando como `customer`. Mientras se sincroniza, el cliente es conservador (sin enlace). Ni query params ni `localStorage` deciden roles.
+   - No cambia la autorización: `requirePermission`, `can`, `ROLE_PERMISSIONS`, `canManageUser`, `canAssignRole` y las guardas de `/admin/**` y `/organizador/**` siguen igual. El enlace no autoriza; el servidor vuelve a comprobar cada ruta.
+3. **Login sin redirección por rol:** `/login` pasa `fallbackRedirectUrl="/"` a `SignIn`. Con un `redirect_url` interno se vuelve a él (Clerk lo valida contra su propio origen y descarta los externos). Sin `redirect_url` se va a `/`, para todos los roles.
+4. **Archivos:** `accountLinks.ts`, `useSessionUser.ts`, `session.service.ts`, `actions/session.actions.ts` (nuevo), `app/(auth)/login/[[...rest]]/page.tsx` y sus tests.
+5. **Criterios de aceptación:**
+   - [x] `getAccountLinks`: `customer` → Mi perfil y Mis entradas, sin panel; `organizer` → además "Panel de organizador" → `/organizador`; `admin` y `super_admin` → además "Panel" → `/admin/usuarios`. El menú y el `Sheet` usan esos enlaces.
+   - [x] Un rol ausente o desconocido en `publicMetadata` no muestra el panel.
+   - [x] `syncClerkRole`: si Clerk difiere de la BD escribe el rol de la BD y devuelve `changed: true`; si coincide no escribe; sin sesión no escribe.
+   - [x] `syncSessionRoleAction`: sin parámetros; ante un error devuelve `changed: false`.
+   - [x] `useSessionUser`: llama a la acción una vez por usuario y, con `changed`, recarga el usuario de Clerk.
+   - [ ] Manual, con `ronalehm@gmail.com` (`super_admin` en la BD): tras entrar, el menú muestra "Mi perfil", "Mis entradas" y "Panel" → `/admin/usuarios`, y puede comprar.
+   - [ ] Manual: `/login` sin `redirect_url` lleva a `/` para todos los roles; `/login?redirect_url=/checkout/...` vuelve a esa ruta; `/login?redirect_url=https://ejemplo.com` no sale del sitio.
+   - [x] Tests: `accountLinks.test.ts`, `useSessionUser.test.ts`, `session.service.test.ts`, `session.actions.test.ts`; se ajustan `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.

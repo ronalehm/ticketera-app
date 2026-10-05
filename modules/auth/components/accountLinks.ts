@@ -11,12 +11,19 @@ const BASE_LINKS: readonly AccountLink[] = [
 ];
 
 /**
- * Enlaces de la cuenta, compartidos por el menú de usuario y el bloque de cuenta del `Sheet`. El panel solo aparece con
- * `panel:access` (organizador, admin, super admin): "Panel" para quien además gestiona usuarios. El acceso real lo
- * decide el servidor (`requirePermission`).
+ * Enlaces de la cuenta, compartidos por el menú de usuario y el bloque de cuenta del `Sheet`. Todos los roles ven los
+ * básicos; con `users:manage` (admin, super admin) se añade "Panel" → `/admin/usuarios`, y con solo `panel:access`
+ * (organizador) "Panel de organizador" → `/organizador`. El acceso real lo decide el servidor (`requirePermission`).
  */
 export function getAccountLinks(role: SessionUser["role"]): readonly AccountLink[] {
-  if (!roleCan(role, "panel:access")) return BASE_LINKS;
-  const label = roleCan(role, "users:manage") ? "Panel" : "Panel de organizador";
-  return [...BASE_LINKS, { href: "/organizador", label, icon: LayoutDashboard }];
+  const panel = getPanelLink(role);
+  return panel ? [...BASE_LINKS, panel] : BASE_LINKS;
+}
+
+function getPanelLink(role: SessionUser["role"]): AccountLink | null {
+  if (roleCan(role, "users:manage")) return { href: "/admin/usuarios", label: "Panel", icon: LayoutDashboard };
+  if (roleCan(role, "panel:access")) {
+    return { href: "/organizador", label: "Panel de organizador", icon: LayoutDashboard };
+  }
+  return null;
 }

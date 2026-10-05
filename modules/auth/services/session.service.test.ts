@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "../types/auth.types";
 import { isMfaPending } from "../utils/can";
-import { getSessionUser, getVerifiedEmail, requirePermission, requireUser } from "./session.service";
+import { getSessionUser, getVerifiedEmail, requirePermission, requireUser, syncClerkRole } from "./session.service";
 import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn(), currentUser: vi.fn(), clerkClient: vi.fn() }));
@@ -53,6 +53,7 @@ function mockClerkUser(user: {
 }) {
   const { role, email = "Ana@Example.com", verified = true, firstName = "Ana", lastName = "Pérez" } = user;
   vi.mocked(currentUser).mockResolvedValue({
+    id: "user_1",
     firstName,
     lastName,
     publicMetadata: role ? { role } : {},
@@ -145,6 +146,70 @@ describe("getSessionUser · mfaVerified", () => {
     mockSession("user_1", c.factorVerificationAge);
     vi.mocked(findUserByClerkId).mockResolvedValue(USER);
     expect(await getSessionUser()).toEqual({ ...USER, mfaVerified: c.mfaVerified });
+  });
+});
+
+describe("syncClerkRole", () => {
+  it("sin sesión devuelve changed false sin consultar Clerk ni escribir", async () => {
+    mockSession(null);
+    expect(await syncClerkRole()).toEqual({ changed: false });
+    expect(currentUser).not.toHaveBeenCalled();
+    expect(updateUserMetadata).not.toHaveBeenCalled();
+  });
+
+  it.each([{ clerkRole: "customer" }, { clerkRole: undefined }])(
+    "con la fila vinculada y Clerk en $clerkRole escribe el rol de la BD y devuelve changed true",
+    async ({ clerkRole }) => {
+      mockSession("user_1");
+      vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "super_admin" });
+      mockClerkUser({ role: clerkRole });
+
+      expect(await syncClerkRole()).toEqual({ changed: true });
+      expect(updateUserMetadata).toHaveBeenCalledTimes(1);
+      expect(updateUserMetadata).toHaveBeenCalledWith("user_1", { publicMetadata: { role: "super_admin" } });
+    },
+  );
+
+  it("con el rol de Clerk al día no escribe y devuelve changed false", async () => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "admin" });
+    mockClerkUser({ role: "admin" });
+
+    expect(await syncClerkRole()).toEqual({ changed: false });
+    expect(clerkClient).not.toHaveBeenCalled();
+    expect(updateUserMetadata).not.toHaveBeenCalled();
+  });
+
+  it("sin usuario de Clerk devuelve changed false sin escribir", async () => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue({ ...USER, role: "admin" });
+    vi.mocked(currentUser).mockResolvedValue(null);
+
+    expect(await syncClerkRole()).toEqual({ changed: false });
+    expect(updateUserMetadata).not.toHaveBeenCalled();
+  });
+
+  it("al vincular la fila reutiliza su comparación: una sola lectura de Clerk y una escritura", async () => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue(null);
+    vi.mocked(ensureUser).mockResolvedValue({ ...USER, role: "super_admin" });
+    mockClerkUser({});
+
+    expect(await syncClerkRole()).toEqual({ changed: true });
+    expect(currentUser).toHaveBeenCalledTimes(1);
+    expect(updateUserMetadata).toHaveBeenCalledTimes(1);
+    expect(updateUserMetadata).toHaveBeenCalledWith("user_1", { publicMetadata: { role: "super_admin" } });
+  });
+
+  it("al vincular con el rol de Clerk ya al día devuelve changed false sin escribir", async () => {
+    mockSession("user_1");
+    vi.mocked(findUserByClerkId).mockResolvedValue(null);
+    vi.mocked(ensureUser).mockResolvedValue(USER);
+    mockClerkUser({ role: "customer" });
+
+    expect(await syncClerkRole()).toEqual({ changed: false });
+    expect(currentUser).toHaveBeenCalledTimes(1);
+    expect(updateUserMetadata).not.toHaveBeenCalled();
   });
 });
 

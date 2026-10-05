@@ -12,17 +12,42 @@ import { AccountLinkError, ensureUser, findUserByClerkId } from "./users.service
  * primera vez pide el usuario a Clerk, crea o vincula la fila y replica su rol en `publicMetadata.role` si difiere.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
+  return (await loadSession())?.user ?? null;
+}
+
+/**
+ * Replica el rol de la BD (`users.role`) en `publicMetadata.role` de Clerk si difiere, p. ej. tras cambiarlo por seed o
+ * SQL. Devuelve `changed: true` solo si escribió. Sin sesión o con el rol al día no escribe nada.
+ */
+export async function syncClerkRole(): Promise<{ changed: boolean }> {
+  const session = await loadSession();
+  if (!session) return { changed: false };
+  // Fila recién creada o vinculada: `findOrCreateUser` ya comparó el rol con Clerk.
+  if (session.roleSync) return session.roleSync;
+
+  const clerkUser = await currentUser();
+  if (!clerkUser) return { changed: false };
+  return { changed: await replicateRole(clerkUser.id, clerkUser.publicMetadata.role, session.user.role) };
+}
+
+/** Resultado de replicar el rol en Clerk; `null` si no se comparó (la fila ya existía). */
+type RoleSync = { changed: boolean } | null;
+
+async function loadSession(): Promise<{ user: SessionUser; roleSync: RoleSync } | null> {
   const { userId, factorVerificationAge } = await auth();
   if (!userId) return null;
 
-  const user = await findOrCreateUser(userId);
+  const result = await findOrCreateUser(userId);
+  if (!result) return null;
   // `factorVerificationAge` = [primer factor, segundo factor] en minutos; -1 si la sesión no usó ese factor.
-  return user && { ...user, mfaVerified: (factorVerificationAge?.[1] ?? -1) >= 0 };
+  return { ...result, user: { ...result.user, mfaVerified: (factorVerificationAge?.[1] ?? -1) >= 0 } };
 }
 
-async function findOrCreateUser(userId: string) {
+async function findOrCreateUser(
+  userId: string,
+): Promise<{ user: Omit<SessionUser, "mfaVerified">; roleSync: RoleSync } | null> {
   const existing = await findUserByClerkId(userId);
-  if (existing) return existing;
+  if (existing) return { user: existing, roleSync: null };
 
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
@@ -36,11 +61,15 @@ async function findOrCreateUser(userId: string) {
     firstName: clerkUser.firstName ?? "",
     lastName: clerkUser.lastName ?? "",
   });
-  if (clerkUser.publicMetadata.role !== user.role) {
-    const client = await clerkClient();
-    await client.users.updateUserMetadata(userId, { publicMetadata: { role: user.role } });
-  }
-  return user;
+  return { user, roleSync: { changed: await replicateRole(userId, clerkUser.publicMetadata.role, user.role) } };
+}
+
+/** Escribe `role` en `publicMetadata.role` del usuario de Clerk si `clerkRole` difiere; devuelve si escribió. */
+async function replicateRole(clerkId: string, clerkRole: unknown, role: SessionUser["role"]): Promise<boolean> {
+  if (clerkRole === role) return false;
+  const client = await clerkClient();
+  await client.users.updateUserMetadata(clerkId, { publicMetadata: { role } });
+  return true;
 }
 
 /**
