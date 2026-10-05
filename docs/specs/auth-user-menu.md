@@ -1,7 +1,7 @@
 # Menú de usuario en el header y página "Mi perfil"
 
 - Módulo: auth (+ `components/shared`, `lib/`)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Pedido del usuario: "cuando ingreso a la página con un usuario y contraseña debe verse quién está logeado con un ícono y ver perfil: card de usuario".
