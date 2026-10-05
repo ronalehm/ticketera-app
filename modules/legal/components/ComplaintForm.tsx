@@ -356,7 +356,7 @@ export function ComplaintForm() {
                 {label("itemDescription", "Descripción")}
                 <Input
                   {...textProps("itemDescription")}
-                  placeholder="Ej.: 2 entradas para Noche de sintetizadores, pedido MT-AB12CD"
+                  placeholder="Ej.: 2 entradas para Noche de sintetizadores, pedido TK-1042"
                   className="h-11"
                 />
                 {fieldError("itemDescription")}

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TicketType } from "../types/events.types";
@@ -8,6 +9,31 @@ import { TicketSelector } from "./TicketSelector";
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/navigation")>()),
   useSearchParams: () => new URLSearchParams("general=2&vip=1"),
+}));
+
+// Stub de `StartCheckoutButton`: mismo marcado (formulario con el input "selection") sin la acción de servidor.
+vi.mock("@/modules/checkout/start", () => ({
+  StartCheckoutButton: ({
+    checkoutHref,
+    className,
+    children,
+  }: {
+    checkoutHref: string | null;
+    className?: string;
+    children: ReactNode;
+  }) =>
+    checkoutHref === null ? (
+      <button type="button" disabled className={className}>
+        {children}
+      </button>
+    ) : (
+      <form>
+        <input type="hidden" name="selection" value={checkoutHref} />
+        <button type="submit" className={className}>
+          {children}
+        </button>
+      </form>
+    ),
 }));
 
 const TYPES: TicketType[] = [
@@ -22,6 +48,9 @@ const renderSelector = (status: TicketType["status"] = "available", ticketTypes 
 const add = (name: string) => screen.getByRole("button", { name: `Añadir una entrada ${name}` }) as HTMLButtonElement;
 const remove = (name: string) => screen.getByRole("button", { name: `Quitar una entrada ${name}` }) as HTMLButtonElement;
 const cta = () => screen.getByText("Continuar con la compra");
+// Lo que el CTA envía a `startCheckout` (input "selection" de su formulario).
+const selection = () =>
+  ((cta() as HTMLButtonElement).form?.elements.namedItem("selection") as HTMLInputElement | null)?.value;
 const total = () => screen.getByText("Total").nextElementSibling?.textContent;
 
 afterEach(cleanup);
@@ -82,7 +111,7 @@ describe("TicketSelector", () => {
     expect(remove("Palco").disabled).toBe(true);
   });
 
-  it("CTA deshabilitado con 0 entradas y enlace al checkout con cantidades", () => {
+  it("CTA deshabilitado con 0 entradas y, con cantidades, envía la selección del checkout", () => {
     renderSelector();
     expect(cta().tagName).toBe("BUTTON");
     expect((cta() as HTMLButtonElement).disabled).toBe(true);
@@ -90,7 +119,7 @@ describe("TicketSelector", () => {
     fireEvent.click(add("General"));
     fireEvent.click(add("General"));
 
-    expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=2");
+    expect(selection()).toBe("/checkout?evento=mi-evento&general=2");
   });
 
   it("evento agotado muestra 'Entradas agotadas' sin controles ni CTA", () => {
@@ -105,7 +134,7 @@ describe("TicketSelector", () => {
 });
 
 describe("TicketSelector con initialQuantities", () => {
-  it("precarga cantidades, total y enlace desde el primer render, y '−' las cambia", () => {
+  it("precarga cantidades, total y selección del CTA desde el primer render, y '−' las cambia", () => {
     render(
       <TicketSelector
         slug="mi-evento"
@@ -118,13 +147,13 @@ describe("TicketSelector con initialQuantities", () => {
 
     expect(add("General").parentElement?.textContent).toContain("2");
     expect(total()).toBe("S/ 360.00");
-    expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=2");
+    expect(selection()).toBe("/checkout?evento=mi-evento&general=2");
 
     fireEvent.click(remove("General"));
 
     expect(add("General").parentElement?.textContent).toContain("1");
     expect(total()).toBe("S/ 180.00");
-    expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=1");
+    expect(selection()).toBe("/checkout?evento=mi-evento&general=1");
   });
 
   it("en un evento agotado ignora initialQuantities y muestra 'Entradas agotadas' sin controles", () => {
@@ -151,6 +180,6 @@ describe("PreselectedTicketSelector", () => {
     expect(add("General").parentElement?.textContent).toContain("2");
     expect(add("VIP").parentElement?.textContent).toContain("1");
     expect(total()).toBe("S/ 910.00");
-    expect(cta().closest("a")?.getAttribute("href")).toBe("/checkout?evento=mi-evento&general=2&vip=1");
+    expect(selection()).toBe("/checkout?evento=mi-evento&general=2&vip=1");
   });
 });

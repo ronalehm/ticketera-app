@@ -1,8 +1,8 @@
 # Página: checkout `/checkout` y `/checkout/confirmacion`
 
-> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra y textos; Fase 3: ancho de los contenedores).
+> Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER. Specs: `docs/specs/checkout-mock-payment.md` (Fases 3 y 4; base en `docs/specs/checkout-purchase.md` Fase 1) y `docs/specs/design-alignment-purchase-flow.md` (Fase 1: pantalla de compra y textos; Fase 3: ancho de los contenedores). Compra real (reserva, Stripe y confirmación desde la BD): `docs/specs/checkout-stripe.md` (Fases 2 y 5).
 
-Pasos 2 ("Datos y pago", `/checkout`) y 3 ("Confirmación", `/checkout/confirmacion`) de la compra. El pago es **simulado**: no hay pasarela ni se envían datos a ningún servicio; los datos de tarjeta solo existen en el estado del formulario. La orden aprobada se guarda solo en el navegador (`localStorage`).
+Pasos 2 ("Datos y pago", `/checkout?orden=<uuid>`) y 3 ("Confirmación", `/checkout/confirmacion?orden=<uuid>`) de la compra. "Continuar" del paso 1 reserva los asientos en la BD (orden `pending` de 10 min) y lleva al paso 2, que lee la orden de la BD. El pago es con tarjeta mediante el **Payment Element de Stripe** (modo test): los datos de tarjeta solo viven en el iframe de Stripe. Un webhook de Stripe emite las entradas y la confirmación lee la orden de la BD según su estado. Las URL usan el UUID de la orden, nunca el código `TK-…`.
 
 ## Pantalla de compra (`PurchaseShell`)
 
@@ -54,7 +54,7 @@ h1 sr-only        "Finalizar compra" (no se ve; único h1 y primer encabezado)
 Banner            [reloj] Reservamos tus entradas por mm:ss. Completa el pago antes de que se liberen.
 ┌──────────────────────────────────────────┬──────────────────────┐
 │ Datos del comprador                      │ [img] Título         │  columna derecha 380px,
-│ Enviaremos tus entradas al correo que    │       sáb 14 nov ·   │  sticky lg:top-24
+│ Asociaremos tus entradas al correo que   │       sáb 14 nov ·   │  sticky lg:top-24
 │ indiques. Los campos con * son oblig.    │       Lugar, Ciudad  │
 │ Nombres *          | Apellidos *         │ ──────────────────── │
 │ Correo electrónico * (ancho completo)    │ 2 × General S/ 500.00│
@@ -62,11 +62,11 @@ Banner            [reloj] Reservamos tus entradas por mm:ss. Completa el pago an
 │                    | identidad * [DNI▾][]│ (Fila L · 9 · …)     │
 ├──────────────────────────────────────────┤ Cambiar entradas     │
 │ Método de pago                           │ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │
-│ [Tarjeta][Yape][PagoEfectivo]            │ Total (3 entradas)   │
-│ Número * | Venc. * | CVV *               │           S/ 910.00  │
-│ Nombre en la tarjeta *                   │ Precio final, sin    │
-│ (i) Demo: no se realiza ningún cobro     │ cargos ocultos       │
-│     real. [Tarjetas de prueba: …]        │ [Lock Pagar S/ 910]  │
+│ [Tarjeta][Yape Próx.][PagoEfectivo Próx.]│ Total (3 entradas)   │
+│ [Payment Element de Stripe (iframe)]     │           S/ 910.00  │
+│ (candado) Pago seguro procesado por…     │ Precio final, sin    │
+│ (i) Modo de prueba: no se realiza…       │ cargos ocultos       │
+│     Tarjeta de prueba 4242 4242 …        │ [Lock Pagar S/ 910]  │
 │ [Alert error de pago]                    │ Acepta los términos  │
 ├──────────────────────────────────────────┤ para continuar.      │
 │ ☐ Acepto los Términos… y la Política     │                      │
@@ -89,19 +89,21 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 
 - Bloque `rounded-2xl border border-warning/50 bg-warning/10 px-4 py-3` con `Clock` (`aria-hidden`): "Reservamos tus entradas por **mm:ss**. Completa el pago antes de que se liberen." (`tabular-nums`, sin animaciones).
 - Anuncio `aria-live="polite"` `sr-only` solo al cambiar el minuto.
-- Al expirar (10 min): `Alert` destructivo "Tu reserva expiró" con "Volver a elegir entradas" (`h-11`) hacia el paso 1, y los botones "Pagar" quedan deshabilitados.
+- Cuenta el tiempo que le queda a la reserva (`expires_at` de la orden en la BD, 10 min desde "Continuar"; recargar no lo reinicia).
+- Al expirar: `Alert` destructivo "Tu reserva expiró" con "Volver a elegir entradas" (`h-11`) hacia el paso 1, y los botones "Pagar" quedan deshabilitados.
 
 ### Campos obligatorios (`*`)
 
 - Marca visual `RequiredMark` (`modules/checkout/components/RequiredMark.tsx`): `<span aria-hidden="true" className="ml-0.5 text-destructive">*</span>` al final de la etiqueta.
-- Llevan `*`: Nombres, Apellidos, Correo electrónico, Celular, Documento de identidad, Número de tarjeta, Vencimiento, CVV, Nombre en la tarjeta y Términos. "Método de pago" no (siempre hay uno elegido, Tarjeta por defecto).
+- Llevan `*`: Nombres, Apellidos, Correo electrónico, Celular, Documento de identidad y Términos (los campos de tarjeta son del Payment Element de Stripe). "Método de pago" no (siempre hay uno elegido, Tarjeta por defecto).
 - Lo obligatorio llega a la tecnología de apoyo con `required` en cada `input` y en el `Checkbox` de Términos (`noValidate` evita las burbujas del navegador). El nombre accesible no incluye el `*` ("Nombres", no "Nombres *").
 
 ### Datos del comprador
 
 - Descripción (`CardDescription`), con texto por ancho (`display: none`: nada se anuncia dos veces):
-  - por debajo de `sm`: "Enviaremos tus entradas a este correo. Los campos con * son obligatorios." (`<span className="sm:hidden">`);
-  - desde `sm`: "Enviaremos tus entradas al correo que indiques. Los campos con * son obligatorios." (`<span className="max-sm:hidden">`).
+  - por debajo de `sm`: "Asociaremos tus entradas a este correo. Los campos con * son obligatorios." (`<span className="sm:hidden">`);
+  - desde `sm`: "Asociaremos tus entradas al correo que indiques. Los campos con * son obligatorios." (`<span className="max-sm:hidden">`).
+  - "Asociaremos", no "Enviaremos": en F3 no se envían correos; la compra queda en Mis entradas de la cuenta con sesión o, si se compra como invitado, de la cuenta con ese correo verificado.
   - La leyenda de los `*` va en todos los anchos (el diseño no tiene `*`; la app sí).
 - **Placeholders:** Nombres y Apellidos, "Como figura en tu documento"; Correo electrónico, "tu@email.com"; Celular, "Número de celular" (a la derecha de "+51"); número de documento, "Número". Caben sin cortarse a 375 px.
 - Grilla `sm:grid-cols-2`, sin huecos:
@@ -113,7 +115,7 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
   ```
 
   - Nombres (`given-name`) | Apellidos (`family-name`).
-  - Correo electrónico (`type="email"`, `email`) a todo el ancho: es el dato al que se envían las entradas y suele ser largo.
+  - Correo electrónico (`type="email"`, `email`) a todo el ancho: es el dato al que se asocian las entradas y suele ser largo.
   - Celular (addon "+51", `type="tel"`, `inputMode="numeric"`, `tel-national`, `maxLength={9}`) | Documento de identidad.
   - En móvil, una columna en el mismo orden, que es también el orden de tabulación y el del foco al primer inválido.
 - **Documento de identidad** es un grupo: `FieldSet` con `FieldLegend variant="label"` "Documento de identidad *". Dentro, fila `flex gap-2`: `Select` de tipo (`w-32 shrink-0`, DNI por defecto) + `Input` del número (`flex-1 min-w-0`; `inputMode="numeric"` y `maxLength={8}` solo con DNI). Cada control tiene etiqueta `sr-only` ("Tipo de documento", "Número de documento"). El trigger muestra la abreviatura (`DNI`, `CE`, `Pasaporte`); la lista desplegada, los nombres completos ("Carné de extranjería"). El error del número va debajo de la fila. A 375 px tipo y número caben en una fila sin scroll horizontal.
@@ -140,11 +142,16 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 
 - Sin aviso arriba de los métodos.
 - `RadioGroup` nombrado por el h2 de la sección, `grid gap-3 sm:grid-cols-3`: radio cards (patrón "choice card" de shadcn) `min-h-16 cursor-pointer`, seleccionada `border-primary bg-accent`; iconos `CreditCard` (Tarjeta), `Smartphone` (Yape), `Store` (PagoEfectivo), `aria-hidden`.
-- **"Tarjeta de crédito o débito" en móvil:** por debajo de `sm` (métodos apilados a todo el ancho), Tarjeta lleva el sufijo `<span className="sm:hidden"> de crédito o débito</span>` (`MOBILE_LABEL_SUFFIX`), y el radio se llama "Tarjeta de crédito o débito". Desde `sm` (tres columnas) dice "Tarjeta". `PAYMENT_METHOD_LABELS` no cambia.
-- Tarjeta: grilla `grid-cols-2 sm:grid-cols-4 gap-4`: "Número de tarjeta *" (`col-span-2`, "0000 0000 0000 0000", se agrupa de 4 en 4), "Vencimiento *" ("MM/AA"), "CVV *" ("3 o 4 dígitos"), "Nombre en la tarjeta *" (ancho completo). Todos `required`, `autoComplete="off"` (simulación: no se invita a guardar tarjetas reales), `inputMode="numeric"` en los numéricos, `h-11`.
-- Yape / PagoEfectivo: sin campos; bloque `rounded-2xl bg-accent p-4` con su icono y el texto informativo.
-- **Nota de demo** al pie (tras los campos de tarjeta o el bloque de Yape/PagoEfectivo): `<p className="flex gap-2 text-sm text-muted-foreground">` con `Info` (`aria-hidden`, `size-4 shrink-0 mt-0.5`): "Demo: no se realiza ningún cobro real." Solo con Tarjeta se añade: " Tarjetas de prueba: 4242 4242 4242 4242 (aprobada) y 4000 0000 0000 0002 (rechazada)." Texto visible, sin `title`.
-- Error de pago: `Alert` destructivo bajo los métodos, recibe el foco al aparecer (p. ej. "Tu tarjeta fue rechazada…").
+- **Solo Tarjeta:** siempre seleccionada (`defaultValue="card"`). Yape y PagoEfectivo van con `RadioGroupItem disabled` y `Badge variant="secondary"` "Próximamente": atenuados (`opacity-60`, `cursor-not-allowed`), no se pueden elegir.
+- **"Tarjeta de crédito o débito" en móvil:** por debajo de `sm` (métodos apilados a todo el ancho), Tarjeta lleva el sufijo `<span className="sm:hidden"> de crédito o débito</span>` (`CARD_MOBILE_SUFFIX`), y el radio se llama "Tarjeta de crédito o débito". Desde `sm` (tres columnas) dice "Tarjeta". `PAYMENT_METHOD_LABELS` no cambia.
+- **Payment Element de Stripe** bajo los métodos (sin campos de tarjeta propios): solo tarjeta, sin pestañas ni Apple/Google Pay, sin campos de nombre/correo/teléfono de Stripe (salen de "Datos del comprador"). Appearance con los valores de los tokens Mentec (el iframe no lee variables CSS; spec `checkout-stripe.md` decisión 25), `locale: "es-419"`.
+  - **Cargando:** `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Cargando formulario de pago…" (`role="status"`, `text-sm text-muted-foreground`).
+  - **Error de carga:** `Alert` destructivo "No pudimos cargar el formulario de pago. Recarga la página." en lugar del Payment Element.
+- **Notas** al pie, `<p className="flex gap-2 text-sm text-muted-foreground">` con icono `aria-hidden` `mt-0.5 size-4 shrink-0`:
+  - `Lock`: "Pago seguro procesado por Stripe. No almacenamos los datos de tu tarjeta."
+  - `Info`: "Modo de prueba: no se realiza ningún cobro real. Tarjeta de prueba 4242 4242 4242 4242, cualquier fecha futura y CVC."
+- Error de pago: `Alert` destructivo bajo los métodos, recibe el foco al aparecer: el mensaje de Stripe en español (tarjeta rechazada o datos inválidos), "Tu reserva expiró. Vuelve a elegir tus entradas.", "Esta compra ya no está disponible." o "No pudimos iniciar el pago. Inténtalo de nuevo.". El botón vuelve a quedar activo para reintentar.
+- **Envío:** Términos → datos del comprador (`useZodForm`; si fallan, no se llama a Stripe) → `elements.submit()` → `payOrder` (reserva vigente, guarda al comprador y crea el PaymentIntent con el importe de la orden) → `stripe.confirmPayment`, que redirige a `/checkout/confirmacion?orden=<uuid>` (o pasa antes por 3DS).
 
 ### Términos
 
@@ -158,8 +165,8 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 
   | Estado | Cuándo | Aspecto | Atributos | Aviso debajo |
   |---|---|---|---|---|
-  | 1. Procesando | se está procesando el pago | `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Procesando pago…" | `disabled` nativo (sale del orden de Tab); región `sr-only` `role="status"` anuncia "Procesando pago…" | no |
-  | 2. Expirado | la reserva expiró | deshabilitado | `disabled` nativo | no (lo explica el `Alert` "Tu reserva expiró") |
+  | 1. Procesando | se está procesando el pago o Stripe ya está redirigiendo | `Spinner` (`aria-hidden`, `motion-reduce:animate-none`) + "Procesando pago…" | `disabled` nativo (sale del orden de Tab); región `sr-only` `role="status"` anuncia "Procesando pago…" | no |
+  | 2. Expirado o pago no listo | la reserva expiró, o Stripe / el Payment Element aún no están listos (o no cargaron) | deshabilitado | `disabled` nativo | no (lo explican el `Alert` "Tu reserva expiró" o el estado del Payment Element) |
   | 3. Términos pendientes | Términos sin marcar (también al cargar) | pálido: `opacity-50`, `cursor-not-allowed`, sin hover ni desplazamiento al pulsar (`aria-disabled:` neutraliza `hover:bg-primary` y el `translate-y`) | `aria-disabled="true"` y `aria-describedby` al aviso; **sin** `disabled` (sigue en el orden de Tab) | "Acepta los términos para continuar." (`text-center text-sm text-muted-foreground`) |
   | 4. Activo | Términos marcados, sin procesar ni expirar | primario normal | ninguno extra | no |
 
@@ -170,17 +177,17 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 ### Reglas específicas
 
 - Formulario: con Términos marcados, errores al enviar, revalidación al salir del campo tras el primer intento, foco al primer inválido ("Nombres" con el formulario vacío), `aria-invalid` + `aria-describedby`, error junto al campo (`FieldError`).
-- Orden de tabulación: cabecera ("Volver a entradas" por debajo de `lg`, el logo desde `lg`) → Nombres → Apellidos → Correo → Celular → Tipo → Número → método → campos de tarjeta → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible.
-- Estados (`not-found`, `sold-out`, `invalid-tickets`, `free`): patrón del 404 de evento (centrado, h1 + descripción + acciones `h-11`); siempre con salida. Van en `<PurchaseShell>` sin paso (cabecera solo con el logo, fondo gris).
+- Orden de tabulación: cabecera ("Volver a entradas" por debajo de `lg`, el logo desde `lg`) → Nombres → Apellidos → Correo → Celular → Tipo → Número → método (Tarjeta) → campos del Payment Element (iframe de Stripe) → Términos → (móvil: botón del resumen) → "Cambiar entradas" → Pagar, con foco visible.
+- Estados (`CheckoutStatusMessage`): `order-not-found` (`orden` ausente, inválida o inexistente: "No encontramos tu compra") y `order-expired` (reserva vencida: "Tu reserva expiró" con "Volver a elegir entradas" → `/eventos/<slug>`). Una orden ya pagada o reembolsada redirige a la confirmación. Patrón del 404 de evento (centrado, h1 + descripción + acciones `h-11`); siempre con salida. Van en `<PurchaseShell>` sin paso (cabecera solo con el logo, fondo gris).
 - Importes con el formato del MASTER (`S/ 910.00`).
 - Sin scroll horizontal a 375 / 768 / 1024 / 1440; targets ≥ 44 px; solo tokens; sin emojis.
 - Metadata: `Finalizar compra | Mentec Tickets`.
 
 ## Paso 3: `/checkout/confirmacion`
 
-> Spec: `docs/specs/checkout-mock-payment.md` Fase 4, alineada a las capturas en la Fase 6 (decisiones 24–27). El PDF de "Descargar PDF" lo define `docs/specs/tickets-pdf-download.md`; el talón navegable, `docs/specs/tickets-ticket-pager.md`.
+> Spec: `docs/specs/checkout-mock-payment.md` Fase 4, alineada a las capturas en la Fase 6 (decisiones 24–27). El PDF de "Descargar PDF" lo define `docs/specs/tickets-pdf-download.md`; el talón navegable, `docs/specs/tickets-ticket-pager.md`. Confirmación desde la BD: `docs/specs/checkout-stripe.md` (requisito 11, Fase 5).
 
-URL `/checkout/confirmacion?orden=MT-XXXXXX` (a ella se llega con `router.replace` tras el pago aprobado). La página (Server Component) valida `orden` (`parseOrderCode`); si falta o es inválido muestra directamente "No encontramos tu compra". Si es válido, `OrderConfirmation` lee la orden del store persistido (`useStoredOrder`).
+URL `/checkout/confirmacion?orden=<uuid>` (a ella redirige Stripe tras `confirmPayment`, con o sin 3DS). La página (Server Component) lee la orden de la BD (`getOrderConfirmation`) y, según su estado, compone `OrderConfirmation` (orden `paid`) o un `CheckoutStatusMessage` (ver Estados). Las entradas las emite el webhook de Stripe: hasta que llega, la orden sigue `pending` y se ve "Estamos procesando tu pago".
 
 ### Layout
 
@@ -191,25 +198,26 @@ Cabecera de compra  PurchaseShell currentStep={3}, sin flecha (oculta al imprimi
 Fondo bg-muted
         (CircleCheck en círculo bg-accent)
         h1 "¡Compra confirmada!"
-        Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas.
-        ( Pedido N.º MT-AB12CD )
+        Tus entradas están listas. Te las mostramos abajo y también las tienes
+        en Mis entradas con tu cuenta de **luis@correo.pe**.
+        ( Pedido N.º TK-1042 )
 ┌────────┬──────────────────────────────────────────┬╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐
 │ imagen │ CATEGORÍA                                ┆     [QR]      │  tarjeta-entrada
-│        │ Título del evento                        ┆ MT-AB12CD-01  │  (md+: horizontal,
+│        │ Título del evento                        ┆  TK-1042-01   │  (md+: horizontal,
 │        │ lunes 5 de octubre · Costa Verde, Lima   ┆ Titular: Luis │   talón a la derecha)
 │        │ Tribuna Oriente: Fila L · 9 · Fila M · 8 ┆ Entrada 1 de N│  (una línea por zona
 │        │ Zona | Entradas | Total pagado           ┆    [<] [>]    │   con asientos)
 └────────┴──────────────────────────────────────────┴╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
 [Ver mis entradas]  [Agregar al calendario]  [Descargar PDF]   (ocultos al imprimir)
 (h2 "Qué sigue": visible < md, sr-only en md+)
-[Revisa tu correo] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
+[Descarga tus entradas] [Muestra tu QR] [Todo en Mis entradas]   (oculto al imprimir)
 (sin footer)
 ```
 
-- Cabecera: `OrderConfirmation` (`{ code }`, sin prop `stepper`) envuelve cada estado en `PurchaseShell`: la orden confirmada, con `currentStep={3}` (sin `back`); cargando y no encontrada, sin paso (solo el logo). La página `app/(purchase)/checkout/confirmacion/page.tsx` solo valida `orden` y compone.
-- Contenedor (`CONTAINER_CLASS`, en "cargando" y "encontrada"; "no encontrada" usa `CheckoutStatusMessage`, centrado) `mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
-- Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full bg-card ring-1 ring-border` "Pedido N.º **MT-AB12CD**" (blanco sobre el fondo gris).
-- **Correo del comprador** en el texto de la cabecera: "Enviamos tus entradas a **luis@correo.pe**. También las tienes siempre en Mis entradas." El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
+- Cabecera: `OrderConfirmation` (`{ order }`: la orden `paid` que lee la página) se envuelve en `PurchaseShell currentStep={3}` (sin `back`). Los demás estados los compone la página `app/(purchase)/checkout/confirmacion/page.tsx` en `<PurchaseShell>` sin paso (solo el logo).
+- Contenedor (`CONTAINER_CLASS`; los estados usan `CheckoutStatusMessage`, centrado) `mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 md:px-6 py-8 md:py-12`.
+- Cabecera centrada: círculo `bg-accent` con `CircleCheck` `text-primary` (`aria-hidden`, `size-16 md:size-20`); h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1); texto `text-muted-foreground`; chip `rounded-full bg-card ring-1 ring-border` "Pedido N.º **TK-1042**" (blanco sobre el fondo gris; código `TK-<n>` de la orden).
+- **Correo del comprador** en el texto de la cabecera: "Tus entradas están listas. Te las mostramos abajo y también las tienes en Mis entradas con tu cuenta de **luis@correo.pe**." (no se envían correos en F3). El correo (`order.buyer.email`) va en `<strong className="font-semibold text-foreground break-all">`: destaca sobre el `text-muted-foreground` del párrafo y, si es largo, se parte en varias líneas sin scroll horizontal a 375 px. `ConfirmationHeader` recibe props planas `code` y `email`.
 
 ### Tarjeta-entrada (`ConfirmationTicketCard`)
 
@@ -224,7 +232,7 @@ Fondo bg-muted
 - **Talón navegable** (spec `docs/specs/tickets-ticket-pager.md`): separador punteado (`border-dashed`; horizontal en móvil, vertical en `md`) con dos muescas decorativas (`bg-muted ring-1 ring-border rounded-full`, `aria-hidden`: del gris del fondo de la página). Contenedor `flex flex-col items-center justify-center gap-3 p-6`, `md:w-56` (224 px; no cambia). Recorre **todas** las entradas del pedido (`useState(0)`, empieza en la entrada 1) y muestra, en columna centrada, la entrada actual `tickets[index]`:
   1. `TicketQr` de la entrada actual (`size-40 md:size-32`).
   2. Bloque `flex w-full min-w-0 flex-col items-center gap-0.5 text-center`:
-     - código `text-sm font-semibold tabular-nums` con prefijo `sr-only` "Código de entrada: " (p. ej. "MT-AB12CD-01");
+     - código `text-sm font-semibold tabular-nums` con prefijo `sr-only` "Código de entrada: " (p. ej. "TK-1042-01");
      - "Titular: {nombre}" (`text-sm text-muted-foreground break-words`), solo si el titular no está vacío ni es solo espacios.
   3. Paginador de entradas compartido (`components/shared/TicketPager`, MASTER §7) con `className="print:hidden"`: "Entrada n de N" (`text-lg font-bold tabular-nums`) y flechas "Entrada anterior" / "Entrada siguiente" (44 × 44 px), siempre visibles; la del extremo queda deshabilitada y enfocable (también ambas con 1 entrada). ArrowLeft/ArrowRight con el foco en una flecha cambian de entrada. Por container query va **apilado y centrado** (texto encima, flechas debajo) con < 256 px de contenedor, como en el talón `md+` (176 px de contenido) y a 320 px; **en fila** (texto a la izquierda, flechas a la derecha) desde 256 px.
 - El cuerpo de la tarjeta (Zona, Entradas, Total pagado y asientos compactos) no cambia al navegar. "Descargar PDF" incluye siempre todas las entradas del pedido, sea cual sea la que se ve.
@@ -234,7 +242,7 @@ Fondo bg-muted
 
 - "Ver mis entradas" (primario, `Ticket`, enlace a `/mis-entradas`).
 - "Agregar al calendario" (outline, `CalendarPlus`; texto visible "Calendario" en móvil y "Agregar al calendario" desde `sm`, `aria-label="Agregar al calendario"`): descarga `<slug>.ics` con título, fecha, "Lugar, Ciudad" y "Pedido <código> · N entradas · Mentec Tickets".
-- "Descargar PDF" (`TicketsPdfButton` outline, `Download`): genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-MT-AB12CD.pdf`), A4 con una página por entrada del pedido (anatomía, colores y fuente en MASTER §7 "PDF de entradas"). Recibe `buildTicketPdfInput(order)`; jsPDF se carga solo al pulsar. No abre el diálogo de impresión.
+- "Descargar PDF" (`TicketsPdfButton` outline, `Download`): genera en el navegador y descarga `mentec-<pedido>.pdf` (p. ej. `mentec-TK-1042.pdf`), A4 con una página por entrada del pedido (anatomía, colores y fuente en MASTER §7 "PDF de entradas"). Recibe `buildTicketPdfInput(order)`; jsPDF se carga solo al pulsar. No abre el diálogo de impresión.
   - **Reposo:** `Download` + "Descargar PDF".
   - **Generando:** `Spinner` (`aria-hidden`, `size-5 motion-reduce:animate-none`) + "Generando…"; `aria-busy="true"` y `aria-disabled="true"` (`disabled` + `focusableWhenDisabled`: conserva el foco y no admite un segundo clic); `cursor-progress opacity-70`; región `sr-only` `role="status"` anuncia "Generando PDF…".
   - **Error:** vuelve a reposo y muestra debajo "No pudimos generar el PDF. Inténtalo de nuevo." (`role="alert"`, `text-sm text-destructive`, `col-span-2 text-center sm:basis-full`: ocupa las dos columnas en móvil y la línea completa desde `sm`). Al reintentar, el mensaje desaparece.
@@ -243,11 +251,11 @@ Fondo bg-muted
 ### Qué sigue
 
 - `<section aria-labelledby>` con h2 "Qué sigue" `text-lg font-bold md:sr-only`: **visible por debajo de `md`** (tarjetas apiladas) y `sr-only` en `md+`. Siempre nombra la sección para el lector y mantiene la jerarquía h1 → h2 sin saltos.
-- `<ol>` `grid gap-3 md:grid-cols-3` (en `md+` las 3 tarjetas en fila) de tarjetas `rounded-2xl bg-card ring-1 ring-border` con icono (`Mail`, `QrCode`, `Ticket`, `aria-hidden`). Cada descripción tiene un texto corto (`<span className="md:hidden">`) y uno largo (`<span className="max-md:hidden">`); el oculto sale del árbol de accesibilidad:
+- `<ol>` `grid gap-3 md:grid-cols-3` (en `md+` las 3 tarjetas en fila) de tarjetas `rounded-2xl bg-card ring-1 ring-border` con icono (`Download`, `QrCode`, `Ticket`, `aria-hidden`). Las descripciones con dos textos llevan uno corto (`<span className="md:hidden">`) y uno largo (`<span className="max-md:hidden">`); el oculto sale del árbol de accesibilidad. Sin "Revisa tu correo": en F3 no se envían correos.
 
   | Tarjeta | Texto corto (< md) | Texto largo (md+) |
   |---|---|---|
-  | "Revisa tu correo" | "Ahí llegan tus entradas y el comprobante." | "Ahí llegan tus entradas y el comprobante de pago." |
+  | "Descarga tus entradas" | "Guárdalas en PDF o muéstralas desde Mis entradas." (un solo texto en todos los anchos) | (igual) |
   | "Muestra tu QR" | "Cada entrada tiene su QR. Muéstralo en el ingreso." | "Cada entrada tiene su propio QR. Muéstralo desde tu celular en el ingreso." |
   | "Todo en Mis entradas" | "Ingresa con tu cuenta para verlas cuando quieras." | "Entra con tu cuenta para ver y descargar tus entradas cuando quieras." |
 
@@ -260,8 +268,16 @@ Ningún botón imprime; las clases `print:` solo limpian la impresión manual de
 
 ### Estados
 
-- **Cargando** (primer render y rehidratación del store): `Spinner` + "Cargando tu compra…" (`role="status"`), en `<PurchaseShell>` sin paso: cabecera solo con el logo.
-- **No encontrada** (sin `orden`, formato inválido o código que no está en este navegador): `CheckoutStatusMessage variant="order-not-found"`: h1 "No encontramos tu compra", "El enlace no es válido o la compra se realizó en otro navegador." y "Volver al inicio"; en `<PurchaseShell>` sin paso (cabecera solo con el logo y fondo gris; sin stepper, barra ni "Compra segura").
+Según el estado de la orden en la BD (`getOrderConfirmation`). Sin estado "cargando": la página llega ya con la orden. Todos menos `paid` son un `CheckoutStatusMessage` en `<PurchaseShell>` sin paso (cabecera solo con el logo y fondo gris; sin stepper, barra ni "Compra segura"):
+
+| Estado | Cuándo | h1 / descripción | Acción |
+|---|---|---|---|
+| `paid` | el webhook emitió las entradas | "¡Compra confirmada!" (layout de arriba) | las de "Acciones" |
+| `processing` (`payment-processing`) | orden `pending` con el PaymentIntent `succeeded`/`processing` (el webhook aún no llega) | "Estamos procesando tu pago" / "Esto puede tardar unos segundos. Esta página se actualizará sola." | "Volver al inicio" (outline). `AutoRefresh` pide la página cada 3 s (no con la pestaña oculta) |
+| `payment-failed` | orden `pending` vigente con el pago sin completar (p. ej. 3DS rechazado) | "Tu pago no se completó" / "No se realizó ningún cobro. Puedes volver a intentarlo mientras tu reserva siga vigente." | "Volver a intentar el pago" → `/checkout?orden=<uuid>` |
+| `expired` (`order-expired`) | la misma, con la reserva vencida | "Tu reserva expiró" (como en el paso 2) | "Volver a elegir entradas" |
+| `refunded` (`order-refunded`) | el pago llegó sin los asientos y se reembolsó | "No pudimos confirmar tus entradas" / reembolso del 100 % (5 a 10 días hábiles) | "Volver a elegir entradas" |
+| `not-found` (`order-not-found`) | sin `orden`, UUID inválido o inexistente | "No encontramos tu compra" / "El enlace no es válido o la compra ya no existe." | "Volver al inicio" |
 
 ### Reglas específicas
 

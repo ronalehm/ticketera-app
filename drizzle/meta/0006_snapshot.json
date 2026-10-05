@@ -1,5 +1,5 @@
 {
-  "id": "3041f217-f753-4635-8f61-7fa2a5d4e8e0",
+  "id": "8dfdc389-97af-481b-913d-a98505179eb1",
   "prevId": "d42357a0-5cf9-4e5f-a4c8-9ce029810dc3",
   "version": "7",
   "dialect": "postgresql",
@@ -467,18 +467,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "map_view_box": {
-          "name": "map_view_box",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "map_stage": {
-          "name": "map_stage",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -602,10 +590,6 @@
         "events_draft_complete_check": {
           "name": "events_draft_complete_check",
           "value": "\"events\".\"status\" = 'draft' OR (\"events\".\"venue_id\" IS NOT NULL AND \"events\".\"description\" IS NOT NULL AND \"events\".\"image_url\" IS NOT NULL AND \"events\".\"starts_at\" IS NOT NULL AND \"events\".\"doors_open_at\" IS NOT NULL)"
-        },
-        "events_map_override_check": {
-          "name": "events_map_override_check",
-          "value": "(\"events\".\"map_view_box\" IS NULL) = (\"events\".\"map_stage\" IS NULL)"
         }
       },
       "isRLSEnabled": false
@@ -2367,32 +2351,32 @@
           "name": "buyer_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_email": {
           "name": "buyer_email",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_phone": {
           "name": "buyer_phone",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_document_type": {
           "name": "buyer_document_type",
           "type": "document_type",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "buyer_document_number": {
           "name": "buyer_document_number",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -2405,6 +2389,12 @@
         "expires_at": {
           "name": "expires_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_count": {
+          "name": "ticket_count",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -2575,6 +2565,14 @@
         "orders_amounts_check": {
           "name": "orders_amounts_check",
           "value": "\"orders\".\"platform_fee_cents\" + \"orders\".\"organizer_amount_cents\" = \"orders\".\"subtotal_cents\""
+        },
+        "orders_buyer_required_check": {
+          "name": "orders_buyer_required_check",
+          "value": "\"orders\".\"status\" = 'pending' OR (\"orders\".\"buyer_name\" IS NOT NULL AND \"orders\".\"buyer_email\" IS NOT NULL AND \"orders\".\"buyer_phone\" IS NOT NULL AND \"orders\".\"buyer_document_type\" IS NOT NULL AND \"orders\".\"buyer_document_number\" IS NOT NULL)"
+        },
+        "orders_ticket_count_check": {
+          "name": "orders_ticket_count_check",
+          "value": "\"orders\".\"ticket_count\" > 0"
         }
       },
       "isRLSEnabled": false

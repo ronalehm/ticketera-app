@@ -2,11 +2,17 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 const DB_URL = "postgres://user:pass@127.0.0.1:5432/app";
-const SERVER_BASE = { DATABASE_URL: DB_URL, CLERK_SECRET_KEY: "sk_test_abc" };
+const SERVER_BASE = {
+  DATABASE_URL: DB_URL,
+  CLERK_SECRET_KEY: "sk_test_abc",
+  STRIPE_SECRET_KEY: "sk_test_abc",
+  STRIPE_WEBHOOK_SECRET: "whsec_abc",
+};
 const PUBLIC_BASE = {
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_abc",
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/login",
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/registro",
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_abc",
 };
 
 // lib/env.ts valida process.env al importarse.
@@ -71,6 +77,21 @@ describe("serverEnvSchema", () => {
     expect(errorOf({ ...SERVER_BASE, CLERK_SECRET_KEY: "pk_test_abc" })).toContain("CLERK_SECRET_KEY");
   });
 
+  it.each([
+    ["STRIPE_SECRET_KEY", "sk_live_abc"],
+    ["STRIPE_WEBHOOK_SECRET", "abc"],
+  ])("falla si falta %s o tiene el prefijo inválido (%s) y la nombra", (name, invalid) => {
+    expect(errorOf(omit(SERVER_BASE, name))).toContain(name);
+    expect(errorOf({ ...SERVER_BASE, [name]: invalid })).toContain(name);
+  });
+
+  it("acepta las claves de test de Stripe", () => {
+    expect(serverEnvSchema.parse(SERVER_BASE)).toMatchObject({
+      STRIPE_SECRET_KEY: "sk_test_abc",
+      STRIPE_WEBHOOK_SECRET: "whsec_abc",
+    });
+  });
+
   it("falla con un correo inválido", () => {
     expect(errorOf({ ...SERVER_BASE, SUPER_ADMIN_EMAIL: "no-es-correo" })).toContain(
       "SUPER_ADMIN_EMAIL",
@@ -122,7 +143,7 @@ describe("publicEnvSchema", () => {
     ).toBe("abc");
   });
 
-  it("acepta las variables de Clerk válidas", () => {
+  it("acepta las variables de Clerk y Stripe válidas", () => {
     expect(publicEnvSchema.parse(PUBLIC_BASE)).toEqual({ ...PUBLIC_BASE, NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY: undefined });
   });
 
@@ -131,6 +152,12 @@ describe("publicEnvSchema", () => {
     expect(
       errorOf({ ...PUBLIC_BASE, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "sk_test_abc" }, publicEnvSchema),
     ).toContain("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
+  });
+
+  it("falla si falta NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY o es pk_live_ y la nombra", () => {
+    const name = "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY";
+    expect(errorOf(omit(PUBLIC_BASE, name), publicEnvSchema)).toContain(name);
+    expect(errorOf({ ...PUBLIC_BASE, [name]: "pk_live_abc" }, publicEnvSchema)).toContain(name);
   });
 
   it.each(["NEXT_PUBLIC_CLERK_SIGN_IN_URL", "NEXT_PUBLIC_CLERK_SIGN_UP_URL"])(

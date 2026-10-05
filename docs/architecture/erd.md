@@ -133,6 +133,7 @@ erDiagram
     uuid user_id FK
     order_status status
     timestamptz expires_at
+    int ticket_count
     int subtotal_cents
     int platform_fee_cents
     int organizer_amount_cents
@@ -451,13 +452,14 @@ Sincronización (F2): sin sesión, los favoritos siguen en `localStorage` (`ment
 | `code` | text UNIQUE | `TK-` + `nextval('order_code_seq')`. |
 | `event_id` | uuid → `events.id` | |
 | `user_id` | uuid NULL → `users.id` | `NULL` = compra como invitado. |
-| `buyer_name` | text | |
-| `buyer_email` | text | |
-| `buyer_phone` | text | |
-| `buyer_document_type` | `document_type` | |
-| `buyer_document_number` | text | |
+| `buyer_name` | text NULL | `NULL` mientras la orden está `pending`: nace al reservar, antes de conocer al comprador. |
+| `buyer_email` | text NULL | |
+| `buyer_phone` | text NULL | |
+| `buyer_document_type` | `document_type` NULL | |
+| `buyer_document_number` | text NULL | |
 | `status` | `order_status` | Default `pending`. |
 | `expires_at` | timestamptz | `now() + 10 min` al reservar. |
+| `ticket_count` | integer | Asientos de la orden, CHECK `> 0`. El webhook comprueba que la orden conserva todos (los perdidos ya no apuntan a ella). |
 | `subtotal_cents` | integer | Lo que paga el comprador. |
 | `platform_fee_cents` | integer | Congelado al crear la orden. |
 | `organizer_amount_cents` | integer | `subtotal − platform_fee`. CHECK de la suma. |
@@ -468,6 +470,7 @@ Sincronización (F2): sin sesión, los favoritos siguen en `localStorage` (`ment
 | `pii_masked_at` | timestamptz NULL | Job de retención: 1 año después del evento, `buyer_phone` y `buyer_document_number` se enmascaran (`*****678`). |
 
 Índices: `(user_id)`, `(event_id, status)`, `(buyer_email)`.
+Restricción: `CHECK orders_buyer_required_check (status = 'pending' OR (buyer_name, buyer_email, buyer_phone, buyer_document_type y buyer_document_number NOT NULL))`: el comprador se guarda al pagar; fuera de `pending` es obligatorio.
 
 **`tickets`**: una entrada por asiento vendido.
 
@@ -703,6 +706,7 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Un evento fuera de `draft` está completo (fecha, apertura de puertas, recinto, imagen y descripción): CHECK `events_draft_complete_check`.
 - El mapa propio de un evento lleva `viewBox` y escenario juntos: CHECK `events_map_override_check`.
 - Un recinto `pending_review` siempre tiene dueño: CHECK `venues_pending_has_owner_check`.
+- Una orden fuera de `pending` tiene comprador: CHECK `orders_buyer_required_check`.
 - Un favorito por usuario y evento: PK `saved_events (user_id, event_id)`.
 
 ## Reglas que garantiza la app (no la BD)

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { EventCategory, EventDetail } from "@/modules/events";
-import type { checkoutFormSchema, PAYMENT_METHODS } from "../schemas/payment.schema";
+import type { checkoutBuyerSchema } from "../schemas/payment.schema";
 
 export type CheckoutOrderItem = {
   ticketTypeId: string;
@@ -24,16 +24,30 @@ export type CheckoutOrderResult =
   | { status: "not-found" }
   | { status: "sold-out" | "invalid-tickets" | "free"; eventSlug: string };
 
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export type ReservationResult = { status: "reserved"; orderId: string } | { status: "invalid" | "unavailable" };
 
-export type CheckoutFormValues = z.input<typeof checkoutFormSchema>;
-export type CheckoutFormData = z.output<typeof checkoutFormSchema>;
+export type PendingCheckoutResult =
+  | { status: "not-found" }
+  | { status: "expired"; eventSlug: string }
+  | { status: "closed"; orderId: string } // paid | refunded (desde F4)
+  | { status: "ok"; orderId: string; amountCents: number; remainingMs: number; order: CheckoutOrder };
 
-// Contrato E: orden guardada en el navegador tras el pago simulado (la leen la confirmación y "Mis entradas").
-export type OrderTicket = { code: string /* MT-AB12CD-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
+/** Estado de `useActionState` del botón "Continuar": `null` al inicio; si la reserva falla, el mensaje. */
+export type StartCheckoutState = { error: string } | null;
+
+export type CheckoutBuyer = z.output<typeof checkoutBuyerSchema>;
+
+export type PayOrderResult =
+  | { ok: true; clientSecret: string }
+  | { ok: false; error: "invalid-input" | "order-expired" | "order-unavailable" | "payment-error" };
+
+export type CheckoutFormValues = z.input<typeof checkoutBuyerSchema>;
+
+// Contrato E: vista de una orden pagada (la leen la confirmación, "Mis entradas" y el PDF).
+export type OrderTicket = { code: string /* TK-<n>-01 */; ticketTypeName: string; seatLabel?: string; holderName: string };
 
 export type Order = {
-  code: string; // "MT-" + 6 chars A-Z0-9
+  code: string; // "TK-<n>" (orders.code)
   createdAt: string; // ISO
   ownerEmail: string; // correo del comprador (en minúsculas)
   event: { slug: string; title: string; category: EventCategory; startsAt: string; venue: string; city: string; imageUrl: string };
@@ -41,8 +55,14 @@ export type Order = {
   ticketCount: number;
   total: number; // PEN
   paymentMethod: "card" | "yape" | "pagoefectivo";
-  buyer: { firstName: string; lastName: string; email: string; phone: string; documentType: "dni" | "ce" | "passport"; documentNumber: string };
+  buyer: { name: string; email: string };
   tickets: OrderTicket[];
 };
 
-export type OrderBuyer = Order["buyer"];
+export type ConfirmationState = "paid" | "refunded" | "processing" | "payment-failed" | "expired" | "not-found";
+
+export type OrderConfirmationResult =
+  | { status: "not-found" | "processing" }
+  | { status: "paid"; order: Order }
+  | { status: "payment-failed"; orderId: string }
+  | { status: "expired" | "refunded"; eventSlug: string };
