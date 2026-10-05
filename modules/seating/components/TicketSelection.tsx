@@ -1,9 +1,11 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { flushSync } from "react-dom";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
@@ -32,7 +34,7 @@ type TicketSelectionProps = {
 const STEP_ENTER_CLASS = "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300";
 
 function getStepLabel(zone: VenueZone | undefined): string {
-  if (!zone) return "Paso 1 de 2 · Elige una zona";
+  if (!zone) return "Paso 1 de 2 · Elige tus zonas";
   return zone.kind === "numbered" ? "Paso 2 de 2 · Elige tus butacas" : "Paso 2 de 2 · Elige la cantidad";
 }
 
@@ -42,8 +44,9 @@ function getOriginStyle(zone: VenueZone, width: number, height: number): CSSProp
 }
 
 /**
- * Paso "Entradas" de la compra: una tarjeta "Elige tus entradas" con dos sub-pasos (1: mapa + tarjetas de zona; 2:
- * cantidad de una zona de pie o plano de una numerada), con "Tu compra" sticky en `lg` y la barra inferior en móvil.
+ * Paso "Entradas" de la compra: una tarjeta "Elige tus entradas" con dos sub-pasos (1: mapa ilustrativo + tarjetas de
+ * zona, donde se combinan cantidades de pie; 2: plano de una numerada o, con `?zona=`, cantidad de una de pie), con
+ * "Tu compra" sticky en `lg` y la barra inferior en móvil.
  * Orden móvil = orden del DOM; por breakpoint solo se alternan el resumen y la barra (nunca se duplican para lectores).
  * No lee la URL: la precarga y la zona inicial llegan por props (`PreselectedTicketSelection`).
  */
@@ -63,7 +66,7 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
   // La selección del hook solo contiene asientos válidos del mapa, así que `resolveSeats` no devuelve `null`.
   const selectedSeats = resolveSeats(map, selection.seatIds) ?? [];
 
-  /** Abre el sub-paso 2 y lleva el foco al h3 de la zona, ya montado tras el render síncrono. */
+  /** Abre el sub-paso 2 (solo "Elegir/Cambiar butacas") y lleva el foco al h3 de la zona, ya montado tras el render síncrono. */
   const handleOpenZone = (zoneId: string) => {
     flushSync(() => {
       selection.selectZone(zoneId);
@@ -72,14 +75,17 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
     document.getElementById(zoneHeadingId)?.focus();
   };
 
-  /** Vuelve al sub-paso 1 y lleva el foco a la tarjeta de la zona que se cerró. */
+  /**
+   * Vuelve al sub-paso 1 ("Todas las zonas" o "Agregar otra zona") y lleva el foco al contenedor de la tarjeta de la
+   * zona que se cerró (las formas del mapa también llevan `data-zone-id`, pero no son enfocables).
+   */
   const handleBack = (zoneId: string) => {
     flushSync(() => {
       selection.closeZone();
       setHighlightedZoneId(null);
       setReturnZoneId(zoneId);
     });
-    document.querySelector<HTMLElement>(`[data-zone-id="${zoneId}"]`)?.focus();
+    document.querySelector<HTMLElement>(`[role="group"][data-zone-id="${zoneId}"]`)?.focus();
   };
 
   const renderZoneStep = (zone: VenueZone) => {
@@ -119,6 +125,20 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
             onPickBestSeats={selection.pickBestSeats}
             headingId={zoneHeadingId}
           />
+        )}
+
+        {selectedInZone > 0 && (
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">Puedes combinar varias zonas en una misma compra.</p>
+            <Button
+              variant="outline"
+              className="h-11 cursor-pointer gap-2 font-semibold"
+              onClick={() => handleBack(zone.id)}
+            >
+              <Plus aria-hidden />
+              Agregar otra zona
+            </Button>
+          </div>
         )}
       </>
     );
@@ -163,14 +183,14 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
                     tones={tones}
                     highlightedZoneId={highlightedZoneId}
                     selectedCountByZone={selectedCountByZone}
-                    onOpenZone={handleOpenZone}
-                    onHighlightZone={setHighlightedZoneId}
                   />
                   <ZoneCards
                     zones={map.zones}
                     tones={tones}
                     highlightedZoneId={highlightedZoneId}
                     selectedCountByZone={selectedCountByZone}
+                    atLimit={selection.atLimit}
+                    onChangeQuantity={selection.changeQuantity}
                     onOpenZone={handleOpenZone}
                     onHighlightZone={setHighlightedZoneId}
                   />
@@ -185,6 +205,7 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
           ticketCount={selection.ticketCount}
           total={selection.total}
           checkoutHref={selection.checkoutHref}
+          onRemoveLine={selection.clearZone}
           className="hidden self-start lg:sticky lg:top-24 lg:flex"
         />
       </div>
@@ -194,6 +215,7 @@ export function TicketSelection({ map, initialSelection, initialZoneId }: Ticket
         ticketCount={selection.ticketCount}
         total={selection.total}
         checkoutHref={selection.checkoutHref}
+        onRemoveLine={selection.clearZone}
         className="sticky bottom-0 z-30 -mx-4 md:-mx-6 lg:hidden"
       />
     </div>
