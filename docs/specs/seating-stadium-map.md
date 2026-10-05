@@ -2083,7 +2083,7 @@ No hay API: son datos mock.
   - Archivos: `modules/seating/components/PurchaseSummary.tsx`, `modules/seating/components/MobilePurchaseBar.tsx`.
   - Depende de: Fase 6.
   - En paralelo con T1, T2 y T3.
-- [ ] T5. `TicketSelection` (indicador, props nuevas, pie "Agregar otra zona" y `onRemoveLine`), test reescrito y página de diseño (requisitos 43, 46 y 47).
+- [x] T5. `TicketSelection` (indicador, props nuevas, pie "Agregar otra zona" y `onRemoveLine`), test reescrito y página de diseño (requisitos 43, 46 y 47).
   - Archivos: `modules/seating/components/TicketSelection.tsx`, `modules/seating/components/TicketSelection.test.tsx`, `design-system/ticketera/pages/ticket-selection.md`.
   - Depende de: T1, T2, T3 y T4.
   - Secuencial. Verificar `npx vitest run`, `npm run lint` y `npm run build`.
