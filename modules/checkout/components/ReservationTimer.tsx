@@ -9,15 +9,15 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCountdown } from "../hooks/useCountdown";
 
-const RESERVATION_DURATION_MS = 600_000;
-
 type ReservationTimerProps = {
+  /** Tiempo restante de la reserva al montar (`expires_at − now()` con el reloj de la BD). */
+  durationMs: number;
   retryHref: string;
   onExpire?: () => void;
 };
 
-export function ReservationTimer({ retryHref, onExpire }: ReservationTimerProps) {
-  const { label, minutesLeft, isExpired } = useCountdown(RESERVATION_DURATION_MS);
+export function ReservationTimer({ durationMs, retryHref, onExpire }: ReservationTimerProps) {
+  const { label, minutesLeft, isExpired } = useCountdown(durationMs);
   const handleExpire = useEffectEvent(() => onExpire?.());
 
   // isExpired solo pasa de false a true una vez: onExpire se llama una sola vez.

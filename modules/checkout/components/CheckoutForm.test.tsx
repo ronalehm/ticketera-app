@@ -82,8 +82,13 @@ const toggleTerms = () => fireEvent.click(screen.getByText(/^Acepto los/));
 const TERMS_HINT = "Acepta los términos para continuar.";
 const summaryPanel = () => screen.getByRole("complementary", { name: "Resumen de la compra" });
 
+// Tiempo restante de la reserva que da la BD (p. ej. al recargar a los 7 minutos).
+const REMAINING_MS = 180_000;
+
 function renderForm(order: CheckoutOrder = ORDER) {
-  return render(<CheckoutForm order={order} changeHref="/eventos/noche-de-sintetizadores-lima" />);
+  return render(
+    <CheckoutForm order={order} remainingMs={REMAINING_MS} changeHref="/eventos/noche-de-sintetizadores-lima" />,
+  );
 }
 
 function fillBuyer() {
@@ -304,7 +309,9 @@ describe("CheckoutForm", () => {
 
     type("Nombres", "Luis");
     session.user = SESSION_USER;
-    rerender(<CheckoutForm order={ORDER} changeHref="/eventos/noche-de-sintetizadores-lima" />);
+    rerender(
+      <CheckoutForm order={ORDER} remainingMs={REMAINING_MS} changeHref="/eventos/noche-de-sintetizadores-lima" />,
+    );
 
     expect(input("Nombres").value).toBe("Luis");
     expect(input("Apellidos").value).toBe("Quispe");
@@ -331,13 +338,22 @@ describe("CheckoutForm", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("a los 10 minutos la reserva expira, deshabilita 'Pagar' y enviar no llama al service", () => {
+  it("el temporizador arranca en el tiempo restante de la BD, no en 10 minutos", () => {
+    renderForm();
+    expect(screen.getByText("03:00")).toBeTruthy();
+  });
+
+  it("la reserva expira a los remainingMs (no a los 10 minutos), deshabilita 'Pagar' y enviar no llama al service", () => {
     vi.useFakeTimers();
     const { container } = renderForm();
     fillBuyer();
     fillCard();
 
-    act(() => vi.advanceTimersByTime(600_000));
+    act(() => vi.advanceTimersByTime(REMAINING_MS - 1000));
+    expect(screen.queryByText("Tu reserva expiró")).toBeNull();
+    for (const button of payButtons()) expect(button.disabled).toBe(false);
+
+    act(() => vi.advanceTimersByTime(1000));
 
     expect(screen.getByText("Tu reserva expiró")).toBeTruthy();
     for (const button of payButtons()) expect(button.disabled).toBe(true);
@@ -556,7 +572,7 @@ describe("CheckoutForm", () => {
   it("con la reserva expirada y Términos sin marcar, 'Pagar' queda disabled y sin aviso de términos", () => {
     vi.useFakeTimers();
     renderForm();
-    act(() => vi.advanceTimersByTime(600_000));
+    act(() => vi.advanceTimersByTime(REMAINING_MS));
 
     for (const button of payButtons()) expect(button.disabled).toBe(true);
     expect(screen.queryAllByText(TERMS_HINT)).toHaveLength(0);

@@ -37,13 +37,19 @@ const STATUS_CONTENT = {
     description: "El enlace no es válido o la compra se realizó en otro navegador.",
     actions: [HOME],
   },
+  "order-expired": {
+    title: "Tu reserva expiró",
+    description:
+      "El tiempo para completar la compra terminó y liberamos tus entradas. Vuelve a elegirlas para intentarlo de nuevo.",
+    actions: [RETRY],
+  },
 } satisfies Record<string, { title: string; description: string; actions: Action[] }>;
 
 const ACTION_CLASS = "h-11 cursor-pointer px-6 font-semibold duration-200";
 
 type CheckoutStatusMessageProps = {
   variant: keyof typeof STATUS_CONTENT;
-  /** Necesario en las variantes con enlace al evento (sold-out, invalid-tickets, free). */
+  /** Necesario en las variantes con enlace al evento (sold-out, invalid-tickets, free, order-expired). */
   eventSlug?: string;
 };
 

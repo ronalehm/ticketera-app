@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { StartCheckoutButton } from "@/modules/checkout/start";
 import { formatEventPrice } from "@/modules/events/purchase";
 
 import type { SelectionLine } from "../types/seating.types";
@@ -61,17 +61,10 @@ export function PurchaseSummaryContent({ lines, ticketCount, total, checkoutHref
         <p className="text-sm text-muted-foreground">Precio final, sin cargos ocultos</p>
       </div>
 
-      {checkoutHref === null ? (
-        <button type="button" disabled className={CTA_CLASS}>
-          Continuar
-          <ArrowRight className="size-5" aria-hidden />
-        </button>
-      ) : (
-        <Link href={checkoutHref} className={CTA_CLASS}>
-          Continuar
-          <ArrowRight className="size-5" aria-hidden />
-        </Link>
-      )}
+      <StartCheckoutButton checkoutHref={checkoutHref} className={CTA_CLASS}>
+        Continuar
+        <ArrowRight className="size-5" aria-hidden />
+      </StartCheckoutButton>
     </div>
   );
 }

@@ -105,10 +105,12 @@ function PayButton({ totalLabel, isProcessing, disabled, termsPending, className
 
 type CheckoutFormProps = {
   order: CheckoutOrder;
+  /** Milisegundos que le quedan a la reserva (`getPendingCheckout`). */
+  remainingMs: number;
   changeHref: string;
 };
 
-export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
+export function CheckoutForm({ order, remainingMs, changeHref }: CheckoutFormProps) {
   const router = useRouter();
   const { user } = useSessionUser();
   const [isExpired, setIsExpired] = useState(false);
@@ -204,7 +206,7 @@ export function CheckoutForm({ order, changeHref }: CheckoutFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <ReservationTimer retryHref={changeHref} onExpire={() => setIsExpired(true)} />
+      <ReservationTimer durationMs={remainingMs} retryHref={changeHref} onExpire={() => setIsExpired(true)} />
 
       <form
         noValidate
