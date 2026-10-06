@@ -14,10 +14,15 @@ export { PreselectedTicketSelector } from "./components/PreselectedTicketSelecto
 export { RelatedEvents } from "./components/RelatedEvents";
 export { TicketSelector } from "./components/TicketSelector";
 export { UpcomingEvents } from "./components/UpcomingEvents";
-export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
 export type { EventFilters } from "./schemas/eventFilters.schema";
 export { listEventCategories } from "./services/categories.service";
-export { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./services/events.service";
+export {
+  getEventBySlug,
+  getEvents,
+  getFeaturedEvents,
+  getRelatedEvents,
+  getUpcomingEvents,
+} from "./services/events.service";
 export type {
   Event,
   EventCategory,

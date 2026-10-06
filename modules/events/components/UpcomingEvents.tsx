@@ -8,20 +8,16 @@ import { buttonVariants } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
-import type { Event } from "../types/events.types";
+import type { Event, EventCategory } from "../types/events.types";
 import { EventCard } from "./EventCard";
 
-type Filter = Event["category"] | "all";
+// Valor del chip «Todos»: el guion bajo no cabe en `categorySlugSchema`, así que no choca con ninguna categoría.
+const ALL = "_all";
 
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: "all", label: "Todos" },
-  ...EVENT_CATEGORIES.map((category) => ({ value: category, label: EVENT_CATEGORY_LABELS[category] })),
-];
-
-export function UpcomingEvents({ events }: { events: Event[] }) {
-  const [filter, setFilter] = useState<Filter>("all");
-  const visible = filter === "all" ? events : events.filter((event) => event.category === filter);
+export function UpcomingEvents({ events, categories }: { events: Event[]; categories: EventCategory[] }) {
+  const [filter, setFilter] = useState(ALL);
+  const filters = [{ value: ALL, label: "Todos" }, ...categories.map(({ slug, name }) => ({ value: slug, label: name }))];
+  const visible = filter === ALL ? events : events.filter((event) => event.category === filter);
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
@@ -31,10 +27,10 @@ export function UpcomingEvents({ events }: { events: Event[] }) {
           aria-label="Filtrar por categoría"
           value={[filter]}
           // Selección única: Base UI devuelve [] al deseleccionar; en ese caso vuelve a "Todos".
-          onValueChange={(value) => setFilter((value[0] as Filter | undefined) ?? "all")}
+          onValueChange={(value) => setFilter(value[0] ?? ALL)}
           className="w-max"
         >
-          {FILTERS.map(({ value, label }) => (
+          {filters.map(({ value, label }) => (
             <ToggleGroupItem
               key={value}
               value={value}

@@ -12,6 +12,8 @@ import { EventCard } from "./EventCard";
 const navButtonClassName = "static hidden size-11 cursor-pointer sm:inline-flex";
 
 export function FeaturedEventsRail({ events }: { events: Event[] }) {
+  if (events.length === 0) return null;
+
   return (
     <section className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
       <Carousel opts={{ align: "start" }} aria-label="Eventos destacados">

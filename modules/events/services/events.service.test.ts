@@ -11,7 +11,14 @@ import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { EVENTS_MOCK } from "../data/events.mock";
 import { eventDetailSchema, eventSchema } from "../schemas/events.schema";
 import type { Event, EventDetail } from "../types/events.types";
-import { getEventBySlug, getEvents, getFeaturedEvents, getRelatedEvents } from "./events.service";
+import {
+  FEATURED_EVENTS_LIMIT,
+  getEventBySlug,
+  getEvents,
+  getFeaturedEvents,
+  getRelatedEvents,
+  getUpcomingEvents,
+} from "./events.service";
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
@@ -30,6 +37,16 @@ function seededRow(slug: string) {
   if (!row?.startsAt || !row.doorsOpenAt) throw new Error(`Evento no sembrado: ${slug}`);
   const organizer = SEEDED.organizers.find(({ userId }) => userId === row.organizerId)?.legalName;
   return { startsAt: row.startsAt.toISOString(), doorsOpenAt: row.doorsOpenAt.toISOString(), organizer: organizer ?? "" };
+}
+
+/** `now` con el que se sembró la BD de test: todos los eventos sembrados empiezan después. */
+const now = TEST_SEED_OPTIONS.now;
+const DRAFT_SLUG = "feria-familiar-de-verano";
+const mockSlugs = EVENTS_MOCK.map((event) => event.slug);
+
+/** Slugs ordenados por la fecha con la que los sembró el seed. */
+function byDate(slugs: string[]) {
+  return slugs.toSorted((a, b) => Date.parse(seededRow(a).startsAt) - Date.parse(seededRow(b).startsAt));
 }
 
 /** El evento del mock como lo siembra el seed: sus fechas desde `now`, sin ventas (todo disponible). */
@@ -65,10 +82,55 @@ describeWithDb("events.service (BD)", () => {
     events.forEach((event, index) => expectSameAsMock(event, seededEvent(eventSchema.parse(EVENTS_MOCK[index]))));
   });
 
-  it("getFeaturedEvents devuelve solo los destacados", async () => {
-    const featured = await getFeaturedEvents();
-    expect(featured).toHaveLength(EVENTS_MOCK.filter((event) => event.featured).length);
-    expect(featured.every((event) => event.featured)).toBe(true);
+  describe("getFeaturedEvents", () => {
+    const featuredSlugs = byDate(EVENTS_MOCK.filter((event) => event.featured).map((event) => event.slug));
+
+    it("devuelve los destacados publicados futuros, por fecha ascendente", async () => {
+      const featured = await getFeaturedEvents({ now });
+      expect(featured.map((event) => event.slug)).toEqual(featuredSlugs);
+      expect(featured.every((event) => event.featured)).toBe(true);
+    });
+
+    it("no devuelve un destacado publicado que ya empezó", async () => {
+      const [first, ...rest] = featuredSlugs;
+      const featured = await getFeaturedEvents({ now: new Date(Date.parse(seededRow(first).startsAt) + 1) });
+      expect(featured.map((event) => event.slug)).toEqual(rest);
+    });
+
+    it("no devuelve un borrador destacado", async () => {
+      expect(Date.parse(seededRow(DRAFT_SLUG).startsAt)).toBeGreaterThan(now.getTime());
+      const featured = await inRolledBackTransaction(async (tx) => {
+        await tx.update(events).set({ featured: false }).where(inArray(events.slug, mockSlugs));
+        await tx.update(events).set({ featured: true }).where(eq(events.slug, DRAFT_SLUG));
+        return getFeaturedEvents({ now });
+      });
+      expect(featured).toEqual([]);
+    });
+
+    it(`con más de ${FEATURED_EVENTS_LIMIT} destacados devuelve los ${FEATURED_EVENTS_LIMIT} más próximos`, async () => {
+      expect(mockSlugs.length).toBeGreaterThan(FEATURED_EVENTS_LIMIT);
+      const featured = await inRolledBackTransaction(async (tx) => {
+        await tx.update(events).set({ featured: true }).where(inArray(events.slug, mockSlugs));
+        return getFeaturedEvents({ now });
+      });
+      expect(featured.map((event) => event.slug)).toEqual(byDate(mockSlugs).slice(0, FEATURED_EVENTS_LIMIT));
+    });
+  });
+
+  describe("getUpcomingEvents", () => {
+    const upcomingSlugs = async (at: Date) =>
+      (await getUpcomingEvents({ now: at }))
+        .map((event) => event.slug)
+        .filter((slug) => !slug.startsWith(TEST_EVENT_SLUG_PREFIX));
+
+    it("devuelve los publicados futuros por fecha ascendente, sin borradores", async () => {
+      expect(await upcomingSlugs(now)).toEqual(byDate(mockSlugs));
+    });
+
+    it("no devuelve los que ya empezaron", async () => {
+      const [first, ...rest] = byDate(mockSlugs);
+      expect(await upcomingSlugs(new Date(Date.parse(seededRow(first).startsAt) + 1))).toEqual(rest);
+    });
   });
 
   describe("getEventBySlug", () => {

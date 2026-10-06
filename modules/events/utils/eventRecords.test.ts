@@ -25,7 +25,7 @@ const record: EventDetailRecord = {
 
 const ticketTypes: TicketTypeRecord[] = [
   { slug: "general", name: "General", description: null, priceCents: 18000, totalSeats: 10, availableSeats: 10 },
-  { slug: "vip", name: "VIP", description: "Zona frente al escenario", priceCents: 45050, totalSeats: 10, availableSeats: 2 },
+  { slug: "vip", name: "VIP", description: "Zona frente al escenario", priceCents: 45050, totalSeats: 10, availableSeats: 1 },
   { slug: "tribuna-norte", name: "Tribuna Norte", description: null, priceCents: 9000, totalSeats: 10, availableSeats: 0 },
 ];
 
@@ -39,7 +39,7 @@ describe("toEvent", () => {
 
   it("calcula el status desde los conteos", () => {
     expect(toEvent(record).status).toBe("available");
-    expect(toEvent({ ...record, availableSeats: 20 }).status).toBe("low-stock");
+    expect(toEvent({ ...record, availableSeats: 10 }).status).toBe("low-stock");
     expect(toEvent({ ...record, availableSeats: 0 }).status).toBe("sold-out");
   });
 
