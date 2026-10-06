@@ -1,4 +1,4 @@
-import { TransactionRollbackError } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 import { vi } from "vitest";
 import type * as DbClient from "@/lib/db/client";
 
@@ -47,4 +47,39 @@ export async function inRolledBackTransaction<T>(run: (tx: Tx) => Promise<T>): P
   if (!outcome) throw new Error("inRolledBackTransaction: la transacción no llegó a ejecutar `run`");
   if (!outcome.ok) throw outcome.error;
   return outcome.value;
+}
+
+/**
+ * Transacción real (confirmada en `commit`, que se puede llamar varias veces) que queda abierta tras ejecutar `run`:
+ * hasta entonces, lo que escribe no lo ven las demás conexiones, que se bloquean si esperan sus locks.
+ */
+export async function openTransaction(run: (tx: Tx) => Promise<void>): Promise<{ commit: () => Promise<void> }> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let ready!: () => void;
+  const started = new Promise<void>((resolve) => (ready = resolve));
+  const done = db.transaction(async (tx) => {
+    await run(tx);
+    ready();
+    await released;
+  });
+  await Promise.race([started, done]);
+  return {
+    commit: () => {
+      release();
+      return done;
+    },
+  };
+}
+
+/** Espera a que alguna conexión quede bloqueada esperando un lock en una consulta que contenga `fragment`. */
+export async function waitForLockWait(fragment: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const { rows } = await db.execute(
+      sql`select 1 from pg_stat_activity where wait_event_type = 'Lock' and query like ${`%${fragment}%`}`,
+    );
+    if (rows.length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Ninguna consulta con "${fragment}" llegó a esperar un lock`);
 }

@@ -8,6 +8,7 @@ import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
 import { COPA_DEL_NORTE_VENUE } from "./copaDelNorte.mock";
+import { toSeededLayout } from "./seededLayout";
 import { PITCH_STAGE, STADIUM_CENTER, STAGE_SECTOR } from "./stadium.mock";
 
 const SLUG = "copa-del-norte-trujillo";
@@ -85,7 +86,7 @@ describeWithDb("getVenueMapBySlug (herradura de fútbol)", () => {
   it("devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,

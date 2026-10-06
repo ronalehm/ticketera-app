@@ -71,7 +71,7 @@ Es solo UI/UX con datos mock. La sesión sigue en el store zustand persistido `m
    - Un `DropdownMenuGroup` cuyo `DropdownMenuLabel` es la tarjeta del usuario (`UserSummary`: avatar de 40 px, nombre completo y correo). Así el grupo de enlaces queda etiquetado con el nombre y el correo del usuario.
    - Dentro del grupo, los enlaces de `ACCOUNT_LINKS`: Fase 1 "Mis entradas" y "Panel de organizador"; Fase 2 añade "Mi perfil" al principio.
    - Después, `DropdownMenuSeparator` y el item "Cerrar sesión".
-   - **"Panel de organizador" se muestra a toda sesión:** no hay roles y el panel ya es accesible sin sesión (Decisión 9 de `layout-fullscreen-shells`). Es el único acceso al panel desde el header aparte del banner de la landing (Pregunta abierta 2).
+   - ~~**"Panel de organizador" se muestra a toda sesión**~~ — **Reemplazado por la Enmienda 1** (al final de la spec): el enlace al panel depende del rol.
 6. **Cerrar sesión deja al usuario en la página actual**, como hoy en el header: `signOut()` sin navegar. En `/perfil` o `/mis-entradas`, la página pasa a su estado "Inicia sesión…".
    - Limitación aceptada: el disparador se desmonta al cerrar sesión, así que Base UI no puede devolverle el foco y el foco vuelve al documento (Pregunta abierta 3).
    - El panel del organizador (layout F3) sí navega a `/`, porque allí lo pide el diseño.
@@ -530,7 +530,52 @@ Coordinación:
 
 ## Preguntas abiertas
 1. **Edición de datos en `/perfil`:** la Fase 2 es solo lectura. ¿Se confirma la Fase 3 (editar nombres, apellidos, celular y documento con el correo fijo, guardado mock en el navegador), o se deja hasta tener backend?
-2. **"Panel de organizador" en el menú:** se muestra a toda sesión porque no hay roles y el panel es accesible sin sesión (Decisión 5). ¿Debe ocultarse a los compradores cuando exista un rol "organizador" (otra spec)?
+2. ~~**"Panel de organizador" en el menú**~~ — Resuelta por la Enmienda 1: se oculta a los compradores.
 3. **Foco tras "Cerrar sesión" desde el menú:** el botón de cuenta desaparece y el foco vuelve al documento (Decisión 6). ¿Se quiere llevar el foco a "Iniciar sesión" (solo visible desde `sm`), o redirigir a `/` como en el panel del organizador?
 4. **Precarga en el checkout:** ahora la sesión trae celular y documento. ¿Se precargan también en el formulario de compra (hoy solo nombre, apellido y correo), en otra spec de checkout?
 5. **Formato del celular:** se muestra tal como se guardó ("987654321"). ¿Se prefiere agrupado ("987 654 321") o con prefijo (+51)?
+
+## Enmiendas
+
+### Enmienda 1 — Enlace al panel según el rol (pedido del usuario; implementado en `admin-panel` F5b, commit `0db0f5e`)
+Reemplaza el punto "Panel de organizador se muestra a toda sesión" y resuelve la Pregunta abierta 2. Con `admin-panel` ya existen los roles y el panel exige `panel:access`, así que mostrar el enlace a un comprador solo lo llevaba de vuelta a `/`.
+1. **Rol en el cliente:** `useSessionUser` devuelve `role`, leído de `publicMetadata.role` de Clerk (copia del rol de la BD). Un valor ausente o desconocido cuenta como `customer`. Solo sirve para mostrar u ocultar enlaces; la autorización la sigue haciendo el servidor (`requirePermission`).
+2. **Enlaces de la cuenta:** `getAccountLinks(role)` en `modules/auth/components/accountLinks.ts` sustituye a la constante `ACCOUNT_LINKS`. La usan el menú (`UserMenu`, que recibe `role`) y el bloque "Tu cuenta" del `Sheet` (`AuthHeaderActions`).
+   - Todos los roles ven "Mi perfil" y "Mis entradas".
+   - Con `panel:access` se añade el enlace a `/organizador`:
+     - "Panel de organizador" para `organizer`;
+     - "Panel" para `admin` y `super_admin`, que también gestionan usuarios.
+   - Un `customer` no ve enlace al panel.
+3. **Limitación conocida:** `publicMetadata.role` se sincroniza al vincular la cuenta y cuando un admin cambia el rol desde `/admin/usuarios`. Si el rol cambia por otra vía (seed o SQL), el enlace puede no aparecer hasta que se corrija el metadato. No afecta el acceso, que lo decide la BD.
+4. **Criterios de aceptación:**
+   - [x] Un `customer`, o una sesión sin rol o con un rol desconocido en `publicMetadata`, no ve el enlace al panel, ni en el menú ni en el `Sheet`.
+   - [x] Un `organizer` ve "Panel de organizador" → `/organizador`.
+   - [x] `admin` y `super_admin` ven "Panel" → `/organizador`.
+   - [x] Tests: `useSessionUser.test.ts`, `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.
+
+### Enmienda 2 — "Panel" del admin a `/admin/usuarios` y rol de Clerk sincronizado con la BD (pedido del usuario)
+Corrige la Enmienda 1. Caso real: `ronalehm@gmail.com` es `super_admin` en la BD y entra a `/admin/usuarios`, pero el menú no muestra "Panel". **Causa:** el seed lo promovió a `super_admin` por SQL con la fila ya vinculada (`clerk_id` presente), y `getSessionUser` solo replica el rol en `publicMetadata.role` al **crear o vincular** la fila. Clerk se quedó con `customer` (o sin rol) y el cliente lo trata como `customer`.
+
+Los roles no excluyen la compra: todos ven "Mi perfil" y "Mis entradas" y compran igual. El rol privilegiado solo añade el enlace al panel.
+
+1. **Destino del enlace al panel** (reemplaza el último punto del 2 de la Enmienda 1):
+   - `organizer` → "Panel de organizador" → `/organizador`. También con `organizers.status` `pending` o `suspended` (entran en modo lectura; mutar sigue exigiendo `requireApprovedOrganizer`).
+   - `admin` y `super_admin` → "Panel" → `/admin/usuarios`. El criterio es `users:manage`; no hay menú aparte para `super_admin`.
+   - `customer`, o rol ausente o desconocido → sin enlace.
+2. **Sincronización BD → Clerk** (reemplaza la "Limitación conocida" de la Enmienda 1):
+   - `syncClerkRole()` en `session.service.ts`: lee el usuario con `getSessionUser()` (BD) y `currentUser()` (Clerk). Si `publicMetadata.role` difiere de `users.role`, llama a `updateUserMetadata` con el rol de la BD y devuelve `{ changed: true }`. Sin sesión, o si coincide, devuelve `{ changed: false }`. La comparación y la escritura se comparten con la vinculación de `findOrCreateUser` (sin duplicar).
+   - `syncSessionRoleAction()` en `modules/auth/actions/session.actions.ts`: server action **sin parámetros** que llama a `syncClerkRole()`. Best effort: un error se registra y devuelve `{ changed: false }`. No recibe ni devuelve un rol: el cliente no puede elegir el suyo.
+   - `useSessionUser`: con sesión cargada, llama a la acción **una vez por usuario y carga de página** (un `Set` en memoria del módulo, sin `localStorage`). Si devuelve `changed`, ejecuta `user.reload()` para que `publicMetadata` llegue actualizado y el menú se vuelva a pintar.
+   - El rol del cliente sigue saliendo solo de `publicMetadata.role`, y un valor ausente o desconocido sigue contando como `customer`. Mientras se sincroniza, el cliente es conservador (sin enlace). Ni query params ni `localStorage` deciden roles.
+   - No cambia la autorización: `requirePermission`, `can`, `ROLE_PERMISSIONS`, `canManageUser`, `canAssignRole` y las guardas de `/admin/**` y `/organizador/**` siguen igual. El enlace no autoriza; el servidor vuelve a comprobar cada ruta.
+3. **Login sin redirección por rol:** `/login` pasa `fallbackRedirectUrl="/"` a `SignIn`. Con un `redirect_url` interno se vuelve a él (Clerk lo valida contra su propio origen y descarta los externos). Sin `redirect_url` se va a `/`, para todos los roles.
+4. **Archivos:** `accountLinks.ts`, `useSessionUser.ts`, `session.service.ts`, `actions/session.actions.ts` (nuevo), `app/(auth)/login/[[...rest]]/page.tsx` y sus tests.
+5. **Criterios de aceptación:**
+   - [x] `getAccountLinks`: `customer` → Mi perfil y Mis entradas, sin panel; `organizer` → además "Panel de organizador" → `/organizador`; `admin` y `super_admin` → además "Panel" → `/admin/usuarios`. El menú y el `Sheet` usan esos enlaces.
+   - [x] Un rol ausente o desconocido en `publicMetadata` no muestra el panel.
+   - [x] `syncClerkRole`: si Clerk difiere de la BD escribe el rol de la BD y devuelve `changed: true`; si coincide no escribe; sin sesión no escribe.
+   - [x] `syncSessionRoleAction`: sin parámetros; ante un error devuelve `changed: false`.
+   - [x] `useSessionUser`: llama a la acción una vez por usuario y, con `changed`, recarga el usuario de Clerk.
+   - [ ] Manual, con `ronalehm@gmail.com` (`super_admin` en la BD): tras entrar, el menú muestra "Mi perfil", "Mis entradas" y "Panel" → `/admin/usuarios`, y puede comprar.
+   - [ ] Manual: `/login` sin `redirect_url` lleva a `/` para todos los roles; `/login?redirect_url=/checkout/...` vuelve a esa ruta; `/login?redirect_url=https://ejemplo.com` no sale del sitio.
+   - [x] Tests: `accountLinks.test.ts`, `useSessionUser.test.ts`, `session.service.test.ts`, `session.actions.test.ts`; se ajustan `UserMenu.test.tsx` y `AuthHeaderActions.test.tsx`.

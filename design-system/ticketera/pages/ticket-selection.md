@@ -216,7 +216,7 @@ Sub-paso 2 de una zona numerada, debajo de `ZoneStepHeader` (que pone el nombre,
 Dos variantes según la zona (los datos lo deciden):
 
 - **En arco** (con `planTransform`; las zonas numeradas de todos los mapas mock): fondo del estadio, lienzo apaisado desde `sm` y minimapa.
-- **En cuadrícula** (sin `planTransform`; mapas sin geometría, hoy ninguno en el mock, y la vista previa del organizer, `SeatGridPreview`): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
+- **En cuadrícula** (sin `planTransform`; mapas sin geometría, hoy ninguno en el mock): barra "ESCENARIO", sin fondo ni minimapa y con la proporción del plano en todos los anchos.
 
 **Planos grandes: se elige tras "Acercar" en móvil** (arena, teatro y comedia: `norte`, `platea`, `mezanine` y `preferencial`; y Preferencial de Sueños de una noche andina). Conservan sus butacas por zona, así que su `seatViewBox` mide hasta 622 de ancho (≤ 12 filas, sin límite de butacas por fila). A 375 px, con el plano entero a la vista, las butacas miden ~16–18 px (sirven para ver el plano; Norte, 17.6 px); tras un "Acercar" (×1.5) miden ≥ 24 px (medido: 26.5 Norte, 25.0 Platea, 24.5 Mezanine, 24.8 Preferencial). La ayuda "Toca una butaca para elegirla. Acerca el plano con los botones o pellizcando." ya lo indica. El festival mantiene los límites de la spec base (≤ 10 butacas por fila, ≤ 400 de ancho, ≥ 24 px con el plano entero), y también los cumple Occidente de Copa del Norte (6 filas de 4 a 9 butacas, `seatViewBox` 365 × 368: medido 27.3 px con el plano entero y 40.9 px tras un "Acercar"). También los cumple Mesa de Micro abierto (3 filas de 6, 8 y 10 butacas, mesas para dos, `seatViewBox` 389 × 203: medido 25.6 px con el plano entero y 38.4 px tras un "Acercar"). Preferencial de Sueños de una noche andina ("primeras cinco filas": 5 filas de 6 a 13 butacas, 48, `seatViewBox` 470 × 254) es un plano grande: medido 21.2 px con el plano entero y 31.8 px tras un "Acercar". Platea de Los Ecos del Sur (61 butacas, `seatViewBox` 508 × 280) sería un plano grande, pero está agotada y no se abre. Oriente y Occidente del Clásico del Pacífico cumplen los límites de la spec base (6 filas de 4 a 8 butacas, 34 cada una, `seatViewBox` 351 × 342: medido 28.4 px con el plano entero y 42.5 px tras un "Acercar").
 
@@ -325,7 +325,7 @@ El estadio entero dibujado debajo de las butacas, en coordenadas del plano, como
 | Foco (teclado) | anillo `stroke-ring` de 3 unidades alrededor de la forma (círculo r = 15 o cuadrado 30 × 30), solo con `focus-visible` |
 
 - Transición de color de 150 ms. El borde `primary` de las disponibles contrasta ≥ 3:1 con `muted` y `accent`.
-- La forma (`SeatShape`) es la misma en el plano, la leyenda y la vista previa del organizer (`SeatGridPreview`).
+- La forma (`SeatShape`) es la misma en el plano y en la leyenda.
 
 ### Números al acercar (nivel de detalle)
 

@@ -18,7 +18,8 @@ import { reserveCheckoutOrder } from "./reservation.service";
 vi.mock("@/lib/stripe", () => ({ stripe: { paymentIntents: { retrieve: vi.fn() } } }));
 const retrieve = vi.mocked(stripe.paymentIntents.retrieve);
 
-const STARTS_AT = new Date("2026-12-12T01:00:00.000Z");
+// Lejana, como la de `createTestEvent`: el evento publicado queda al final del catálogo que leen otros tests.
+const STARTS_AT = new Date("2099-12-12T01:00:00.000Z");
 const IMAGE_URL = "https://example.com/evento.jpg";
 const BUYER = {
   buyerName: "Ana Quispe",
@@ -88,9 +89,12 @@ const userIdOf = async (orderId: string) =>
 
 describeWithDb("orders.service", () => {
   beforeAll(async () => {
-    testEvent = await createTestEvent({ general: 40, numbered: { rows: ["A", "B"], seatsPerRow: 2 }, priceCents: 5000 });
-    // Los eventos `draft` de prueba no traen fecha ni imagen; un evento publicado siempre las tiene.
-    await db.update(events).set({ startsAt: STARTS_AT, imageUrl: IMAGE_URL }).where(eq(events.id, testEvent.eventId));
+    testEvent = await createTestEvent({ general: 40, numbered: { rows: ["A", "B"], seatsPerRow: 2 }, priceCents: 5000, status: "published" });
+    // Fecha e imagen propias para comprobar que la confirmación y "Mis entradas" las leen del evento.
+    await db
+      .update(events)
+      .set({ startsAt: STARTS_AT, doorsOpenAt: STARTS_AT, imageUrl: IMAGE_URL })
+      .where(eq(events.id, testEvent.eventId));
   });
 
   afterAll(async () => {

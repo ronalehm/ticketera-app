@@ -1,71 +1,59 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { ChangeEvent, ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CircleAlert } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useZodForm } from "@/hooks/useZodForm";
 import { cn } from "@/lib/utils";
-import { CITIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
+import { useSaveEventDraft } from "../hooks/useEventDrafts";
 import {
+  createEventDraftSchema,
   EVENT_CATEGORY_OPTIONS,
+  EVENT_DRAFT_LIMITS,
   getTodayInLima,
-  MIN_AGE_LABELS,
-  MIN_AGE_OPTIONS,
-  organizerEventFormSchema,
 } from "../schemas/organizer.schema";
-import { useObjectUrl } from "../hooks/useObjectUrl";
-import { useOrganizerStore } from "../stores/organizer.store";
-import type { OrganizerEventFormValues, SeatingMode, TicketTypeRow } from "../types/organizer.types";
+import type {
+  EditableEvent,
+  EventDraftFormValues,
+  OrganizerOption,
+  TicketTypeRow,
+  VenueOption,
+} from "../types/organizer.types";
+import { EVENT_DRAFT_GENERIC_ERROR } from "../utils/eventDraftError";
 import { buildEventPreview } from "../utils/eventPreview";
 import {
-  applySeatingMode,
-  createTicketTypeRow,
-  getCoverImageError,
+  createTicketTypeRows,
+  EMPTY_EVENT_DRAFT,
+  getEventFormLock,
+  getMinAgeLabels,
   getTicketTypeErrors,
-  toOrganizerEvent,
+  toEventDraftFormValues,
 } from "../utils/organizerEventForm";
-import { CoverImageField } from "./CoverImageField";
 import { EventPreviewCard } from "./EventPreviewCard";
-import { SeatingModeField } from "./SeatingModeField";
-import { FORM_CONTROL_SCROLL, TicketTypesField } from "./TicketTypesField";
+import { FORM_CONTROL_SCROLL, FORM_INPUT_CLASS, FORM_SELECT_TRIGGER_CLASS } from "./formStyles";
+import { TicketTypesField } from "./TicketTypesField";
 
-type TextField = Exclude<
-  keyof OrganizerEventFormValues,
-  "intent" | "category" | "minAge" | "city" | "seatingMode" | "hasCoverImage" | "ticketTypes"
->;
-
-const INPUT_CLASS = cn("h-11", FORM_CONTROL_SCROLL);
+type TextField = "title" | "description" | "date" | "time" | "doorsOpen" | "imageUrl";
+type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
-const ORGANIZER_DESCRIPTION_ID = "organizer-event-organizer-description";
-const SELECT_TRIGGER_CLASS = cn("w-full cursor-pointer data-[size=default]:h-11", FORM_CONTROL_SCROLL);
-// La etiqueta de cada ciudad es su propio nombre: la misma lista que el filtro público (decisión 6).
-const CITY_ITEMS = CITIES.map((city) => ({ label: city, value: city }));
-
-const INITIAL_VALUES: Omit<OrganizerEventFormValues, "ticketTypes"> = {
-  intent: "publish",
-  name: "",
-  category: "conciertos",
-  minAge: "0",
-  description: "",
-  organizer: "",
-  date: "",
-  time: "",
-  doorsOpen: "",
-  venue: "",
-  city: "",
-  address: "",
-  seatingMode: "",
-  hasCoverImage: false,
-};
+const IMAGE_URL_DESCRIPTION_ID = "organizer-event-imageUrl-description";
+/** Tras guardar, Mis eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
+const SAVED_HREF = "/organizador/eventos?guardado=borrador";
+const SAVED_CHANGES_HREF = "/organizador/eventos?guardado=cambios";
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
 const subscribeToToday = () => () => {};
@@ -83,86 +71,106 @@ function FormSection({ title, description, children }: { title: string; descript
   );
 }
 
-export function OrganizerEventForm() {
-  const router = useRouter();
-  const addEvent = useOrganizerStore((state) => state.addEvent);
-  // La primera fila usa useId: su id va en los `id` de los inputs y debe coincidir entre SSR e hidratación.
-  const firstRowId = useId();
-  // `min` de la fecha solo en cliente: la página se prerenderiza y "hoy" del build quedaría congelado (y no hidrataría).
-  const today = useSyncExternalStore(subscribeToToday, getTodayInLima, () => undefined);
-  const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(organizerEventFormSchema, {
-    ...INITIAL_VALUES,
-    ticketTypes: [{ ...createTicketTypeRow(), id: firstRowId }],
-  });
-  // La portada solo vive en este formulario: una URL local compartida con la vista previa, nunca va al store (Decisión 7).
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverError, setCoverError] = useState<string>();
-  // Último archivo elegido: si se elige otro mientras se valida el anterior, solo cuenta el último.
-  const pendingCoverRef = useRef<File | null>(null);
-  const coverUrl = useObjectUrl(coverFile);
+type OrganizerEventFormProps = {
+  /** Id del usuario de la sesión: separa la caché de Mis eventos de cada usuario. */
+  userId: string;
+  /** Recintos aprobados con sus secciones (`listApprovedVenuesWithSections`). */
+  venues: VenueOption[];
+  /** Organizadores aprobados (`listApprovedOrganizers`): solo para admin y super_admin, que eligen el dueño. */
+  organizers?: OrganizerOption[];
+  /** Evento que se edita (`getEventForEdit`); sin él, se crea un borrador nuevo. */
+  event?: EditableEvent;
+};
 
-  // Sin rehidratar, el primer addEvent sobrescribiría los eventos guardados en localStorage.
-  useEffect(() => {
-    useOrganizerStore.persist.rehydrate();
-  }, []);
+/**
+ * Crear o editar un evento (spec admin-panel, F5a y F5b): se guarda en la BD (`createEventAction`/`updateEventAction`) y
+ * vuelve a Mis eventos. En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
+ * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Mis eventos.
+ */
+export function OrganizerEventForm({ userId, venues, organizers, event }: OrganizerEventFormProps) {
+  const router = useRouter();
+  const requireOrganizer = organizers !== undefined;
+  const [schema] = useState(() => createEventDraftSchema({ requireOrganizer }));
+  // `min` de la fecha solo en cliente: la página se renderiza en el servidor y "hoy" del servidor no hidrataría igual.
+  const today = useSyncExternalStore(subscribeToToday, getTodayInLima, () => undefined);
+  const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
+    schema,
+    event ? toEventDraftFormValues(event, venues, organizers) : EMPTY_EVENT_DRAFT,
+  );
+  const save = useSaveEventDraft(userId);
+  const [serverError, setServerError] = useState<string | null>(null);
+  // Guardado: el botón sigue deshabilitado hasta que llega Mis eventos (un segundo clic crearía otro borrador).
+  const [saved, setSaved] = useState(false);
+  const lock = getEventFormLock(event);
+  const structureLocked = lock !== null;
+  const salesLocked = lock === "sales";
+  const published = event?.status === "published";
+
+  const venue = venues.find((candidate) => candidate.id === values.venueId);
+  const minAgeLabels = getMinAgeLabels(values.minAge);
 
   const onSubmit = handleSubmit(async (data) => {
-    addEvent(toOrganizerEvent(data, `org-${crypto.randomUUID()}`));
-    router.push(`/organizador?guardado=${data.intent === "publish" ? "publicado" : "borrador"}`);
+    setServerError(null);
+    try {
+      const result = await save.mutateAsync({ eventId: event?.id, values: data });
+      if (!result.ok) {
+        setServerError(result.error);
+        return;
+      }
+      setSaved(true);
+      router.push(published ? SAVED_CHANGES_HREF : SAVED_HREF);
+    } catch {
+      setServerError(EVENT_DRAFT_GENERIC_ERROR);
+    }
   });
 
-  // useZodForm agrupa los errores de las filas en `ticketTypes`; los mensajes por campo salen del mismo schema (Decisión 9).
+  // useZodForm agrupa los errores de las filas en `ticketTypes`; los mensajes por campo salen de las mismas reglas.
   const ticketTypeErrors = errors.ticketTypes ? getTicketTypeErrors(values.ticketTypes) : null;
 
-  // Un archivo no válido muestra el error y conserva la imagen anterior.
-  async function selectCover(file: File) {
-    pendingCoverRef.current = file;
-    const error = await getCoverImageError(file);
-    if (pendingCoverRef.current !== file) return;
-    setCoverError(error ?? undefined);
-    if (error) return;
-    setCoverFile(file);
-    setValue("hasCoverImage", true);
-    handleBlur("hasCoverImage");
+  function selectValue<K extends SelectField>(name: K, value: EventDraftFormValues[K] | null) {
+    if (value === null) return;
+    setValue(name, value);
+    handleBlur(name);
   }
 
-  function removeCover() {
-    pendingCoverRef.current = null;
-    setCoverError(undefined);
-    setCoverFile(null);
-    setValue("hasCoverImage", false);
-    handleBlur("hasCoverImage");
-  }
-
-  // Las filas toman el tipo del modo elegido; el modo y la lista se revalidan juntos (regla de "Mixto").
-  function selectSeatingMode(mode: SeatingMode) {
-    setValue("seatingMode", mode);
-    setValue("ticketTypes", applySeatingMode(values.ticketTypes, mode));
-    revalidateTicketTypes();
+  // Otro recinto, otras secciones: las filas empiezan de cero (sin marcar, con el nombre de cada sección).
+  function selectVenue(venueId: string | null) {
+    if (venueId === null) return;
+    const sections = venues.find((candidate) => candidate.id === venueId)?.sections ?? [];
+    setValue("venueId", venueId);
+    setValue("ticketTypes", createTicketTypeRows(sections));
+    handleBlur("venueId");
+    handleBlur("ticketTypes");
   }
 
   function changeTicketTypes(rows: TicketTypeRow[]) {
     setValue("ticketTypes", rows);
-    revalidateTicketTypes();
   }
 
   function revalidateTicketTypes() {
     handleBlur("ticketTypes");
-    handleBlur("seatingMode");
+    handleBlur("venueId");
   }
 
   // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y de la ayuda y del error.
   const textProps = (name: TextField, descriptionId?: string) => ({
     id: `organizer-event-${name}`,
     value: values[name],
-    onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, event.target.value),
+    onChange: (changeEvent: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, changeEvent.target.value),
     onBlur: () => handleBlur(name),
     "aria-invalid": !!errors[name],
     "aria-describedby":
       [descriptionId, errors[name] && `organizer-event-${name}-error`].filter(Boolean).join(" ") || undefined,
   });
 
-  const fieldError = (name: TextField | "city") => (
+  const selectTriggerProps = (name: SelectField) => ({
+    id: `organizer-event-${name}`,
+    "aria-invalid": !!errors[name],
+    "aria-describedby": errors[name] ? `organizer-event-${name}-error` : undefined,
+    className: FORM_SELECT_TRIGGER_CLASS,
+  });
+
+  const fieldError = (name: TextField | SelectField) => (
     <FieldError id={`organizer-event-${name}-error`}>{errors[name]}</FieldError>
   );
 
@@ -172,10 +180,15 @@ export function OrganizerEventForm() {
       <div className="flex min-w-0 flex-col gap-6">
         <FormSection title="Información básica">
           <FieldGroup>
-            <Field data-invalid={!!errors.name}>
-              <FieldLabel htmlFor="organizer-event-name">Nombre del evento</FieldLabel>
-              <Input {...textProps("name")} placeholder="Ej. Festival de verano 2026" maxLength={100} className={INPUT_CLASS} />
-              {fieldError("name")}
+            <Field data-invalid={!!errors.title}>
+              <FieldLabel htmlFor="organizer-event-title">Nombre del evento</FieldLabel>
+              <Input
+                {...textProps("title")}
+                placeholder="Ej. Festival de verano 2026"
+                maxLength={EVENT_DRAFT_LIMITS.title}
+                className={FORM_INPUT_CLASS}
+              />
+              {fieldError("title")}
             </Field>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -183,14 +196,11 @@ export function OrganizerEventForm() {
                 <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
                 <Select
                   items={EVENT_CATEGORY_LABELS}
+                  disabled={salesLocked}
                   value={values.category}
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    setValue("category", value);
-                    handleBlur("category");
-                  }}
+                  onValueChange={(value) => selectValue("category", value)}
                 >
-                  <SelectTrigger id="organizer-event-category" className={SELECT_TRIGGER_CLASS}>
+                  <SelectTrigger {...selectTriggerProps("category")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -203,25 +213,17 @@ export function OrganizerEventForm() {
                 </Select>
               </Field>
 
-              {/* Siempre es una opción válida del Select: no necesita mensaje de error (requisito 8). */}
+              {/* Siempre es una opción válida del Select (la lista o la mayor que conserva el borrador): sin mensaje de error. */}
               <Field>
                 <FieldLabel htmlFor="organizer-event-minAge">Edad mínima</FieldLabel>
-                <Select
-                  items={MIN_AGE_LABELS}
-                  value={values.minAge}
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    setValue("minAge", value);
-                    handleBlur("minAge");
-                  }}
-                >
-                  <SelectTrigger id="organizer-event-minAge" className={SELECT_TRIGGER_CLASS}>
+                <Select items={minAgeLabels} value={values.minAge} onValueChange={(value) => selectValue("minAge", value)}>
+                  <SelectTrigger {...selectTriggerProps("minAge")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MIN_AGE_OPTIONS.map((age) => (
+                    {Object.entries(minAgeLabels).map(([age, label]) => (
                       <SelectItem key={age} value={age} className="min-h-11 cursor-pointer">
-                        {MIN_AGE_LABELS[age]}
+                        {label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -234,161 +236,167 @@ export function OrganizerEventForm() {
               <Textarea
                 {...textProps("description")}
                 rows={4}
-                maxLength={2000}
+                maxLength={EVENT_DRAFT_LIMITS.description}
                 placeholder="Cuenta de qué trata el evento, quiénes se presentan y qué incluye la entrada."
                 className={FORM_CONTROL_SCROLL}
               />
               {fieldError("description")}
             </Field>
 
-            <Field data-invalid={!!errors.organizer}>
-              <FieldLabel htmlFor="organizer-event-organizer">Organizador</FieldLabel>
-              <Input
-                {...textProps("organizer", ORGANIZER_DESCRIPTION_ID)}
-                placeholder="Ej. Pulso Producciones"
-                maxLength={100}
-                className={INPUT_CLASS}
-              />
-              <FieldDescription id={ORGANIZER_DESCRIPTION_ID}>
-                Aparece en la página del evento como «Organiza: …».
-              </FieldDescription>
-              {fieldError("organizer")}
-            </Field>
+            {organizers && (
+              <Field data-invalid={!!errors.organizerId}>
+                <FieldLabel htmlFor="organizer-event-organizerId">Organizador</FieldLabel>
+                <Select
+                  items={organizers.map(({ id, name }) => ({ value: id, label: name }))}
+                  disabled={structureLocked}
+                  value={values.organizerId}
+                  onValueChange={(value) => selectValue("organizerId", value)}
+                >
+                  <SelectTrigger {...selectTriggerProps("organizerId")}>
+                    <SelectValue placeholder="Elige el organizador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizers.map(({ id, name }) => (
+                      <SelectItem key={id} value={id} className="min-h-11 cursor-pointer">
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>Dueño del evento: solo organizadores aprobados.</FieldDescription>
+                {fieldError("organizerId")}
+              </Field>
+            )}
           </FieldGroup>
         </FormSection>
 
-        <FormSection title="Fecha y lugar">
+        <FormSection title="Fecha y recinto">
           <FieldGroup>
             {/* Móvil: Fecha | Hora de inicio y, en la segunda línea, Apertura de puertas en la primera columna. */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               <Field data-invalid={!!errors.date}>
                 <FieldLabel htmlFor="organizer-event-date">Fecha</FieldLabel>
-                <Input {...textProps("date")} type="date" min={today} className={INPUT_CLASS} />
+                <Input
+                  {...textProps("date")}
+                  type="date"
+                  min={today}
+                  disabled={salesLocked}
+                  className={FORM_INPUT_CLASS}
+                />
                 {fieldError("date")}
               </Field>
               <Field data-invalid={!!errors.time}>
                 <FieldLabel htmlFor="organizer-event-time">Hora de inicio</FieldLabel>
-                <Input {...textProps("time")} type="time" className={INPUT_CLASS} />
+                <Input {...textProps("time")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
                 {fieldError("time")}
               </Field>
               <Field data-invalid={!!errors.doorsOpen}>
                 <FieldLabel htmlFor="organizer-event-doorsOpen">Apertura de puertas</FieldLabel>
-                <Input {...textProps("doorsOpen")} type="time" className={INPUT_CLASS} />
+                <Input {...textProps("doorsOpen")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
                 {fieldError("doorsOpen")}
               </Field>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2 md:gap-4">
-              <Field data-invalid={!!errors.venue}>
-                <FieldLabel htmlFor="organizer-event-venue">Lugar</FieldLabel>
-                <Input {...textProps("venue")} placeholder="Ej. Estadio Nacional" maxLength={100} className={INPUT_CLASS} />
-                {fieldError("venue")}
-              </Field>
-              <Field data-invalid={!!errors.city}>
-                <FieldLabel htmlFor="organizer-event-city">Ciudad</FieldLabel>
-                <Select
-                  items={CITY_ITEMS}
-                  value={values.city}
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    setValue("city", value);
-                    handleBlur("city");
-                  }}
-                >
-                  <SelectTrigger
-                    id="organizer-event-city"
-                    aria-invalid={!!errors.city}
-                    aria-describedby={errors.city ? "organizer-event-city-error" : undefined}
-                    className={SELECT_TRIGGER_CLASS}
-                  >
-                    <SelectValue placeholder="Elige la ciudad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CITIES.map((city) => (
-                      <SelectItem key={city} value={city} className="min-h-11 cursor-pointer">
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {fieldError("city")}
-              </Field>
-            </div>
-
-            <Field data-invalid={!!errors.address}>
-              <FieldLabel htmlFor="organizer-event-address">Dirección</FieldLabel>
-              <Input
-                {...textProps("address")}
-                placeholder="Ej. Av. José Díaz s/n, Cercado de Lima"
-                maxLength={150}
-                className={INPUT_CLASS}
-              />
-              {fieldError("address")}
+            <Field data-invalid={!!errors.venueId}>
+              <FieldLabel htmlFor="organizer-event-venueId">Recinto</FieldLabel>
+              <Select
+                items={venues.map(({ id, name, city }) => ({ value: id, label: `${name} · ${city}` }))}
+                disabled={structureLocked}
+                value={values.venueId}
+                onValueChange={selectVenue}
+              >
+                <SelectTrigger {...selectTriggerProps("venueId")}>
+                  <SelectValue placeholder="Elige el recinto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {venues.map(({ id, name, city }) => (
+                    <SelectItem key={id} value={id} className="min-h-11 cursor-pointer">
+                      {name} · {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>Solo recintos aprobados. Sus secciones definen los tipos de entrada.</FieldDescription>
+              {fieldError("venueId")}
             </Field>
           </FieldGroup>
         </FormSection>
 
         <FormSection title="Imagen de portada">
-          {/* El error del archivo tiene prioridad sobre el de portada obligatoria. */}
-          <CoverImageField
-            previewUrl={coverUrl}
-            error={coverError ?? errors.hasCoverImage}
-            onSelect={selectCover}
-            onRemove={removeCover}
-          />
-        </FormSection>
-
-        <FormSection
-          title="Mapa de asientos"
-          description="Define si quien compra elegirá su asiento en un plano. De esto depende cómo configuras los tipos de entrada."
-        >
-          <SeatingModeField value={values.seatingMode} error={errors.seatingMode} onChange={selectSeatingMode} />
+          <Field data-invalid={!!errors.imageUrl}>
+            <FieldLabel htmlFor="organizer-event-imageUrl">URL de la imagen</FieldLabel>
+            <Input
+              {...textProps("imageUrl", IMAGE_URL_DESCRIPTION_ID)}
+              type="url"
+              inputMode="url"
+              placeholder="https://…"
+              maxLength={EVENT_DRAFT_LIMITS.imageUrl}
+              className={FORM_INPUT_CLASS}
+            />
+            <FieldDescription id={IMAGE_URL_DESCRIPTION_ID}>
+              Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla
+              la recorta de forma distinta.
+            </FieldDescription>
+            {fieldError("imageUrl")}
+          </Field>
         </FormSection>
 
         <FormSection
           title="Tipos de entrada"
-          description="Cada tipo de entrada es una zona con su precio y su capacidad."
+          description="Elige qué secciones del recinto se venden, con qué nombre y a qué precio."
         >
           <TicketTypesField
-            mode={values.seatingMode}
+            sections={venue ? venue.sections : null}
             rows={values.ticketTypes}
             errors={ticketTypeErrors}
             onChange={changeTicketTypes}
             onBlur={revalidateTicketTypes}
+            selectionLocked={structureLocked}
+            valuesLocked={salesLocked}
           />
         </FormSection>
       </div>
 
       <aside
         aria-labelledby={PREVIEW_TITLE_ID}
-        className="flex flex-col gap-3 self-start lg:sticky lg:top-10 lg:col-start-2 lg:row-span-2 lg:row-start-1"
+        className="flex flex-col gap-3 self-start lg:sticky lg:top-10 lg:col-start-2 lg:row-span-3 lg:row-start-1"
       >
         <h2 id={PREVIEW_TITLE_ID} className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
           Vista previa
         </h2>
-        <EventPreviewCard {...buildEventPreview(values, coverUrl)} />
+        <EventPreviewCard {...buildEventPreview(values, venue)} />
         <p className="text-sm text-muted-foreground">Así verán tu evento los compradores en el listado.</p>
       </aside>
 
-      {/* Móvil: barra pegada abajo mientras se ve el formulario, sin tapar el footer (sticky, Decisión 12). lg: estática. */}
+      {serverError && (
+        <Alert variant="destructive" className="lg:col-start-1">
+          <CircleAlert aria-hidden />
+          <AlertTitle>{serverError}</AlertTitle>
+        </Alert>
+      )}
+
+      {/* Móvil: barra pegada abajo mientras se ve el formulario, sin tapar el footer (sticky). lg: estática. */}
       <div className="sticky bottom-0 z-10 -mx-4 grid grid-cols-2 gap-3 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:-mx-6 md:px-6 lg:static lg:col-start-1 lg:mx-0 lg:flex lg:justify-end lg:border-t-0 lg:p-0">
-        {/* Primer botón de envío: Enter en un campo guarda como borrador, la opción que no publica (Decisión 8). */}
+        <Link
+          href="/organizador/eventos"
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            "h-11 cursor-pointer font-semibold duration-200 md:h-12 lg:px-5",
+            FORM_CONTROL_SCROLL,
+          )}
+        >
+          Cancelar
+        </Link>
         <Button
           type="submit"
-          variant="outline"
-          disabled={isSubmitting}
-          onClick={() => setValue("intent", "draft")}
-          className="h-11 cursor-pointer font-semibold duration-200 md:h-12 lg:px-5"
+          disabled={isSubmitting || saved}
+          className={cn(
+            "h-11 cursor-pointer font-semibold duration-200 hover:bg-primary-strong md:h-12 lg:px-5",
+            FORM_CONTROL_SCROLL,
+          )}
         >
-          Guardar borrador
-        </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          onClick={() => setValue("intent", "publish")}
-          className="h-11 cursor-pointer font-semibold duration-200 hover:bg-primary-strong md:h-12 lg:px-5"
-        >
-          Publicar <span className="max-lg:sr-only">evento</span>
+          {isSubmitting && <Spinner aria-hidden className="motion-reduce:animate-none" />}
+          {isSubmitting ? "Guardando…" : published ? "Guardar cambios" : "Guardar borrador"}
         </Button>
       </div>
     </form>

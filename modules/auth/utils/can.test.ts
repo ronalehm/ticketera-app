@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionUser } from "../types/auth.types";
-import { can, isMfaPending, MFA_ENFORCED } from "./can";
+import { type Action, can, canAssignRole, canManageUser, isMfaPending, MFA_ENFORCED, roleCan } from "./can";
 
 function user(role: SessionUser["role"], mfaVerified: boolean): SessionUser {
   return {
@@ -61,4 +61,103 @@ describe("isMfaPending", () => {
     expect(isMfaPending(user("admin", true), true)).toBe(false);
     expect(isMfaPending(user("customer", false), true)).toBe(false);
   });
+});
+
+/** Matriz de la spec admin-panel ("Autorización"): acciones permitidas por rol. */
+const ALLOWED: Record<SessionUser["role"], Action[]> = {
+  customer: ["profile:update"],
+  organizer: ["profile:update", "panel:access", "events:manageOwn"],
+  admin: ["profile:update", "panel:access", "events:manageOwn", "events:manageAny", "events:moderate", "users:manage"],
+  super_admin: [
+    "profile:update",
+    "panel:access",
+    "events:manageOwn",
+    "events:manageAny",
+    "events:moderate",
+    "users:manage",
+    "users:assignAdmin",
+  ],
+};
+
+const ACTIONS: Action[] = [
+  "profile:update",
+  "panel:access",
+  "events:manageOwn",
+  "events:manageAny",
+  "events:moderate",
+  "users:manage",
+  "users:assignAdmin",
+];
+
+describe("can: matriz rol × acción", () => {
+  it.each(ACTIONS)("sin sesión, %s → false", (action) => {
+    expect(can(null, action)).toBe(false);
+  });
+
+  it.each(ROLES.flatMap((role) => ACTIONS.map((action) => [role, action, ALLOWED[role].includes(action)] as const)))(
+    "%s · %s → %s",
+    (role, action, allowed) => {
+      expect(can(user(role, false), action)).toBe(allowed);
+    },
+  );
+
+  it.each(ACTIONS)("con la exigencia activada, un admin sin segundo factor no puede %s", (action) => {
+    expect(can(user("admin", false), action, true)).toBe(false);
+    expect(can(user("super_admin", false), action, true)).toBe(false);
+  });
+});
+
+describe("roleCan: matriz rol × acción, sin sesión ni MFA", () => {
+  it.each(ROLES.flatMap((role) => ACTIONS.map((action) => [role, action, ALLOWED[role].includes(action)] as const)))(
+    "%s · %s → %s",
+    (role, action, allowed) => {
+      expect(roleCan(role, action)).toBe(allowed);
+    },
+  );
+});
+
+const SELF_ID = "00000000-0000-8000-8000-000000000001";
+const OTHER_ID = "00000000-0000-8000-8000-000000000002";
+const person = (id: string, role: SessionUser["role"]) => ({ id, role });
+
+describe("canManageUser: actor × objetivo", () => {
+  /** Roles objetivo que gestiona cada rol (a otro usuario, nunca a sí mismo). */
+  const MANAGES: Record<SessionUser["role"], SessionUser["role"][]> = {
+    customer: [],
+    organizer: [],
+    admin: ["customer", "organizer"],
+    super_admin: ["customer", "organizer", "admin"],
+  };
+
+  it.each(ROLES.flatMap((actor) => ROLES.map((target) => [actor, target, MANAGES[actor].includes(target)] as const)))(
+    "%s → %s (otro usuario) → %s",
+    (actor, target, allowed) => {
+      expect(canManageUser(person(SELF_ID, actor), person(OTHER_ID, target))).toBe(allowed);
+    },
+  );
+
+  it.each(ROLES)("un %s no se gestiona a sí mismo", (role) => {
+    expect(canManageUser(person(SELF_ID, role), person(SELF_ID, role))).toBe(false);
+  });
+
+  it("super_admin no gestiona a otro super_admin; admin no gestiona a otro admin", () => {
+    expect(canManageUser(person(SELF_ID, "super_admin"), person(OTHER_ID, "super_admin"))).toBe(false);
+    expect(canManageUser(person(SELF_ID, "admin"), person(OTHER_ID, "admin"))).toBe(false);
+  });
+});
+
+describe("canAssignRole", () => {
+  const ASSIGNS: Record<SessionUser["role"], SessionUser["role"][]> = {
+    customer: [],
+    organizer: [],
+    admin: ["customer", "organizer"],
+    super_admin: ["customer", "organizer", "admin"],
+  };
+
+  it.each(ROLES.flatMap((actor) => ROLES.map((role) => [actor, role, ASSIGNS[actor].includes(role)] as const)))(
+    "%s asigna %s → %s",
+    (actor, role, allowed) => {
+      expect(canAssignRole(person(SELF_ID, actor), role)).toBe(allowed);
+    },
+  );
 });

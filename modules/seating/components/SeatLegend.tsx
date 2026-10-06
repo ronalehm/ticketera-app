@@ -47,9 +47,9 @@ function AccessibleSquare({ className }: { className: string }) {
 
 /**
  * Forma de una butaca (forma y color, no solo color; decisión 10): disponible (azul claro con borde), elegida
- * (navy + check), ocupada (gris + ×) y accesible (cuadrado cian con silla de ruedas). La comparten el plano,
- * la leyenda y `SeatGridPreview`; el hover solo actúa dentro de un `group/seat` y el número dentro de un
- * `group/plan` con `data-detail="numbers"`.
+ * (navy + check), ocupada (gris + ×) y accesible (cuadrado cian con silla de ruedas). La comparten el plano y
+ * la leyenda; el hover solo actúa dentro de un `group/seat` y el número dentro de un `group/plan` con
+ * `data-detail="numbers"`.
  */
 export function SeatShape({ status, selected, number }: SeatShapeProps) {
   if (status === "occupied") {

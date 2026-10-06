@@ -7,6 +7,7 @@ import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
 import { SINTETIZADORES_VENUE } from "./nocheDeSintetizadores.mock";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
 
 const SLUG = "noche-de-sintetizadores-lima";
@@ -84,7 +85,7 @@ describeWithDb("getVenueMapBySlug (arena curva)", () => {
     const map = await getVenueMapBySlug(SLUG);
     expect(map?.viewBox).toBe(layout.viewBox);
     expect(map?.stage).toEqual(layout.stage);
-    expect(map?.zones).toEqual(layout.zones.map((zone) => expect.objectContaining(zone)));
+    expect(map?.zones).toEqual(toSeededLayout(layout).zones.map((zone) => expect.objectContaining(zone)));
   });
 
   it("resuelve norte-A-1 como Tribuna Norte · Fila A · Asiento 1", async () => {

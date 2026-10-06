@@ -1,16 +1,10 @@
 import type { z } from "zod";
 import type { organizerEventSchema } from "../schemas/organizer.schema";
 
-// Datos de ejemplo del panel: los consume organizer.service.ts, que los une con los eventos y los valida.
+// Solo lo lee el seed (`lib/db/seed/buildSeedData.ts`), que lo siembra como evento `draft`. El panel lee los eventos y
+// sus ventas de la BD (`listManagedEvents`, spec admin-panel F3).
 
-/** Ventas de los eventos publicados del organizador; el resto de datos sale del evento con el mismo `slug`. */
-export const ORGANIZER_SALES_MOCK: { slug: string; sold: number; capacity: number }[] = [
-  { slug: "noche-de-sintetizadores-lima", sold: 7420, capacity: 8000 },
-  { slug: "la-casa-de-los-espejos", sold: 312, capacity: 420 },
-  { slug: "el-circo-de-las-estrellas", sold: 414, capacity: 1200 },
-];
-
-/** Borradores del organizador: no existen en el listado público de eventos. */
+/** Borradores de ejemplo: no existen en el listado público de eventos. */
 export const ORGANIZER_DRAFTS_MOCK: z.input<typeof organizerEventSchema>[] = [
   {
     id: "org-draft-001",

@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { formatEventDate } from "@/modules/events";
 
 type EventPurchaseStripProps = {
@@ -25,7 +25,7 @@ export function EventPurchaseStrip({ slug, title, imageUrl, startsAt, venue, cit
       </Link>
 
       <div className="flex items-center gap-4">
-        <Image
+        <EventCoverImage
           src={imageUrl}
           alt=""
           width={64}

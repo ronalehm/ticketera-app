@@ -47,7 +47,7 @@ describe("toEvent", () => {
   });
 
   it.each(["startsAt", "imageUrl"] as const)("lanza con el slug si %s es null", (field) => {
-    expect(() => toEvent({ ...record, [field]: null })).toThrow(`Evento publicado incompleto: ${record.slug}`);
+    expect(() => toEvent({ ...record, [field]: null })).toThrow(`Evento publicado incompleto: ${record.slug} (falta ${field})`);
   });
 });
 
@@ -79,9 +79,9 @@ describe("toEventDetail", () => {
     });
   });
 
-  it.each(["description", "doorsOpenAt"] as const)("lanza con el slug si %s es null", (field) => {
+  it.each(["description", "doorsOpenAt", "organizer"] as const)("lanza con el slug si %s es null", (field) => {
     expect(() => toEventDetail({ ...record, [field]: null }, ticketTypes)).toThrow(
-      `Evento publicado incompleto: ${record.slug}`,
+      `Evento publicado incompleto: ${record.slug} (falta ${field})`,
     );
   });
 });

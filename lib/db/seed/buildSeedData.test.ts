@@ -1,15 +1,31 @@
 import { isDeepStrictEqual } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
-import { getAvailabilityStatus } from "@/modules/events/utils/availability";
 import { LEGAL_DOCUMENT_KINDS } from "@/modules/legal/schemas/legal.schema";
+import { ORGANIZER_DRAFTS_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
 import { PITCH_STAGE, STADIUM_CENTER } from "@/modules/seating/data/stadium.mock";
 import { VENUE_LAYOUTS_MOCK, VENUE_SECTORS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { getAnnularSectorPath } from "@/modules/seating/utils/annularSector";
-import { DEMO_GENERAL_CAPACITY, buildSeedData, seedUuid } from "./buildSeedData";
+import {
+  DEMO_GENERAL_CAPACITY,
+  SEED_LEAD_DAYS,
+  buildSeedData,
+  demoTaxId,
+  organizerIndexForSlug,
+  seedUuid,
+  type BuildSeedDataInput,
+} from "./buildSeedData";
 
 const SUPER_ADMIN_ID = seedUuid("test:super-admin");
-const data = buildSeedData({ superAdminId: SUPER_ADMIN_ID });
+const ORGANIZERS = ["organizer.one@ticketera.test", "organizer.two@ticketera.test"].map((email) => ({
+  id: seedUuid(`user:${email}`),
+  email,
+}));
+/** 5 de octubre de 2026, 12:00 en Lima. */
+const NOW = new Date("2026-10-05T17:00:00Z");
+const INPUT: BuildSeedDataInput = { superAdminId: SUPER_ADMIN_ID, organizers: ORGANIZERS, now: NOW };
+const data = buildSeedData(INPUT);
+const DAY_MS = 86_400_000;
 
 const UUID_V8 = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -59,14 +75,13 @@ function addAventuraLayout(zone: MockZone) {
   VENUE_LAYOUTS_MOCK.push({ eventSlug: AVENTURA, viewBox: "0 0 600 300", stage: PITCH_STAGE, zones: [zone] });
 }
 
+/** Fecha y hora locales de Lima (UTC−5) de un instante, como `AAAA-MM-DDTHH:MM`. */
+const limaLocal = (date: Date | string) =>
+  new Date(new Date(date).getTime() - 5 * 3_600_000).toISOString().slice(0, 16);
+
 /** Conjunto ordenado de pares (id del recinto, slug) de secciones. */
 const sectionKeySet = (sections: { venueId: string; slug: string }[]) =>
   [...new Set(sections.map((section) => `${section.venueId}/${section.slug}`))].sort();
-
-function countSeats(predicate: (seat: (typeof data.eventSeats)[number]) => boolean) {
-  const seats = data.eventSeats.filter(predicate);
-  return { total: seats.length, available: seats.filter((seat) => seat.status === "available").length };
-}
 
 describe("seedUuid", () => {
   it("es determinista, UUID versión 8 y distinto para claves distintas", () => {
@@ -84,7 +99,11 @@ describe("buildSeedData", () => {
   });
 
   it("es determinista", () => {
-    expect(buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toEqual(data);
+    expect(buildSeedData(INPUT)).toEqual(data);
+  });
+
+  it("lanza sin organizadores", () => {
+    expect(() => buildSeedData({ ...INPUT, organizers: [] })).toThrow(/al menos un organizador/);
   });
 
   it("siembra 6 categorías, 13 eventos publicados, 1 borrador y un asiento de recinto por butaca de los layouts", () => {
@@ -102,7 +121,7 @@ describe("buildSeedData", () => {
 
   it("los ids son únicos en cada tabla", () => {
     for (const rows of Object.values(data)) {
-      const ids = rows.map((row) => ("legalName" in row ? row.userId : row.id));
+      const ids = rows.map((row) => ("commissionBps" in row ? row.userId : row.id));
       expect(new Set(ids).size).toBe(ids.length);
     }
   });
@@ -177,7 +196,7 @@ describe("buildSeedData", () => {
       path: SYNTHETIC_PATH,
       labelPos: { x: 300, y: 200 },
     });
-    const seeded = buildSeedData({ superAdminId: SUPER_ADMIN_ID });
+    const seeded = buildSeedData(INPUT);
     const seededEvent = (slug: string) => seeded.events.find((event) => event.slug === slug);
     const arena = layoutBySlug(ARENA);
 
@@ -267,79 +286,80 @@ describe("buildSeedData", () => {
     }
   });
 
-  it("los estados calculados coinciden con los del mock para cada evento y tipo de entrada", () => {
-    for (const event of EVENTS_MOCK) {
-      const eventId = eventBySlug(event.slug).id;
-      const eventCounts = countSeats((seat) => seat.eventId === eventId);
-      expect(getAvailabilityStatus(eventCounts.available, eventCounts.total), event.slug).toBe(event.status);
-      for (const ticketType of event.ticketTypes) {
-        const ticketTypeId = seedUuid(`ticket-type:${event.slug}:${ticketType.id}`);
-        const counts = countSeats((seat) => seat.ticketTypeId === ticketTypeId);
-        expect(getAvailabilityStatus(counts.available, counts.total), `${event.slug}/${ticketType.id}`).toBe(
-          ticketType.status,
-        );
-      }
-    }
+  it("todo el inventario está disponible y sin pedido; no hay órdenes", () => {
+    expect(data.eventSeats.length).toBeGreaterThan(0);
+    expect(data.eventSeats.every((seat) => seat.status === "available" && seat.orderId === null)).toBe(true);
+    expect("orders" in data).toBe(false);
   });
 
-  it("una orden de demo por evento con vendidos, importes cuadrados y order_id coherente", () => {
-    const eventsWithSales = new Set(data.eventSeats.filter((seat) => seat.status === "sold").map((seat) => seat.eventId));
-    expect(data.orders.map((order) => order.eventId).sort()).toEqual([...eventsWithSales].sort());
-    for (const order of data.orders) {
-      expect(order.code).toMatch(/^TK-DEMO-\d{3}$/);
-      expect(order).toMatchObject({ status: "paid", userId: null, buyerEmail: "demo@example.com" });
-      expect(order.platformFeeCents + order.organizerAmountCents).toBe(order.subtotalCents);
-      expect(order.platformFeeCents).toBe(Math.round(order.subtotalCents / 10));
-      const priceById = new Map(data.ticketTypes.map((ticketType) => [ticketType.id, ticketType.priceCents]));
-      const subtotal = data.eventSeats
-        .filter((seat) => seat.orderId === order.id)
-        .reduce((sum, seat) => sum + (priceById.get(seat.ticketTypeId) ?? 0), 0);
-      expect(subtotal).toBe(order.subtotalCents);
-    }
-    const orderEvent = new Map(data.orders.map((order) => [order.id, order.eventId]));
-    for (const seat of data.eventSeats) {
-      if (seat.status === "sold") expect(orderEvent.get(seat.orderId ?? "")).toBe(seat.eventId);
-      else expect(seat.orderId).toBeNull();
-    }
-  });
-
-  it("organizadores únicos por nombre, RUC ficticio de 11 dígitos y usuarios sin clerk_id", () => {
-    const names = new Set(EVENTS_MOCK.map((event) => event.organizer));
-    expect(data.organizers.map((organizer) => organizer.legalName)).toEqual([...names]);
-    const taxIds = data.organizers.map((organizer) => organizer.taxId);
+  it("organizadores: los de la entrada, approved, con datos fiscales completos y RUC demo único", () => {
+    expect(data.users).toEqual([
+      { id: ORGANIZERS[0].id, email: ORGANIZERS[0].email, firstName: "Organizador", lastName: "Demo 1", role: "organizer", clerkId: null },
+      { id: ORGANIZERS[1].id, email: ORGANIZERS[1].email, firstName: "Organizador", lastName: "Demo 2", role: "organizer", clerkId: null },
+    ]);
+    expect(data.organizers).toEqual(
+      ORGANIZERS.map(({ id, email }, index) => ({
+        userId: id,
+        status: "approved",
+        legalName: `Productora Demo ${index + 1} S.A.C.`,
+        taxIdType: "ruc",
+        taxId: demoTaxId(email),
+        commissionBps: 1000,
+        payoutsEnabled: false,
+      })),
+    );
+    const taxIds = data.organizers.map((organizer) => organizer.taxId ?? "");
     expect(new Set(taxIds).size).toBe(taxIds.length);
     expect(taxIds.every((taxId) => /^20\d{9}$/.test(taxId))).toBe(true);
-    expect(taxIds[0]).toBe("20000000001");
-    for (const user of data.users) {
-      expect(user).toMatchObject({ role: "organizer", clerkId: null, lastName: "" });
-      expect(user.email).toMatch(/^[a-z0-9-]+@example\.com$/);
-    }
-    expect(data.users.find((user) => user.firstName === "Compañía Teatral Espejo")?.email).toBe(
-      "compania-teatral-espejo@example.com",
-    );
   });
 
-  it("el borrador pertenece a Pulso Producciones, en Parque Selva Alegre y con un tipo general", () => {
+  it("reparte cada evento (borrador incluido) por sha256(slug) mod n, y los dos organizadores reciben eventos", () => {
+    for (const event of data.events) {
+      expect(event.organizerId, event.slug).toBe(ORGANIZERS[organizerIndexForSlug(event.slug, ORGANIZERS.length)].id);
+    }
+    const owners = new Set(data.events.map((event) => event.organizerId));
+    expect(owners).toEqual(new Set(ORGANIZERS.map((organizer) => organizer.id)));
+    expect(organizerIndexForSlug("cualquier-slug", 1)).toBe(0);
+    const single = buildSeedData({ ...INPUT, organizers: [ORGANIZERS[1]] });
+    expect(single.events.every((event) => event.organizerId === ORGANIZERS[1].id)).toBe(true);
+  });
+
+  it("fechas: todas posteriores a now, la primera now + 7 días, con la hora local y la apertura de puertas del mock", () => {
+    const starts = data.events.map((event) => event.startsAt?.getTime() ?? 0);
+    expect(starts.every((time) => time > NOW.getTime())).toBe(true);
+    expect(data.events.every((event) => (event.doorsOpenAt?.getTime() ?? 0) > NOW.getTime())).toBe(true);
+    // El evento más temprano del mock (y de los borradores) cae 7 días después del día de `now` en Lima.
+    const earliest = data.events.reduce((first, event) => (event.startsAt! < first.startsAt! ? event : first));
+    expect(limaLocal(earliest.startsAt!).slice(0, 10)).toBe("2026-10-12");
+    expect(SEED_LEAD_DAYS).toBe(7);
+
+    const shift = eventBySlug(EVENTS_MOCK[0].slug).startsAt!.getTime() - Date.parse(EVENTS_MOCK[0].startsAt);
+    expect(shift % DAY_MS).toBe(0);
+    for (const mock of EVENTS_MOCK) {
+      const event = eventBySlug(mock.slug);
+      // Mismo desplazamiento en días enteros para todos: conserva la hora local y la distancia entre eventos.
+      expect(event.startsAt!.getTime() - Date.parse(mock.startsAt), mock.slug).toBe(shift);
+      expect(limaLocal(event.startsAt!).slice(11), mock.slug).toBe(limaLocal(mock.startsAt).slice(11));
+      expect(event.startsAt!.getTime() - event.doorsOpenAt!.getTime(), mock.slug).toBe(
+        Date.parse(mock.startsAt) - Date.parse(mock.doorsOpenAt),
+      );
+    }
     const draft = eventBySlug("feria-familiar-de-verano");
-    const pulso = data.organizers.find((organizer) => organizer.legalName === "Pulso Producciones");
-    expect(draft).toMatchObject({
-      organizerId: pulso?.userId,
-      description: "Borrador sin descripción.",
-      minAge: 0,
-      doorsOpenAt: draft.startsAt,
+    expect(draft.startsAt!.getTime() - Date.parse(ORGANIZER_DRAFTS_MOCK[0].startsAt ?? "")).toBe(shift);
+    expect(draft.doorsOpenAt).toEqual(draft.startsAt);
+  });
+
+  it("con el mismo now da las mismas fechas; con un now posterior las desplaza en días enteros", () => {
+    const sameDay = buildSeedData({ ...INPUT, now: new Date("2026-10-06T04:59:59Z") }); // 23:59 del 5 en Lima
+    expect(sameDay.events).toEqual(data.events);
+
+    const later = buildSeedData({ ...INPUT, now: new Date(NOW.getTime() + 10 * DAY_MS) });
+    later.events.forEach((event, index) => {
+      expect(event.startsAt!.getTime() - data.events[index].startsAt!.getTime(), event.slug).toBe(10 * DAY_MS);
+      expect(event.doorsOpenAt!.getTime() - data.events[index].doorsOpenAt!.getTime(), event.slug).toBe(10 * DAY_MS);
     });
-    expect(data.venues.find((venue) => venue.id === draft.venueId)).toMatchObject({
-      name: "Parque Selva Alegre",
-      city: "Arequipa",
-      address: "Por confirmar",
-      mapViewBox: null,
-    });
-    const ticketTypes = data.ticketTypes.filter((ticketType) => ticketType.eventId === draft.id);
-    expect(ticketTypes).toEqual([expect.objectContaining({ slug: "general", priceCents: 4000 })]);
-    expect(data.venueSections.find((section) => section.id === ticketTypes[0].sectionId)).toMatchObject({
-      seating: "general",
-      capacity: 1500,
-    });
+    // Lo demás no depende de `now`.
+    expect({ ...later, events: [] }).toEqual({ ...data, events: [] });
   });
 
   it("siembra una versión published de cada kind legal, con ids deterministas y fecha de publicación", () => {
@@ -361,16 +381,9 @@ describe("buildSeedData", () => {
     expect(new Set(times).size).toBe(times.length);
   });
 
-  it("lanza si no puede reproducir el estado del evento", () => {
-    const festival = EVENTS_MOCK.find((event) => event.slug === "festival-vive-latino-lima");
-    if (!festival) throw new Error("falta festival-vive-latino-lima");
-    festival.status = "sold-out";
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/sold-out.*festival-vive-latino-lima/);
-  });
-
   it("lanza si una zona apunta a un tipo de entrada inexistente", () => {
     VENUE_LAYOUTS_MOCK[0].zones[0].ticketTypeId = "no-existe";
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/tipo de entrada inexistente: no-existe/);
+    expect(() => buildSeedData(INPUT)).toThrow(/tipo de entrada inexistente: no-existe/);
   });
 
   it("lanza si una sección del mismo recinto tiene geometría distinta en dos layouts", () => {
@@ -380,16 +393,16 @@ describe("buildSeedData", () => {
     if (!arenaVip) throw new Error("falta la zona vip de la arena");
     // Misma geometría de la sección: se comparte aunque el viewBox y el escenario del evento sean otros.
     addAventuraLayout({ ...structuredClone(arenaVip), ticketTypeId: "entrada-libre" });
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).not.toThrow();
+    expect(() => buildSeedData(INPUT)).not.toThrow();
 
     expect(arenaVip.path).not.toBe(SYNTHETIC_PATH);
     VENUE_LAYOUTS_MOCK.at(-1)!.zones[0].path = SYNTHETIC_PATH;
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/geometría distinta/);
+    expect(() => buildSeedData(INPUT)).toThrow(/geometría distinta/);
   });
 
   it("lanza si dos secciones del mismo recinto comparten slug con distinto nombre", () => {
     const aventura = moveAventuraToStadium();
     aventura.ticketTypes[0] = { ...aventura.ticketTypes[0], id: "vip", name: "Otro VIP" };
-    expect(() => buildSeedData({ superAdminId: SUPER_ADMIN_ID })).toThrow(/repetida con nombres distintos/);
+    expect(() => buildSeedData(INPUT)).toThrow(/repetida con nombres distintos/);
   });
 });

@@ -136,6 +136,15 @@ describe("OrderConfirmation", () => {
     });
   });
 
+  it("portada de otro dominio: la img de la tarjeta-entrada usa la URL tal cual, sin pasar por /_next/image", () => {
+    const cover = "https://cdn.example.org/x.jpg";
+    const { container } = renderConfirmation({ ...ORDER, event: { ...ORDER.event, imageUrl: cover } });
+    const img = container.querySelector(`img[src="${cover}"]`) as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.getAttribute("srcset")).toBeNull();
+    expect(container.querySelector('img[src^="/_next/image"]')).toBeNull();
+  });
+
   it("muestra el correo del comprador en negrita en la cabecera", () => {
     renderConfirmation();
 

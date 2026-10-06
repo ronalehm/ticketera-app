@@ -7,6 +7,7 @@ import { getVenueMapBySlug } from "../services/seating.service";
 import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
 import { NOCHE_ANDINA_VENUE } from "./suenosDeUnaNocheAndina.mock";
 
@@ -87,7 +88,7 @@ describeWithDb("getVenueMapBySlug (teatro con Preferencial numerada A–E)", () 
   it("devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,

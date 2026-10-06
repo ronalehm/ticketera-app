@@ -3,6 +3,7 @@ import { boolean, check, index, integer, jsonb, pgTable, text, uuid } from "driz
 import {
   createdAt,
   documentTypeEnum,
+  organizerStatusEnum,
   taxIdTypeEnum,
   timestamptz,
   updatedAt,
@@ -30,9 +31,11 @@ export const organizers = pgTable(
     userId: uuid("user_id")
       .primaryKey()
       .references(() => users.id),
-    legalName: text("legal_name").notNull(),
-    taxIdType: taxIdTypeEnum("tax_id_type").notNull(),
-    taxId: text("tax_id").notNull().unique(),
+    status: organizerStatusEnum("status").notNull().default("pending"),
+    // Datos fiscales opcionales mientras el organizador no esté aprobado (organizers_approved_complete_check).
+    legalName: text("legal_name"),
+    taxIdType: taxIdTypeEnum("tax_id_type"),
+    taxId: text("tax_id").unique(),
     commissionBps: integer("commission_bps").notNull(),
     stripeRecipientId: text("stripe_recipient_id"),
     payoutsEnabled: boolean("payouts_enabled").notNull().default(false),
@@ -41,6 +44,10 @@ export const organizers = pgTable(
   },
   (t) => [
     check("organizers_commission_bps_check", sql`${t.commissionBps} BETWEEN 0 AND 10000`),
+    check(
+      "organizers_approved_complete_check",
+      sql`${t.status} <> 'approved' OR (${t.legalName} IS NOT NULL AND ${t.taxIdType} IS NOT NULL AND ${t.taxId} IS NOT NULL)`,
+    ),
   ],
 );
 

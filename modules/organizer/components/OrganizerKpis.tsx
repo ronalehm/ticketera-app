@@ -1,17 +1,18 @@
 import { CalendarDays, ChartColumn, Ticket, type LucideIcon } from "lucide-react";
 
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
-import { formatEventPrice } from "@/modules/events/format";
 
 import type { DashboardKpis } from "../types/organizer.types";
-import { formatCount } from "../utils/organizerStats";
+import { formatRevenue } from "../utils/organizerStats";
 
 type Kpi = { label: string; value: string; icon: LucideIcon; className?: string };
 
 // Un solo orden en el DOM para todos los breakpoints (Decisión 14); en móvil, Ingresos ocupa la fila completa.
-export function OrganizerKpis({ revenue, ticketsSold, publishedCount }: DashboardKpis) {
+// Ingresos = ventas brutas MVP (órdenes `paid`, spec admin-panel Decisión 10).
+export function OrganizerKpis({ revenueCents, ticketsSold, publishedCount }: DashboardKpis) {
   const kpis: Kpi[] = [
-    { label: "Ingresos", value: formatEventPrice(revenue), icon: ChartColumn, className: "col-span-2 lg:col-span-1" },
+    { label: "Ingresos", value: formatRevenue(revenueCents), icon: ChartColumn, className: "col-span-2 lg:col-span-1" },
     { label: "Entradas vendidas", value: formatCount(ticketsSold), icon: Ticket },
     { label: "Eventos publicados", value: formatCount(publishedCount), icon: CalendarDays },
   ];

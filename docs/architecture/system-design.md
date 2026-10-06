@@ -20,7 +20,7 @@ Hoy la app es solo frontend, con datos mock:
 | Login / registro | `modules/auth` con `users.mock.ts` | `auth-login-register.md` |
 | Pago | **Stripe** (modo test, Payment Element); órdenes y entradas en la BD, confirmadas por el webhook | `checkout-stripe.md` |
 | Mis entradas | Lee las órdenes pagadas del usuario desde la BD; vincula las compras de invitado con su correo verificado | `tickets-my-tickets.md`, `checkout-stripe.md` |
-| Panel de organizador | `modules/organizer/data/organizerEvents.mock.ts` | `organizer-dashboard.md` |
+| Panel (organizador y admin) | Shell por rol, KPIs y "Mis eventos" desde la BD (`listManagedEvents`), usuarios y roles (F1–F4); CRUD de borradores en la BD (F5a); moderación, publicación con inventario, cancelación sin ventas y bloqueo de cambios sensibles (F5b), ver §7.11 | `organizer-dashboard.md`, `admin-panel.md` |
 
 Los services mantienen su firma; cada fase cambia el mock por la BD sin tocar la UI.
 
@@ -48,7 +48,7 @@ El objetivo es una ticketera con:
 | Inventario | Una fila por lugar vendible (`event_seats`), también en zonas generales. Un solo mecanismo de reserva: `UPDATE … FOR UPDATE SKIP LOCKED` con expiración perezosa. |
 | Recintos | Catálogo reutilizable (`venues` → `venue_sections` → `venue_seats`) gestionado por admin, más recintos propios que crea un organizador (`pending_review`, solo visibles para su dueño) y que un admin aprueba al catálogo (`approved`). |
 | Correo | Resend, envío directo después del commit con reintento por job. |
-| Imágenes | Google Cloud Storage. |
+| Imágenes | Objetivo: Google Cloud Storage. Hoy (admin-panel, Decisión 5) la portada es una URL `https` de cualquier dominio guardada en `events.image_url`, sin almacenamiento de archivos; las vistas públicas la renderizan con `next/image` `unoptimized` (`components/shared/EventCoverImage`), así que `images.remotePatterns` no se abre. Las imágenes estáticas propias siguen optimizadas. |
 | Documentos legales | En la BD (markdown, versionados e inmutables al publicar), editables por `super_admin`. |
 | Moneda / documentos | PEN. DNI, CE, pasaporte. |
 | Región GCP | `southamerica-west1` (Santiago), la más cercana a Lima. |
@@ -150,9 +150,10 @@ Mismo código en ambos entornos: solo cambian las variables.
 | `CRON_SECRET` | Autenticación de `/api/jobs/*`. |
 | `GCS_BUCKET` | Imágenes de portada. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional) | Mapa del recinto; sin clave no se muestra el mapa. |
-| `APP_URL` | URLs absolutas (correos, `return_url` de Stripe). Producción: `https://ticketera-mentec.dev`. |
-| `SUPER_ADMIN_EMAIL` | Correo del primer `super_admin` que crea el seed (`ronalehm@gmail.com`). |
+| `APP_URL` | Obligatoria, solo servidor: URL pública `http(s)` sin barra final (se normaliza). URLs absolutas que salen del servidor: `redirectUrl` de las invitaciones de Clerk (`<APP_URL>/registro`), correos, `return_url` de Stripe. Local `http://localhost:3000`; preview, la URL de la rama en Vercel; producción `https://ticketera-app-x6xq.vercel.app`. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Errores de servidor y cliente. |
+
+Variables solo del seed (`lib/db/seed/env.ts`, no las lee la app): `SUPER_ADMIN_EMAIL`, `SEED_ORGANIZER_EMAILS`; y `ALLOW_DEMO_RESET` para `npm run db:reset-demo`.
 
 ### Pool de conexiones
 
@@ -236,7 +237,7 @@ Correos de esta etapa:
 - Correos adicionales: invitación de staff de puerta, resultado de solicitud de organizador, resultado de solicitud de reembolso, resultado de revisión de evento.
 
 ### Cloud Storage
-Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y tamaño.
+Portadas de evento (JPG/PNG, 16:9). Subida desde el servidor tras validar tipo y tamaño. Aún no implementado: hoy la portada es una URL `https` (ver "Imágenes" en §2).
 
 ### Google Maps (opcional)
 `venues` guarda `lat`, `lng`, `place_id`. La UI muestra el mapa solo si existe la API key.
@@ -296,13 +297,13 @@ sequenceDiagram
   participant DB as Postgres
   participant S as Stripe
   C->>A: reserveSeats(evento, zonas/cantidades o asientos)
-  A->>DB: tx: INSERT order pending (expires_at = now()+10min)<br/>UPDATE event_seats ... SKIP LOCKED
+  A->>DB: tx: evento published FOR SHARE (§7.11)<br/>INSERT order pending (expires_at = now()+10min)<br/>UPDATE event_seats ... SKIP LOCKED
   alt menos asientos de los pedidos
     A->>DB: ROLLBACK
     A-->>C: "Sin cupo"
   end
   C->>A: createPayment(orderId, comprador)
-  A->>DB: orden pending y no vencida
+  A->>DB: orden pending y no vencida, de un evento published
   A->>S: PaymentIntent (importe de la orden, idempotencyKey=order.id)
   C->>S: confirmPayment (iframe)
   S->>A: webhook payment_intent.succeeded
@@ -400,15 +401,44 @@ Base legal: D.S. 016-2024-JUS (reglamento de la Ley 29733, vigente desde el 31/0
 4. Antes del primer payout completa su alta como destinatario de Global Payouts (`payouts_enabled`).
 
 ### 7.11 Moderación y edición de eventos
-Estados: `draft` → `pending_review` → `published` → `finished`; `published` → `cancelled`.
+Estados: `draft` → `pending_review` → `published` → `finished`; `published` → `cancelled`. Implementado en `admin-panel.md` (F5b).
 
-- El organizador crea y edita en `draft` y pulsa "Enviar a revisión" → `pending_review`.
-- Un borrador solo exige título y categoría. Salir de `draft` exige fecha, apertura de puertas, recinto, imagen y descripción (CHECK `events_draft_complete_check`).
-- La moderación incluye recintos: el recinto propio de un organizador nace `pending_review` y un admin lo pasa a `approved` (entra en el catálogo y conserva su `organizer_id`). Si no se aprueba, sigue `pending_review` y el organizador lo corrige o elige otro.
-- Un evento solo se publica con recinto `approved`. El organizador puede enviar a revisión un evento con recinto propio `pending_review`; el admin aprueba primero el recinto y luego el evento.
-- Un admin aprueba (→ `published`, se generan los `event_seats`, `revalidateTag`) o rechaza (→ `draft` con `review_note`). Correo al organizador.
-- Con al menos una venta, el organizador solo puede editar descripción, imagen, edad mínima y precio de zonas **para ventas futuras** (lo vendido conserva su `unit_price_cents`). No puede cambiar fecha, hora o recinto ni quitar zonas con ventas: para eso usa una solicitud (§7.12).
-- Editar fecha, recinto o zonas de un evento publicado **sin ventas** lo devuelve a `pending_review`.
+**Transiciones permitidas** (cualquier otra se rechaza):
+
+| Desde | Hacia | Quién | Condición |
+|---|---|---|---|
+| `draft` | `pending_review` | organizador dueño (`approved`) o admin / super_admin | "Enviar a revisión": requisitos de abajo |
+| `pending_review` | `published` | admin / super_admin | "Aprobar": requisitos de abajo, organizador y recinto aún `approved`; genera el inventario |
+| `pending_review` | `draft` | admin / super_admin | "Rechazar": con `review_note` (motivo que ve el organizador) |
+| `published` | `cancelled` | admin / super_admin | Solo sin ventas (ver "Ventas" abajo) |
+
+- `cancelled` es terminal y `finished` lo pone el sistema.
+- Un borrador solo exige título y categoría.
+- **Enviar a revisión y aprobar** exigen `starts_at > now()`, los campos de `events_draft_complete_check` (recinto, descripción, portada, `starts_at`, `doors_open_at`) y al menos un tipo de entrada, cada uno con algún lugar que vender (una sección numerada sin butacas no vale). Si falta algo, el mensaje dice qué.
+- **Aprobar** es una sola transacción: `SELECT … FOR UPDATE` del evento; si ya no está `pending_review`, no hace nada; revalida los requisitos y que el organizador dueño y el recinto sigan `approved` (si no, falla con un mensaje claro); comprueba que no hay inventario activo; genera todos los `event_seats` (numerados y generales); pone `status = published`, `reviewed_by` y `reviewed_at`; `COMMIT`. Un segundo clic espera el lock y no genera nada; un fallo hace rollback de todo.
+- **Rechazar** devuelve el evento a `draft` con `review_note`; el organizador lo corrige y lo vuelve a enviar.
+- **Páginas públicas:** aprobar, cancelar y editar un evento publicado invalidan el inicio (`/`), el catálogo (`/eventos`), el detalle (`/eventos/<slug>`) y la compra (`/eventos/<slug>/entradas`) con `revalidatePath` en las server actions. El slug de un evento publicado no cambia al editarlo. Enviar a revisión y rechazar no tocan nada público.
+- **Concurrencia con el checkout:** la reserva solo vende eventos `published` y lee el evento `FOR SHARE`; cancelar y editar lo bloquean `FOR UPDATE`. Si la cancelación llega antes, la reserva encuentra el evento cancelado y da `invalid`; si la reserva llega antes, su orden `pending` vigente bloquea la cancelación. Nunca queda una orden `pending` en un evento cancelado, y el pago de una orden cuyo evento ya no está `published` se rechaza.
+- **Cancelar con ventas está bloqueado** ("Cancelación con reembolsos: Próximamente"): la cancelación con reembolsos de §7.3 queda para una fase posterior.
+- La moderación incluye recintos: el recinto propio de un organizador nace `pending_review` y un admin lo pasa a `approved` (entra en el catálogo y conserva su `organizer_id`). Si no se aprueba, sigue `pending_review` y el organizador lo corrige o elige otro. En el panel actual (F5a) solo se eligen recintos `approved` existentes.
+- Un evento solo se publica con recinto `approved`.
+- Correo al organizador con el resultado de la revisión: pendiente (Resend aún no está integrado).
+
+**Ventas** (Decisiones 11 y 12 de `admin-panel.md`): órdenes `paid`, `partially_refunded` (aún tienen entradas válidas) o `pending` vigentes (`expires_at > now()`). Es un único predicado SQL (`lib/db/activeSales.ts`) que usan la edición, la cancelación y `db:seed` (que no desplaza la fecha de un evento demo con ventas).
+
+**Qué se edita según el estado** (Decisión 11, reemplaza la regla anterior de precios "para ventas futuras"; lo garantiza `updateEvent`):
+
+| Estado | Se edita |
+|---|---|
+| `draft` | Todo. |
+| `pending_review` | Nada: lo que se aprueba es lo que se revisó. Para cambiarlo, el admin lo rechaza y vuelve a `draft`. |
+| `published` sin ventas | Textos (título, descripción), portada, edad mínima, categoría, fecha (inicio y apertura) y nombre y precio de cada tipo de entrada. |
+| `published` con ventas | Solo título, descripción, portada y edad mínima. |
+| `cancelled`, `finished` | Nada. |
+
+En un evento publicado **nunca** se cambian el recinto, las secciones a la venta (zonas) ni el organizador, con o sin ventas: el inventario generado al aprobar depende de ellos. Para cambiar fecha o recinto de un evento con ventas, el organizador usa una solicitud (§7.12).
+
+**Capacidad en el panel:** `draft` y `pending_review` muestran la capacidad configurada en secciones y tipos de entrada; desde `published` se cuentan los `event_seats` no retirados.
 
 ### 7.12 Solicitudes del organizador
 - "Solicitar cancelación" o "Solicitar reprogramación" desde su panel, con motivo → `organizer_requests` `pending`.

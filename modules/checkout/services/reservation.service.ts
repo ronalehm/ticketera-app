@@ -20,7 +20,13 @@ type Line = { ticketTypeId: string; priceCents: number; quantity: number; seatId
 
 /**
  * Crea la orden `pending` y retiene sus asientos en una transacción. `invalid` si el pedido no cuadra con la BD
- * (evento, tipo, `max_per_order` o asiento inexistente); `unavailable` si falta algún lugar libre (rollback).
+ * (evento inexistente o no publicado, tipo, `max_per_order` o asiento inexistente); `unavailable` si falta algún lugar
+ * libre (rollback).
+ *
+ * El evento se lee `FOR SHARE`: las reservas no se bloquean entre sí, pero sí con el `FOR UPDATE` de la moderación y la
+ * edición del panel (cancelar, editar un publicado). Si el evento se cancela mientras esta reserva espera, Postgres
+ * revalida el `status` sobre la fila nueva y la reserva da `invalid`; si la reserva llega antes, la cancelación espera y
+ * encuentra su orden `pending` como venta activa. Nunca queda una orden `pending` en un evento cancelado.
  */
 export async function reserveCheckoutOrder(
   order: CheckoutOrder,
@@ -33,7 +39,8 @@ export async function reserveCheckoutOrder(
         .select({ id: events.id, commissionBps: organizers.commissionBps })
         .from(events)
         .innerJoin(organizers, eq(organizers.userId, events.organizerId))
-        .where(eq(events.slug, order.event.slug));
+        .where(and(eq(events.slug, order.event.slug), eq(events.status, "published")))
+        .for("share", { of: events });
       if (!event) return { status: "invalid" };
 
       const types = await tx

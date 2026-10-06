@@ -72,6 +72,7 @@ erDiagram
   }
   organizers {
     uuid user_id PK,FK
+    organizer_status status
     text tax_id UK
     int commission_bps
     text stripe_recipient_id
@@ -215,6 +216,7 @@ Tablas sin relaciones en el diagrama: `stripe_events`, `complaint_counters`.
 | `user_role` | `customer`, `organizer`, `admin`, `super_admin` |
 | `document_type` | `dni`, `ce`, `passport` |
 | `tax_id_type` | `ruc`, `dni` |
+| `organizer_status` | `approved`, `pending`, `suspended` |
 | `seating_type` | `general`, `numbered` |
 | `venue_status` | `pending_review`, `approved` |
 | `event_status` | `draft`, `pending_review`, `published`, `cancelled`, `finished` |
@@ -260,12 +262,15 @@ Columnas `created_at`/`updated_at` omitidas. `NULL` indica columna opcional; el 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `user_id` | uuid PK → `users.id` | |
-| `legal_name` | text | Razón social o nombre. |
-| `tax_id_type` | `tax_id_type` | |
-| `tax_id` | text UNIQUE | RUC (11) o DNI (8). |
+| `status` | `organizer_status` | Default `pending`. Separado del rol: `pending`/`suspended` entra al panel en solo lectura; solo `approved` crea o modifica eventos. La migración 0008 dejó `approved` a los organizadores existentes. |
+| `legal_name` | text NULL | Razón social o nombre. Obligatorio si `approved`. |
+| `tax_id_type` | `tax_id_type` NULL | Obligatorio si `approved`. |
+| `tax_id` | text NULL UNIQUE | RUC (11) o DNI (8). Obligatorio si `approved`. |
 | `commission_bps` | integer | Comisión en puntos básicos (1000 = 10%). CHECK 0–10000. La edita `super_admin`. |
 | `stripe_recipient_id` | text NULL | Destinatario de Global Payouts. |
 | `payouts_enabled` | boolean | Default `false`. |
+
+Restricción: `CHECK organizers_approved_complete_check (status <> 'approved' OR (legal_name IS NOT NULL AND tax_id_type IS NOT NULL AND tax_id IS NOT NULL))`: un organizador `pending` puede no tener aún datos fiscales; para aprobarlo hacen falta los tres.
 
 **`audit_logs`**: acciones sensibles (roles, reembolsos, cancelaciones, respuestas a reclamos, documentos legales). Solo inserción.
 
@@ -706,6 +711,7 @@ Restricción: `CHECK (user_id IS NOT NULL OR order_id IS NOT NULL)`. Visitantes 
 - Un evento fuera de `draft` está completo (fecha, apertura de puertas, recinto, imagen y descripción): CHECK `events_draft_complete_check`.
 - El mapa propio de un evento lleva `viewBox` y escenario juntos: CHECK `events_map_override_check`.
 - Un recinto `pending_review` siempre tiene dueño: CHECK `venues_pending_has_owner_check`.
+- Un organizador `approved` tiene razón social, tipo y número fiscal: CHECK `organizers_approved_complete_check`.
 - Una orden fuera de `pending` tiene comprador: CHECK `orders_buyer_required_check`.
 - Un favorito por usuario y evento: PK `saved_events (user_id, event_id)`.
 

@@ -7,7 +7,13 @@ import { AuthHeaderActions } from "./AuthHeaderActions";
 const navigation = vi.hoisted(() => ({ pathname: "/" }));
 const clerk = vi.hoisted(() => ({
   isLoaded: true,
-  user: null as null | { firstName: string; lastName: string; primaryEmailAddress: { emailAddress: string } },
+  user: null as null | {
+    id: string;
+    firstName: string;
+    lastName: string;
+    primaryEmailAddress: { emailAddress: string };
+    publicMetadata: { role?: string };
+  },
   signOut: vi.fn(),
 }));
 
@@ -16,11 +22,17 @@ vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
   useClerk: () => ({ signOut: clerk.signOut }),
 }));
+vi.mock("../actions/session.actions", () => ({ syncSessionRoleAction: vi.fn(async () => ({ changed: false })) }));
 
-const clerkUser = { firstName: "Ana", lastName: "Quispe", primaryEmailAddress: { emailAddress: "demo@mentectickets.pe" } };
+const clerkUser = {
+  id: "user_1",
+  firstName: "Ana",
+  lastName: "Quispe",
+  primaryEmailAddress: { emailAddress: "demo@mentectickets.pe" },
+};
 
-function signIn() {
-  clerk.user = clerkUser;
+function signIn(role = "organizer") {
+  clerk.user = { ...clerkUser, publicMetadata: { role } };
 }
 
 const ACCOUNT_BUTTON = "Cuenta de Ana Quispe";
@@ -153,6 +165,23 @@ describe("AuthHeaderActions (sheet)", () => {
     expect(first.getAttribute("href")).toBe("/perfil");
     expect(first.getAttribute("aria-current")).toBe("page");
     expect(within(nav).getByRole("button", { name: "Mis entradas" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("un cliente (o sin rol en publicMetadata) no ve el enlace al panel", async () => {
+    for (const role of ["customer", "rol-desconocido"]) {
+      signIn(role);
+      renderSheet();
+      const nav = await screen.findByRole("navigation", { name: "Tu cuenta" });
+      expect(within(nav).getAllByRole("button").map((link) => link.textContent)).toEqual(["Mi perfil", "Mis entradas"]);
+      cleanup();
+    }
+  });
+
+  it.each(["admin", "super_admin"])("un %s ve el enlace Panel → /admin/usuarios", async (role) => {
+    signIn(role);
+    renderSheet();
+    const nav = await screen.findByRole("navigation", { name: "Tu cuenta" });
+    expect(within(nav).getByRole("button", { name: "Panel" }).getAttribute("href")).toBe("/admin/usuarios");
   });
 
   it("sin usuario muestra Iniciar sesión y Crear cuenta, sin Tu cuenta ni Mis entradas", async () => {

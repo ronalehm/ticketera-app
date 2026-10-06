@@ -1,10 +1,10 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import Image from "next/image";
 import { CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
 
 import { DateChip } from "@/components/shared/DateChip";
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { TicketsPdfButton } from "@/components/shared/TicketsPdfButton";
@@ -54,7 +54,7 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
   return (
     <article className="overflow-hidden rounded-2xl bg-card text-card-foreground ring-1 ring-border print:break-inside-avoid print:ring-0">
       <div className="relative h-36 bg-muted md:h-48">
-        <Image
+        <EventCoverImage
           src={event.imageUrl}
           alt={`${event.title} en ${event.venue}, ${event.city}`}
           fill

@@ -8,6 +8,7 @@ import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
 import { MICRO_ABIERTO_VENUE } from "./microAbierto.mock";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
 
 const SLUG = "micro-abierto-arequipa";
@@ -78,7 +79,7 @@ describeWithDb("getVenueMapBySlug (stand-up curvo)", () => {
   it("devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,

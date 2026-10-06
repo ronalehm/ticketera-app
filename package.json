@@ -10,7 +10,8 @@
     "test": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file-if-exists=.env lib/db/seed/run.ts"
+    "db:seed": "tsx --env-file-if-exists=.env lib/db/seed/run.ts",
+    "db:reset-demo": "tsx --env-file-if-exists=.env lib/db/seed/resetDemo.run.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

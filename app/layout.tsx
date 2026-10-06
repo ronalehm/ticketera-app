@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Providers } from "./providers";
 
 const creatoDisplay = localFont({
   src: [
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={cn("font-sans", creatoDisplay.variable)}>
       <body className="flex min-h-dvh flex-col">
         <ClerkProvider appearance={{ theme: shadcn }} localization={esES}>
-          {children}
+          <Providers>{children}</Providers>
         </ClerkProvider>
       </body>
     </html>

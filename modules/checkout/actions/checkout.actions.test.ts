@@ -130,7 +130,7 @@ describe("startCheckout", () => {
   it("excepción inesperada → error genérico y log sin el mensaje", async () => {
     vi.mocked(reserveCheckoutOrder).mockRejectedValue(new Error("datos de ana@example.com"));
     expect(await startCheckout(null, form(SELECTION))).toEqual(GENERIC_ERROR);
-    expect(console.error).toHaveBeenCalledWith("startCheckout", { name: "Error", code: undefined });
+    expect(console.error).toHaveBeenCalledWith("startCheckout", { name: "Error" });
     expect(redirect).not.toHaveBeenCalled();
   });
 

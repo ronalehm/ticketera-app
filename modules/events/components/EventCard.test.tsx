@@ -65,6 +65,14 @@ describe("EventCard", () => {
     expect(screen.queryByRole("link", { name: /^Ver entradas/ })).toBeNull();
   });
 
+  it("portada de otro dominio: la img usa la URL tal cual, sin pasar por /_next/image", () => {
+    const cover = "https://cdn.example.org/x.jpg";
+    const { container } = render(<EventCard event={{ ...getEvent("risas-sin-filtro"), imageUrl: cover }} />);
+    const img = container.querySelector("img") as HTMLImageElement;
+    expect(img.getAttribute("src")).toBe(cover);
+    expect(img.getAttribute("srcset")).toBeNull();
+  });
+
   it("gratis: muestra 'Entrada libre' sin 'Desde'", () => {
     render(<EventCard event={getEvent("aventura-en-el-bosque-magico")} />);
     expect(screen.getByText("Entrada libre")).toBeTruthy();

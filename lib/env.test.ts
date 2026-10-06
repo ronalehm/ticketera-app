@@ -3,6 +3,7 @@ import { z } from "zod";
 
 const DB_URL = "postgres://user:pass@127.0.0.1:5432/app";
 const SERVER_BASE = {
+  APP_URL: "http://localhost:3000",
   DATABASE_URL: DB_URL,
   CLERK_SECRET_KEY: "sk_test_abc",
   STRIPE_SECRET_KEY: "sk_test_abc",
@@ -53,23 +54,13 @@ describe("serverEnvSchema", () => {
         DATABASE_URL_UNPOOLED: "",
         DATABASE_URL_MIGRATOR: "",
         DATABASE_URL_TEST: "",
-        SUPER_ADMIN_EMAIL: "",
       }),
     ).toEqual({
       ...SERVER_BASE,
       DATABASE_URL_UNPOOLED: undefined,
       DATABASE_URL_MIGRATOR: undefined,
       DATABASE_URL_TEST: undefined,
-      SUPER_ADMIN_EMAIL: undefined,
     });
-  });
-
-  it("normaliza SUPER_ADMIN_EMAIL a minúsculas", () => {
-    const parsed = serverEnvSchema.parse({
-      ...SERVER_BASE,
-      SUPER_ADMIN_EMAIL: "Ronalehm@Gmail.com",
-    });
-    expect(parsed.SUPER_ADMIN_EMAIL).toBe("ronalehm@gmail.com");
   });
 
   it("falla si falta CLERK_SECRET_KEY o no empieza por sk_ y la nombra", () => {
@@ -92,10 +83,34 @@ describe("serverEnvSchema", () => {
     });
   });
 
-  it("falla con un correo inválido", () => {
-    expect(errorOf({ ...SERVER_BASE, SUPER_ADMIN_EMAIL: "no-es-correo" })).toContain(
-      "SUPER_ADMIN_EMAIL",
-    );
+  it("falla si falta APP_URL y la nombra", () => {
+    expect(errorOf(omit(SERVER_BASE, "APP_URL"))).toContain("APP_URL");
+    expect(errorOf({ ...SERVER_BASE, APP_URL: "" })).toContain("APP_URL");
+  });
+
+  it.each(["localhost:3000", "ftp://ticketera.dev", "javascript:alert(1)", "https://", "https://ticketera.dev?x=1", "https://ticketera.dev/#a"])(
+    "rechaza APP_URL que no es una URL http(s) base (%s) y la nombra",
+    (invalid) => {
+      expect(errorOf({ ...SERVER_BASE, APP_URL: invalid })).toContain("APP_URL");
+    },
+  );
+
+  it.each([
+    ["http://localhost:3000", "http://localhost:3000"],
+    ["http://localhost:3000/", "http://localhost:3000"],
+    ["https://ticketera-app-x6xq.vercel.app//", "https://ticketera-app-x6xq.vercel.app"],
+    ["https://preview.example.dev/base/", "https://preview.example.dev/base"],
+  ])("acepta APP_URL %s y la normaliza sin barra final (%s)", (input, expected) => {
+    expect(serverEnvSchema.parse({ ...SERVER_BASE, APP_URL: input }).APP_URL).toBe(expected);
+  });
+
+  it("no exige ni valida las variables del seed (lib/db/seed/env.ts)", () => {
+    const parsed = serverEnvSchema.parse({
+      ...SERVER_BASE,
+      SUPER_ADMIN_EMAIL: "no-es-correo",
+      SEED_ORGANIZER_EMAILS: "tampoco",
+    });
+    expect(parsed).toEqual(SERVER_BASE);
   });
 });
 
@@ -106,6 +121,8 @@ describe("env", () => {
 
   it("se parsea de process.env al importar", () => {
     expect(env.DATABASE_URL).toBe(DB_URL);
+    // vitest.config.mts (INERT_KEYS_ENV).
+    expect(env.APP_URL).toBe("http://localhost:3000");
   });
 
   it("lanza un Error que nombra la variable inválida", async () => {

@@ -1,22 +1,21 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { z } from "zod";
+import { buildEventSeatRows, generalSeatPlan } from "@/lib/db/eventInventory";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { legalDocuments } from "@/lib/db/schema/legal";
-import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
+import { normalizeText, slugify } from "@/lib/text";
 // Excepción documentada (spec data-foundation, Decisión 15; auth-clerk, Decisión 13): el seed es tooling y lee
 // internals de los módulos.
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { eventDetailSchema } from "@/modules/events/schemas/events.schema";
-import { getAvailabilityStatus, LOW_STOCK_RATIO } from "@/modules/events/utils/availability";
-import { normalizeText } from "@/modules/events/utils/eventFilters";
 import { LEGAL_DOCUMENTS_MOCK } from "@/modules/legal/data/legalDocuments.mock";
 import { legalDocumentSchema } from "@/modules/legal/schemas/legal.schema";
-import { ORGANIZER_DRAFTS_MOCK, ORGANIZER_SALES_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
+import { ORGANIZER_DRAFTS_MOCK } from "@/modules/organizer/data/organizerEvents.mock";
 import { organizerEventSchema } from "@/modules/organizer/schemas/organizer.schema";
 import { VENUE_LAYOUTS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { venueLayoutSchema } from "@/modules/seating/schemas/seating.schema";
@@ -25,20 +24,16 @@ export const DEMO_GENERAL_CAPACITY = 200;
 const COMMISSION_BPS = 1000;
 /** Base de `events.created_at`: cada evento suma su índice en segundos para conservar el orden del mock. */
 const SEED_EPOCH = Date.parse("2026-10-01T05:00:00Z");
-/** Parte del inventario general que queda libre en un tipo `low-stock` (Decisión 8). */
-const LOW_STOCK_FREE_RATIO = 0.1;
-const DEMO_BUYER = {
-  buyerName: "Ventas de demostración",
-  buyerEmail: "demo@example.com",
-  buyerPhone: "+51900000000",
-  buyerDocumentType: "dni",
-  buyerDocumentNumber: "00000000",
-} as const;
+/** Días entre `now` y el día del primer evento sembrado. */
+export const SEED_LEAD_DAYS = 7;
+const DAY_MS = 86_400_000;
+/** Lima no tiene horario de verano: UTC−5 todo el año. */
+const LIMA_OFFSET_MS = -5 * 3_600_000;
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
 export type SeedData = {
-  users: Insert<typeof users>[]; // organizadores (el super admin lo inserta seed())
+  users: Insert<typeof users>[]; // organizadores reales de prueba (el super admin lo inserta seed())
   organizers: Insert<typeof organizers>[];
   categories: Insert<typeof categories>[];
   venues: Insert<typeof venues>[];
@@ -46,15 +41,23 @@ export type SeedData = {
   venueSeats: Insert<typeof venueSeats>[];
   events: Insert<typeof events>[];
   ticketTypes: Insert<typeof ticketTypes>[];
-  orders: Insert<typeof orders>[];
   eventSeats: Insert<typeof eventSeats>[];
   legalDocuments: Insert<typeof legalDocuments>[];
 };
 
 type VenueLayout = z.infer<typeof venueLayoutSchema>;
 type Zone = VenueLayout["zones"][number];
-type MockStatus = "available" | "low-stock" | "sold-out";
-type SeatPlan = { venueSeatId: string | null; sold: boolean; key: string };
+
+/** Organizador real de prueba: su fila de `users` (`id` existente o `seedUuid`) y su correo. */
+export type SeedOrganizer = { id: string; email: string };
+
+export type BuildSeedDataInput = {
+  superAdminId: string;
+  /** Al menos uno, en el orden de `parseSeedRoles` (ordenados por correo). */
+  organizers: SeedOrganizer[];
+  /** Instante de referencia: todas las fechas sembradas son posteriores. */
+  now: Date;
+};
 
 /** UUID v8 (RFC 9562) derivado de sha256(key): el mismo id en cada ejecución del seed. */
 export function seedUuid(key: string): string {
@@ -65,40 +68,60 @@ export function seedUuid(key: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-const toKebab = (text: string) =>
-  normalizeText(text)
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
 const toCents = (price: number) => Math.round(price * 100);
 
+/** Primeros 32 bits de sha256(key): base del reparto y de los datos fiscales demo. */
+const hash32 = (key: string) => createHash("sha256").update(key).digest().readUInt32BE(0);
+
+/** Índice del organizador de un evento: sha256(slug) mod n. */
+export const organizerIndexForSlug = (slug: string, organizerCount: number) => hash32(`event:${slug}`) % organizerCount;
+
+/** RUC demo (20 + 9 dígitos) derivado del correo: único por organizador y estable entre ejecuciones. */
+export const demoTaxId = (email: string) => `20${String(hash32(`tax-id:${email}`) % 1_000_000_000).padStart(9, "0")}`;
+
+/** Día del calendario de Lima (días desde la época) de un instante. */
+const limaDay = (time: number) => Math.floor((time + LIMA_OFFSET_MS) / DAY_MS);
+
 /**
- * Lugares de una zona general según el estado del mock: libres todos, el 10 % o ninguno. Con `fillAvailable`,
- * una zona `available` deja libre solo lo justo para seguir `available` (el 20 % + 1), para que el evento
- * entero pueda quedar en `low-stock` (p. ej. `festival-vive-latino-lima`).
+ * Desplazamiento (múltiplo de días) que lleva la fecha más temprana de los mocks a `now` + `SEED_LEAD_DAYS` días en
+ * Lima. Conserva la hora local y la distancia entre eventos; todas las fechas quedan después de `now`.
  */
-function generalSeatPlan(key: string, capacity: number, status: MockStatus, fillAvailable: boolean): SeatPlan[] {
-  const free = {
-    available: fillAvailable ? Math.floor(capacity * LOW_STOCK_RATIO) + 1 : capacity,
-    "low-stock": Math.ceil(capacity * LOW_STOCK_FREE_RATIO),
-    "sold-out": 0,
-  }[status];
-  return Array.from({ length: capacity }, (_, index) => ({
-    venueSeatId: null,
-    sold: index >= free,
-    key: `${key}:${index}`,
-  }));
+function dateShiftMs(now: Date, mockDates: string[]): number {
+  const earliest = Math.min(...mockDates.map((date) => Date.parse(date)));
+  return (limaDay(now.getTime()) + SEED_LEAD_DAYS - limaDay(earliest)) * DAY_MS;
 }
 
 /** Filas de cada tabla a partir de los mocks. Pura y determinista; lanza `Error` si los mocks son incoherentes. */
-export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedData {
+export function buildSeedData({ superAdminId, organizers: seedOrganizers, now }: BuildSeedDataInput): SeedData {
+  if (seedOrganizers.length === 0) throw new Error("El seed necesita al menos un organizador");
   const mockEvents = eventDetailSchema.array().parse(EVENTS_MOCK);
   const layouts = venueLayoutSchema.array().parse(VENUE_LAYOUTS_MOCK);
   const drafts = organizerEventSchema.array().parse(ORGANIZER_DRAFTS_MOCK);
+  const shiftMs = dateShiftMs(now, [
+    ...mockEvents.flatMap((event) => [event.startsAt, event.doorsOpenAt]),
+    ...drafts.flatMap((draft) => draft.startsAt ?? []),
+  ]);
+  const shiftDate = (date: string) => new Date(Date.parse(date) + shiftMs);
+  const organizerIdForSlug = (slug: string) => seedOrganizers[organizerIndexForSlug(slug, seedOrganizers.length)].id;
 
   const data: SeedData = {
-    users: [],
-    organizers: [],
+    users: seedOrganizers.map(({ id, email }, index) => ({
+      id,
+      email,
+      firstName: "Organizador",
+      lastName: `Demo ${index + 1}`,
+      role: "organizer",
+      clerkId: null,
+    })),
+    organizers: seedOrganizers.map(({ id, email }, index) => ({
+      userId: id,
+      status: "approved",
+      legalName: `Productora Demo ${index + 1} S.A.C.`,
+      taxIdType: "ruc",
+      taxId: demoTaxId(email),
+      commissionBps: COMMISSION_BPS,
+      payoutsEnabled: false,
+    })),
     categories: Object.entries(EVENT_CATEGORY_LABELS).map(([slug, name]) => ({
       id: seedUuid(`category:${slug}`),
       slug,
@@ -109,7 +132,6 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     venueSeats: [],
     events: [],
     ticketTypes: [],
-    orders: [],
     eventSeats: [],
     legalDocuments: legalDocumentSchema
       .array()
@@ -124,25 +146,6 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
         publishedBy: superAdminId,
       })),
   };
-
-  const organizerIds = new Map<string, string>();
-  function organizerId(name: string): string {
-    const existing = organizerIds.get(name);
-    if (existing) return existing;
-    const email = `${toKebab(name)}@example.com`;
-    const id = seedUuid(`user:${email}`);
-    organizerIds.set(name, id);
-    data.users.push({ id, email, firstName: name, lastName: "", role: "organizer", clerkId: null });
-    data.organizers.push({
-      userId: id,
-      legalName: name,
-      taxIdType: "ruc",
-      taxId: `20${String(organizerIds.size).padStart(9, "0")}`,
-      commissionBps: COMMISSION_BPS,
-      payoutsEnabled: false,
-    });
-    return id;
-  }
 
   /**
    * Recinto del evento. El recinto toma el `viewBox` y el escenario del primer layout que lo usa; un evento cuyo
@@ -195,8 +198,6 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     name: string,
     venueId: string,
     venueKey: string,
-    status: MockStatus,
-    fillAvailable: boolean,
   ) {
     const base = {
       venueId,
@@ -210,7 +211,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     };
     if (zone.kind === "general") {
       const id = sectionId({ ...base, seating: "general", capacity: zone.capacity, seatViewBox: null }, venueKey);
-      return { id, seats: generalSeatPlan(id, zone.capacity, status, fillAvailable) };
+      return { id, seats: generalSeatPlan(id, zone.capacity) };
     }
     const isNew = !data.venueSections.some((section) => section.slug === zone.id && section.venueId === venueId);
     const id = sectionId(
@@ -238,7 +239,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
             accessible: seat.status === "accessible",
           });
         }
-        return { venueSeatId, sold: seat.status === "occupied", key: seat.id };
+        return { venueSeatId, key: seat.id };
       }),
     );
     return { id, seats };
@@ -258,7 +259,7 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
     data.events.push({
       id: eventId,
       slug: event.slug,
-      organizerId: organizerId(event.organizer),
+      organizerId: organizerIdForSlug(event.slug),
       venueId: eventVenueId,
       mapViewBox,
       mapStage,
@@ -266,8 +267,8 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
       title: event.title,
       description: event.description,
       imageUrl: event.imageUrl,
-      startsAt: new Date(event.startsAt),
-      doorsOpenAt: new Date(event.doorsOpenAt),
+      startsAt: shiftDate(event.startsAt),
+      doorsOpenAt: shiftDate(event.doorsOpenAt),
       minAge: event.minAge,
       featured: event.featured,
       status: "published",
@@ -275,41 +276,26 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
       createdAt: new Date(SEED_EPOCH + eventIndex * 1000),
     });
 
-    const orderId = seedUuid(`order:${event.slug}`);
-    let subtotalCents = 0;
-    let ticketCount = 0;
-    const eventSeatRows: Insert<typeof eventSeats>[] = [];
-
     /** Sección y plan de lugares de cada tipo de entrada (las secciones y asientos se registran una sola vez). */
-    const planTicketTypes = (fillAvailable: boolean) =>
-      event.ticketTypes.map((ticketType, ticketTypeIndex) => {
-        const zoneIndex = layout?.zones.findIndex((zone) => zone.ticketTypeId === ticketType.id) ?? -1;
-        if (layout && zoneIndex >= 0) {
-          const zone = layout.zones[zoneIndex];
-          return zoneSection(zone, zoneIndex, ticketType.name, eventVenueId, venueKey, ticketType.status, fillAvailable);
-        }
-        const id = sectionId(
-          {
-            venueId: eventVenueId,
-            slug: ticketType.id,
-            name: ticketType.name,
-            sortOrder: ticketTypeIndex,
-            seating: "general",
-            capacity: DEMO_GENERAL_CAPACITY,
-          },
-          venueKey,
-        );
-        return { id, seats: generalSeatPlan(id, DEMO_GENERAL_CAPACITY, ticketType.status, fillAvailable) };
-      });
-    const eventStatus = (plans: { seats: SeatPlan[] }[]) => {
-      const seats = plans.flatMap((plan) => plan.seats);
-      return getAvailabilityStatus(seats.filter((seat) => !seat.sold).length, seats.length);
-    };
-    let sections = planTicketTypes(false);
-    if (eventStatus(sections) !== event.status) sections = planTicketTypes(true);
-    if (eventStatus(sections) !== event.status) {
-      throw new Error(`No se puede reproducir el estado "${event.status}" del evento ${event.slug}`);
-    }
+    const sections = event.ticketTypes.map((ticketType, ticketTypeIndex) => {
+      const zoneIndex = layout?.zones.findIndex((zone) => zone.ticketTypeId === ticketType.id) ?? -1;
+      if (layout && zoneIndex >= 0) {
+        const zone = layout.zones[zoneIndex];
+        return zoneSection(zone, zoneIndex, ticketType.name, eventVenueId, venueKey);
+      }
+      const id = sectionId(
+        {
+          venueId: eventVenueId,
+          slug: ticketType.id,
+          name: ticketType.name,
+          sortOrder: ticketTypeIndex,
+          seating: "general",
+          capacity: DEMO_GENERAL_CAPACITY,
+        },
+        venueKey,
+      );
+      return { id, seats: generalSeatPlan(id, DEMO_GENERAL_CAPACITY) };
+    });
 
     event.ticketTypes.forEach((ticketType, ticketTypeIndex) => {
       const section = sections[ticketTypeIndex];
@@ -327,60 +313,24 @@ export function buildSeedData({ superAdminId }: { superAdminId: string }): SeedD
         sortOrder: ticketTypeIndex,
       });
 
-      for (const seat of section.seats) {
-        if (seat.sold) {
-          subtotalCents += priceCents;
-          ticketCount += 1;
-        }
-        eventSeatRows.push({
-          id: seedUuid(`event-seat:${event.slug}:${ticketType.id}:${seat.key}`),
-          eventId,
-          ticketTypeId,
-          venueSeatId: seat.venueSeatId,
-          status: seat.sold ? "sold" : "available",
-          orderId: seat.sold ? orderId : null,
-        });
-      }
+      // Todo el inventario queda disponible: el seed no siembra ventas (spec admin-panel, F2).
+      const seatId = (key: string) => seedUuid(`event-seat:${event.slug}:${ticketType.id}:${key}`);
+      for (const row of buildEventSeatRows(eventId, ticketTypeId, section.seats, seatId)) data.eventSeats.push(row);
     });
-
-    if (ticketCount > 0) {
-      const platformFeeCents = Math.round((subtotalCents * COMMISSION_BPS) / 10000);
-      const demoDate = new Date(SEED_EPOCH);
-      // ponytail: orden `paid` sin `tickets`; en F3 se decide si el seed los emite (Preguntas abiertas 2 y 5).
-      data.orders.push({
-        id: orderId,
-        code: `TK-DEMO-${String(eventIndex + 1).padStart(3, "0")}`,
-        eventId,
-        userId: null,
-        ...DEMO_BUYER,
-        status: "paid",
-        expiresAt: demoDate,
-        paidAt: demoDate,
-        ticketCount,
-        subtotalCents,
-        platformFeeCents,
-        organizerAmountCents: subtotalCents - platformFeeCents,
-      });
-    }
-    data.eventSeats.push(...eventSeatRows);
   });
-
-  const draftOrganizerSlug = ORGANIZER_SALES_MOCK[0]?.slug;
-  const draftOrganizer = mockEvents.find((event) => event.slug === draftOrganizerSlug)?.organizer;
-  if (!draftOrganizer) throw new Error(`ORGANIZER_SALES_MOCK apunta a un evento inexistente: ${draftOrganizerSlug}`);
 
   drafts.forEach((draft, draftIndex) => {
     if (!draft.startsAt || !draft.imageUrl || draft.priceFrom === null) {
       throw new Error(`El borrador "${draft.title}" necesita fecha, imagen y precio para sembrarse`);
     }
-    const slug = toKebab(draft.title);
+    const slug = slugify(draft.title);
     const eventId = seedUuid(`event:${slug}`);
     const { id: draftVenueId, mapViewBox, mapStage } = venueId(draft.venue, draft.city, "Por confirmar", undefined);
-    const startsAt = new Date(draft.startsAt);
+    const startsAt = shiftDate(draft.startsAt);
     data.events.push({
       id: eventId,
       slug,
-      organizerId: organizerId(draftOrganizer),
+      organizerId: organizerIdForSlug(slug),
       venueId: draftVenueId,
       mapViewBox,
       mapStage,

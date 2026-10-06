@@ -1,30 +1,20 @@
 import { describe, expect, it } from "vitest";
-import type { OrganizerEventFormValues } from "../types/organizer.types";
+import type { EventDraftFormValues, VenueOption } from "../types/organizer.types";
 import { buildEventPreview } from "./eventPreview";
+import { EMPTY_EVENT_DRAFT } from "./organizerEventForm";
 
-const empty: OrganizerEventFormValues = {
-  intent: "publish",
-  name: "",
-  category: "conciertos",
-  minAge: "0",
-  description: "",
-  organizer: "",
-  date: "",
-  time: "",
-  doorsOpen: "",
-  venue: "",
-  city: "",
-  address: "",
-  seatingMode: "",
-  hasCoverImage: false,
-  ticketTypes: [
-    { id: "row-1", name: "", price: "", description: "", maxPerOrder: "10", kind: "general", quantity: "", rows: "", seatsPerRow: "" },
-  ],
+const SECTION_A = "11111111-1111-4111-8111-111111111111";
+const SECTION_B = "22222222-2222-4222-8222-222222222222";
+const VENUE: VenueOption = {
+  id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
+  name: "Teatro Municipal",
+  city: "Lima",
+  sections: [],
 };
 
 describe("buildEventPreview", () => {
   it("con el formulario vacío deja los marcadores en null", () => {
-    expect(buildEventPreview(empty, null)).toEqual({
+    expect(buildEventPreview(EMPTY_EVENT_DRAFT, undefined)).toEqual({
       title: null,
       categoryLabel: "Conciertos",
       dateLabel: null,
@@ -36,49 +26,37 @@ describe("buildEventPreview", () => {
   });
 
   it("con el formulario completo da los textos de la tarjeta", () => {
-    const values: OrganizerEventFormValues = {
-      ...empty,
-      name: "  Hamlet ",
+    const values: EventDraftFormValues = {
+      ...EMPTY_EVENT_DRAFT,
+      title: "  Hamlet ",
       category: "teatro",
       date: "2026-12-05",
       time: "20:00",
-      venue: " Teatro Municipal ",
-      city: " Lima ",
+      venueId: VENUE.id,
+      imageUrl: " https://images.unsplash.com/hamlet.jpg ",
       ticketTypes: [
-        { ...empty.ticketTypes[0], id: "row-1", name: "Platea", price: "120", quantity: "100" },
-        { ...empty.ticketTypes[0], id: "row-2", name: "Mezanine", price: "80", quantity: "50" },
+        { sectionId: SECTION_A, selected: true, name: "Platea", price: "120" },
+        { sectionId: SECTION_B, selected: true, name: "Mezanine", price: "80" },
       ],
     };
-    expect(buildEventPreview(values, "blob:http://localhost/abc")).toEqual({
+    expect(buildEventPreview(values, VENUE)).toEqual({
       title: "Hamlet",
       categoryLabel: "Teatro",
       dateLabel: "sáb 5 dic",
       dateChip: { month: "DIC", day: "05" },
       place: "Teatro Municipal · Lima",
       priceFrom: 80,
-      imageUrl: "blob:http://localhost/abc",
+      imageUrl: "https://images.unsplash.com/hamlet.jpg",
     });
   });
 
-  it("une lugar y ciudad con un punto medio", () => {
-    expect(buildEventPreview({ ...empty, venue: "Estadio Nacional", city: "Lima" }, null).place).toBe(
-      "Estadio Nacional · Lima",
-    );
-  });
-
-  it("con solo la ciudad, el lugar es la ciudad", () => {
-    expect(buildEventPreview({ ...empty, venue: "  ", city: "Lima" }, null).place).toBe("Lima");
-  });
-
   it("sin hora no hay fecha ni chip", () => {
-    const preview = buildEventPreview({ ...empty, date: "2026-12-05" }, null);
+    const preview = buildEventPreview({ ...EMPTY_EVENT_DRAFT, date: "2026-12-05" }, undefined);
     expect(preview.dateLabel).toBeNull();
     expect(preview.dateChip).toBeNull();
   });
 
-  it("con una fecha inválida no hay fecha ni chip", () => {
-    const preview = buildEventPreview({ ...empty, date: "2026-13-45", time: "20:00" }, null);
-    expect(preview.dateLabel).toBeNull();
-    expect(preview.dateChip).toBeNull();
+  it.each(["http://images.unsplash.com/a.jpg", "https://", "portada"])("una portada no válida (%s) no se muestra", (imageUrl) => {
+    expect(buildEventPreview({ ...EMPTY_EVENT_DRAFT, imageUrl }, undefined).imageUrl).toBeNull();
   });
 });

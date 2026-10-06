@@ -7,12 +7,21 @@ const appPath = z.string().startsWith("/");
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
 
+/**
+ * URL pública de la app (`http(s)`, sin barra final: se normaliza). Base de las URLs absolutas que salen del servidor,
+ * como el `redirectUrl` de las invitaciones de Clerk (`${APP_URL}/registro`).
+ */
+const appUrl = z
+  .url({ protocol: /^https?$/ })
+  .refine((value) => !/[?#]/.test(value), "Sin query ni fragmento: se le concatenan rutas")
+  .transform((value) => value.replace(/\/+$/, ""));
+
 export const serverEnvSchema = z.object({
+  APP_URL: appUrl,
   DATABASE_URL: z.url(),
   DATABASE_URL_UNPOOLED: optional(z.url()),
   DATABASE_URL_MIGRATOR: optional(z.url()),
   DATABASE_URL_TEST: optional(z.url()),
-  SUPER_ADMIN_EMAIL: optional(z.email().transform((email) => email.toLowerCase())),
   CLERK_SECRET_KEY: z.string().startsWith("sk_"),
   // Solo claves de test de Stripe en todos los entornos (las live llegan en F8).
   STRIPE_SECRET_KEY: z.string().startsWith("sk_test_"),

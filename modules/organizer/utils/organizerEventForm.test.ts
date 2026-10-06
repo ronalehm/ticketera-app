@@ -1,270 +1,40 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { organizerEventSchema } from "../schemas/organizer.schema";
-import type { OrganizerEventFormValues, TicketTypeRow } from "../types/organizer.types";
+import { describe, expect, it } from "vitest";
+import { createEventDraftSchema, MIN_AGE_LABELS } from "../schemas/organizer.schema";
+import type { EditableEvent, EventDraftFormValues, TicketTypeRow, VenueOption } from "../types/organizer.types";
 import {
-  applySeatingMode,
   buildStartsAt,
-  createTicketTypeRow,
-  formatSeatGridSummary,
+  createTicketTypeRows,
+  EMPTY_EVENT_DRAFT,
+  formatPriceInput,
   formatTicketCount,
-  getCoverImageError,
+  getEventFormLock,
+  getMinAgeLabels,
   getMinTicketPrice,
-  getNewRowKind,
-  getRowCapacity,
-  getSeatGridSize,
-  getTicketCapacity,
+  getSelectedCapacity,
   getTicketTypeErrors,
-  toOrganizerEvent,
+  toCents,
+  toEventDraftFormValues,
+  toEventDraftInput,
 } from "./organizerEventForm";
 
-const ROW_DEFAULTS = { description: "", maxPerOrder: "10" };
+const SECTION_A = "11111111-1111-4111-8111-111111111111";
+const SECTION_B = "22222222-2222-4222-8222-222222222222";
+const VENUE: VenueOption = {
+  id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
+  name: "Estadio Nacional",
+  city: "Lima",
+  sections: [
+    { id: SECTION_A, name: "Campo", seating: "general", capacity: 1000 },
+    { id: SECTION_B, name: "Occidente", seating: "numbered", capacity: 240 },
+  ],
+};
 
-function row(price: string, quantity: string, name = "General"): TicketTypeRow {
-  return { ...ROW_DEFAULTS, id: `row-${price}-${quantity}`, name, price, kind: "general", quantity, rows: "", seatsPerRow: "" };
-}
-
-function numbered(rows: string, seatsPerRow: string, price = "120", name = "Platea"): TicketTypeRow {
-  return { ...ROW_DEFAULTS, id: `row-${rows}-${seatsPerRow}`, name, price, kind: "numbered", quantity: "", rows, seatsPerRow };
-}
-
-describe("createTicketTypeRow", () => {
-  it("crea una fila general vacía con un id único, sin descripción y con máximo por compra 10", () => {
-    const first = createTicketTypeRow();
-    const second = createTicketTypeRow();
-    expect(first).toEqual({
-      id: expect.any(String),
-      name: "",
-      price: "",
-      description: "",
-      maxPerOrder: "10",
-      kind: "general",
-      quantity: "",
-      rows: "",
-      seatsPerRow: "",
-    });
-    expect(first.id).not.toBe(second.id);
-  });
-
-  it("crea una fila del tipo indicado", () => {
-    expect(createTicketTypeRow("numbered").kind).toBe("numbered");
-    expect(createTicketTypeRow("general").kind).toBe("general");
-  });
-});
-
-describe("getNewRowKind", () => {
-  it.each([
-    ["numbered", "numbered"],
-    ["general", "general"],
-    ["mixed", "general"],
-    ["", "general"],
-  ] as const)("%j → %s", (mode, expected) => {
-    expect(getNewRowKind(mode)).toBe(expected);
-  });
-});
-
-describe("applySeatingMode", () => {
-  const general = { ...row("50", "100"), rows: "5", seatsPerRow: "8" };
-  const seated = { ...numbered("10", "20"), quantity: "30" };
-
-  it.each(["general", "numbered"] as const)("%s fuerza el tipo y conserva cantidad, filas y asientos", (mode) => {
-    expect(applySeatingMode([general, seated], mode)).toEqual([
-      { ...general, kind: mode },
-      { ...seated, kind: mode },
-    ]);
-  });
-
-  it("mixed no cambia nada", () => {
-    expect(applySeatingMode([general, seated], "mixed")).toEqual([general, seated]);
-  });
-
-  it.each(["general", "numbered", "mixed"] as const)("%s devuelve objetos nuevos sin mutar los originales", (mode) => {
-    const rows = [general, seated];
-    const result = applySeatingMode(rows, mode);
-    expect(result).not.toBe(rows);
-    result.forEach((value, index) => expect(value).not.toBe(rows[index]));
-    expect(rows).toEqual([general, { ...numbered("10", "20"), quantity: "30" }]);
-  });
-
-  it("ir y volver de modo no pierde la cantidad", () => {
-    const back = applySeatingMode(applySeatingMode([general], "numbered"), "general");
-    expect(back).toEqual([general]);
-  });
-});
-
-describe("getCoverImageError", () => {
-  const close = vi.fn();
-
-  function mockBitmap(width: number, height: number) {
-    const createImageBitmap = vi.fn().mockResolvedValue({ width, height, close });
-    vi.stubGlobal("createImageBitmap", createImageBitmap);
-    return createImageBitmap;
-  }
-
-  /** Archivo del tipo y peso indicados (el contenido no importa: el tamaño en píxeles lo da el mock). */
-  function image(type: string, bytes = 1024) {
-    return new File([new Uint8Array(bytes)], "portada", { type });
-  }
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    close.mockClear();
-  });
-
-  it.each(["image/png", "image/jpeg"])("%s de 1920 × 1080 → null y cierra el bitmap", async (type) => {
-    const createImageBitmap = mockBitmap(1920, 1080);
-    const file = image(type);
-    await expect(getCoverImageError(file)).resolves.toBeNull();
-    expect(createImageBitmap).toHaveBeenCalledWith(file);
-    expect(close).toHaveBeenCalledOnce();
-  });
-
-  it("acepta exactamente 1200 × 675 y 5 MB", async () => {
-    mockBitmap(1200, 675);
-    await expect(getCoverImageError(image("image/jpeg", 5 * 1024 * 1024))).resolves.toBeNull();
-  });
-
-  it.each(["image/gif", "image/webp", "application/pdf"])("%s → error de formato sin leer la imagen", async (type) => {
-    const createImageBitmap = mockBitmap(1920, 1080);
-    await expect(getCoverImageError(image(type))).resolves.toBe("Sube una imagen en formato JPG o PNG.");
-    expect(createImageBitmap).not.toHaveBeenCalled();
-  });
-
-  it("el formato tiene prioridad sobre el peso", async () => {
-    mockBitmap(1920, 1080);
-    await expect(getCoverImageError(image("image/gif", 6 * 1024 * 1024))).resolves.toBe(
-      "Sube una imagen en formato JPG o PNG.",
-    );
-  });
-
-  it("un JPG de 6 MB → error de peso sin leer la imagen", async () => {
-    const createImageBitmap = mockBitmap(1920, 1080);
-    await expect(getCoverImageError(image("image/jpeg", 6 * 1024 * 1024))).resolves.toBe(
-      "La imagen pesa más de 5 MB. Sube una más liviana.",
-    );
-    expect(createImageBitmap).not.toHaveBeenCalled();
-  });
-
-  it("una imagen que no se puede leer → error de lectura", async () => {
-    vi.stubGlobal("createImageBitmap", vi.fn().mockRejectedValue(new DOMException("bad", "InvalidStateError")));
-    await expect(getCoverImageError(image("image/png"))).resolves.toBe(
-      "No se pudo leer la imagen. Prueba con otro archivo.",
-    );
-  });
-
-  it.each([
-    [800, 600],
-    [1199, 1080],
-    [1920, 674],
-    [675, 1200],
-  ])("%i × %i → error de tamaño y cierra el bitmap", async (width, height) => {
-    mockBitmap(width, height);
-    await expect(getCoverImageError(image("image/png"))).resolves.toBe("La imagen debe medir al menos 1200 × 675 px.");
-    expect(close).toHaveBeenCalledOnce();
-  });
-});
-
-describe("getSeatGridSize", () => {
-  it("devuelve filas y asientos de una zona numerada válida", () => {
-    expect(getSeatGridSize(numbered("10", "20"))).toEqual({ rows: 10, seatsPerRow: 20 });
-  });
-
-  it("acepta los límites 30 × 60 y recorta espacios", () => {
-    expect(getSeatGridSize(numbered("30", "60"))).toEqual({ rows: 30, seatsPerRow: 60 });
-    expect(getSeatGridSize(numbered(" 1 ", "1"))).toEqual({ rows: 1, seatsPerRow: 1 });
-  });
-
-  it.each([
-    ["31", "20"],
-    ["10", "61"],
-    ["", "20"],
-    ["2.5", "20"],
-    ["0", "20"],
-    ["10", "abc"],
-  ])("(%j, %j) → null", (rows, seatsPerRow) => {
-    expect(getSeatGridSize(numbered(rows, seatsPerRow))).toBeNull();
-  });
-
-  it("una fila general → null aunque tenga filas y asientos", () => {
-    expect(getSeatGridSize({ ...row("50", "100"), rows: "10", seatsPerRow: "20" })).toBeNull();
-  });
-});
-
-describe("getRowCapacity", () => {
-  it("general: la cantidad", () => {
-    expect(getRowCapacity(row("50", "100"))).toBe(100);
-  });
-
-  it("numerada: filas × asientos por fila", () => {
-    expect(getRowCapacity(numbered("10", "20"))).toBe(200);
-  });
-
-  it.each([row("50", ""), row("50", "0"), row("50", "1.5"), numbered("31", "20"), numbered("", "")])(
-    "inválida → null (%#)",
-    (value) => {
-      expect(getRowCapacity(value)).toBeNull();
-    },
-  );
-
-  it("numerada: ignora la cantidad", () => {
-    expect(getRowCapacity({ ...numbered("", ""), quantity: "999" })).toBeNull();
-  });
-});
-
-describe("formatSeatGridSummary", () => {
-  it.each<[{ rows: number; seatsPerRow: number }, number | null, string]>([
-    [{ rows: 10, seatsPerRow: 20 }, 120, "Filas A–J · 20 asientos por fila · S/ 120.00 c/u"],
-    [{ rows: 1, seatsPerRow: 1 }, null, "Fila A · 1 asiento por fila"],
-    [{ rows: 10, seatsPerRow: 20 }, 0, "Filas A–J · 20 asientos por fila · Entrada libre"],
-    [{ rows: 30, seatsPerRow: 60 }, null, "Filas A–AD · 60 asientos por fila"],
-  ])("%j con precio %j → %s", (size, price, expected) => {
-    expect(formatSeatGridSummary(size, price)).toBe(expected);
-  });
-});
-
-describe("getTicketCapacity", () => {
-  it("suma las cantidades válidas", () => {
-    expect(getTicketCapacity([row("50", "100"), row("80", "50")])).toBe(150);
-  });
-
-  it("ignora filas vacías o inválidas", () => {
-    expect(getTicketCapacity([row("50", "100"), row("", ""), row("1", "0"), row("1", "1.5"), row("1", "abc"), row("80", " 50 ")])).toBe(150);
-  });
-
-  it("da 0 sin cantidades válidas", () => {
-    expect(getTicketCapacity([row("", "")])).toBe(0);
-  });
-
-  it("suma generales y numeradas; las numeradas inválidas no cuentan", () => {
-    expect(getTicketCapacity([row("50", "100"), numbered("10", "20"), numbered("31", "20")])).toBe(300);
-  });
-
-  it("una numerada no suma su cantidad", () => {
-    expect(getTicketCapacity([{ ...numbered("", ""), quantity: "999" }])).toBe(0);
-  });
-});
-
-describe("getMinTicketPrice", () => {
-  it.each<[string[], number | null]>([
-    [["80", "120"], 80],
-    [["0", "50"], 0],
-    [["", ""], null],
-    [["-5", "30"], 30],
-    [["-5"], null],
-    [["12.50", "abc"], 12.5],
-  ])("%j → %j", (prices, expected) => {
-    expect(getMinTicketPrice(prices.map((price) => row(price, "1")))).toBe(expected);
-  });
-});
-
-describe("formatTicketCount", () => {
-  it.each([
-    [0, "0 entradas"],
-    [1, "1 entrada"],
-    [150, "150 entradas"],
-    [1500, "1,500 entradas"],
-  ])("%i → %s", (n, expected) => {
-    expect(formatTicketCount(n)).toBe(expected);
-  });
+const row = (sectionId: string, overrides: Partial<TicketTypeRow> = {}): TicketTypeRow => ({
+  sectionId,
+  selected: true,
+  name: "General",
+  price: "50",
+  ...overrides,
 });
 
 describe("buildStartsAt", () => {
@@ -273,130 +43,211 @@ describe("buildStartsAt", () => {
   });
 
   it.each([
-    ["2026-12-05", ""],
     ["", "20:00"],
+    ["2026-12-05", ""],
     ["2026-13-45", "20:00"],
     ["2026-12-05", "25:00"],
-  ])("(%j, %j) → null", (date, time) => {
+  ])("%j + %j → null", (date, time) => {
     expect(buildStartsAt(date, time)).toBeNull();
   });
 });
 
-describe("getTicketTypeErrors", () => {
-  it("devuelve los mensajes de cada fila por campo", () => {
-    const rows = [row("50", "100"), row("", "", ""), row("-5", "0"), row("abc", "1.5")];
-    expect(getTicketTypeErrors(rows)).toEqual([
-      {},
-      { name: "Ingresa el nombre del tipo de entrada", price: "Ingresa el precio", quantity: "Ingresa la cantidad" },
-      { price: "El precio debe ser 0 o mayor", quantity: "La cantidad debe ser un número entero mayor o igual a 1" },
-      { price: "El precio debe ser 0 o mayor", quantity: "La cantidad debe ser un número entero mayor o igual a 1" },
+describe("precios", () => {
+  it.each([
+    ["50", 5000],
+    ["49.9", 4990],
+    ["0.07", 7],
+    ["0", 0],
+    ["19.99", 1999],
+  ])("toCents(%j) → %d", (price, cents) => {
+    expect(toCents(price)).toBe(cents);
+  });
+
+  it("formatPriceInput da dos decimales", () => {
+    expect(formatPriceInput(4990)).toBe("49.90");
+    expect(formatPriceInput(0)).toBe("0.00");
+  });
+});
+
+describe("createTicketTypeRows", () => {
+  it("una fila sin marcar por sección, con su nombre como nombre por defecto", () => {
+    expect(createTicketTypeRows(VENUE.sections)).toEqual([
+      { sectionId: SECTION_A, selected: false, name: "Campo", price: "" },
+      { sectionId: SECTION_B, selected: false, name: "Occidente", price: "" },
     ]);
   });
 
-  it("devuelve los mensajes por campo de una zona numerada", () => {
-    const rows = [numbered("10", "20"), numbered("", ""), numbered("31", "61"), numbered("2.5", "0")];
-    expect(getTicketTypeErrors(rows)).toEqual([
-      {},
-      { rows: "Ingresa el número de filas", seatsPerRow: "Ingresa los asientos por fila" },
-      {
-        rows: "Las filas deben ser un número entero entre 1 y 30",
-        seatsPerRow: "Los asientos por fila deben ser un número entero entre 1 y 60",
-      },
-      {
-        rows: "Las filas deben ser un número entero entre 1 y 30",
-        seatsPerRow: "Los asientos por fila deben ser un número entero entre 1 y 60",
-      },
-    ]);
-  });
-
-  it("devuelve los mensajes de máximo por compra y descripción", () => {
-    const rows = [
-      { ...row("50", "100"), maxPerOrder: "" },
-      { ...numbered("10", "20"), maxPerOrder: "11", description: "x".repeat(151) },
-      { ...row("50", "100"), maxPerOrder: "1", description: "Campo de pie, sin ubicación asignada." },
-    ];
-    expect(getTicketTypeErrors(rows)).toEqual([
-      { maxPerOrder: "Ingresa el máximo por compra" },
-      {
-        description: "La descripción debe tener como máximo 150 caracteres",
-        maxPerOrder: "El máximo por compra debe ser un número entero entre 1 y 10",
-      },
-      {},
+  it("marca las secciones con tipo de entrada guardado, con su nombre y precio", () => {
+    const rows = createTicketTypeRows(VENUE.sections, [{ sectionId: SECTION_B, name: "Platea", priceCents: 12050 }]);
+    expect(rows).toEqual([
+      { sectionId: SECTION_A, selected: false, name: "Campo", price: "" },
+      { sectionId: SECTION_B, selected: true, name: "Platea", price: "120.50" },
     ]);
   });
 });
 
-describe("toOrganizerEvent", () => {
-  const published: OrganizerEventFormValues = {
-    intent: "publish",
-    name: "  Festival de verano 2026 ",
+describe("getMinAgeLabels", () => {
+  it("con una edad de la lista, solo la lista; con una mayor conservada, también esa", () => {
+    expect(getMinAgeLabels("18")).toBe(MIN_AGE_LABELS);
+    expect(getMinAgeLabels("21")).toEqual({ ...MIN_AGE_LABELS, "21": "+21" });
+    expect(Object.keys(getMinAgeLabels("21"))).toEqual(["0", "12", "14", "16", "18", "21"]);
+  });
+});
+
+describe("toEventDraftFormValues", () => {
+  const event: EditableEvent = {
+    id: "e0000000-0000-4000-8000-000000000001",
+    status: "draft",
+    organizerId: "00000000-0000-8000-8000-000000000001",
+    title: "Festival",
     category: "festivales",
-    minAge: "0",
-    description: "Tres escenarios.",
-    organizer: "",
-    date: "2026-12-05",
-    time: "20:00",
-    doorsOpen: "",
-    venue: " Estadio Nacional ",
-    city: " Lima ",
-    address: "",
-    seatingMode: "general",
-    hasCoverImage: true,
-    ticketTypes: [row("50", "100"), row("80", "50", "VIP")],
+    description: null,
+    startsAt: "2026-12-06T01:00:00.000Z", // 5 dic, 20:00 en Lima
+    doorsOpenAt: "2026-12-05T23:30:00.000Z", // 18:30 en Lima
+    minAge: 18,
+    venueId: VENUE.id,
+    imageUrl: null,
+    ticketTypes: [{ sectionId: SECTION_A, name: "General", priceCents: 5000 }],
+    reviewNote: null,
+    hasSales: false,
   };
 
-  it("convierte un formulario publicado", () => {
-    const event = toOrganizerEvent(published, "org-123");
-    expect(event).toEqual({
-      id: "org-123",
-      title: "Festival de verano 2026",
+  it("pasa fechas a Lima, nulos a vacíos y precios a soles", () => {
+    expect(toEventDraftFormValues(event, [VENUE])).toEqual({
+      title: "Festival",
       category: "festivales",
-      startsAt: "2026-12-05T20:00:00-05:00",
-      venue: "Estadio Nacional",
-      city: "Lima",
-      imageUrl: null,
-      priceFrom: 50,
-      sold: 0,
-      capacity: 150,
-      status: "published",
+      minAge: "18",
+      description: "",
+      date: "2026-12-05",
+      time: "20:00",
+      doorsOpen: "18:30",
+      venueId: VENUE.id,
+      organizerId: event.organizerId,
+      imageUrl: "",
+      ticketTypes: [
+        { sectionId: SECTION_A, selected: true, name: "General", price: "50.00" },
+        { sectionId: SECTION_B, selected: false, name: "Occidente", price: "" },
+      ],
     });
-    expect(organizerEventSchema.safeParse(event).success).toBe(true);
   });
 
-  it("con zonas mixtas suma los asientos de las numeradas", () => {
-    const values: OrganizerEventFormValues = {
-      ...published,
-      ticketTypes: [row("50", "100"), numbered("10", "20"), numbered("31", "20", "80", "Galería")],
-    };
-    const event = toOrganizerEvent(values, "org-789");
-    expect(event).toMatchObject({ capacity: 300, priceFrom: 50 });
-    expect(organizerEventSchema.safeParse(event).success).toBe(true);
+  it("sin fecha deja los campos vacíos", () => {
+    const values = toEventDraftFormValues({ ...event, startsAt: null, doorsOpenAt: null }, [VENUE]);
+    expect([values.date, values.time, values.doorsOpen]).toEqual(["", "", ""]);
   });
 
-  it("convierte un borrador con solo el nombre", () => {
-    const draft: OrganizerEventFormValues = {
-      ...published,
-      intent: "draft",
-      name: "Mi borrador",
-      date: "",
-      time: "",
-      venue: "",
-      city: "",
-      ticketTypes: [row("", "", "")],
-    };
-    const event = toOrganizerEvent(draft, "org-456");
-    expect(event).toMatchObject({
-      id: "org-456",
-      title: "Mi borrador",
+  it("una edad fuera de la lista pasa a la siguiente (nunca rebaja la restricción)", () => {
+    expect(toEventDraftFormValues({ ...event, minAge: 15 }, [VENUE]).minAge).toBe("16");
+    expect(toEventDraftFormValues({ ...event, minAge: 0 }, [VENUE]).minAge).toBe("0");
+  });
+
+  it("una edad mayor que todas las de la lista se conserva (nunca pasa a +18) y es válida para el schema", () => {
+    const values = toEventDraftFormValues({ ...event, minAge: 21 }, [VENUE]);
+    expect(values.minAge).toBe("21");
+    expect(createEventDraftSchema({ requireOrganizer: true }).safeParse(values).success).toBe(true);
+  });
+
+  it("con organizadores (admin), si el dueño ya no está aprobado el organizador queda vacío", () => {
+    const approved = [{ id: event.organizerId, name: "Pulso Producciones S.A.C." }];
+    expect(toEventDraftFormValues(event, [VENUE], approved).organizerId).toBe(event.organizerId);
+    expect(toEventDraftFormValues(event, [VENUE], []).organizerId).toBe("");
+    // Sin lista (organizador): se conserva; el servicio usa al propio organizador.
+    expect(toEventDraftFormValues(event, [VENUE]).organizerId).toBe(event.organizerId);
+  });
+
+  it("con un recinto que ya no está en la lista no hay filas", () => {
+    expect(toEventDraftFormValues(event, []).ticketTypes).toEqual([]);
+  });
+
+  it("el resultado es válido para el schema", () => {
+    const values = toEventDraftFormValues(event, [VENUE]);
+    expect(createEventDraftSchema({ requireOrganizer: true }).safeParse(values).success).toBe(true);
+  });
+});
+
+describe("toEventDraftInput", () => {
+  const values: EventDraftFormValues = {
+    ...EMPTY_EVENT_DRAFT,
+    title: "Festival",
+    category: "festivales",
+    minAge: "16",
+    description: "Tres escenarios.",
+    date: "2026-12-05",
+    time: "20:00",
+    doorsOpen: "18:00",
+    venueId: VENUE.id,
+    organizerId: "00000000-0000-8000-8000-000000000001",
+    imageUrl: "https://images.unsplash.com/a.jpg",
+    ticketTypes: [row(SECTION_A, { selected: false }), row(SECTION_B, { name: "Platea", price: "120.5" })],
+  };
+
+  it("convierte fechas, edad y precios, y solo pasa las filas marcadas con su posición como orden", () => {
+    expect(toEventDraftInput(values, { requireOrganizer: true })).toEqual({
+      title: "Festival",
+      category: "festivales",
+      description: "Tres escenarios.",
+      startsAt: new Date("2026-12-06T01:00:00Z"),
+      doorsOpenAt: new Date("2026-12-05T23:00:00Z"),
+      minAge: 16,
+      venueId: VENUE.id,
+      imageUrl: "https://images.unsplash.com/a.jpg",
+      organizerId: "00000000-0000-8000-8000-000000000001",
+      ticketTypes: [{ sectionId: SECTION_B, name: "Platea", priceCents: 12050, sortOrder: 0 }],
+    });
+  });
+
+  it("los vacíos pasan a null", () => {
+    const input = toEventDraftInput({ ...EMPTY_EVENT_DRAFT, title: "Borrador" }, { requireOrganizer: true });
+    expect(input).toMatchObject({
+      description: null,
       startsAt: null,
-      venue: "",
-      city: "",
+      doorsOpenAt: null,
+      venueId: null,
       imageUrl: null,
-      priceFrom: null,
-      sold: 0,
-      capacity: 0,
-      status: "draft",
+      organizerId: null,
+      ticketTypes: [],
     });
-    expect(organizerEventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it("para un organizador ignora el organizador indicado", () => {
+    expect(toEventDraftInput(values, { requireOrganizer: false }).organizerId).toBeNull();
+  });
+});
+
+describe("filas de tipos de entrada", () => {
+  it("getTicketTypeErrors da los errores de cada fila marcada", () => {
+    expect(getTicketTypeErrors([row(SECTION_A), row(SECTION_B, { price: "" })])).toEqual([
+      {},
+      { price: "Ingresa el precio" },
+    ]);
+  });
+
+  it("getMinTicketPrice ignora las filas sin marcar y los precios no válidos", () => {
+    const rows = [row(SECTION_A, { price: "80" }), row(SECTION_B, { selected: false, price: "10" })];
+    expect(getMinTicketPrice(rows)).toBe(80);
+    expect(getMinTicketPrice([row(SECTION_A, { price: "abc" })])).toBeNull();
+    expect(getMinTicketPrice([row(SECTION_A, { price: "0" }), row(SECTION_B, { price: "15" })])).toBe(0);
+  });
+
+  it("getSelectedCapacity suma la capacidad de las secciones marcadas", () => {
+    expect(getSelectedCapacity([row(SECTION_A), row(SECTION_B)], VENUE.sections)).toBe(1240);
+    expect(getSelectedCapacity([row(SECTION_A, { selected: false }), row(SECTION_B)], VENUE.sections)).toBe(240);
+  });
+
+  it("formatTicketCount usa singular y separador de miles", () => {
+    expect(formatTicketCount(1)).toBe("1 entrada");
+    expect(formatTicketCount(1500)).toBe("1,500 entradas");
+  });
+});
+
+describe("getEventFormLock", () => {
+  it.each([
+    [undefined, null],
+    [{ status: "draft", hasSales: false }, null],
+    [{ status: "pending_review", hasSales: false }, null],
+    [{ status: "published", hasSales: false }, "structure"],
+    [{ status: "published", hasSales: true }, "sales"],
+  ] as const)("%j → %s", (event, expected) => {
+    expect(getEventFormLock(event)).toBe(expected);
   });
 });

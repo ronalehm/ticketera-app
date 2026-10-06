@@ -1,11 +1,15 @@
 // @vitest-environment node
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db/client";
-import { eventSeats } from "@/lib/db/schema/events";
+import { eventSeats, events } from "@/lib/db/schema/events";
 import { orders } from "@/lib/db/schema/sales";
 import { describeWithDb } from "@/lib/db/testDb";
 import { createTestEvent, type TestEvent, type TestEventOptions } from "@/lib/db/testFixtures";
+import { openTransaction, waitForLockWait } from "@/lib/db/testTransaction";
+// La cancelación real del panel (spec admin-panel, F5b): lo que se prueba es cómo se serializa con la reserva.
+import { cancelEvent } from "@/modules/organizer/services/eventModeration.service";
 import type { CheckoutOrder, CheckoutOrderItem } from "../types/checkout.types";
 import { releaseOrder, reserveCheckoutOrder } from "./reservation.service";
 
@@ -27,7 +31,7 @@ const numbered = (...ids: string[]): CheckoutOrderItem => ({
 let testEvent: TestEvent | undefined;
 
 async function setup(options: TestEventOptions): Promise<TestEvent> {
-  testEvent = await createTestEvent(options);
+  testEvent = await createTestEvent({ ...options, status: "published" });
   return testEvent;
 }
 
@@ -173,6 +177,63 @@ describeWithDb("reservation.service", () => {
 
     expect(await getOrders(eventId)).toHaveLength(0);
     expect((await getSeats(eventId)).every((seat) => seat.status === "available" && seat.orderId === null)).toBe(true);
+  });
+
+  describe("evento que ya no se vende (spec admin-panel, F5b)", () => {
+    /** Admin de la sesión: `cancelEvent` solo mira su rol. */
+    const ADMIN = { id: randomUUID(), role: "admin" } as const;
+
+    const getStatus = async (eventId: string) =>
+      (await db.select({ status: events.status }).from(events).where(eq(events.id, eventId)))[0].status;
+
+    it.each(["draft", "pending_review", "cancelled"] as const)("evento %s → invalid sin filas nuevas", async (status) => {
+      const { eventId, slug } = await setup({ general: 2 });
+      await db.update(events).set({ status }).where(eq(events.id, eventId));
+
+      expect(await reserveCheckoutOrder(checkoutOrder(slug, [general(1)]), null)).toEqual({ status: "invalid" });
+
+      expect(await getOrders(eventId)).toHaveLength(0);
+      expect((await getSeats(eventId)).every((seat) => seat.status === "available")).toBe(true);
+    });
+
+    it("una reserva que espera a una cancelación en curso da invalid y no deja ninguna orden", async () => {
+      const { eventId, slug } = await setup({ general: 2 });
+      // La cancelación, en su propia conexión, bloquea el evento (`FOR UPDATE`) y queda sin confirmar.
+      const cancellation = await openTransaction(async (tx) => {
+        await cancelEvent(ADMIN, eventId, tx as unknown as typeof db);
+      });
+      try {
+        const reservation = reserveCheckoutOrder(checkoutOrder(slug, [general(1)]), null);
+        await waitForLockWait("for share");
+        await cancellation.commit();
+
+        expect(await reservation).toEqual({ status: "invalid" });
+      } finally {
+        await cancellation.commit();
+      }
+      expect(await getStatus(eventId)).toBe("cancelled");
+      expect(await getOrders(eventId)).toHaveLength(0);
+    });
+
+    it("cancelar y reservar a la vez nunca deja una orden pending en un evento cancelado", async () => {
+      const { eventId, slug } = await setup({ general: 2 });
+
+      const [reservation, cancellation] = await Promise.allSettled([
+        reserveCheckoutOrder(checkoutOrder(slug, [general(1)]), null),
+        cancelEvent(ADMIN, eventId),
+      ]);
+
+      const pending = (await getOrders(eventId)).filter((order) => order.status === "pending");
+      if ((await getStatus(eventId)) === "cancelled") {
+        // Ganó la cancelación: la reserva encontró el evento cancelado.
+        expect(reservation).toEqual({ status: "fulfilled", value: { status: "invalid" } });
+        expect(pending).toHaveLength(0);
+      } else {
+        // Ganó la reserva: su orden pending vigente bloquea la cancelación (Decisión 12).
+        expect(reservation).toEqual({ status: "fulfilled", value: { status: "reserved", orderId: pending[0]?.id } });
+        expect(cancellation).toEqual({ status: "rejected", reason: expect.objectContaining({ code: "has_sales" }) });
+      }
+    });
   });
 
   it("releaseOrder de una orden pending → lugares available sin order_id y orden vencida", async () => {

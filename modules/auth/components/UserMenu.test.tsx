@@ -6,12 +6,17 @@ import { UserMenu } from "./UserMenu";
 const TRIGGER_NAME = "Cuenta de Ronald Eleazar Mendoza Huamán";
 const EMAIL = "ronald.eleazar.mendoza.huaman@correo-ejemplo.pe";
 
-function renderMenu({ pathname = "/", onSignOut = vi.fn() } = {}) {
+function renderMenu({
+  pathname = "/",
+  onSignOut = vi.fn(),
+  role = "organizer",
+}: { pathname?: string; onSignOut?: () => void; role?: "customer" | "organizer" | "admin" | "super_admin" } = {}) {
   render(
     <UserMenu
       firstName="Ronald Eleazar"
       lastName="Mendoza Huamán"
       email={EMAIL}
+      role={role}
       pathname={pathname}
       onSignOut={onSignOut}
     />,
@@ -58,6 +63,26 @@ describe("UserMenu", () => {
     expect(items[1].getAttribute("href")).toBe("/mis-entradas");
     expect(items[2].tagName).toBe("A");
     expect(items[2].getAttribute("href")).toBe("/organizador");
+  });
+
+  it("un cliente no ve el enlace al panel", async () => {
+    const { trigger } = renderMenu({ role: "customer" });
+    await openMenu(trigger);
+
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Mi perfil",
+      "Mis entradas",
+      "Cerrar sesión",
+    ]);
+  });
+
+  it.each(["admin", "super_admin"] as const)("%s ve el enlace Panel → /admin/usuarios", async (role) => {
+    const { trigger } = renderMenu({ role });
+    await openMenu(trigger);
+
+    const panel = screen.getByRole("menuitem", { name: "Panel" });
+    expect(panel.getAttribute("href")).toBe("/admin/usuarios");
+    expect(screen.queryByRole("menuitem", { name: "Panel de organizador" })).toBeNull();
   });
 
   it("marca con aria-current=page el enlace de la ruta actual", async () => {

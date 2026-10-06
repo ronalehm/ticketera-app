@@ -1,22 +1,24 @@
-import { and, eq, getTableColumns, isNull, not, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { buildSeedData, seedUuid, type SeedData } from "./buildSeedData";
+import { parseSeedRoles, SeedConfigError } from "./env";
 
 /** Filas por INSERT: lejos del límite de 65 535 parámetros de Postgres. */
 const BATCH_SIZE = 1000;
 
 /**
- * Columnas que el seed posee y actualiza en filas ya existentes (spec seating-all-venue-maps, decisión 7):
- * la geometría del mapa y el inventario demo. Con `[]`, la tabla solo inserta las filas que faltan.
+ * Columnas que el seed posee y actualiza en filas ya existentes (spec seating-all-venue-maps, decisión 7, y
+ * admin-panel F2): la geometría del mapa, el inventario demo y el organizador y las fechas de los eventos.
+ * Con `[]`, la tabla solo inserta las filas que faltan. `users` va aparte: se busca por correo (ver `seed`).
  */
-export const SEED_OWNED_COLUMNS: { [K in keyof SeedData]: (keyof SeedData[K][number])[] } = {
-  users: [],
+export const SEED_OWNED_COLUMNS: { [K in Exclude<keyof SeedData, "users">]: (keyof SeedData[K][number])[] } = {
   organizers: [],
   categories: [],
   venues: ["mapViewBox", "stage"],
@@ -33,12 +35,27 @@ export const SEED_OWNED_COLUMNS: { [K in keyof SeedData]: (keyof SeedData[K][num
   ],
   venueSeats: ["x", "y", "accessible"],
   // Mapa propio del evento (`NULL` = el del recinto): así un evento recibe el suyo en una BD ya sembrada.
-  events: ["mapViewBox", "mapStage"],
+  // Organizador (reparto por hash del slug) y fechas (relativas a `now`): se reasignan y desplazan en cada ejecución,
+  // salvo las fechas de un evento con ventas (ver `EVENT_DATE_COLUMNS`).
+  events: ["organizerId", "startsAt", "doorsOpenAt", "mapViewBox", "mapStage"],
   ticketTypes: ["sectionId", "sortOrder"],
-  orders: ["ticketCount", "subtotalCents", "platformFeeCents", "organizerAmountCents"],
   eventSeats: ["status", "orderId", "retiredAt"],
   // Documentos legales publicados: identidad y negocio, como `users`; solo se insertan los que faltan.
   legalDocuments: [],
+};
+
+/**
+ * Fechas que el seed no desplaza en un evento con ventas activas (`isActiveSaleOrder`; spec admin-panel, enmienda 9,
+ * como la Decisión 11: con ventas no se cambia la fecha).
+ */
+const EVENT_DATE_COLUMNS: readonly (keyof SeedData["events"][number])[] = ["startsAt", "doorsOpenAt"];
+
+export type SeedOptions = {
+  superAdminEmail: string;
+  /** Organizadores reales de prueba (`SEED_ORGANIZER_EMAILS`): al menos uno y nunca el super admin. */
+  organizerEmails: string[];
+  /** Instante de referencia de las fechas sembradas (`run.ts` pasa `new Date()`). */
+  now: Date;
 };
 
 export type SeedReport = {
@@ -48,22 +65,48 @@ export type SeedReport = {
   retiredEventSeats: number;
   /** Lugares obsoletos que no se retiran porque tienen una venta o retención real. */
   obsoleteWithSales: number;
+  /**
+   * Organizadores de `SEED_ORGANIZER_EMAILS` cuya fila en `organizers` no está `approved` (p. ej. un admin la dejó
+   * `pending` o `suspended`): el seed respeta ese estado y no lo aprueba, aunque les reparte eventos igual.
+   */
+  nonApprovedOrganizers: { email: string; status: (typeof organizers.$inferSelect)["status"] }[];
+  /** Slugs (ordenados) de los eventos del seed con ventas activas (`isActiveSaleOrder`): conservan su fecha. */
+  eventsWithKeptDates: string[];
 };
 
 /** Un array como un único parámetro `uuid[]` (no como lista de parámetros). */
 const uuidArray = (ids: string[]) => sql`${sql.param(ids)}::uuid[]`;
 
+/** Lo único que `seed` usa de la conexión: vale una BD o una transacción abierta (`db:reset-demo`). */
+export type SeedDatabase = Pick<NodePgDatabase, "transaction">;
+
 /**
  * Siembra los mocks en una transacción, sin borrar nada:
  * - inserta lo que falta y actualiza solo las columnas de `SEED_OWNED_COLUMNS` que cambian (ids deterministas);
- * - nunca toca un lugar retenido ni uno vendido a un pedido que no es demo;
- * - retira (`retired_at`) el inventario demo que el layout ya no tiene.
- * El super admin se busca por correo y conserva su `id` (y su `clerk_id`) si ya existía.
+ * - todo el inventario que escribe queda disponible, y nunca toca un lugar retenido o vendido (con pedido);
+ * - retira (`retired_at`) el inventario demo que el layout ya no tiene;
+ * - no desplaza la fecha (`starts_at`, `doors_open_at`) de un evento con ventas activas (`isActiveSaleOrder`: órdenes
+ *   `paid`, `partially_refunded` o `pending` vigentes): lo informa en `eventsWithKeptDates`.
+ * El super admin y los organizadores se buscan por correo y conservan su `id`, su `clerk_id` y sus datos de perfil
+ * si ya existían; tampoco cambia el `status` de un organizador que ya tenía fila (un admin pudo dejarlo `pending` o
+ * `suspended`): lo informa en `nonApprovedOrganizers`. Lanza `SeedConfigError`, sin escribir nada, si el super admin está entre los organizadores o si un
+ * organizador ya es admin o super admin (nunca se degrada).
  */
-export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdminEmail: string }): Promise<SeedReport> {
-  const email = superAdminEmail.toLowerCase();
+export async function seed(db: SeedDatabase, options: SeedOptions): Promise<SeedReport> {
+  const { superAdminEmail: email, organizerEmails } = parseSeedRoles(options);
 
   return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: users.id, email: users.email, role: users.role })
+      .from(users)
+      .where(inArray(users.email, organizerEmails));
+    const privileged = existing.filter((user) => user.role === "admin" || user.role === "super_admin");
+    if (privileged.length > 0) {
+      throw new SeedConfigError(
+        `SEED_ORGANIZER_EMAILS incluye cuentas admin o super admin (${privileged.map((user) => user.email).join(", ")}): el seed no las degrada a organizador`,
+      );
+    }
+
     await tx
       .insert(users)
       .values({ id: seedUuid(`user:${email}`), email, firstName: "Super", lastName: "Admin", role: "super_admin" })
@@ -75,12 +118,22 @@ export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdmin
     // `returning` no devuelve la fila si no se actualizó.
     const [superAdmin] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
 
-    const data = buildSeedData({ superAdminId: superAdmin.id });
+    const existingIds = new Map(existing.map((user) => [user.email, user.id]));
+    const data = buildSeedData({
+      superAdminId: superAdmin.id,
+      organizers: organizerEmails.map((organizerEmail) => ({
+        id: existingIds.get(organizerEmail) ?? seedUuid(`user:${organizerEmail}`),
+        email: organizerEmail,
+      })),
+      now: options.now,
+    });
 
-    /** Un lugar se puede reescribir o retirar: no está retenido y no es de un pedido real. */
-    const demoOrderIds = data.events.map((event) => seedUuid(`order:${event.slug}`));
-    const withoutRealSale = sql`(${eventSeats.status} <> 'held'
-      AND (${eventSeats.orderId} IS NULL OR ${eventSeats.orderId} = ANY(${uuidArray(demoOrderIds)})))`;
+    /**
+     * Un lugar se puede reescribir o retirar si no tiene pedido (`event_seats_status_order_check`: solo los
+     * `available` no lo tienen). Así nunca toca una retención ni una venta, tampoco las demo de seeds anteriores:
+     * esas solo las borra `db:reset-demo`.
+     */
+    const withoutSale = isNull(eventSeats.orderId);
 
     /** INSERT … ON CONFLICT por lotes; devuelve las filas escritas (insertadas o actualizadas). */
     async function upsertAll<T extends PgTable>(
@@ -116,22 +169,64 @@ export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdmin
       return written;
     }
 
+    /**
+     * Organizadores por correo: una fila previa conserva id, `clerk_id` y perfil, y solo un `customer` pasa a
+     * `organizer` (un admin o super admin nunca se degrada, aunque cambie de rol tras la comprobación de arriba).
+     */
+    async function upsertOrganizerUsers(): Promise<number> {
+      const result = await tx
+        .insert(users)
+        .values(data.users)
+        .onConflictDoUpdate({
+          target: users.email,
+          set: { role: "organizer", updatedAt: sql`now()` },
+          setWhere: sql`${users.role} = 'customer'`,
+        });
+      return result.rowCount ?? 0;
+    }
+
+    /** Eventos del seed con ventas activas (`isActiveSaleOrder`): el seed no desplaza su fecha. */
+    async function eventsWithSales(): Promise<{ id: string; slug: string }[]> {
+      return tx
+        .selectDistinct({ id: events.id, slug: events.slug })
+        .from(events)
+        .innerJoin(orders, eq(orders.eventId, events.id))
+        .where(
+          and(
+            sql`${events.id} = ANY(${uuidArray(data.events.flatMap((row) => row.id ?? []))})`,
+            isActiveSaleOrder,
+          ),
+        )
+        .orderBy(events.slug);
+    }
+
+    /** Eventos: los que tienen ventas se actualizan sin sus columnas de fecha. */
+    async function upsertEvents(keptDateIds: ReadonlySet<string>): Promise<number> {
+      const hasSales = (row: SeedData["events"][number]) => keptDateIds.has(row.id as string);
+      const withoutDates = SEED_OWNED_COLUMNS.events.filter((column) => !EVENT_DATE_COLUMNS.includes(column));
+      return (
+        (await upsertAll(events, data.events.filter((row) => !hasSales(row)), SEED_OWNED_COLUMNS.events)) +
+        (await upsertAll(events, data.events.filter(hasSales), withoutDates))
+      );
+    }
+
+    const keptDates = await eventsWithSales();
+
     // En orden de dependencias.
     const written: SeedReport["written"] = {
-      users: await upsertAll(users, data.users, SEED_OWNED_COLUMNS.users),
+      users: await upsertOrganizerUsers(),
       organizers: await upsertAll(organizers, data.organizers, SEED_OWNED_COLUMNS.organizers),
       categories: await upsertAll(categories, data.categories, SEED_OWNED_COLUMNS.categories),
       venues: await upsertAll(venues, data.venues, SEED_OWNED_COLUMNS.venues),
       venueSections: await upsertAll(venueSections, data.venueSections, SEED_OWNED_COLUMNS.venueSections),
       venueSeats: await upsertAll(venueSeats, data.venueSeats, SEED_OWNED_COLUMNS.venueSeats),
-      events: await upsertAll(events, data.events, SEED_OWNED_COLUMNS.events),
+      events: await upsertEvents(new Set(keptDates.map((event) => event.id))),
       ticketTypes: await upsertAll(ticketTypes, data.ticketTypes, SEED_OWNED_COLUMNS.ticketTypes),
-      orders: await upsertAll(orders, data.orders, SEED_OWNED_COLUMNS.orders),
       eventSeats: await upsertAll(
         eventSeats,
         data.eventSeats.map((row) => ({ ...row, retiredAt: null })),
         SEED_OWNED_COLUMNS.eventSeats,
-        withoutRealSale,
+        withoutSale,
       ),
       legalDocuments: await upsertAll(legalDocuments, data.legalDocuments, SEED_OWNED_COLUMNS.legalDocuments),
     };
@@ -145,12 +240,30 @@ export async function seed(db: NodePgDatabase, { superAdminEmail }: { superAdmin
     const retired = await tx
       .update(eventSeats)
       .set({ retiredAt: sql`now()`, updatedAt: sql`now()` })
-      .where(and(obsolete, withoutRealSale));
+      .where(and(obsolete, withoutSale));
     const [{ obsoleteWithSales }] = await tx
       .select({ obsoleteWithSales: sql<number>`count(*)::int` })
       .from(eventSeats)
-      .where(and(obsolete, not(withoutRealSale)));
+      .where(and(obsolete, not(withoutSale)));
 
-    return { written, retiredEventSeats: retired.rowCount ?? 0, obsoleteWithSales };
+    const nonApprovedOrganizers = await tx
+      .select({ email: users.email, status: organizers.status })
+      .from(organizers)
+      .innerJoin(users, eq(users.id, organizers.userId))
+      .where(
+        and(
+          inArray(organizers.userId, data.organizers.map((row) => row.userId)),
+          sql`${organizers.status} <> 'approved'`,
+        ),
+      )
+      .orderBy(users.email);
+
+    return {
+      written,
+      retiredEventSeats: retired.rowCount ?? 0,
+      obsoleteWithSales,
+      nonApprovedOrganizers,
+      eventsWithKeptDates: keptDates.map((event) => event.slug),
+    };
   });
 }

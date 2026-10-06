@@ -3,13 +3,15 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { db } from "@/lib/db/client";
+import { events } from "@/lib/db/schema/events";
 import { orders } from "@/lib/db/schema/sales";
 import { stripe } from "@/lib/stripe";
 import type { CheckoutBuyer, PayOrderResult } from "../types/checkout.types";
 
 /**
- * Guarda al comprador en la orden `pending` vigente y crea su PaymentIntent con el importe de la BD.
- * `idempotencyKey = order.id` con parámetros fijos: reintentar devuelve el mismo PaymentIntent.
+ * Guarda al comprador en la orden `pending` vigente de un evento publicado y crea su PaymentIntent con el importe de la
+ * BD. `idempotencyKey = order.id` con parámetros fijos: reintentar devuelve el mismo PaymentIntent. Una orden de un
+ * evento que ya no está publicado (cancelado, finalizado) no se paga: `order-unavailable`.
  */
 export async function createOrderPayment(
   orderId: string,
@@ -25,11 +27,14 @@ export async function createOrderPayment(
         status: orders.status,
         subtotalCents: orders.subtotalCents,
         isExpired: sql<boolean>`${orders.expiresAt} <= now()`,
+        eventStatus: events.status,
       })
       .from(orders)
+      .innerJoin(events, eq(events.id, orders.eventId))
       .where(eq(orders.id, orderId))
-      .for("update");
-    if (!row || row.status !== "pending") return "order-unavailable" as const;
+      // Solo la orden: bloquear también el evento serializaría todos los pagos del evento.
+      .for("update", { of: orders });
+    if (!row || row.status !== "pending" || row.eventStatus !== "published") return "order-unavailable" as const;
     if (row.isExpired) return "order-expired" as const;
 
     await tx

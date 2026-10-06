@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useSessionUser } from "../hooks/useSessionUser";
-import { ACCOUNT_LINKS } from "./accountLinks";
+import { getAccountLinks } from "./accountLinks";
 import { UserMenu } from "./UserMenu";
 import { UserSummary } from "@/components/shared/UserSummary";
 
@@ -42,6 +42,7 @@ export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
           firstName={user.firstName}
           lastName={user.lastName}
           email={user.email}
+          role={user.role}
           pathname={pathname}
           onSignOut={signOut}
         />
@@ -69,7 +70,7 @@ export function AuthHeaderActions({ variant }: AuthHeaderActionsProps) {
           className="rounded-2xl bg-muted p-4"
         />
         <nav aria-label="Tu cuenta" className="flex flex-col">
-          {ACCOUNT_LINKS.map(({ href, label, icon: Icon }) => (
+          {getAccountLinks(user.role).map(({ href, label, icon: Icon }) => (
             <SheetClose
               key={href}
               nativeButton={false}

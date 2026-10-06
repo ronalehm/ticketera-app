@@ -1,13 +1,19 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import { getVenueMapBySlug } from "../services/seating.service";
 import type { VenueMap } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { resolveSeats } from "../utils/seatIds";
 import { ESPEJOS_SECTORS, ESPEJOS_VENUE } from "./laCasaDeLosEspejos.mock";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const SLUG = "la-casa-de-los-espejos";
 const layout = venueLayoutSchema.parse(ESPEJOS_VENUE.layout);
@@ -114,7 +120,7 @@ describeWithDb("teatro curvo la-casa-de-los-espejos (BD)", () => {
 
   it("el mapa de la BD coincide con el layout del mock", async () => {
     const map = await getMap();
-    expect(map).toMatchObject({ viewBox: layout.viewBox, stage: layout.stage, zones: layout.zones });
+    expect(map).toMatchObject({ viewBox: layout.viewBox, stage: layout.stage, zones: toSeededLayout(layout).zones });
   });
 
   it("platea-F-8 resuelve con su etiqueta y mezanine-A-3 resuelve", async () => {
@@ -125,11 +131,15 @@ describeWithDb("teatro curvo la-casa-de-los-espejos (BD)", () => {
     ]);
   });
 
-  it("platea-F-7 existe pero está ocupada, así que no resuelve", async () => {
-    const map = await getMap();
-    const platea = map.zones.find((zone) => zone.id === "platea");
-    const seats = platea?.kind === "numbered" ? platea.rows.flatMap((row) => row.seats) : [];
-    expect(seats.find((seat) => seat.id === "platea-F-7")?.status).toBe("occupied");
-    expect(resolveSeats(map, ["platea-F-7"])).toBeNull();
+  it("platea-F-7 vendida existe pero está ocupada, así que no resuelve", async () => {
+    await inRolledBackTransaction(async () => {
+      // El seed no siembra ventas: la venta la crea el test.
+      await sellTestSeats(SLUG, { seatIds: ["platea-F-7"] });
+      const map = await getMap();
+      const platea = map.zones.find((zone) => zone.id === "platea");
+      const seats = platea?.kind === "numbered" ? platea.rows.flatMap((row) => row.seats) : [];
+      expect(seats.find((seat) => seat.id === "platea-F-7")?.status).toBe("occupied");
+      expect(resolveSeats(map, ["platea-F-7"])).toBeNull();
+    });
   });
 });

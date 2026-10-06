@@ -1,3 +1,4 @@
+import { normalizeText } from "@/lib/text";
 import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
 import { CITIES, PRICE_RANGES } from "../data/searchOptions";
 import { eventFiltersSchema, type City, type EventFilters } from "../schemas/eventFilters.schema";
@@ -30,10 +31,6 @@ const chipDateFormatter = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
   timeZone: "UTC",
 });
-
-export function normalizeText(text: string): string {
-  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-}
 
 const limaDate = (event: Event): string => limaDateFormatter.format(new Date(event.startsAt));
 const limaMonth = (event: Event): string => limaDate(event).slice(0, 7);

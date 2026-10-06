@@ -3,6 +3,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import type { TestProject } from "vitest/node";
 import { seed } from "./seed/seed";
+import { TEST_SEED_OPTIONS } from "./testSeedOptions";
 
 /** Solo con DATABASE_URL_TEST (vitest.config.mts): migra, vacía `public` y siembra la BD de test una vez. */
 export default async function setup(project: TestProject) {
@@ -19,7 +20,7 @@ export default async function setup(project: TestProject) {
     if (rows.length > 0) {
       await pool.query(`TRUNCATE ${rows.map(({ tablename }) => `"public"."${tablename}"`).join(", ")} CASCADE`);
     }
-    await seed(db, { superAdminEmail: "super.admin@example.com" });
+    await seed(db, TEST_SEED_OPTIONS);
   } finally {
     await pool.end();
   }

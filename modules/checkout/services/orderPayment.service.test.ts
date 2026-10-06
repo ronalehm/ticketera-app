@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { db } from "@/lib/db/client";
+import { events } from "@/lib/db/schema/events";
 import { users } from "@/lib/db/schema/identity";
 import { orders } from "@/lib/db/schema/sales";
 import { stripe } from "@/lib/stripe";
@@ -43,7 +44,7 @@ async function readOrder(orderId: string) {
 
 describeWithDb("createOrderPayment", () => {
   beforeAll(async () => {
-    testEvent = await createTestEvent({ general: 10, priceCents: 5000 });
+    testEvent = await createTestEvent({ general: 10, priceCents: 5000, status: "published" });
     const suffix = randomUUID().slice(0, 8);
     [{ id: sessionUserId }] = await db
       .insert(users)
@@ -140,6 +141,19 @@ describeWithDb("createOrderPayment", () => {
     expect(await createOrderPayment(randomUUID(), BUYER, null)).toEqual({ ok: false, error: "order-unavailable" });
     expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
     expect((await readOrder(orderId)).buyerEmail).toBe("otra@example.com");
+  });
+
+  it("orden vigente de un evento que ya no está publicado (cancelado) → order-unavailable sin Stripe ni comprador", async () => {
+    const orderId = await reserve(1);
+    await db.update(events).set({ status: "cancelled" }).where(eq(events.id, testEvent.eventId));
+    try {
+      expect(await createOrderPayment(orderId, BUYER, sessionUserId)).toEqual({ ok: false, error: "order-unavailable" });
+      expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+      expect((await readOrder(orderId)).buyerEmail).toBeNull();
+    } finally {
+      // El evento es de todo el archivo: vuelve a estar a la venta para los demás tests.
+      await db.update(events).set({ status: "published" }).where(eq(events.id, testEvent.eventId));
+    }
   });
 
   it("Stripe lanza → payment-error, log con type/code sin datos del comprador", async () => {

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, count, eq, getTableColumns, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
@@ -11,19 +11,24 @@ import { legalDocuments } from "@/lib/db/schema/legal";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
+import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 import { inRolledBackTransaction, type Tx } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events/catalog";
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
 import { VENUE_LAYOUTS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { getVenueMapBySlug } from "@/modules/seating/seats";
-import { buildSeedData, seedUuid, type SeedData } from "./buildSeedData";
-import { seed, type SeedReport } from "./seed";
+import { buildSeedData, organizerIndexForSlug, seedUuid, type SeedData } from "./buildSeedData";
+import { SeedConfigError } from "./env";
+import { seed, type SeedDatabase, type SeedReport } from "./seed";
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
-// El mismo correo que usa lib/db/testGlobalSetup.ts.
-const SUPER_ADMIN_EMAIL = "super.admin@example.com";
+// Las mismas opciones con las que lib/db/testGlobalSetup.ts siembra la BD de test.
+const SUPER_ADMIN_EMAIL = TEST_SEED_OPTIONS.superAdminEmail;
+const ORGANIZER_EMAILS = TEST_SEED_OPTIONS.organizerEmails;
+const NOW = TEST_SEED_OPTIONS.now;
+const DAY_MS = 86_400_000;
 /** Un seed completo contra Neon tarda decenas de segundos. */
 const SEED_TIMEOUT_MS = 120_000;
 
@@ -49,7 +54,6 @@ function seedScope(datasets: SeedData[], seedEmails: string[]): SeedScope {
     venueSeats: [venueSeats, venueSeats.sectionId, sectionIds],
     events: [events, events.id, eventIds],
     ticketTypes: [ticketTypes, ticketTypes.eventId, eventIds],
-    orders: [orders, orders.id, union((data) => idsOf(data.orders))],
     eventSeats: [eventSeats, eventSeats.eventId, eventIds],
     legalDocuments: [legalDocuments, legalDocuments.id, union((data) => idsOf(data.legalDocuments))],
   };
@@ -65,14 +69,40 @@ async function countSeedRows(data: SeedData, seedEmails: string[]) {
   return Object.fromEntries(entries);
 }
 
+/** `buildSeedData` con los ids reales de la BD del super admin y de los organizadores de `options`. */
+async function seedDataFor(tx: Pick<Tx, "select">, options = TEST_SEED_OPTIONS): Promise<SeedData> {
+  const rows = await tx
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(inArray(users.email, [options.superAdminEmail, ...options.organizerEmails]));
+  const idOf = (email: string) => rows.find((row) => row.email === email)?.id ?? seedUuid(`user:${email}`);
+  return buildSeedData({
+    superAdminId: idOf(options.superAdminEmail),
+    organizers: [...options.organizerEmails].sort().map((email) => ({ id: idOf(email), email })),
+    now: options.now,
+  });
+}
+
+describe("seed: validación previa", () => {
+  it("aborta sin abrir la transacción si SUPER_ADMIN_EMAIL está entre los organizadores", async () => {
+    const transaction = vi.fn();
+    const database = { transaction } as unknown as SeedDatabase;
+
+    await expect(
+      seed(database, { ...TEST_SEED_OPTIONS, organizerEmails: [...ORGANIZER_EMAILS, SUPER_ADMIN_EMAIL.toUpperCase()] }),
+    ).rejects.toThrow(SeedConfigError);
+    await expect(seed(database, { ...TEST_SEED_OPTIONS, organizerEmails: [] })).rejects.toThrow(SeedConfigError);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+});
+
 describeWithDb("seed (Postgres)", () => {
-  const data = buildSeedData({ superAdminId: "00000000-0000-0000-0000-000000000000" });
-
   it("volver a ejecutarlo no falla y deja los conteos de buildSeedData", async () => {
-    await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+    await seed(db, TEST_SEED_OPTIONS);
 
+    const data = await seedDataFor(db);
     const expected = Object.fromEntries(Object.entries(data).map(([name, rows]) => [name, rows.length]));
-    const seedEmails = [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
+    const seedEmails = [...ORGANIZER_EMAILS, SUPER_ADMIN_EMAIL];
     expect(await countSeedRows(data, seedEmails)).toEqual({ ...expected, users: seedEmails.length });
   }, SEED_TIMEOUT_MS);
 
@@ -83,7 +113,7 @@ describeWithDb("seed (Postgres)", () => {
     const creators = await db
       .selectDistinct({ createdBy: venues.createdBy })
       .from(venues)
-      .where(inArray(venues.id, idsOf(data.venues)));
+      .where(inArray(venues.id, idsOf((await seedDataFor(db)).venues)));
     expect(creators).toEqual([{ createdBy: admins[0].id }]);
   });
 
@@ -94,7 +124,7 @@ describeWithDb("seed (Postgres)", () => {
       .values({ email, clerkId: "user_test_promote", firstName: "Promo", lastName: "Test", role: "customer" })
       .returning();
     try {
-      await seed(db, { superAdminEmail: "Promote.Me@Example.com" });
+      await seed(db, { ...TEST_SEED_OPTIONS, superAdminEmail: "Promote.Me@Example.com" });
       const promoted = await db.select().from(users).where(eq(users.email, email));
       expect(promoted).toEqual([
         expect.objectContaining({ id: created.id, clerkId: "user_test_promote", role: "super_admin" }),
@@ -123,7 +153,6 @@ const SEED_TABLES = {
   venueSeats,
   events,
   ticketTypes,
-  orders,
   eventSeats,
   legalDocuments,
 } satisfies Record<keyof SeedData, PgTable>;
@@ -142,17 +171,20 @@ const PRE_F1_REPORT: SeedReport = {
     venueSeats: 100,
     events: 0,
     ticketTypes: 0,
-    orders: 2,
     eventSeats: 2600,
     legalDocuments: 0,
   },
   retiredEventSeats: 400,
   obsoleteWithSales: 0,
+  nonApprovedOrganizers: [],
+  eventsWithKeptDates: [],
 };
 const EMPTY_REPORT: SeedReport = {
   written: Object.fromEntries(SEED_TABLE_NAMES.map((name) => [name, 0])) as SeedReport["written"],
   retiredEventSeats: 0,
   obsoleteWithSales: 0,
+  nonApprovedOrganizers: [],
+  eventsWithKeptDates: [],
 };
 const NO_IDS = Object.fromEntries(SEED_TABLE_NAMES.map((name) => [name, []])) as unknown as TableIds;
 
@@ -163,11 +195,11 @@ const ticketTypeId = (slug: string, type: string) => seedUuid(`ticket-type:${slu
 const anyId = (column: ReturnType<typeof keyColumn>, ids: string[]) => sql`${column} = ANY(${sql.param(ids)}::uuid[])`;
 
 /** `buildSeedData` sin los layouts de la Fase 1 (los restaura siempre, como buildSeedData.test.ts). */
-function buildPreF1SeedData(superAdminId: string): SeedData {
+async function buildPreF1SeedData(tx: Tx): Promise<SeedData> {
   const layouts = [...VENUE_LAYOUTS_MOCK];
   VENUE_LAYOUTS_MOCK.splice(0, layouts.length, ...layouts.filter((layout) => !PHASE_1_SLUGS.includes(layout.eventSlug)));
   try {
-    return buildSeedData({ superAdminId });
+    return await seedDataFor(tx);
   } finally {
     VENUE_LAYOUTS_MOCK.splice(0, VENUE_LAYOUTS_MOCK.length, ...layouts);
   }
@@ -186,9 +218,8 @@ function fullRow(name: SeedTable, row: object) {
 
 /** Lleva la BD de test (sembrada con la rama) al estado de producción, aplicando la diferencia `post → pre`. */
 async function toPreF1State(tx: Tx) {
-  const [admin] = await tx.select({ id: users.id }).from(users).where(eq(users.email, SUPER_ADMIN_EMAIL));
-  const post = buildSeedData({ superAdminId: admin.id });
-  const pre = buildPreF1SeedData(admin.id);
+  const post = await seedDataFor(tx);
+  const pre = await buildPreF1SeedData(tx);
   const keysOf = (name: SeedTable, data: SeedData) => new Set(data[name].map((row: object) => rowKey(name, row)));
 
   // Solo en esta transacción de test (se revierte): el seed nunca borra.
@@ -214,15 +245,14 @@ async function toPreF1State(tx: Tx) {
     }
   }
 
-  const seedEmails = [...post.users.map((user) => user.email), SUPER_ADMIN_EMAIL];
+  const seedEmails = [...ORGANIZER_EMAILS, SUPER_ADMIN_EMAIL];
   const scope = seedScope([pre, post], seedEmails);
   expect(await countActiveRows(tx, scope)).toEqual(expectedCounts(pre, seedEmails));
-  // Fase 1: 456 → 556 butacas, 38 956 → 41 156 lugares y 7 → 8 pedidos demo.
+  // Fase 1: 456 → 556 butacas y 38 956 → 41 156 lugares.
   expect([
     post.venueSeats.length - pre.venueSeats.length,
     post.eventSeats.length - pre.eventSeats.length,
-    post.orders.length - pre.orders.length,
-  ]).toEqual([100, 2200, 1]);
+  ]).toEqual([100, 2200]);
   for (const slug of PHASE_1_SLUGS) expect(await getVenueMapBySlug(slug)).toBeNull();
 
   return { pre, post, seedEmails, scope };
@@ -299,9 +329,9 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
         const { post, seedEmails, scope } = await toPreF1State(tx);
         const idsBefore = await tableIds(tx, scope);
 
-        const first = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+        const first = await seed(db, TEST_SEED_OPTIONS);
         const afterFirst = await fingerprint(tx, scope);
-        const second = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+        const second = await seed(db, TEST_SEED_OPTIONS);
 
         expect(first).toEqual(PRE_F1_REPORT);
         expect(second).toEqual(EMPTY_REPORT);
@@ -316,17 +346,17 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
         const ecos = await getVenueMapBySlug(ECOS);
         const platea = numberedSeats(ecos, "platea");
         expect(platea).toHaveLength(61);
-        expect(platea.filter((seat) => seat.status !== "occupied")).toEqual([]);
-        expect(ecos?.zones.map((zone) => zone.status)).toEqual(["sold-out", "sold-out"]);
+        // Sin ventas (admin-panel F2): todo disponible, aunque el mock lo dé por vendido.
+        expect(platea.filter((seat) => seat.status !== "available")).toEqual([]);
+        expect(ecos?.zones.map((zone) => zone.status)).toEqual(["available", "available"]);
 
         for (const slug of PHASE_1_SLUGS) {
           const mock = EVENTS_MOCK.find((event) => event.slug === slug);
           const event = await getEventBySlug(slug);
-          const statuses = (source: typeof mock | typeof event) => ({
-            status: source?.status,
-            ticketTypes: source?.ticketTypes.map((type) => [type.id, type.status]),
-          });
-          expect(statuses(event)).toEqual(statuses(mock));
+          expect(event?.status).toBe("available");
+          expect(event?.ticketTypes.map((type) => [type.id, type.status])).toEqual(
+            mock?.ticketTypes.map((type) => [type.id, "available"]),
+          );
         }
 
         const retired = await tx
@@ -334,18 +364,17 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
             ticketTypeId: eventSeats.ticketTypeId,
             venueSeatId: eventSeats.venueSeatId,
             status: eventSeats.status,
-            orderCode: orders.code,
+            orderId: eventSeats.orderId,
           })
           .from(eventSeats)
-          .leftJoin(orders, eq(orders.id, eventSeats.orderId))
           .where(and(isNotNull(eventSeats.retiredAt), inArray(eventSeats.eventId, scope.eventSeats[2])));
         const byType = (id: string) => retired.filter((seat) => seat.ticketTypeId === id);
         expect(retired).toHaveLength(400);
         expect(byType(ticketTypeId(COPA, "occidente"))).toHaveLength(200);
         const ecosRetired = byType(ticketTypeId(ECOS, "platea"));
         expect(ecosRetired).toHaveLength(200);
-        // Conservan su estado de venta demo.
-        expect(ecosRetired.filter((seat) => seat.status !== "sold" || seat.orderCode !== "TK-DEMO-002")).toEqual([]);
+        // Retirados tal como estaban: disponibles y sin pedido.
+        expect(ecosRetired.filter((seat) => seat.status !== "available" || seat.orderId !== null)).toEqual([]);
         expect(retired.filter((seat) => seat.venueSeatId !== null)).toEqual([]);
       });
     },
@@ -396,11 +425,11 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
           .update(eventSeats)
           .set({ status: "sold", orderId: order.id })
           .where(inArray(eventSeats.id, foreignSeatIds));
-        // Las filas del seed más el cliente y el pedido ajenos (sus lugares son de un evento del seed).
+        // Las filas del seed más el cliente ajeno (su pedido se comprueba aparte: el seed ya no tiene órdenes).
         const seedIds = await tableIds(tx, scope);
-        const idsBefore = { ...seedIds, users: [...seedIds.users, customer.id], orders: [...seedIds.orders, order.id] };
+        const idsBefore = { ...seedIds, users: [...seedIds.users, customer.id] };
 
-        const report = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+        const report = await seed(db, TEST_SEED_OPTIONS);
 
         expect(report).toMatchObject({ retiredEventSeats: 399, obsoleteWithSales: 1 });
         expect(await tx.select().from(users).where(eq(users.id, customer.id))).toEqual([customer]);
@@ -418,48 +447,262 @@ describeWithDb("seed: actualiza una BD sembrada antes de la Fase 1 sin vaciarla"
   );
 });
 
-// --- `orders.ticket_count` es del seed: con otro mapa cambia el número de lugares vendidos de la orden demo. ---
+// --- Seed limpio (spec admin-panel, F2): organizadores reales, reparto por hash, fechas desde `now`, sin ventas. ---
 
-const CLASICO = "clasico-del-pacifico";
+describeWithDb("seed: organizadores reales, fechas desde now y sin ventas (admin-panel F2)", () => {
+  const seedEmails = [...ORGANIZER_EMAILS, SUPER_ADMIN_EMAIL];
 
-describeWithDb("seed: corrige el ticket_count de una orden demo sembrada con otro mapa", () => {
+  /** Evento → organizador que le toca a cada evento del seed en la BD. */
+  async function organizerBySlug(tx: Pick<Tx, "select">, data: SeedData) {
+    const rows = await tx
+      .select({ slug: events.slug, organizerId: events.organizerId })
+      .from(events)
+      .where(inArray(events.id, idsOf(data.events)));
+    return Object.fromEntries(rows.map((row) => [row.slug, row.organizerId]));
+  }
+  const expectedOrganizers = (data: SeedData) =>
+    Object.fromEntries(data.events.map((event) => [event.slug, event.organizerId]));
+
+  it("sin ventas ni órdenes demo: inventario disponible, eventos futuros y 2 organizadores approved", async () => {
+    const data = await seedDataFor(db);
+    const eventIds = idsOf(data.events);
+    const [{ notAvailable }] = await db
+      .select({ notAvailable: count() })
+      .from(eventSeats)
+      .where(and(inArray(eventSeats.eventId, eventIds), sql`${eventSeats.status} <> 'available'`));
+    expect(notAvailable).toBe(0);
+    const [{ demoOrders }] = await db
+      .select({ demoOrders: count() })
+      .from(orders)
+      .where(sql`${orders.code} LIKE 'TK-DEMO-%'`);
+    expect(demoOrders).toBe(0);
+
+    const seeded = await db.select({ startsAt: events.startsAt }).from(events).where(inArray(events.id, eventIds));
+    expect(seeded).toHaveLength(eventIds.length);
+    expect(seeded.every(({ startsAt }) => startsAt !== null && startsAt > NOW)).toBe(true);
+
+    const seedOrganizers = await db
+      .select({ email: users.email, role: users.role, clerkId: users.clerkId, status: organizers.status })
+      .from(organizers)
+      .innerJoin(users, eq(users.id, organizers.userId))
+      .where(inArray(users.email, ORGANIZER_EMAILS));
+    expect(seedOrganizers.sort((a, b) => a.email.localeCompare(b.email))).toEqual(
+      ORGANIZER_EMAILS.map((email) => ({ email, role: "organizer", clerkId: null, status: "approved" })),
+    );
+    // Reparto por sha256(slug) mod 2: los dos reciben eventos.
+    expect(new Set(Object.values(await organizerBySlug(db, data))).size).toBe(2);
+    for (const event of data.events) {
+      expect(event.organizerId, event.slug).toBe(data.users[organizerIndexForSlug(event.slug, 2)].id);
+    }
+  });
+
   it(
-    "lo deja igual a los lugares vendidos de la orden y una 2.ª ejecución no escribe",
+    "con el mismo now no escribe nada ni cambia la huella; con un now posterior solo desplaza las fechas",
     async () => {
       await inRolledBackTransaction(async (tx) => {
-        const [admin] = await tx.select({ id: users.id }).from(users).where(eq(users.email, SUPER_ADMIN_EMAIL));
-        const data = buildSeedData({ superAdminId: admin.id });
-        const scope = seedScope([data], [...data.users.map((user) => user.email), SUPER_ADMIN_EMAIL]);
-        const orderId = seedUuid(`order:${CLASICO}`);
-        const demoOrder = data.orders.find((row) => row.id === orderId);
-        if (!demoOrder) throw new Error(`Falta la orden demo de ${CLASICO}`);
-        // Sembrada con otro mapa: el resto de la BD ya coincide con buildSeedData.
-        const staleTicketCount = demoOrder.ticketCount + 7;
-        await tx.update(orders).set({ ticketCount: staleTicketCount }).where(eq(orders.id, orderId));
+        const data = await seedDataFor(tx);
+        const scope = seedScope([data], seedEmails);
+        const before = await fingerprint(tx, scope);
 
-        const first = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
-        const afterFirst = await fingerprint(tx, scope);
-        const second = await seed(db, { superAdminEmail: SUPER_ADMIN_EMAIL });
+        expect(await seed(db, TEST_SEED_OPTIONS)).toEqual(EMPTY_REPORT);
+        expect(await fingerprint(tx, scope)).toEqual(before);
 
-        expect(first).toEqual({ ...EMPTY_REPORT, written: { ...EMPTY_REPORT.written, orders: 1 } });
-        expect(second).toEqual(EMPTY_REPORT);
-        expect(await fingerprint(tx, scope)).toEqual(afterFirst);
-
-        const [order] = await tx.select().from(orders).where(eq(orders.id, orderId));
-        const [{ sold }] = await tx
-          .select({ sold: count() })
-          .from(eventSeats)
-          .where(and(eq(eventSeats.orderId, orderId), eq(eventSeats.status, "sold"), isNull(eventSeats.retiredAt)));
-        expect(order.ticketCount).not.toBe(staleTicketCount);
-        expect(order.ticketCount).toBe(sold);
-        expect(order).toMatchObject({
-          ticketCount: demoOrder.ticketCount,
-          subtotalCents: demoOrder.subtotalCents,
-          platformFeeCents: demoOrder.platformFeeCents,
-          organizerAmountCents: demoOrder.organizerAmountCents,
+        const later = new Date(NOW.getTime() + 10 * DAY_MS);
+        expect(await seed(db, { ...TEST_SEED_OPTIONS, now: later })).toEqual({
+          ...EMPTY_REPORT,
+          written: { ...EMPTY_REPORT.written, events: data.events.length },
         });
+        const rows = await tx
+          .select({ id: events.id, startsAt: events.startsAt, doorsOpenAt: events.doorsOpenAt })
+          .from(events)
+          .where(inArray(events.id, idsOf(data.events)));
+        expect(rows).toHaveLength(data.events.length);
+        for (const row of rows) {
+          const seeded = data.events.find((event) => event.id === row.id);
+          expect(row.startsAt!.getTime() - seeded!.startsAt!.getTime(), seeded?.slug).toBe(10 * DAY_MS);
+          expect(row.doorsOpenAt!.getTime() - seeded!.doorsOpenAt!.getTime(), seeded?.slug).toBe(10 * DAY_MS);
+          expect(row.startsAt!.getTime()).toBeGreaterThan(later.getTime());
+        }
       });
     },
-    MIGRATION_TIMEOUT_MS,
+    SEED_TIMEOUT_MS,
+  );
+
+  it(
+    "no desplaza la fecha de un evento demo con una orden paid, partially_refunded o pending vigente, y lo lista en el informe",
+    async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const data = await seedDataFor(tx);
+        const [paidEvent, pendingEvent, expiredEvent, partialEvent] = data.events;
+        const MINUTE_MS = 60_000;
+        const baseOrder = { ticketCount: 1, subtotalCents: 1000, platformFeeCents: 100, organizerAmountCents: 900 };
+        await tx.insert(orders).values([
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PAID",
+            eventId: paidEvent.id as string,
+            buyerName: "Cliente Pagado",
+            buyerEmail: "kept.paid@example.com",
+            buyerPhone: "+51911111111",
+            buyerDocumentType: "dni",
+            buyerDocumentNumber: "12345678",
+            status: "paid",
+            // Una orden pagada protege la fecha aunque su reserva ya haya expirado.
+            expiresAt: new Date(Date.now() - 60 * MINUTE_MS),
+            paidAt: new Date(),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PARTIAL",
+            eventId: partialEvent.id as string,
+            buyerName: "Cliente Reembolsado",
+            buyerEmail: "kept.partial@example.com",
+            buyerPhone: "+51922222222",
+            buyerDocumentType: "dni",
+            buyerDocumentNumber: "87654321",
+            // Reembolso parcial: aún tiene entradas válidas, así que cuenta como venta.
+            status: "partially_refunded",
+            expiresAt: new Date(Date.now() - 60 * MINUTE_MS),
+            paidAt: new Date(),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-KEPT-PENDING",
+            eventId: pendingEvent.id as string,
+            expiresAt: new Date(Date.now() + 10 * MINUTE_MS),
+          },
+          {
+            ...baseOrder,
+            code: "TK-TEST-EXPIRED-PENDING",
+            eventId: expiredEvent.id as string,
+            expiresAt: new Date(Date.now() - MINUTE_MS),
+          },
+        ]);
+
+        const later = new Date(NOW.getTime() + 10 * DAY_MS);
+        const report = await seed(db, { ...TEST_SEED_OPTIONS, now: later });
+
+        expect(report).toEqual({
+          ...EMPTY_REPORT,
+          written: { ...EMPTY_REPORT.written, events: data.events.length - 3 },
+          eventsWithKeptDates: [paidEvent.slug, pendingEvent.slug, partialEvent.slug].sort(),
+        });
+        const rows = await tx
+          .select({ id: events.id, startsAt: events.startsAt, doorsOpenAt: events.doorsOpenAt })
+          .from(events)
+          .where(inArray(events.id, idsOf([paidEvent, pendingEvent, expiredEvent, partialEvent])));
+        const shiftOf = (event: SeedData["events"][number]) => {
+          const row = rows.find((candidate) => candidate.id === event.id)!;
+          return [
+            row.startsAt!.getTime() - event.startsAt!.getTime(),
+            row.doorsOpenAt!.getTime() - event.doorsOpenAt!.getTime(),
+          ];
+        };
+        expect(shiftOf(paidEvent)).toEqual([0, 0]);
+        expect(shiftOf(pendingEvent)).toEqual([0, 0]);
+        expect(shiftOf(partialEvent)).toEqual([0, 0]);
+        expect(shiftOf(expiredEvent)).toEqual([10 * DAY_MS, 10 * DAY_MS]);
+      });
+    },
+    SEED_TIMEOUT_MS,
+  );
+
+  it(
+    "reasigna en una BD ya sembrada los eventos de otro organizador (p. ej. uno sintético de un seed anterior)",
+    async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const data = await seedDataFor(tx);
+        const legacyEmail = "pulso-producciones@example.com";
+        const [legacy] = await tx
+          .insert(users)
+          .values({ id: seedUuid(`user:${legacyEmail}`), email: legacyEmail, firstName: "Pulso", lastName: "", role: "organizer" })
+          .returning({ id: users.id });
+        await tx
+          .insert(organizers)
+          .values({ userId: legacy.id, status: "approved", legalName: "Pulso", taxIdType: "ruc", taxId: "test-legacy", commissionBps: 1000 });
+        const moved = idsOf(data.events).slice(0, 3);
+        await tx.update(events).set({ organizerId: legacy.id }).where(inArray(events.id, moved));
+
+        const report = await seed(db, TEST_SEED_OPTIONS);
+
+        expect(report).toEqual({ ...EMPTY_REPORT, written: { ...EMPTY_REPORT.written, events: moved.length } });
+        expect(await organizerBySlug(tx, data)).toEqual(expectedOrganizers(data));
+      });
+    },
+    SEED_TIMEOUT_MS,
+  );
+
+  it.each(["pending", "suspended"] as const)(
+    "respeta un organizador que un admin dejó %s: no lo aprueba, le reparte eventos y lo avisa en el informe",
+    async (status) => {
+      await inRolledBackTransaction(async (tx) => {
+        const data = await seedDataFor(tx);
+        const [email] = ORGANIZER_EMAILS;
+        const [{ id }] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
+        await tx.update(organizers).set({ status }).where(eq(organizers.userId, id));
+
+        const report = await seed(db, TEST_SEED_OPTIONS);
+
+        expect(report).toEqual({ ...EMPTY_REPORT, nonApprovedOrganizers: [{ email, status }] });
+        const [organizer] = await tx.select().from(organizers).where(eq(organizers.userId, id));
+        expect(organizer.status).toBe(status);
+        expect(await organizerBySlug(tx, data)).toEqual(expectedOrganizers(data));
+        expect(Object.values(expectedOrganizers(data))).toContain(id);
+      });
+    },
+    SEED_TIMEOUT_MS,
+  );
+
+  it(
+    "un organizador que ya existía conserva id, clerk_id y perfil, pasa a organizer y recibe su fila approved",
+    async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const email = "existing.organizer@ticketera.test";
+        const [existing] = await tx
+          .insert(users)
+          .values({ email, clerkId: "user_test_existing_organizer", firstName: "Ana", lastName: "Previa", phone: "+51911111111" })
+          .returning();
+        const options = { ...TEST_SEED_OPTIONS, organizerEmails: [...ORGANIZER_EMAILS, email] };
+
+        await seed(db, options);
+
+        const [user] = await tx.select().from(users).where(eq(users.id, existing.id));
+        expect(user).toEqual({ ...existing, role: "organizer", updatedAt: user.updatedAt });
+        const [organizer] = await tx.select().from(organizers).where(eq(organizers.userId, existing.id));
+        expect(organizer).toMatchObject({ status: "approved", taxIdType: "ruc", legalName: expect.any(String) });
+        expect(organizer.taxId).toMatch(/^20\d{9}$/);
+        // Con 3 organizadores el reparto es sha256(slug) mod 3.
+        const data = await seedDataFor(tx, options);
+        expect(await organizerBySlug(tx, data)).toEqual(expectedOrganizers(data));
+        expect(Object.values(expectedOrganizers(data))).toContain(existing.id);
+      });
+    },
+    SEED_TIMEOUT_MS,
+  );
+
+  it.each(["admin", "super_admin"] as const)(
+    "aborta sin escribir nada si un correo de organizador ya es %s",
+    async (role) => {
+      await inRolledBackTransaction(async (tx) => {
+        const email = `already.${role}@ticketera.test`;
+        const [privileged] = await tx
+          .insert(users)
+          .values({ email, firstName: "Ya", lastName: "Admin", role })
+          .returning();
+        const scope = seedScope([await seedDataFor(tx)], seedEmails);
+        const before = await fingerprint(tx, scope);
+
+        const error = await seed(db, { ...TEST_SEED_OPTIONS, organizerEmails: [...ORGANIZER_EMAILS, email] }).catch(
+          (caught: unknown) => caught,
+        );
+        expect(error).toBeInstanceOf(SeedConfigError);
+        expect((error as Error).message).toContain(email);
+
+        expect(await tx.select().from(users).where(eq(users.id, privileged.id))).toEqual([privileged]);
+        expect(await tx.select().from(organizers).where(eq(organizers.userId, privileged.id))).toEqual([]);
+        expect(await fingerprint(tx, scope)).toEqual(before);
+      });
+    },
+    SEED_TIMEOUT_MS,
   );
 });

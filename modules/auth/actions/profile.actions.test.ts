@@ -101,15 +101,12 @@ describe("completeProfileAction", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("error propio de la app → mensaje genérico y el log lleva su mensaje", async () => {
+  it("error propio de la app → mensaje genérico y el log lleva solo su nombre (nunca el mensaje)", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(completeProfile).mockRejectedValue(new Error('No hay una versión publicada de "terms"'));
 
     expect(await completeProfileAction(INPUT, null)).toEqual(GENERIC_ERROR);
-    expect(consoleError).toHaveBeenCalledWith("completeProfileAction", {
-      name: "Error",
-      message: 'No hay una versión publicada de "terms"',
-    });
+    expect(consoleError).toHaveBeenCalledWith("completeProfileAction", { name: "Error" });
   });
 
   it.each([

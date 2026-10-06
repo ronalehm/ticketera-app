@@ -1,32 +1,33 @@
-import Image from "next/image";
+import type { ReactNode } from "react";
 import { ImageIcon } from "lucide-react";
 
+import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCount } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
-import { formatEventDate, formatEventPrice } from "@/modules/events/format";
+import type { ManagedEvent, ManagedEventStatus } from "@/modules/events";
+import { formatEventDate } from "@/modules/events/format";
 
-import type { OrganizerEvent, OrganizerEventStatus } from "../types/organizer.types";
-import { formatCount, getEventRevenue, getSoldPercentage } from "../utils/organizerStats";
+import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
+import { formatRevenue, getSoldPercentage } from "../utils/organizerStats";
 
 type OrganizerEventsTableProps = {
-  events: OrganizerEvent[];
+  events: ManagedEvent[];
   /** id del encabezado que nombra la tabla y la lista. */
   labelledBy: string;
-};
-
-// Patrón de EVENT_STATUS_BADGE: el estado siempre lleva texto, nunca solo color.
-const ORGANIZER_STATUS_BADGE: Record<OrganizerEventStatus, { label: string; className: string }> = {
-  published: { label: "Publicado", className: "bg-accent text-accent-foreground" },
-  draft: { label: "Borrador", className: "bg-secondary text-secondary-foreground" },
+  /** Muestra el organizador de cada evento (admin, que ve los de todos). */
+  showOrganizer?: boolean;
+  /** Acciones de cada fila (Mis eventos); sin ella no hay columna de acciones. `null` para una fila sin acciones. */
+  rowActions?: (event: ManagedEvent) => ReactNode;
 };
 
 // Cabecera en mayúsculas pequeñas, sin fondo; px-6 alinea las columnas con la barra de cabecera de la sección.
 const HEADER_CELL = "h-11 px-6 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
 
-function StatusBadge({ status }: { status: OrganizerEventStatus }) {
-  const badge = ORGANIZER_STATUS_BADGE[status];
+function StatusBadge({ status }: { status: ManagedEventStatus }) {
+  const badge = MANAGED_EVENT_STATUS_BADGE[status];
   return <Badge className={cn("h-6 px-2.5 font-semibold", badge.className)}>{badge.label}</Badge>;
 }
 
@@ -38,21 +39,22 @@ function EventThumbnail({ imageUrl }: { imageUrl: string | null }) {
       </div>
     );
   }
-  return (
-    <Image src={imageUrl} alt="" width={48} height={48} sizes="48px" className="size-12 shrink-0 rounded-lg object-cover" />
-  );
+  return <EventCoverImage src={imageUrl} alt="" width={48} height={48} className="size-12 shrink-0 rounded-lg object-cover" />;
 }
 
-function EventMeta({ startsAt, city }: Pick<OrganizerEvent, "startsAt" | "city">) {
+type EventMetaProps = Pick<ManagedEvent, "startsAt" | "city" | "organizer"> & { showOrganizer: boolean };
+
+function EventMeta({ startsAt, city, organizer, showOrganizer }: EventMetaProps) {
   return (
     <p className="truncate text-sm text-muted-foreground">
       {startsAt ? formatEventDate(startsAt) : "Fecha por definir"}
       {city && ` · ${city}`}
+      {showOrganizer && ` · ${organizer}`}
     </p>
   );
 }
 
-function SoldCount({ sold, capacity }: Pick<OrganizerEvent, "sold" | "capacity">) {
+function SoldCount({ sold, capacity }: Pick<ManagedEvent, "sold" | "capacity">) {
   return (
     <p className="text-sm whitespace-nowrap tabular-nums">
       <strong className="font-semibold">{formatCount(sold)}</strong>{" "}
@@ -61,7 +63,7 @@ function SoldCount({ sold, capacity }: Pick<OrganizerEvent, "sold" | "capacity">
   );
 }
 
-function SoldProgress({ title, sold, capacity }: Pick<OrganizerEvent, "title" | "sold" | "capacity">) {
+function SoldProgress({ title, sold, capacity }: Pick<ManagedEvent, "title" | "sold" | "capacity">) {
   return (
     <Progress
       value={getSoldPercentage(sold, capacity)}
@@ -71,8 +73,9 @@ function SoldProgress({ title, sold, capacity }: Pick<OrganizerEvent, "title" | 
   );
 }
 
-function Revenue({ event }: { event: OrganizerEvent }) {
-  if (event.status === "draft") {
+function Revenue({ status, revenueCents }: Pick<ManagedEvent, "status" | "revenueCents">) {
+  // Un borrador no está a la venta.
+  if (status === "draft") {
     return (
       <>
         <span aria-hidden>—</span>
@@ -80,11 +83,11 @@ function Revenue({ event }: { event: OrganizerEvent }) {
       </>
     );
   }
-  return <>{formatEventPrice(getEventRevenue(event))}</>;
+  return <>{formatRevenue(revenueCents)}</>;
 }
 
 // Tabla en lg y tarjetas por debajo; la versión oculta usa display:none, así que no se duplica en el árbol de accesibilidad.
-export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTableProps) {
+export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false, rowActions }: OrganizerEventsTableProps) {
   return (
     <>
       {/* Tabla a sangre dentro de la tarjeta de la sección: sin anillo ni radio propios. */}
@@ -96,6 +99,7 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
               <TableHead className={HEADER_CELL}>Estado</TableHead>
               <TableHead className={HEADER_CELL}>Vendidas</TableHead>
               <TableHead className={cn(HEADER_CELL, "text-right")}>Ingresos</TableHead>
+              {rowActions && <TableHead className={cn(HEADER_CELL, "text-right")}>Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -107,7 +111,12 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
                     <EventThumbnail imageUrl={event.imageUrl} />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{event.title}</p>
-                      <EventMeta startsAt={event.startsAt} city={event.city} />
+                      <EventMeta
+                        startsAt={event.startsAt}
+                        city={event.city}
+                        organizer={event.organizer}
+                        showOrganizer={showOrganizer}
+                      />
                     </div>
                   </div>
                 </TableHead>
@@ -121,8 +130,14 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
                   </div>
                 </TableCell>
                 <TableCell className="px-6 py-3.5 text-right font-semibold tabular-nums">
-                  <Revenue event={event} />
+                  <Revenue status={event.status} revenueCents={event.revenueCents} />
                 </TableCell>
+                {rowActions && (
+                  <TableCell className="px-6 py-3.5">
+                    {/* flex-wrap: con tres acciones la columna no ensancha la tabla, se apilan. */}
+                    <div className="flex flex-wrap items-start justify-end gap-2">{rowActions(event)}</div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -130,25 +145,34 @@ export function OrganizerEventsTable({ events, labelledBy }: OrganizerEventsTabl
       </div>
 
       <ul aria-labelledby={labelledBy} className="space-y-3 lg:hidden">
-        {events.map((event) => (
-          <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
-            <div className="flex items-start gap-3">
-              <EventThumbnail imageUrl={event.imageUrl} />
-              <div className="min-w-0 flex-1">
-                <h3 className="line-clamp-2 leading-snug font-bold">{event.title}</h3>
-                <EventMeta startsAt={event.startsAt} city={event.city} />
+        {events.map((event) => {
+          const actions = rowActions?.(event);
+          return (
+            <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
+              <div className="flex items-start gap-3">
+                <EventThumbnail imageUrl={event.imageUrl} />
+                <div className="min-w-0 flex-1">
+                  <h3 className="line-clamp-2 leading-snug font-bold">{event.title}</h3>
+                  <EventMeta
+                    startsAt={event.startsAt}
+                    city={event.city}
+                    organizer={event.organizer}
+                    showOrganizer={showOrganizer}
+                  />
+                </div>
+                <StatusBadge status={event.status} />
               </div>
-              <StatusBadge status={event.status} />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <SoldCount sold={event.sold} capacity={event.capacity} />
-              <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
-                <Revenue event={event} />
-              </p>
-            </div>
-            <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
-          </li>
-        ))}
+              <div className="flex items-center justify-between gap-3">
+                <SoldCount sold={event.sold} capacity={event.capacity} />
+                <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
+                  <Revenue status={event.status} revenueCents={event.revenueCents} />
+                </p>
+              </div>
+              <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
+              {actions && <div className="flex flex-wrap gap-2 border-t pt-3 *:flex-1">{actions}</div>}
+            </li>
+          );
+        })}
       </ul>
     </>
   );

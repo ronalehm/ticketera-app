@@ -1,12 +1,16 @@
 // @vitest-environment node
-import { TransactionRollbackError, eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { TransactionRollbackError, and, eq, inArray, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, savedEvents } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { tickets } from "@/lib/db/schema/sales";
 import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
+import { createTestEvent, sellTestSeats, type TestEvent } from "@/lib/db/testFixtures";
+import { TEST_SEED_OPTIONS } from "@/lib/db/testSeedOptions";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -41,11 +45,24 @@ describeWithDb("restricciones (Postgres)", () => {
   let soldSeat: typeof eventSeats.$inferSelect;
   let availableSeat: typeof eventSeats.$inferSelect;
   let venueId: string;
+  // El seed no siembra ventas: un evento propio con un lugar vendido y otro disponible.
+  let testEvent: TestEvent;
 
   beforeAll(async () => {
-    [soldSeat] = await db.select().from(eventSeats).where(eq(eventSeats.status, "sold")).limit(1);
-    [availableSeat] = await db.select().from(eventSeats).where(eq(eventSeats.status, "available")).limit(1);
+    testEvent = await createTestEvent({ general: 2 });
+    const {
+      eventSeatIds: [soldSeatId],
+    } = await sellTestSeats(testEvent.slug, { count: 1 });
+    [soldSeat] = await db.select().from(eventSeats).where(eq(eventSeats.id, soldSeatId));
+    [availableSeat] = await db
+      .select()
+      .from(eventSeats)
+      .where(and(eq(eventSeats.eventId, testEvent.eventId), eq(eventSeats.status, "available")));
     [{ id: venueId }] = await db.select({ id: venues.id }).from(venues).limit(1);
+  });
+
+  afterAll(async () => {
+    await testEvent?.cleanup();
   });
 
   it("tickets.event_seat_id es único (23505)", async () => {
@@ -87,6 +104,101 @@ describeWithDb("restricciones (Postgres)", () => {
         tx.insert(venueSections).values({ ...section, venueId, seating: "numbered", capacity: 10 }),
       ),
     ).toBe("23514");
+  });
+
+  describe("organizers.status (0008_organizer_status)", () => {
+    /** Inserta un usuario organizador y su fila de `organizers` con `values`; devuelve el `status` guardado. */
+    const insertOrganizer = (tx: Tx, values: Partial<typeof organizers.$inferInsert>) =>
+      tx
+        .insert(users)
+        .values({ email: "organizer.status.test@example.com", firstName: "Prueba", lastName: "Estado", role: "organizer" })
+        .returning({ id: users.id })
+        .then(([{ id }]) =>
+          tx
+            .insert(organizers)
+            .values({ userId: id, commissionBps: 1000, ...values })
+            .returning({ status: organizers.status }),
+        );
+
+    const fiscal = { legalName: "Prueba SAC", taxIdType: "ruc", taxId: "test-organizer-status" } as const;
+
+    it("approved sin legal_name, tax_id_type o tax_id incumple organizers_approved_complete_check (23514)", async () => {
+      for (const missing of ["legalName", "taxIdType", "taxId"] as const) {
+        expect(
+          await rolledBack((tx) => insertOrganizer(tx, { ...fiscal, [missing]: null, status: "approved" })),
+        ).toMatchObject({ code: "23514", constraint: "organizers_approved_complete_check" });
+      }
+      expect(
+        await rolledBack(async (tx) => {
+          await insertOrganizer(tx, { ...fiscal, status: "approved" });
+          await tx.update(organizers).set({ taxId: null }).where(eq(organizers.taxId, fiscal.taxId));
+        }),
+      ).toMatchObject({ code: "23514", constraint: "organizers_approved_complete_check" });
+    });
+
+    it("sin status queda pending; pending y suspended sin datos fiscales se insertan", async () => {
+      expect(await rolledBack((tx) => insertOrganizer(tx, {}))).toEqual({ value: [{ status: "pending" }] });
+      expect(await rolledBack((tx) => insertOrganizer(tx, { status: "suspended" }))).toEqual({
+        value: [{ status: "suspended" }],
+      });
+      expect(await rolledBack((tx) => insertOrganizer(tx, { ...fiscal, status: "approved" }))).toEqual({
+        value: [{ status: "approved" }],
+      });
+    });
+
+    it("la migración 0008 deja approved a los organizadores existentes y pending a los nuevos", async () => {
+      // El CREATE TYPE se omite: el tipo ya existe al dejar `organizers` como antes de 0008; los DROP NOT NULL son idempotentes.
+      const statements = readFileSync(join(process.cwd(), "drizzle/0008_organizer_status.sql"), "utf8")
+        .split("--> statement-breakpoint")
+        .map((statement) => statement.trim())
+        .filter((statement) => statement && !statement.startsWith("CREATE TYPE"));
+
+      const insertLegacyOrganizer = async (tx: Tx, email: string, taxId: string) => {
+        const { rows } = await tx.execute<{ id: string }>(
+          sql`INSERT INTO users (email, first_name, last_name, role) VALUES (${email}, 'Prueba', 'Backfill', 'organizer') RETURNING id`,
+        );
+        await tx.execute(
+          sql`INSERT INTO organizers (user_id, legal_name, tax_id_type, tax_id, commission_bps) VALUES (${rows[0].id}, 'Prueba SAC', 'ruc', ${taxId}, 1000)`,
+        );
+        return rows[0].id;
+      };
+
+      const result = await rolledBack(async (tx) => {
+        await tx.execute(sql`ALTER TABLE organizers DROP CONSTRAINT organizers_approved_complete_check`);
+        await tx.execute(sql`ALTER TABLE organizers DROP COLUMN status`);
+        const existingId = await insertLegacyOrganizer(tx, "organizer.backfill.old@example.com", "test-backfill-old");
+
+        for (const statement of statements) await tx.execute(sql.raw(statement));
+
+        const [{ id: newId }] = await tx
+          .insert(users)
+          .values({ email: "organizer.backfill.new@example.com", firstName: "Prueba", lastName: "Nuevo", role: "organizer" })
+          .returning({ id: users.id });
+        await tx.insert(organizers).values({ userId: newId, commissionBps: 1000 });
+
+        const rows = await tx
+          .select({ userId: organizers.userId, status: organizers.status })
+          .from(organizers)
+          .where(inArray(organizers.userId, [existingId, newId]));
+        return {
+          existing: rows.find(({ userId }) => userId === existingId)?.status,
+          created: rows.find(({ userId }) => userId === newId)?.status,
+        };
+      });
+
+      expect(result).toEqual({ value: { existing: "approved", created: "pending" } });
+    });
+
+    // Solo las filas del seed: los fixtures de otros archivos de test crean organizadores mientras corre este.
+    it("el seed inserta sus organizadores approved", async () => {
+      const seeded = await db
+        .select({ status: organizers.status })
+        .from(organizers)
+        .innerJoin(users, eq(users.id, organizers.userId))
+        .where(inArray(users.email, TEST_SEED_OPTIONS.organizerEmails));
+      expect(seeded).toHaveLength(TEST_SEED_OPTIONS.organizerEmails.length);
+      expect(seeded.every(({ status }) => status === "approved")).toBe(true);
+    });
   });
 
   describe("data gaps: borradores, favoritos y recintos", () => {

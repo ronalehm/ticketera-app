@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { describeError } from "@/lib/describeError";
 import { getSessionUser } from "@/modules/auth/server";
 import { payOrderInputSchema } from "../schemas/payment.schema";
 import { getCheckoutOrder } from "../services/checkout.service";
@@ -88,9 +89,4 @@ async function getSessionUserId(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-function describeError(error: unknown) {
-  if (!(error instanceof Error)) return { name: typeof error };
-  return { name: error.name, code: (error.cause as { code?: unknown } | undefined)?.code };
 }

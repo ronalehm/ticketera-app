@@ -1,13 +1,19 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { describeWithDb } from "@/lib/db/testDb";
+import { sellTestSeats } from "@/lib/db/testFixtures";
+import { inRolledBackTransaction } from "@/lib/db/testTransaction";
 import { getEventBySlug } from "@/modules/events";
 import { venueLayoutSchema } from "../schemas/seating.schema";
 import { getVenueMapBySlug } from "../services/seating.service";
 import type { VenueZoneLayout } from "../types/seating.types";
 import { getAnnularSectorPath } from "../utils/annularSector";
 import { ECOS_DEL_SUR_VENUE } from "./losEcosDelSur.mock";
+import { toSeededLayout } from "./seededLayout";
 import { STADIUM_CENTER, STADIUM_STAGE, STAGE_SECTOR } from "./stadium.mock";
+
+// Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
+vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
 
 const SLUG = "los-ecos-del-sur-arequipa";
 const SWEEP = { startAngle: 45, endAngle: 135 };
@@ -93,7 +99,7 @@ describeWithDb("losEcosDelSur.mock en la BD", () => {
   it("getVenueMapBySlug devuelve el layout del mock con los datos del evento", async () => {
     const map = await getVenueMapBySlug(SLUG);
     const event = await getEventBySlug(SLUG);
-    const { zones, ...rest } = layout;
+    const { zones, ...rest } = toSeededLayout(layout);
 
     expect(map).toEqual({
       ...rest,
@@ -105,13 +111,23 @@ describeWithDb("losEcosDelSur.mock en la BD", () => {
     });
   });
 
-  it("las dos zonas están agotadas", async () => {
-    const map = await getVenueMapBySlug(SLUG);
-    if (!map) throw new Error(`Sin mapa: ${SLUG}`);
+  it("sembradas, las dos zonas están disponibles; vendido todo, las dos quedan agotadas", async () => {
+    const statuses = async () => {
+      const map = await getVenueMapBySlug(SLUG);
+      if (!map) throw new Error(`Sin mapa: ${SLUG}`);
+      return map.zones.map((zone) => [zone.id, zone.status]);
+    };
 
-    expect(map.zones.map((zone) => [zone.id, zone.status])).toEqual([
-      ["general", "sold-out"],
-      ["platea", "sold-out"],
+    expect(await statuses()).toEqual([
+      ["general", "available"],
+      ["platea", "available"],
     ]);
+    await inRolledBackTransaction(async () => {
+      await sellTestSeats(SLUG);
+      expect(await statuses()).toEqual([
+        ["general", "sold-out"],
+        ["platea", "sold-out"],
+      ]);
+    });
   });
 });
