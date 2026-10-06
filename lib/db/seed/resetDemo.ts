@@ -4,6 +4,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { eventSeats, eventStaff, events, savedEvents } from "@/lib/db/schema/events";
 import { auditLogs, organizers, users } from "@/lib/db/schema/identity";
 import { complaints, consents, legalDocuments } from "@/lib/db/schema/legal";
+import { eventNotifications } from "@/lib/db/schema/notifications";
 import { organizerApplications, organizerRequests, privacyRequests, refundRequests } from "@/lib/db/schema/requests";
 import { checkInScans, orders, payouts, refunds, stripeEvents, tickets } from "@/lib/db/schema/sales";
 import { venues } from "@/lib/db/schema/venues";
@@ -151,6 +152,7 @@ export const USER_REFERENCES: readonly PgColumn[] = [
   tickets.checkedInBy,
   checkInScans.scannedBy,
   payouts.organizerId,
+  eventNotifications.createdBy,
 ];
 
 /**

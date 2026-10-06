@@ -28,7 +28,9 @@ const DESTRUCTIVE_PATTERNS: { name: string; pattern: RegExp }[] = [
 ];
 
 /** Devuelve las infracciones de la regla aditiva que contiene el SQL de una migración. */
-function findViolations(sql: string): string[] {
+function findViolations(source: string): string[] {
+  // Sin literales de texto: el valor de enum `'update'` (0011) no es la sentencia UPDATE.
+  const sql = source.replace(/'(?:[^']|'')*'/g, "''");
   const violations = DESTRUCTIVE_PATTERNS.filter(({ pattern }) => pattern.test(sql)).map(({ name }) => name);
   // DROP CONSTRAINT "x" solo vale si la misma migración vuelve a crear "x" (redefinir un CHECK).
   for (const [, name] of sql.matchAll(/\bDROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/gi)) {

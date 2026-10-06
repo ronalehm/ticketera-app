@@ -18,7 +18,7 @@ const PUBLIC_BASE = {
 
 // lib/env.ts valida process.env al importarse.
 vi.stubEnv("DATABASE_URL", DB_URL);
-const { env, publicEnvSchema, serverEnvSchema } = await import("./env");
+const { effectiveEmailDeliveryMode, env, publicEnvSchema, serverEnvSchema } = await import("./env");
 
 /** Copia de `input` sin la variable `name`. */
 function omit(input: Record<string, string>, name: string) {
@@ -57,6 +57,7 @@ describe("serverEnvSchema", () => {
       }),
     ).toEqual({
       ...SERVER_BASE,
+      EMAIL_DELIVERY_MODE: "allowlist",
       DATABASE_URL_UNPOOLED: undefined,
       DATABASE_URL_MIGRATOR: undefined,
       DATABASE_URL_TEST: undefined,
@@ -110,7 +111,90 @@ describe("serverEnvSchema", () => {
       SUPER_ADMIN_EMAIL: "no-es-correo",
       SEED_ORGANIZER_EMAILS: "tampoco",
     });
-    expect(parsed).toEqual(SERVER_BASE);
+    expect(parsed).toEqual({ ...SERVER_BASE, EMAIL_DELIVERY_MODE: "allowlist" });
+  });
+});
+
+describe("serverEnvSchema: correo (Resend)", () => {
+  // Clave ficticia: nunca una real en los tests.
+  const KEY = "re_test_fake_key_for_unit_tests";
+  const FROM = "Mentec Tickets <notificaciones@ticketera.mentec.dev>";
+
+  it("sin variables de correo arranca: todo opcional y modo allowlist por defecto", () => {
+    expect(serverEnvSchema.parse(SERVER_BASE)).toEqual({ ...SERVER_BASE, EMAIL_DELIVERY_MODE: "allowlist" });
+    expect(serverEnvSchema.parse({ ...SERVER_BASE, EMAIL_DELIVERY_MODE: "" }).EMAIL_DELIVERY_MODE).toBe("allowlist");
+  });
+
+  it("rechaza RESEND_API_KEY sin el prefijo re_ y la nombra", () => {
+    expect(errorOf({ ...SERVER_BASE, RESEND_API_KEY: "sk_abc", EMAIL_ALLOWED_RECIPIENTS: "a@example.com" })).toContain(
+      "RESEND_API_KEY",
+    );
+  });
+
+  it.each(["notificaciones@ticketera.mentec.dev", "Mentec <no-es-correo>", "<a@b.dev>", "Mentec a@b.dev"])(
+    "rechaza EMAIL_FROM sin el formato Nombre <correo@dominio> (%s)",
+    (invalid) => {
+      expect(errorOf({ ...SERVER_BASE, EMAIL_FROM: invalid })).toContain("EMAIL_FROM");
+    },
+  );
+
+  it("acepta EMAIL_FROM con el formato Nombre <correo@dominio>", () => {
+    expect(serverEnvSchema.parse({ ...SERVER_BASE, EMAIL_FROM: FROM }).EMAIL_FROM).toBe(FROM);
+  });
+
+  it("rechaza un EMAIL_DELIVERY_MODE desconocido", () => {
+    expect(errorOf({ ...SERVER_BASE, EMAIL_DELIVERY_MODE: "all" })).toContain("EMAIL_DELIVERY_MODE");
+  });
+
+  it("normaliza EMAIL_ALLOWED_RECIPIENTS a minúsculas, sin espacios ni vacíos", () => {
+    expect(
+      serverEnvSchema.parse({ ...SERVER_BASE, EMAIL_ALLOWED_RECIPIENTS: " Ana@Example.com,,qa@example.com " })
+        .EMAIL_ALLOWED_RECIPIENTS,
+    ).toEqual(["ana@example.com", "qa@example.com"]);
+  });
+
+  it("rechaza un correo inválido en EMAIL_ALLOWED_RECIPIENTS", () => {
+    expect(errorOf({ ...SERVER_BASE, EMAIL_ALLOWED_RECIPIENTS: "ana@example.com,no-es-correo" })).toContain(
+      "EMAIL_ALLOWED_RECIPIENTS",
+    );
+  });
+
+  it.each([
+    ["allowlist", undefined],
+    ["live", "preview"],
+    ["live", undefined],
+  ])("exige EMAIL_ALLOWED_RECIPIENTS con clave en modo efectivo allowlist (%s, VERCEL_ENV=%s)", (mode, vercelEnv) => {
+    const input = { ...SERVER_BASE, RESEND_API_KEY: KEY, EMAIL_DELIVERY_MODE: mode, ...(vercelEnv && { VERCEL_ENV: vercelEnv }) };
+    const message = errorOf(input);
+    expect(message).toContain("EMAIL_ALLOWED_RECIPIENTS");
+    expect(message).not.toContain(KEY);
+    expect(errorOf({ ...input, EMAIL_ALLOWED_RECIPIENTS: " , " })).toContain("EMAIL_ALLOWED_RECIPIENTS");
+    expect(serverEnvSchema.safeParse({ ...input, EMAIL_ALLOWED_RECIPIENTS: "a@example.com" }).success).toBe(true);
+  });
+
+  it("no exige EMAIL_ALLOWED_RECIPIENTS en Production con live ni sin clave", () => {
+    expect(
+      serverEnvSchema.safeParse({ ...SERVER_BASE, RESEND_API_KEY: KEY, EMAIL_DELIVERY_MODE: "live", VERCEL_ENV: "production" })
+        .success,
+    ).toBe(true);
+    expect(serverEnvSchema.safeParse({ ...SERVER_BASE, EMAIL_DELIVERY_MODE: "allowlist" }).success).toBe(true);
+  });
+
+  it("exige CRON_SECRET de al menos 16 caracteres", () => {
+    expect(errorOf({ ...SERVER_BASE, CRON_SECRET: "corto" })).toContain("CRON_SECRET");
+    expect(serverEnvSchema.parse({ ...SERVER_BASE, CRON_SECRET: "x".repeat(16) }).CRON_SECRET).toBe("x".repeat(16));
+  });
+});
+
+describe("effectiveEmailDeliveryMode", () => {
+  it.each([
+    ["live", "production", "live"],
+    ["live", "preview", "allowlist"],
+    ["live", "development", "allowlist"],
+    ["live", undefined, "allowlist"],
+    ["allowlist", "production", "allowlist"],
+  ] as const)("%s con VERCEL_ENV=%s → %s", (mode, vercelEnv, expected) => {
+    expect(effectiveEmailDeliveryMode({ EMAIL_DELIVERY_MODE: mode, VERCEL_ENV: vercelEnv })).toBe(expected);
   });
 });
 
