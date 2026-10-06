@@ -12,6 +12,7 @@ import type {
   EventFormLock,
   EventDraftInput,
   EventDraftValues,
+  ManualVenueInput,
   TicketTypeRow,
   OrganizerOption,
   TicketTypeRowErrors,
@@ -117,6 +118,21 @@ export function toEventDraftFormValues(
   };
 }
 
+/** Recinto del borrador: el ingresado a mano si su checkbox está marcado; si no, el del Select (o `null`). */
+function toVenueInput(values: EventDraftValues): EventDraftInput["venue"] {
+  const manual = values.manualVenue;
+  if (manual?.enabled) {
+    return {
+      kind: "manual",
+      name: manual.name,
+      address: manual.address,
+      city: manual.city as ManualVenueInput["city"], // validada por el schema (`getManualVenueErrors`)
+      sections: manual.sections.map((zone) => ({ id: zone.id, name: zone.name, capacity: Number(zone.capacity) })),
+    };
+  }
+  return values.venueId ? { kind: "existing", id: values.venueId } : null;
+}
+
 /**
  * Borrador listo para el servicio: vacíos → `null`, fechas en Lima, precios en céntimos y solo las filas marcadas, con
  * su posición como orden. `requireOrganizer` (admin, super_admin): el organizador elegido; si no, `null` (el servicio
@@ -132,7 +148,7 @@ export function toEventDraftInput(values: EventDraftValues, { requireOrganizer }
     startsAt: startsAt ? new Date(startsAt) : null,
     doorsOpenAt: doorsOpenAt ? new Date(doorsOpenAt) : null,
     minAge: Number(values.minAge),
-    venueId: values.venueId || null,
+    venue: toVenueInput(values),
     imageUrl: values.imageUrl || null,
     organizerId: requireOrganizer ? values.organizerId || null : null,
     ticketTypes: values.ticketTypes

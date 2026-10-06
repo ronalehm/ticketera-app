@@ -34,7 +34,7 @@ export default async function CreateOrganizerEventPage() {
   const manageAny = roleCan(user.role, "events:manageAny");
   const [categories, venues, organizers] = await Promise.all([
     listEventCategories(),
-    listApprovedVenuesWithSections(),
+    listApprovedVenuesWithSections(user),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
 

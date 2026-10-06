@@ -1,12 +1,13 @@
 // Solo para los tests de integración de los servicios de eventos del panel (describeWithDb, con
 // `vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"))` en el archivo de test).
 import { randomUUID } from "node:crypto";
+import { asc, eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { orders } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import type { Tx } from "@/lib/db/testTransaction";
-import type { EventDraftInput } from "../types/organizer.types";
+import type { EventDraftInput, ManualVenueInput } from "../types/organizer.types";
 import type { EventDraftError, EventDraftErrorCode } from "../utils/eventDraftError";
 import { createEvent } from "./eventDrafts.service";
 
@@ -78,7 +79,7 @@ export function draftInput(venue: { id: string; campoId: string; plateaId: strin
     startsAt: new Date("2027-01-16T01:00:00Z"),
     doorsOpenAt: new Date("2027-01-15T23:00:00Z"),
     minAge: 18,
-    venueId: venue.id,
+    venue: { kind: "existing", id: venue.id },
     imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
     organizerId: null,
     ticketTypes: [
@@ -87,6 +88,66 @@ export function draftInput(venue: { id: string; campoId: string; plateaId: strin
     ],
     ...overrides,
   } satisfies EventDraftInput;
+}
+
+/** Recinto ingresado a mano con dos zonas generales (General 200, VIP 50) con ids nuevos, como los genera el formulario. */
+export function manualVenueInput(overrides: Partial<ManualVenueInput> = {}): ManualVenueInput {
+  return {
+    kind: "manual",
+    name: "Café La Esquina",
+    address: "Av. Larco 1150, Miraflores",
+    city: "Lima",
+    sections: [
+      { id: randomUUID(), name: "General", capacity: 200 },
+      { id: randomUUID(), name: "VIP", capacity: 50 },
+    ],
+    ...overrides,
+  };
+}
+
+/** Borrador completo con un recinto ingresado a mano y un tipo de entrada por zona. */
+export function manualDraftInput(venue: ManualVenueInput = manualVenueInput(), overrides: Partial<EventDraftInput> = {}) {
+  return draftInput(
+    { id: "", campoId: "", plateaId: "" },
+    {
+      venue,
+      ticketTypes: venue.sections.map((zone, sortOrder) => ({
+        sectionId: zone.id,
+        name: `Entrada ${zone.name}`,
+        priceCents: 5000,
+        sortOrder,
+      })),
+      ...overrides,
+    },
+  );
+}
+
+/** Recinto y sus zonas en orden, para comprobar lo que guardó el servicio. */
+export async function getVenueWithZones(tx: Tx, venueId: string) {
+  const [venue] = await tx
+    .select({
+      name: venues.name,
+      address: venues.address,
+      city: venues.city,
+      status: venues.status,
+      organizerId: venues.organizerId,
+      createdBy: venues.createdBy,
+    })
+    .from(venues)
+    .where(eq(venues.id, venueId));
+  const zones = await tx
+    .select({
+      id: venueSections.id,
+      slug: venueSections.slug,
+      name: venueSections.name,
+      sortOrder: venueSections.sortOrder,
+      seating: venueSections.seating,
+      capacity: venueSections.capacity,
+    })
+    .from(venueSections)
+    .where(eq(venueSections.venueId, venueId))
+    .orderBy(asc(venueSections.sortOrder));
+  return { ...venue, zones };
 }
 
 /** Orden de prueba del evento (con comprador: `orders` lo exige fuera de `pending`). */

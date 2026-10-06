@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
 import { orders, tickets } from "@/lib/db/schema/sales";
-import { venueSections } from "@/lib/db/schema/venues";
+import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
 import { db, inRolledBackTransaction, openTransaction, type Tx, waitForLockWait } from "@/lib/db/testTransaction";
 import { OrganizerNotApprovedError } from "@/modules/auth/server";
@@ -24,7 +24,10 @@ import {
   createVenue,
   domainError,
   draftInput,
+  getVenueWithZones,
   insertOrder,
+  manualDraftInput,
+  manualVenueInput,
   type OrganizerStatus,
   setupDraft,
 } from "./eventTestHelpers";
@@ -48,7 +51,7 @@ function titleOnlyInput(title: string): EventDraftInput {
     startsAt: null,
     doorsOpenAt: null,
     minAge: 0,
-    venueId: null,
+    venue: null,
     imageUrl: null,
     organizerId: null,
     ticketTypes: [],
@@ -192,11 +195,14 @@ describeWithDb("eventDrafts.service", () => {
         expect(await tx.select().from(events).where(eq(events.title, "Sección ajena"))).toEqual([]);
       }));
 
-    it("rechaza un recinto no aprobado o inexistente", () =>
+    it("rechaza un recinto pendiente ajeno o inexistente; uno pendiente propio sí se elige de la lista", () =>
       inRolledBackTransaction(async (tx) => {
         const owner = await createUser(tx, "approved");
-        const pending = await createVenue(tx, owner.id, "pending_review");
+        const other = await createUser(tx, "approved");
+        const pending = await createVenue(tx, other.id, "pending_review");
         await expect(createEvent(owner, draftInput(pending))).rejects.toEqual(domainError("venue_not_approved"));
+        const { id } = await createEvent(other, draftInput(pending));
+        expect(await getEvent(tx, id)).toMatchObject({ venueId: pending.id, organizerId: other.id });
         const missing = { ...pending, id: randomUUID() };
         await expect(createEvent(owner, draftInput(missing, { ticketTypes: [] }))).rejects.toEqual(
           domainError("venue_not_approved"),
@@ -207,7 +213,7 @@ describeWithDb("eventDrafts.service", () => {
       inRolledBackTransaction(async (tx) => {
         const owner = await createUser(tx, "approved");
         const venue = await createVenue(tx, owner.id);
-        await expect(createEvent(owner, draftInput(venue, { venueId: null }))).rejects.toEqual(
+        await expect(createEvent(owner, draftInput(venue, { venue: null }))).rejects.toEqual(
           domainError("venue_required"),
         );
       }));
@@ -708,6 +714,156 @@ describeWithDb("eventDrafts.service", () => {
       }));
   });
 
+  describe("recinto ingresado a mano (spec organizer-manual-venue)", () => {
+    /** Organizador con un borrador cuyo recinto ingresó a mano; `status` lo pasa a ese estado. */
+    async function setupManual(tx: Tx, status?: "pending_review" | "published") {
+      const owner = await createUser(tx, "approved");
+      const venue = manualVenueInput();
+      const { id: eventId } = await createEvent(owner, manualDraftInput(venue));
+      if (status) await tx.update(events).set({ status }).where(eq(events.id, eventId));
+      const { venueId } = await getEvent(tx, eventId);
+      return { owner, venue, eventId, venueId: venueId! };
+    }
+
+    /** Recintos pendientes de un organizador. */
+    async function countPendingVenues(tx: Tx, organizerId: string) {
+      const [{ total }] = await tx
+        .select({ total: count() })
+        .from(venues)
+        .where(and(eq(venues.organizerId, organizerId), eq(venues.status, "pending_review")));
+      return total;
+    }
+
+    it("crea el evento y un recinto pending_review del organizador con sus zonas generales y tipos de entrada", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId, venueId } = await setupManual(tx);
+        const [general, vip] = venue.sections;
+
+        expect(await getEvent(tx, eventId)).toMatchObject({
+          status: "draft",
+          venueId,
+          searchText: "festival de prueba cafe la esquina lima",
+        });
+        expect(await getVenueWithZones(tx, venueId)).toEqual({
+          name: "Café La Esquina",
+          address: "Av. Larco 1150, Miraflores",
+          city: "Lima",
+          status: "pending_review",
+          organizerId: owner.id,
+          createdBy: owner.id,
+          zones: [
+            { id: general.id, slug: "general", name: "General", sortOrder: 0, seating: "general", capacity: 200 },
+            { id: vip.id, slug: "vip", name: "VIP", sortOrder: 1, seating: "general", capacity: 50 },
+          ],
+        });
+        expect((await getTicketTypes(tx, eventId)).map(({ sectionId, slug }) => ({ sectionId, slug }))).toEqual([
+          { sectionId: general.id, slug: "general" },
+          { sectionId: vip.id, slug: "vip" },
+        ]);
+      }));
+
+    it("un admin lo crea a nombre del organizador elegido: el recinto es del organizador y lo creó el admin", () =>
+      inRolledBackTransaction(async (tx) => {
+        const admin = await createUser(tx, undefined, { role: "admin" });
+        const owner = await createUser(tx, "approved");
+        const { id } = await createEvent(admin, manualDraftInput(undefined, { organizerId: owner.id }));
+        const { venueId } = await getEvent(tx, id);
+        expect(await getVenueWithZones(tx, venueId!)).toMatchObject({ organizerId: owner.id, createdBy: admin.id });
+      }));
+
+    it("zonas cuyos nombres dan el mismo slug (o ninguno) reciben slugs únicos", () =>
+      inRolledBackTransaction(async (tx) => {
+        const owner = await createUser(tx, "approved");
+        const sections = ["VIP", "Vip!", "¡¡¡"].map((name) => ({ id: randomUUID(), name, capacity: 10 }));
+        const { id } = await createEvent(owner, manualDraftInput(manualVenueInput({ sections })));
+        const { venueId } = await getEvent(tx, id);
+        expect((await getVenueWithZones(tx, venueId!)).zones.map((zone) => zone.slug)).toEqual(["vip", "vip-2", "zona"]);
+      }));
+
+    it("si algo falla no queda ni el evento ni el recinto", () =>
+      inRolledBackTransaction(async (tx) => {
+        const owner = await createUser(tx, "approved");
+        const other = await createVenue(tx, owner.id);
+        const input = manualDraftInput(undefined, {
+          ticketTypes: [{ sectionId: other.campoId, name: "General", priceCents: 5000, sortOrder: 0 }],
+        });
+        await expect(createEvent(owner, input)).rejects.toEqual(domainError("section_not_in_venue"));
+        expect(await countPendingVenues(tx, owner.id)).toBe(0);
+
+        const pending = await createUser(tx, "pending");
+        await expect(createEvent(pending, manualDraftInput())).rejects.toBeInstanceOf(OrganizerNotApprovedError);
+        expect(await countPendingVenues(tx, pending.id)).toBe(0);
+      }));
+
+    it.each(["draft", "pending_review"] as const)(
+      "en %s corrige el mismo recinto y reemplaza sus zonas (los tipos de entrada siguen a las zonas)",
+      (status) =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId, venueId } = await setupManual(tx, status === "draft" ? undefined : status);
+          const [general] = venue.sections;
+          const terraza = { id: randomUUID(), name: "Terraza", capacity: 30 };
+          const corrected = manualVenueInput({
+            name: "Café La Esquina 2",
+            address: "Av. Larco 1160, Miraflores",
+            city: "Arequipa",
+            sections: [{ ...general, capacity: 120 }, terraza],
+          });
+          expect(await updateEvent(owner, eventId, manualDraftInput(corrected))).toMatchObject({ status });
+
+          expect(await getEvent(tx, eventId)).toMatchObject({ venueId, status });
+          expect(await getVenueWithZones(tx, venueId)).toMatchObject({
+            name: "Café La Esquina 2",
+            address: "Av. Larco 1160, Miraflores",
+            city: "Arequipa",
+            status: "pending_review",
+            zones: [
+              { id: general.id, slug: "general", capacity: 120 },
+              { id: terraza.id, slug: "terraza", capacity: 30 },
+            ],
+          });
+          expect((await getTicketTypes(tx, eventId)).map((type) => type.sectionId)).toEqual([general.id, terraza.id]);
+          expect(await countPendingVenues(tx, owner.id)).toBe(1);
+        }),
+    );
+
+    it("con un recinto aprobado, pasar a uno a mano crea otro pendiente y no toca el aprobado", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupDraft(tx);
+        await updateEvent(owner, eventId, manualDraftInput());
+        const { venueId } = await getEvent(tx, eventId);
+        expect(venueId).not.toBe(venue.id);
+        expect(await getVenueWithZones(tx, venueId!)).toMatchObject({ status: "pending_review", organizerId: owner.id });
+        expect(await getVenueWithZones(tx, venue.id)).toMatchObject({ name: venue.name, status: "approved" });
+      }));
+
+    it("un recinto pendiente ajeno no se edita: si el admin cambia el organizador, se crea otro del nuevo", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, eventId, venueId } = await setupManual(tx);
+        const newOwner = await createUser(tx, "approved");
+        const renamed = manualVenueInput({ name: "Otro nombre" });
+        const admin = await createUser(tx, undefined, { role: "admin" });
+        await updateEvent(admin, eventId, manualDraftInput(renamed, { organizerId: newOwner.id }));
+
+        const event = await getEvent(tx, eventId);
+        expect(event.venueId).not.toBe(venueId);
+        expect(await getVenueWithZones(tx, event.venueId!)).toMatchObject({ name: "Otro nombre", organizerId: newOwner.id });
+        expect(await getVenueWithZones(tx, venueId)).toMatchObject({ name: "Café La Esquina", organizerId: owner.id });
+      }));
+
+    it("publicado (recinto ya aprobado): uno a mano da structure_locked y el recinto no cambia", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId, venueId } = await setupManual(tx, "published");
+        await tx.update(venues).set({ status: "approved" }).where(eq(venues.id, venueId));
+        await expect(updateEvent(owner, eventId, manualDraftInput(manualVenueInput({ name: "Cambio" })))).rejects.toEqual(
+          domainError("structure_locked"),
+        );
+        expect(await getVenueWithZones(tx, venueId)).toMatchObject({ name: "Café La Esquina", status: "approved" });
+        // De la lista, el mismo recinto y las mismas zonas: se guarda.
+        const sameStructure = manualDraftInput(venue, { venue: { kind: "existing", id: venueId }, title: "Nuevo título" });
+        expect(await updateEvent(owner, eventId, sameStructure)).toMatchObject({ status: "published" });
+      }));
+  });
+
   describe("deleteEvent", () => {
     it("el dueño borra su borrador y sus tipos de entrada", () =>
       inRolledBackTransaction(async (tx) => {
@@ -841,23 +997,43 @@ describeWithDb("eventDrafts.service", () => {
   });
 
   describe("lecturas del formulario", () => {
-    it("listApprovedVenuesWithSections: solo aprobados, secciones en orden y su capacidad", () =>
+    it("listApprovedVenuesWithSections: aprobados con su dirección, secciones en orden y su capacidad", () =>
       inRolledBackTransaction(async (tx) => {
         const owner = await createUser(tx, "approved");
         const venue = await createVenue(tx, owner.id);
-        const pending = await createVenue(tx, owner.id, "pending_review");
 
-        const list = await listApprovedVenuesWithSections();
+        const list = await listApprovedVenuesWithSections(owner);
         expect(list.find((candidate) => candidate.id === venue.id)).toEqual({
           id: venue.id,
           name: venue.name,
+          address: "Av. Prueba 123",
           city: "Lima",
+          lat: null,
+          lng: null,
+          placeId: null,
+          status: "approved",
+          organizerId: null,
           sections: [
             { id: venue.campoId, name: "Campo", seating: "general", capacity: 300 },
             { id: venue.plateaId, name: "Platea", seating: "numbered", capacity: 6 },
           ],
         });
-        expect(list.some((candidate) => candidate.id === pending.id)).toBe(false);
+      }));
+
+    it("listApprovedVenuesWithSections: un pendiente solo lo ven su organizador y los admins", () =>
+      inRolledBackTransaction(async (tx) => {
+        const owner = await createUser(tx, "approved");
+        const other = await createUser(tx, "approved");
+        const pending = await createVenue(tx, owner.id, "pending_review");
+        const ids = async (viewer: Actor) => (await listApprovedVenuesWithSections(viewer)).map((venue) => venue.id);
+
+        expect((await listApprovedVenuesWithSections(owner)).find((venue) => venue.id === pending.id)).toMatchObject({
+          status: "pending_review",
+          organizerId: owner.id,
+        });
+        expect(await ids(other)).not.toContain(pending.id);
+        expect(await ids(ADMIN)).toContain(pending.id);
+        expect(await ids(SUPER_ADMIN)).toContain(pending.id);
       }));
 
     it("listApprovedOrganizers: solo aprobados sin anonimizar, con su razón social", () =>

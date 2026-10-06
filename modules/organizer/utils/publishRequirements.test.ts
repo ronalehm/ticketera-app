@@ -4,7 +4,7 @@ import { formatPublishIssues, getPublishIssues, type PublishCandidate } from "./
 const NOW = new Date("2026-10-05T15:00:00Z");
 
 const COMPLETE: PublishCandidate = {
-  venueId: "venue-1",
+  hasVenue: true,
   description: "Tres escenarios.",
   imageUrl: "https://example.com/portada.jpg",
   startsAt: new Date("2026-12-06T01:00:00Z"),
@@ -19,7 +19,7 @@ describe("getPublishIssues", () => {
 
   it("lista cada dato que falta (los del CHECK y al menos un tipo de entrada)", () => {
     const empty: PublishCandidate = {
-      venueId: null,
+      hasVenue: false,
       description: "   ",
       imageUrl: null,
       startsAt: null,

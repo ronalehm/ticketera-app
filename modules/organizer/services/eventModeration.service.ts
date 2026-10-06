@@ -32,15 +32,23 @@ function assertModerator(actor: Actor): void {
 }
 
 /**
- * Al aprobar, el organizador dueño y el recinto tienen que seguir `approved`: pudieron suspenderse o retirarse mientras
- * el evento esperaba en revisión.
+ * Al aprobar, el organizador dueño tiene que seguir `approved` (pudo suspenderse mientras el evento esperaba en
+ * revisión) y el recinto también. Un recinto `pending_review` del mismo organizador (ingresado a mano, spec
+ * organizer-manual-venue, Decisión 6) se aprueba aquí, en la misma transacción; uno pendiente ajeno, no.
  */
-async function assertOwnerAndVenueApproved(event: LockedEvent, tx: Tx): Promise<void> {
+async function assertOwnerAndApproveVenue(event: LockedEvent, tx: Tx): Promise<void> {
   if ((await getOrganizerStatus(event.organizerId, tx)) !== "approved") throw new EventDraftError("owner_not_approved");
   const [venue] = event.venueId
-    ? await tx.select({ status: venues.status }).from(venues).where(eq(venues.id, event.venueId))
+    ? await tx
+        .select({ id: venues.id, status: venues.status, organizerId: venues.organizerId })
+        .from(venues)
+        .where(eq(venues.id, event.venueId))
     : [];
-  if (venue?.status !== "approved") throw new EventDraftError("event_venue_not_approved");
+  if (venue?.status === "pending_review" && venue.organizerId === event.organizerId) {
+    await tx.update(venues).set({ status: "approved" }).where(eq(venues.id, venue.id));
+  } else if (venue?.status !== "approved") {
+    throw new EventDraftError("event_venue_not_approved");
+  }
 }
 
 /**
@@ -66,8 +74,8 @@ export async function submitForReview(
 /**
  * Aprueba y publica (`pending_review → published`) en una sola transacción: bloquea el evento; si ya no está en revisión
  * no hace nada (un segundo clic espera el lock y encuentra `published`); revalida los requisitos para publicar y que el
- * organizador y el recinto sigan aprobados; comprueba que no hay inventario activo; genera todo el inventario
- * (`insertEventInventory`) y marca `published` con quién y cuándo lo revisó. Cualquier fallo revierte todo. Devuelve el
+ * organizador siga aprobado y el recinto también (si es el pendiente del organizador, lo aprueba); comprueba que no hay
+ * inventario activo; genera todo el inventario con las secciones vigentes (`insertEventInventory`) y marca `published` con quién y cuándo lo revisó. Cualquier fallo revierte todo. Devuelve el
  * estado en que queda el evento y su slug (la acción invalida sus páginas públicas).
  */
 export async function approveEvent(
@@ -81,7 +89,7 @@ export async function approveEvent(
     const event = await lockManagedEvent(actor, eventId, tx);
     if (!canTransition(actor.role, event.status, "approve")) return { status: event.status, slug: event.slug };
     await assertPublishable(event, tx, now);
-    await assertOwnerAndVenueApproved(event, tx);
+    await assertOwnerAndApproveVenue(event, tx);
 
     const [activeSeat] = await tx
       .select({ id: eventSeats.id })
@@ -99,7 +107,10 @@ export async function approveEvent(
   });
 }
 
-/** Rechaza (`pending_review → draft`) con el motivo (`review_note`), que el organizador ve en su borrador. */
+/**
+ * Rechaza (`pending_review → draft`) con el motivo (`review_note`), que el organizador ve en su borrador. Un recinto
+ * pendiente del evento sigue pendiente y editable (spec organizer-manual-venue, Decisión 6).
+ */
 export async function rejectEvent(actor: Actor, eventId: string, note: string, database: Database = db): Promise<void> {
   assertModerator(actor);
   const reviewNote = note.trim();

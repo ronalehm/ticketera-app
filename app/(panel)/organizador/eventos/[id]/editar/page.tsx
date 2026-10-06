@@ -73,7 +73,7 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
 
   const [categories, venues, organizers] = await Promise.all([
     listEventCategories(),
-    listApprovedVenuesWithSections(),
+    listApprovedVenuesWithSections(user),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
 

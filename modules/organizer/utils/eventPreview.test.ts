@@ -8,6 +8,12 @@ const SECTION_B = "22222222-2222-4222-8222-222222222222";
 const VENUE: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
   name: "Teatro Municipal",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Lima",
   sections: [],
 };

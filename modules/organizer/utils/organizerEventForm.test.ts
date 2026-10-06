@@ -23,6 +23,12 @@ const SECTION_B = "22222222-2222-4222-8222-222222222222";
 const VENUE: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
   name: "Estadio Nacional",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Lima",
   sections: [
     { id: SECTION_A, name: "Campo", seating: "general", capacity: 1000 },
@@ -192,7 +198,7 @@ describe("toEventDraftInput", () => {
       startsAt: new Date("2026-12-06T01:00:00Z"),
       doorsOpenAt: new Date("2026-12-05T23:00:00Z"),
       minAge: 16,
-      venueId: VENUE.id,
+      venue: { kind: "existing", id: VENUE.id },
       imageUrl: "https://images.unsplash.com/a.jpg",
       organizerId: "00000000-0000-8000-8000-000000000001",
       ticketTypes: [{ sectionId: SECTION_B, name: "Platea", priceCents: 12050, sortOrder: 0 }],
@@ -205,7 +211,7 @@ describe("toEventDraftInput", () => {
       description: null,
       startsAt: null,
       doorsOpenAt: null,
-      venueId: null,
+      venue: null,
       imageUrl: null,
       organizerId: null,
       ticketTypes: [],
@@ -214,6 +220,25 @@ describe("toEventDraftInput", () => {
 
   it("para un organizador ignora el organizador indicado", () => {
     expect(toEventDraftInput(values, { requireOrganizer: false }).organizerId).toBeNull();
+  });
+
+  it("con el recinto a mano marcado lo pasa (aforos como números) en lugar del de la lista; desmarcado, se ignora", () => {
+    const manualVenue = {
+      enabled: true,
+      name: "Café La Esquina",
+      address: "Av. Larco 1150, Miraflores",
+      city: "Cusco",
+      sections: [{ id: SECTION_A, name: "General", capacity: "200" }],
+    };
+    expect(toEventDraftInput({ ...values, manualVenue }, { requireOrganizer: false }).venue).toEqual({
+      kind: "manual",
+      name: "Café La Esquina",
+      address: "Av. Larco 1150, Miraflores",
+      city: "Cusco",
+      sections: [{ id: SECTION_A, name: "General", capacity: 200 }],
+    });
+    const unchecked = { ...values, manualVenue: { ...manualVenue, enabled: false } };
+    expect(toEventDraftInput(unchecked, { requireOrganizer: false }).venue).toEqual({ kind: "existing", id: VENUE.id });
   });
 });
 

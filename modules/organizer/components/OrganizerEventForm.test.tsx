@@ -20,6 +20,12 @@ const BLOB_URL = "https://abc.public.blob.vercel-storage.com/events/draft/portad
 const STADIUM: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
   name: "Estadio Nacional",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Lima",
   sections: [
     { id: "11111111-1111-4111-8111-111111111111", name: "Campo", seating: "general", capacity: 1000 },
@@ -29,6 +35,12 @@ const STADIUM: VenueOption = {
 const THEATER: VenueOption = {
   id: "6c1b4d2f-3a5e-4b7c-9d0e-1f2a3b4c5d6e",
   name: "Teatro Municipal",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Arequipa",
   sections: [{ id: "33333333-3333-4333-8333-333333333333", name: "Platea", seating: "numbered", capacity: 300 }],
 };
