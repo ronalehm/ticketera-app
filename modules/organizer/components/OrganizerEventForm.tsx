@@ -82,7 +82,7 @@ type OrganizerEventFormProps = {
 
 /**
  * Crear o editar un evento (spec admin-panel, F5a y F5b): se guarda en la BD (`createEventAction`/`updateEventAction`) y
- * vuelve a Eventos (`/organizador`). En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
+ * vuelve a Eventos (`/organizador`). En un borrador solo el nombre y la categoría son obligatorios; en un evento publicado se bloquean los campos que
  * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Eventos.
  */
 export function OrganizerEventForm({ userId, categories, venues, organizers, event }: OrganizerEventFormProps) {

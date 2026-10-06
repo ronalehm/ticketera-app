@@ -350,7 +350,7 @@ Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Cancel
 
 ### Campos y reglas (`createEventDraftSchema`)
 
-Un borrador solo exige el nombre; lo demás puede faltar, pero lo que se indique tiene que ser válido (la BD no guarda datos a medias). El mismo schema valida el formulario y la entrada de las acciones; las comprobaciones de la BD las hace el servicio.
+Un borrador solo exige el nombre y la categoría; lo demás puede faltar, pero lo que se indique tiene que ser válido (la BD no guarda datos a medias). El mismo schema valida el formulario y la entrada de las acciones; las comprobaciones de la BD las hace el servicio.
 
 | Campo | Control | Regla | Mensaje |
 |---|---|---|---|

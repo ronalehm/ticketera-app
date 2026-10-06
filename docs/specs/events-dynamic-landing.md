@@ -170,28 +170,28 @@ Sincronización: Preview = `origin/main` + esta feature; Neon `test` ≥ migraci
 
 ## Plan de tareas
 ### F1 — Contrato, servicio, seed, categorías nuevas y `categoryName`
-- [ ] T1. `categorySlugSchema`, `EventCategory`, `listEventCategories` (+ tests).
-- [ ] T2. `categoryName` en el evento público, mapper y `EventCard`, `HeroCarousel` (badge), `EventDetailHeader`,
+- [x] T1. `categorySlugSchema`, `EventCategory`, `listEventCategories` (+ tests).
+- [x] T2. `categoryName` en el evento público, mapper y `EventCard`, `HeroCarousel` (badge), `EventDetailHeader`,
   `RelatedEvents`.
-- [ ] T3. `DEFAULT_EVENT_CATEGORIES` (9), migración `0009`, `EVENTS_MOCK`, iconos (`CATEGORY_ICONS` + `Tag`) y tests
+- [x] T3. `DEFAULT_EVENT_CATEGORIES` (9), migración `0009`, `EVENTS_MOCK`, iconos (`CATEGORY_ICONS` + `Tag`) y tests
   del seed y la migración.
 ### F2 — `/eventos`, shell y checkout
-- [ ] T4. Schema de filtros y `eventFilters.ts` dinámicos (+ tests).
-- [ ] T5. `CategoryFilter`, `EventFiltersForm`, `EventFiltersSidebar`, `EventFiltersSheet`, página/metadata de
+- [x] T4. Schema de filtros y `eventFilters.ts` dinámicos (+ tests).
+- [x] T5. `CategoryFilter`, `EventFiltersForm`, `EventFiltersSidebar`, `EventFiltersSheet`, página/metadata de
   `/eventos`.
-- [ ] T6. `SiteShell` async, footer desde BD, header con «Eventos».
-- [ ] T7. Checkout con `categoryName`.
+- [x] T6. `SiteShell` async, footer desde BD, header con «Eventos».
+- [x] T7. Checkout con `categoryName`.
 ### F3 — Formulario del organizador
-- [ ] T8. Schema, `organizerEventForm`, `eventPreview`, `OrganizerEventForm` con `categories`.
-- [ ] T9. `getCategoryId` → `invalid_category`, `getEventForEdit`, páginas `nuevo`/`editar` (+ tests).
+- [x] T8. Schema, `organizerEventForm`, `eventPreview`, `OrganizerEventForm` con `categories`.
+- [x] T9. `getCategoryId` → `invalid_category`, `getEventForEdit`, páginas `nuevo`/`editar` (+ tests).
 ### F4 — Destacados
-- [ ] T10. `setEventFeatured`, `setEventFeaturedAction` (+ tests).
-- [ ] T11. `featured` en `ManagedEvent`, `useSetEventFeatured`, `FeaturedToggle` (+ test), listado y editar.
+- [x] T10. `setEventFeatured`, `setEventFeaturedAction` (+ tests).
+- [x] T11. `featured` en `ManagedEvent`, `useSetEventFeatured`, `FeaturedToggle` (+ test), listado y editar.
 ### F5 — Landing, 10 % y limpieza
-- [ ] T12. `selectPublishedEvents`, `getFeaturedEvents`, `getUpcomingEvents` (+ tests).
-- [ ] T13. `HeroCarousel` 0/1/N, `FeaturedEventsRail`, `app/(site)/page.tsx`.
-- [ ] T14. `CategoryGrid` dinámico y `UpcomingEvents` con chips de BD.
-- [ ] T15. `LOW_STOCK_RATIO`, documentación (`design-system/ticketera/pages/{landing,events-list,organizer}.md`) y
+- [x] T12. `selectPublishedEvents`, `getFeaturedEvents`, `getUpcomingEvents` (+ tests).
+- [x] T13. `HeroCarousel` 0/1/N, `FeaturedEventsRail`, `app/(site)/page.tsx`.
+- [x] T14. `CategoryGrid` dinámico y `UpcomingEvents` con chips de BD.
+- [x] T15. `LOW_STOCK_RATIO`, documentación (`design-system/ticketera/pages/{landing,events-list,organizer}.md`) y
   borrado de `categories.ts`.
 
 ## Verificación
