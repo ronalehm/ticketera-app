@@ -10,6 +10,7 @@ import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../servi
 import type { EventDraftActionFailure, EventDraftActionResult, EventDraftInput } from "../types/organizer.types";
 import { toEventDraftInput } from "../utils/organizerEventForm";
 import { invalidInput as invalid, toEventActionFailure as failure } from "./eventActionFailure";
+import { processEventNotificationsAfterResponse } from "./processEventNotificationsAfterResponse";
 import { revalidatePublicEvent } from "./revalidatePublicEvent";
 
 // Acciones del CRUD de borradores (spec admin-panel, F5a). Todas exigen `events:manageOwn` (`requirePermission`
@@ -42,7 +43,7 @@ export async function createEventAction(input: unknown): Promise<EventDraftActio
 /**
  * Guarda los cambios de un evento: libre en borrador, con los requisitos de revisión si está en revisión, sin tocar su
  * estructura si está publicado (y entonces invalida sus páginas públicas); cancelado o finalizado no se edita. Si la portada cambió, borra la anterior (si era nuestra)
- * después de guardar y de responder.
+ * después de guardar y de responder. Si avisó a los compradores, procesa la notificación tras responder.
  */
 export async function updateEventAction(id: unknown, input: unknown): Promise<EventDraftActionResult> {
   const actor = await requirePermission("events:manageOwn");
@@ -52,8 +53,9 @@ export async function updateEventAction(id: unknown, input: unknown): Promise<Ev
   if (!draft.ok) return draft;
   try {
     const previousImageUrl = (await getEventForEdit(actor, parsedId.data))?.imageUrl;
-    const { status, slug } = await updateEvent(actor, parsedId.data, draft.data);
+    const { status, slug, notification } = await updateEvent(actor, parsedId.data, draft.data);
     if (status === "published") revalidatePublicEvent(slug);
+    processEventNotificationsAfterResponse(notification);
     if (previousImageUrl && previousImageUrl !== draft.data.imageUrl) {
       after(() => deleteOwnCoverBestEffort(previousImageUrl));
     }

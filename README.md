@@ -146,6 +146,85 @@ Tarjetas de prueba (cualquier fecha futura y cualquier CVC):
 | `4000 0000 0000 9995` | Fondos insuficientes |
 | `4000 0025 0000 3155` | Pide autenticación 3D Secure |
 
+## Correo a compradores (Resend)
+
+Cuando se edita un evento **publicado** con compradores (órdenes `paid` o `partially_refunded`) o se cancela, la app avisa por correo a cada dirección distinta, una sola vez (spec `event-change-notifications`). El código vive en `modules/notifications`.
+
+### Configuración
+
+Variables solo de servidor, validadas en `lib/env.ts` y documentadas en `.env.example` (nunca con prefijo `NEXT_PUBLIC_`; la clave nunca va en logs, issues ni documentación):
+
+| Variable | Production | Preview | Local (`.env.local`) |
+|---|---|---|---|
+| `RESEND_API_KEY` | Clave de Production (Sensitive) | Otra clave, distinta de Production (Sensitive) | Clave de prueba/Preview |
+| `EMAIL_FROM` | `Nombre <correo@dominio verificado>` | Igual | Igual |
+| `EMAIL_DELIVERY_MODE` | `live` | `allowlist` | `allowlist` |
+| `EMAIL_ALLOWED_RECIPIENTS` | — | Correos de prueba, separados por comas | Solo tu correo de prueba |
+| `CRON_SECRET` | ≥ 16 caracteres aleatorios | Opcional | Opcional |
+
+- **Modos:** `live` solo tiene efecto si además `VERCEL_ENV=production`; en cualquier otro entorno se fuerza `allowlist` aunque diga `live`. En `allowlist`, los destinatarios fuera de la lista no reciben nada: su entrega queda `failed` con `omitido por allowlist`, sin llamar a Resend.
+- **Sin `RESEND_API_KEY` o sin `EMAIL_FROM`:** la app funciona igual; las notificaciones se encolan y quedan `pending` (se registra un aviso) hasta que haya clave.
+
+### Cómo funciona
+
+1. **Outbox en la misma transacción.** Al guardar el evento, su servicio (`updateEvent` / `cancelEvent`) escribe una fila en `event_notifications` dentro de la misma transacción: si falla una de las dos cosas, no se guarda ninguna. Borradores y eventos en revisión no avisan (no tienen compradores).
+2. **Tipos:**
+   - `schedule`: cambió el inicio o la apertura de puertas. Sale **ya**. Si en el mismo guardado cambiaron también otros campos, van en ese mismo correo.
+   - `cancelled`: el evento se canceló. Sale **ya**.
+   - `update`: cualquier otro cambio (nombre, descripción, portada, categoría, edad, nombre o precio de un tipo de entrada). Espera **10 minutos** y los cambios de ese intervalo se fusionan en un solo correo (primer «antes», último «después»).
+3. **Envío inmediato con `after()`.** Tras responder al usuario, la acción procesa la notificación `schedule`/`cancelled` y, de paso, hasta 5 notificaciones vencidas de cualquier evento (drenado oportunista). No depende del cron.
+4. **Cron.** `GET /api/cron/event-notifications`, protegido con `Authorization: Bearer <CRON_SECRET>` (401 sin él o sin `CRON_SECRET` configurado), procesa en lotes las `pending` vencidas (agrupadas y reintentos) y libera las `sending` con el reclamo vencido (más de 10 minutos). Vercel solo ejecuta crons en el despliegue de Production.
+5. **Reintentos.** Red, timeout, `429` y `5xx` se reintentan con backoff (1, 2, 4, 8 min como mínimo) hasta 5 intentos; un `4xx` de validación marca esa entrega `failed` sin reintento. Al quinto intento fallido la notificación queda `failed`. Una entrega `sent` nunca se reenvía y cada envío lleva una clave de idempotencia de Resend.
+
+### Frecuencia del cron: Hobby y Pro
+
+La frecuencia es solo configuración de `vercel.json` → `crons`; ni la BD ni el código dependen de ella.
+
+| Plan | `schedule` | Consecuencia |
+|---|---|---|
+| Hobby (actual) | `"0 10 * * *"` (05:00 hora de Lima, una vez al día; Vercel no garantiza el minuto) | Fecha y cancelación salen al momento con `after()`. En el peor caso, un cambio agrupado o un reintento sale al día siguiente, salvo que antes lo recoja el drenado de otra acción. |
+| Pro | `"*/10 * * * *"` | Agrupados y reintentos salen en ≤ 10 minutos. |
+
+Para pasar a Pro basta con cambiar esa línea de `vercel.json` y desplegar.
+
+Para ejecutarlo a mano (p. ej. en Preview, donde Vercel no lo lanza), con el `CRON_SECRET` de ese entorno en una variable de tu terminal (no lo pegues en chats ni issues):
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/event-notifications   # → {"processed": N}
+```
+
+### Reprocesar una notificación `failed`
+
+Una notificación queda `failed` al agotar 5 intentos con entregas aún pendientes (p. ej. Resend caído o una clave mal configurada). Corrige primero la causa (`last_error`) y después, en la consola SQL de Neon de esa rama:
+
+```sql
+-- 1. Localizarla y ver por qué falló.
+SELECT id, event_id, kind, attempts, last_error, updated_at
+FROM event_notifications WHERE status = 'failed' ORDER BY updated_at DESC;
+
+SELECT status, last_error, count(*)
+FROM event_notification_deliveries WHERE notification_id = '<id>' GROUP BY status, last_error;
+
+-- 2. Volver a dejarla pendiente. Solo las entregas `failed` por un error reintentable: las `sent` nunca se reenvían,
+--    y no reactives las omitidas por la allowlist ni las rechazadas por Resend (dirección inválida).
+BEGIN;
+UPDATE event_notification_deliveries
+SET status = 'pending', attempts = 0, last_error = NULL, updated_at = now()
+WHERE notification_id = '<id>' AND status = 'failed'
+  AND last_error IS DISTINCT FROM 'omitido por allowlist'
+  AND last_error NOT LIKE 'validation_error%';   -- ajusta el filtro a lo que viste en el paso 1
+UPDATE event_notifications
+SET status = 'pending', attempts = 0, next_attempt_at = NULL, locked_at = NULL, last_error = NULL, updated_at = now()
+WHERE id = '<id>' AND status = 'failed';
+COMMIT;
+```
+
+La recoge el siguiente worker: el cron (o su llamada manual con `curl`) o el drenado de la próxima acción que encole un aviso. Los destinatarios no se recalculan: son los que se congelaron en el primer intento.
+
+### Limitación conocida
+
+Hoy un evento con ventas activas no se puede cancelar (`has_sales`: «Cancelación con reembolsos: Próximamente»), así que el correo `cancelled` solo se enviará cuando se habilite cancelar con compradores; la integración ya está en `cancelEvent`.
+
 ## Estructura
 
 ```

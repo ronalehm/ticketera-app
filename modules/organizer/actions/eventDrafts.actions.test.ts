@@ -3,6 +3,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSessionUser, OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
+import { processDueEventNotifications, processEventNotification } from "@/modules/notifications/server";
 import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../services/eventDrafts.service";
 import type { EventDraftFormValues } from "../types/organizer.types";
 import { EventDraftError } from "../utils/eventDraftError";
@@ -31,6 +32,10 @@ vi.mock("@/lib/env", async (importOriginal) => {
 });
 vi.mock("next/server", () => ({ after: vi.fn((task: () => Promise<void>) => blob.scheduled.push(task)) }));
 const runAfterTasks = () => Promise.all(blob.scheduled.splice(0).map((task) => task()));
+vi.mock("@/modules/notifications/server", () => ({
+  processEventNotification: vi.fn(),
+  processDueEventNotifications: vi.fn(),
+}));
 
 const OWN_COVER = (scope: string) => `https://abc123.public.blob.vercel-storage.com/events/${scope}/${crypto.randomUUID()}.jpg`;
 
@@ -70,7 +75,7 @@ const VALUES: EventDraftFormValues = {
 beforeEach(() => {
   vi.mocked(requirePermission).mockResolvedValue(ORGANIZER);
   vi.mocked(createEvent).mockResolvedValue({ id: EVENT_ID });
-  vi.mocked(updateEvent).mockResolvedValue({ status: "draft", slug: "festival" });
+  vi.mocked(updateEvent).mockResolvedValue({ status: "draft", slug: "festival", notification: null });
   blob.count.mockResolvedValue(0);
   blob.scheduled.length = 0;
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -195,15 +200,31 @@ describe("updateEventAction", () => {
   });
 
   it("un evento publicado invalida el inicio, el catálogo, su detalle y su compra", async () => {
-    vi.mocked(updateEvent).mockResolvedValue({ status: "published", slug: "festival" });
+    vi.mocked(updateEvent).mockResolvedValue({ status: "published", slug: "festival", notification: null });
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
     expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path).sort()).toEqual(
       ["/", "/eventos", "/eventos/festival", "/eventos/festival/entradas"].sort(),
     );
   });
 
+  it("si avisó a los compradores, tras responder envía la notificación inmediata y drena hasta 5 vencidas", async () => {
+    const notification = { id: "a0000000-0000-4000-8000-000000000001", kind: "schedule" as const };
+    vi.mocked(updateEvent).mockResolvedValue({ status: "published", slug: "festival", notification });
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
+    expect(processEventNotification).not.toHaveBeenCalled();
+    await runAfterTasks();
+    expect(processEventNotification).toHaveBeenCalledWith(notification.id);
+    expect(processDueEventNotifications).toHaveBeenCalledWith({ limit: 5 });
+  });
+
+  it("sin notificación encolada no programa nada", async () => {
+    vi.mocked(updateEvent).mockResolvedValue({ status: "published", slug: "festival", notification: null });
+    await updateEventAction(EVENT_ID, VALUES);
+    expect(blob.scheduled).toHaveLength(0);
+  });
+
   it("un evento en revisión se guarda y no invalida páginas públicas", async () => {
-    vi.mocked(updateEvent).mockResolvedValue({ status: "pending_review", slug: "festival" });
+    vi.mocked(updateEvent).mockResolvedValue({ status: "pending_review", slug: "festival", notification: null });
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
     expect(revalidatePath).not.toHaveBeenCalled();
   });

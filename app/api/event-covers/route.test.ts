@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   handleUploadPresigned: vi.fn(),
 }));
 
-vi.mock("@/lib/env", () => ({ env: mocks.env }));
+// Parcial: `env` mockeado; los helpers de `lib/env` (los usa el módulo de notificaciones al importarse) son los reales.
+vi.mock("@/lib/env", async (importOriginal) => ({ ...(await importOriginal<object>()), env: mocks.env }));
 vi.mock("@/modules/auth/server", () => ({ getSessionUser: mocks.getSessionUser }));
 vi.mock("@/modules/organizer/server", async () => ({
   ...(await vi.importActual<object>("@/modules/organizer/services/eventCoverUpload.service")),

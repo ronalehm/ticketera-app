@@ -13,8 +13,9 @@ import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { normalizeText, slugify } from "@/lib/text";
 import { roleCan } from "@/modules/auth/permissions";
 import { getOrganizerStatus, requireApprovedOrganizer, type SessionUser } from "@/modules/auth/server";
-import { categorySlugSchema } from "@/modules/events/format";
+import { categorySlugSchema, formatEventPrice } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
+import { enqueueEventNotification, type EventChange, type EventNotificationKind } from "@/modules/notifications/server";
 import type {
   EditableEvent,
   EventDraftInput,
@@ -34,6 +35,8 @@ export type Actor = Pick<SessionUser, "id" | "role">;
 export type Database = typeof db;
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Queryable = Pick<Database, "select">;
+/** Notificación a compradores encolada en la transacción (spec event-change-notifications); `null` si no hubo. */
+export type EnqueuedNotification = { id: string; kind: EventNotificationKind } | null;
 
 const SLUG_MAX_LENGTH = 80;
 /** Slug de un título sin letras ni números ("!!!"). */
@@ -324,6 +327,7 @@ export async function lockManagedEvent(actor: Actor, eventId: string, tx: Tx) {
       imageUrl: events.imageUrl,
       startsAt: events.startsAt,
       doorsOpenAt: events.doorsOpenAt,
+      minAge: events.minAge,
     })
     .from(events)
     .where(and(eq(events.id, eventId), manageAny ? undefined : eq(events.organizerId, actor.id)))
@@ -386,8 +390,8 @@ export async function createEvent(actor: Actor, input: EventDraftInput, database
 }
 
 /**
- * Edita un evento según su estado (spec event-editing, Decisión 1) y devuelve su estado y su slug (la acción invalida
- * las páginas públicas de un evento publicado):
+ * Edita un evento según su estado (spec event-editing, Decisión 1) y devuelve su estado, su slug (la acción invalida
+ * las páginas públicas de un evento publicado) y la notificación a compradores encolada, si la hubo (solo publicados):
  * - `draft`: edición libre (también la del recinto ingresado a mano, spec organizer-manual-venue, Decisión 7).
  * - `pending_review`: como un borrador (aún no tiene inventario), pero sigue cumpliendo los requisitos para enviarlo a
  *   revisión (`incomplete`) y sigue en revisión: el admin aprueba la versión guardada.
@@ -401,12 +405,12 @@ export async function updateEvent(
   input: EventDraftInput,
   database: Database = db,
   now: Date = new Date(),
-): Promise<{ status: "draft" | "pending_review" | "published"; slug: string }> {
+): Promise<{ status: "draft" | "pending_review" | "published"; slug: string; notification: EnqueuedNotification }> {
   return inTransaction(database, async (tx) => {
     await assertActorCanMutate(actor, tx);
     const current = await lockManagedEvent(actor, eventId, tx);
     if (current.status === "draft") {
-      return { status: "draft" as const, slug: (await updateDraftEvent(actor, current, input, tx)).slug };
+      return { status: "draft" as const, slug: (await updateDraftEvent(actor, current, input, tx)).slug, notification: null };
     }
     if (current.status === "pending_review") {
       // Antes de escribir, lo que exige `events_draft_complete_check`; después, con los tipos guardados, todo (también
@@ -418,11 +422,11 @@ export async function updateEvent(
       if (issues.length > 0) throw new EventDraftError("incomplete", issues);
       const { slug, venueId } = await updateDraftEvent(actor, current, input, tx);
       await assertPublishable({ ...input, id: current.id, venueId }, tx, now);
-      return { status: "pending_review" as const, slug };
+      return { status: "pending_review" as const, slug, notification: null };
     }
     if (current.status === "published") {
-      await updatePublishedEvent(actor, current, input, tx, now);
-      return { status: "published" as const, slug: current.slug };
+      const notification = await updatePublishedEvent(actor, current, input, tx, now);
+      return { status: "published" as const, slug: current.slug, notification };
     }
     throw new EventDraftError("edit_locked");
   });
@@ -493,7 +497,10 @@ const sameInstant = (a: Date | null, b: Date | null) => (a?.getTime() ?? null) =
  *   `pending` vigentes (`price_locked_pending`, enmienda 1); su nombre sí;
  * - con ventas activas (`hasActiveSales`), un cambio de inicio o apertura de puertas informa `schedule_changed_at`
  *   (aviso «Fecha actualizada» a los compradores, Decisión 2);
- * - sigue cumpliendo los requisitos para publicar (`incomplete`); la fecha tiene que ser futura solo si cambia.
+ * - sigue cumpliendo los requisitos para publicar (`incomplete`); la fecha tiene que ser futura solo si cambia;
+ * - encola en la misma transacción el correo a los compradores (spec event-change-notifications, Decisión 3) con todos
+ *   los cambios visibles: `schedule` (sale ya) si cambia el inicio o la apertura de puertas, aunque cambien también
+ *   otros campos (van en ese mismo correo); si no, `update` (se agrupa 10 minutos). Sin compradores no encola nada.
  */
 async function updatePublishedEvent(
   actor: Actor,
@@ -501,9 +508,14 @@ async function updatePublishedEvent(
   input: EventDraftInput,
   tx: Tx,
   now: Date,
-): Promise<void> {
+): Promise<EnqueuedNotification> {
   const currentTypes = await tx
-    .select({ id: ticketTypes.id, sectionId: ticketTypes.sectionId, priceCents: ticketTypes.priceCents })
+    .select({
+      id: ticketTypes.id,
+      sectionId: ticketTypes.sectionId,
+      name: ticketTypes.name,
+      priceCents: ticketTypes.priceCents,
+    })
     .from(ticketTypes)
     .where(eq(ticketTypes.eventId, current.id));
   const currentSections = new Map(currentTypes.map((type) => [type.sectionId, type]));
@@ -555,6 +567,55 @@ async function updatePublishedEvent(
       .set({ name: type.name, priceCents: type.priceCents })
       .where(and(eq(ticketTypes.eventId, current.id), eq(ticketTypes.sectionId, type.sectionId)));
   }
+
+  const changes = await describeChanges(current, input, categoryId, currentSections, tx);
+  const kind = scheduleChanged ? "schedule" : "update";
+  const id = await enqueueEventNotification(tx, { eventId: current.id, kind, changes, actorId: actor.id });
+  return id ? { id, kind } : null;
+}
+
+/**
+ * Cambios visibles para los compradores (antes → ahora), con valores legibles: fechas en ISO (el correo las muestra en
+ * hora de Lima), la categoría por su nombre y cada tipo de entrada por su nombre anterior, con el precio en soles.
+ */
+async function describeChanges(
+  current: LockedEvent,
+  input: EventDraftInput,
+  categoryId: string,
+  currentTypes: Map<string, { name: string; priceCents: number }>,
+  tx: Tx,
+): Promise<EventChange[]> {
+  const changes: EventChange[] = [];
+  const add = (field: string, before: EventChange["before"], after: EventChange["after"]) => {
+    if (before !== after) changes.push({ field, before, after });
+  };
+  const iso = (date: Date | null) => date?.toISOString() ?? null;
+  const price = (cents: number) => formatEventPrice(cents / 100);
+
+  add("title", current.title, input.title);
+  add("description", current.description, input.description);
+  add("imageUrl", current.imageUrl, input.imageUrl);
+  if (categoryId !== current.categoryId) {
+    const names = new Map(
+      (
+        await tx
+          .select({ id: categories.id, name: categories.name })
+          .from(categories)
+          .where(inArray(categories.id, [current.categoryId, categoryId]))
+      ).map((category) => [category.id, category.name]),
+    );
+    add("category", names.get(current.categoryId) ?? null, names.get(categoryId) ?? null);
+  }
+  add("minAge", current.minAge, input.minAge);
+  add("startsAt", iso(current.startsAt), iso(input.startsAt));
+  add("doorsOpenAt", iso(current.doorsOpenAt), iso(input.doorsOpenAt));
+  for (const type of input.ticketTypes) {
+    // `structure_locked` ya garantizó que cada tipo del formulario es uno de los guardados.
+    const saved = currentTypes.get(type.sectionId)!;
+    add(`Entrada «${saved.name}»: nombre`, saved.name, type.name);
+    add(`Entrada «${saved.name}»: precio`, price(saved.priceCents), price(type.priceCents));
+  }
+  return changes;
 }
 
 /**

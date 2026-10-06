@@ -4,11 +4,13 @@ import { and, asc, count, eq, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { eventNotifications } from "@/lib/db/schema/notifications";
 import { orders, tickets } from "@/lib/db/schema/sales";
 import { venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
 import { db, inRolledBackTransaction, openTransaction, type Tx, waitForLockWait } from "@/lib/db/testTransaction";
 import { OrganizerNotApprovedError } from "@/modules/auth/server";
+import { enqueueEventNotification } from "@/modules/notifications/server";
 import type { EventDraftInput } from "../types/organizer.types";
 import {
   createEvent,
@@ -34,6 +36,11 @@ import {
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
+// El outbox real, espiado para simular un fallo del encolado.
+vi.mock("@/modules/notifications/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/notifications/server")>();
+  return { ...actual, enqueueEventNotification: vi.fn(actual.enqueueEventNotification) };
+});
 
 const ADMIN: Actor = { id: randomUUID(), role: "admin" };
 const SUPER_ADMIN: Actor = { id: randomUUID(), role: "super_admin" };
@@ -305,7 +312,7 @@ describeWithDb("eventDrafts.service", () => {
             ticketTypes: [{ sectionId: venue.plateaId, name: "Platea", priceCents: 9000, sortOrder: 0 }],
           }),
         );
-        expect(result).toEqual({ status: "draft", slug: `nuevo-titulo-${suffix}` });
+        expect(result).toEqual({ status: "draft", slug: `nuevo-titulo-${suffix}`, notification: null });
 
         expect(await getEvent(tx, eventId)).toMatchObject({
           title,
@@ -378,7 +385,7 @@ describeWithDb("eventDrafts.service", () => {
         const onlyPlatea = [{ sectionId: venue.plateaId, name: "Platea", priceCents: 9000, sortOrder: 0 }];
         expect(
           await updateEvent(owner, eventId, draftInput(venue, { description: "Corregida", ticketTypes: onlyPlatea })),
-        ).toEqual({ status: "pending_review", slug: expect.any(String) });
+        ).toEqual({ status: "pending_review", slug: expect.any(String), notification: null });
         expect(await getTicketTypes(tx, eventId)).toEqual([
           { sectionId: venue.plateaId, slug: "platea", name: "Platea", priceCents: 9000, sortOrder: 0, maxPerOrder: 10 },
         ]);
@@ -454,7 +461,7 @@ describeWithDb("eventDrafts.service", () => {
         );
 
         // El slug (su URL pública) no cambia aunque cambie el título: la acción invalida esas páginas.
-        expect(result).toEqual({ status: "published", slug });
+        expect(result).toEqual({ status: "published", slug, notification: null });
         expect(await getEvent(tx, eventId)).toMatchObject({ status: "published", slug, title: "Título nuevo", startsAt });
         expect(await getTicketTypes(tx, eventId)).toEqual([
           { sectionId: venue.campoId, slug: "campo", name: "Campo", priceCents: 6000, sortOrder: 0, maxPerOrder: 10 },
@@ -501,6 +508,8 @@ describeWithDb("eventDrafts.service", () => {
           expect(await updateEvent(owner, eventId, input, db, now)).toEqual({
             status: "published",
             slug: expect.any(String),
+            // Una reserva `pending` no es comprador: no se avisa (spec event-change-notifications).
+            notification: status === "pending" ? null : { id: expect.any(String), kind: "schedule" },
           });
 
           const [teatro] = await tx.select({ id: categories.id }).from(categories).where(eq(categories.slug, "teatro"));
@@ -547,6 +556,114 @@ describeWithDb("eventDrafts.service", () => {
         await updateEvent(withoutSales.owner, withoutSales.eventId, draftInput(withoutSales.venue, { startsAt }));
         expect(await getEvent(tx, withoutSales.eventId)).toMatchObject({ startsAt, scheduleChangedAt: null });
       }));
+
+    describe("notificaciones a compradores (spec event-change-notifications, Decisión 3)", () => {
+      async function notificationsOf(tx: Tx, eventId: string) {
+        return tx
+          .select({
+            id: eventNotifications.id,
+            kind: eventNotifications.kind,
+            changes: eventNotifications.changes,
+            createdBy: eventNotifications.createdBy,
+          })
+          .from(eventNotifications)
+          .where(eq(eventNotifications.eventId, eventId))
+          .orderBy(asc(eventNotifications.createdAt));
+      }
+
+      /** Publicado con un comprador (orden `paid`). */
+      async function setupWithBuyer(tx: Tx) {
+        const setup = await setupEvent(tx, "published");
+        await insertOrder(tx, setup.eventId, "paid", new Date(Date.now() - 60_000));
+        return setup;
+      }
+
+      it("cambiar la fecha encola `schedule` en la misma transacción, con todos los cambios y su autor", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId } = await setupWithBuyer(tx);
+          const startsAt = new Date("2027-03-01T01:00:00Z");
+          const result = await updateEvent(owner, eventId, draftInput(venue, { title: "Festival 2", startsAt }));
+
+          const notifications = await notificationsOf(tx, eventId);
+          expect(notifications).toEqual([
+            {
+              id: expect.any(String),
+              kind: "schedule",
+              createdBy: owner.id,
+              changes: [
+                { field: "title", before: "Festival de prueba", after: "Festival 2" },
+                { field: "startsAt", before: "2027-01-16T01:00:00.000Z", after: "2027-03-01T01:00:00.000Z" },
+              ],
+            },
+          ]);
+          expect(result.notification).toEqual({ id: notifications[0].id, kind: "schedule" });
+        }));
+
+      it("cambios menores se fusionan en una sola `update` (primer antes, último después) con etiquetas legibles", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId } = await setupWithBuyer(tx);
+          const first = await updateEvent(owner, eventId, draftInput(venue, { title: "Festival 2" }));
+          const [general, platea] = draftInput(venue).ticketTypes;
+          const second = await updateEvent(
+            owner,
+            eventId,
+            draftInput(venue, {
+              title: "Festival 3",
+              category: "teatro",
+              minAge: 0,
+              ticketTypes: [{ ...general, name: "Campo", priceCents: 7000 }, platea],
+            }),
+          );
+
+          const names = new Map(
+            (await tx.select({ slug: categories.slug, name: categories.name }).from(categories)).map((c) => [c.slug, c.name]),
+          );
+          const notifications = await notificationsOf(tx, eventId);
+          expect(notifications).toEqual([
+            {
+              id: first.notification?.id,
+              kind: "update",
+              createdBy: owner.id,
+              changes: [
+                { field: "title", before: "Festival de prueba", after: "Festival 3" },
+                { field: "category", before: names.get("festivales"), after: names.get("teatro") },
+                { field: "minAge", before: 18, after: 0 },
+                { field: "Entrada «General»: nombre", before: "General", after: "Campo" },
+                { field: "Entrada «General»: precio", before: "S/ 50.00", after: "S/ 70.00" },
+              ],
+            },
+          ]);
+          expect(second.notification).toEqual({ id: first.notification?.id, kind: "update" });
+        }));
+
+      it("sin compradores (o con una reserva pending) no encola nada", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId } = await setupEvent(tx, "published");
+          await insertOrder(tx, eventId, "pending", new Date(Date.now() + 10 * 60_000));
+          const startsAt = new Date("2027-03-01T01:00:00Z");
+          const result = await updateEvent(owner, eventId, draftInput(venue, { title: "Otro", startsAt }));
+          expect(result.notification).toBeNull();
+          expect(await notificationsOf(tx, eventId)).toEqual([]);
+        }));
+
+      it("si el guardado falla no queda notificación; si falla el encolado, el evento no se guarda", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId } = await setupWithBuyer(tx);
+          const past = new Date("2026-01-01T01:00:00Z");
+          await expect(
+            updateEvent(owner, eventId, draftInput(venue, { startsAt: past, doorsOpenAt: past })),
+          ).rejects.toEqual(expect.objectContaining({ code: "incomplete" }));
+          expect(await notificationsOf(tx, eventId)).toEqual([]);
+
+          vi.mocked(enqueueEventNotification).mockRejectedValueOnce(new Error("outbox caído"));
+          const startsAt = new Date("2027-03-01T01:00:00Z");
+          await expect(updateEvent(owner, eventId, draftInput(venue, { title: "No se guarda", startsAt }))).rejects.toThrow(
+            "outbox caído",
+          );
+          expect(await getEvent(tx, eventId)).toMatchObject({ title: "Festival de prueba", scheduleChangedAt: null });
+          expect(await notificationsOf(tx, eventId)).toEqual([]);
+        }));
+    });
 
     /** Publicado con un asiento de Campo vendido (orden paid, con su entrada) y uno de Platea reservado (pending vigente). */
     async function setupWithSoldAndHeldSeats(tx: Tx) {

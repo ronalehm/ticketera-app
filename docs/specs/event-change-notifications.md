@@ -257,16 +257,16 @@ Sincronización: Preview = `origin/main` + esta feature; Neon `test` ≥ migraci
 `production` como BD de Preview.
 
 ## Plan de tareas
-- [ ] T1. Base: dependencias `resend` y `@react-email/components`, `lib/env.ts` + `.env.example`, cliente
+- [x] T1. Base: dependencias `resend` y `@react-email/components`, `lib/env.ts` + `.env.example`, cliente
   `server-only`, modo efectivo y allowlist (+ tests).
-- [ ] T2. Schema y migración `0011`, servicio de outbox (`enqueueEventNotification`, fusión) (+ tests). Paralelo con
+- [x] T2. Schema y migración `0011`, servicio de outbox (`enqueueEventNotification`, fusión) (+ tests). Paralelo con
   T1 salvo `package.json`.
-- [ ] T3. Procesador: reclamo, entregas, envío por lotes, clasificación de errores, reintentos, plantillas (+ tests).
+- [x] T3. Procesador: reclamo, entregas, envío por lotes, clasificación de errores, reintentos, plantillas (+ tests).
   Depende de T1 y T2.
-- [ ] T4. Integración en editar/cancelar/moderar (mismo `tx` + `after()` con envío inmediato y drenado oportunista) y
+- [x] T4. Integración en editar/cancelar/moderar (mismo `tx` + `after()` con envío inmediato y drenado oportunista) y
   cron (`vercel.json` con `"0 10 * * *"`, handler) (+ tests).
   Depende de T3.
-- [ ] T5. Documentación (configuración, operación y cómo reprocesar una notificación `failed`).
+- [x] T5. Documentación (configuración, operación y cómo reprocesar una notificación `failed`).
 
 ## Preguntas abiertas
 (ninguna; el plan de Vercel no se asume: la spec funciona en Hobby con cron diario y en Pro basta con cambiar la

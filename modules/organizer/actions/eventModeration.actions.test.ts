@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
+import { processDueEventNotifications, processEventNotification } from "@/modules/notifications/server";
 import { approveEvent, cancelEvent, rejectEvent, submitForReview } from "../services/eventModeration.service";
 import { EventDraftError } from "../utils/eventDraftError";
 import {
@@ -16,6 +17,13 @@ vi.mock("@/modules/auth/server", async (importOriginal) => {
   return { requirePermission: vi.fn(), OrganizerNotApprovedError };
 });
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// `after` guarda las tareas para ejecutarlas a mano "después de responder".
+const scheduled = vi.hoisted(() => [] as (() => Promise<void>)[]);
+vi.mock("next/server", () => ({ after: vi.fn((task: () => Promise<void>) => scheduled.push(task)) }));
+vi.mock("@/modules/notifications/server", () => ({
+  processEventNotification: vi.fn(),
+  processDueEventNotifications: vi.fn(),
+}));
 vi.mock("../services/eventModeration.service", () => ({
   submitForReview: vi.fn(),
   approveEvent: vi.fn(),
@@ -45,11 +53,12 @@ const GENERIC = { ok: false, error: "No pudimos completar la solicitud. Inténta
 beforeEach(() => {
   vi.mocked(requirePermission).mockResolvedValue(ADMIN);
   vi.mocked(approveEvent).mockResolvedValue({ status: "published", slug: SLUG });
-  vi.mocked(cancelEvent).mockResolvedValue({ slug: SLUG });
+  vi.mocked(cancelEvent).mockResolvedValue({ slug: SLUG, notification: null });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
+  scheduled.length = 0;
   vi.resetAllMocks();
   vi.restoreAllMocks();
 });
@@ -157,6 +166,21 @@ describe("approveEventAction (organizador o recinto ya no aprobados)", () => {
 });
 
 describe("cancelEventAction", () => {
+  it("si encoló el aviso, tras responder lo envía y drena hasta 5 vencidas", async () => {
+    const notification = { id: "a0000000-0000-4000-8000-000000000001", kind: "cancelled" as const };
+    vi.mocked(cancelEvent).mockResolvedValue({ slug: SLUG, notification });
+    expect(await cancelEventAction(EVENT_ID)).toEqual({ ok: true });
+    expect(processEventNotification).not.toHaveBeenCalled();
+    await Promise.all(scheduled.map((task) => task()));
+    expect(processEventNotification).toHaveBeenCalledWith(notification.id);
+    expect(processDueEventNotifications).toHaveBeenCalledWith({ limit: 5 });
+  });
+
+  it("sin compradores no programa nada", async () => {
+    expect(await cancelEventAction(EVENT_ID)).toEqual({ ok: true });
+    expect(scheduled).toHaveLength(0);
+  });
+
   it("con ventas → \"Cancelación con reembolsos: Próximamente\"", async () => {
     vi.mocked(cancelEvent).mockRejectedValue(new EventDraftError("has_sales"));
     expect(await cancelEventAction(EVENT_ID)).toEqual({

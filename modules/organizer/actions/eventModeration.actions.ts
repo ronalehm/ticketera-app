@@ -7,6 +7,7 @@ import { approveEvent, cancelEvent, rejectEvent, submitForReview } from "../serv
 import type { EventDraftActionResult } from "../types/organizer.types";
 import { EVENT_DRAFT_ERROR_MESSAGES } from "../utils/eventDraftError";
 import { invalidInput, toEventActionFailure } from "./eventActionFailure";
+import { processEventNotificationsAfterResponse } from "./processEventNotificationsAfterResponse";
 import { revalidatePublicEvent } from "./revalidatePublicEvent";
 
 // Acciones de moderación (spec admin-panel, F5b). Enviar a revisión exige `events:manageOwn`; aprobar, rechazar y
@@ -62,14 +63,15 @@ export async function rejectEventAction(id: unknown, note: unknown): Promise<Eve
   }
 }
 
-/** Cancela un evento publicado sin ventas. */
+/** Cancela un evento publicado sin ventas y, tras responder, envía el aviso a los compradores si se encoló. */
 export async function cancelEventAction(id: unknown): Promise<EventDraftActionResult> {
   const actor = await requirePermission("events:moderate");
   const parsedId = eventIdSchema.safeParse(id);
   if (!parsedId.success) return invalidInput(parsedId.error);
   try {
-    const { slug } = await cancelEvent(actor, parsedId.data);
+    const { slug, notification } = await cancelEvent(actor, parsedId.data);
     revalidatePublicEvent(slug);
+    processEventNotificationsAfterResponse(notification);
     return { ok: true };
   } catch (error) {
     return toEventActionFailure("cancelEventAction", error);
