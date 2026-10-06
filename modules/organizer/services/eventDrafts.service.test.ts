@@ -827,6 +827,91 @@ describeWithDb("eventDrafts.service", () => {
         }),
     );
 
+    describe("dos eventos del organizador comparten el recinto pendiente (Decisiones 3 y 7)", () => {
+      /**
+       * Evento A con el recinto a mano y evento B que lo elige de la lista; B vende en `bZones` (por nombre; por defecto,
+       * todas). `form` es lo que reenvía el formulario de cualquiera de los dos (bloque manual con las zonas guardadas).
+       */
+      async function setupShared(tx: Tx, bZones?: string[]) {
+        const { owner, eventId, venueId } = await setupManual(tx);
+        const { zones } = await getVenueWithZones(tx, venueId);
+        const form = manualVenueInput({ sections: zones.map(({ id, name, capacity }) => ({ id, name, capacity: capacity ?? 0 })) });
+        const sold = form.sections.filter((zone) => !bZones || bZones.includes(zone.name));
+        const { id: otherId } = await createEvent(
+          owner,
+          manualDraftInput({ ...form, sections: sold }, { venue: { kind: "existing", id: venueId }, title: "Segundo" }),
+        );
+        return { owner, eventId, otherId, venueId, form };
+      }
+
+      it("editar el título de cualquiera de los dos guarda y no cambia las zonas", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, otherId, venueId, form } = await setupShared(tx);
+          const before = await getVenueWithZones(tx, venueId);
+          await updateEvent(owner, eventId, manualDraftInput(form, { title: "Primero renombrado" }));
+          await updateEvent(owner, otherId, manualDraftInput(form, { title: "Segundo renombrado" }));
+          expect((await getEvent(tx, eventId)).title).toBe("Primero renombrado");
+          expect((await getEvent(tx, otherId)).title).toBe("Segundo renombrado");
+          expect(await getVenueWithZones(tx, venueId)).toEqual(before);
+          expect((await getEvent(tx, otherId)).venueId).toBe(venueId);
+        }));
+
+      it("renombrar zonas (también intercambiar sus nombres) las cambia en su sitio para los dos eventos", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, otherId, venueId, form } = await setupShared(tx);
+          const [general, vip] = form.sections;
+          const renamed = { ...form, sections: [{ ...general, name: "Palco" }, vip] };
+          await updateEvent(owner, eventId, manualDraftInput(renamed));
+          expect((await getVenueWithZones(tx, venueId)).zones).toMatchObject([
+            { id: general.id, name: "Palco", slug: "palco" },
+            { id: vip.id, name: "VIP", slug: "vip" },
+          ]);
+
+          const swapped = { ...form, sections: [{ ...general, name: "VIP" }, { ...vip, name: "Palco" }] };
+          await updateEvent(owner, otherId, manualDraftInput(swapped, { title: "Segundo" }));
+          expect((await getVenueWithZones(tx, venueId)).zones).toMatchObject([
+            { id: general.id, name: "VIP", slug: "vip" },
+            { id: vip.id, name: "Palco", slug: "palco" },
+          ]);
+          // Los tipos de entrada del otro evento siguen en las mismas zonas.
+          expect((await getTicketTypes(tx, eventId)).map((type) => type.sectionId)).toEqual([general.id, vip.id]);
+        }));
+
+      it("añadir una zona la crea sin tocar las demás", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, otherId, venueId, form } = await setupShared(tx);
+          const terraza = { id: randomUUID(), name: "Terraza", capacity: 30 };
+          await updateEvent(owner, eventId, manualDraftInput({ ...form, sections: [...form.sections, terraza] }));
+          expect((await getVenueWithZones(tx, venueId)).zones).toMatchObject([
+            { id: form.sections[0].id, slug: "general" },
+            { id: form.sections[1].id, slug: "vip" },
+            { id: terraza.id, slug: "terraza", capacity: 30, sortOrder: 2 },
+          ]);
+          expect(await getTicketTypes(tx, otherId)).toHaveLength(2);
+        }));
+
+      it("quitar una zona que usa el otro evento da venue_section_in_use y no guarda nada", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, venueId, form } = await setupShared(tx);
+          const before = await getVenueWithZones(tx, venueId);
+          const withoutVip = { ...form, name: "Otro nombre", sections: [form.sections[0]] };
+          await expect(
+            updateEvent(owner, eventId, manualDraftInput(withoutVip, { title: "No se guarda" })),
+          ).rejects.toEqual(domainError("venue_section_in_use"));
+          expect(await getVenueWithZones(tx, venueId)).toEqual(before);
+          expect((await getEvent(tx, eventId)).title).toBe("Festival de prueba");
+          expect(await getTicketTypes(tx, eventId)).toHaveLength(2);
+        }));
+
+      it("quitar una zona que no usa ningún otro evento la borra", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, otherId, venueId, form } = await setupShared(tx, ["General"]);
+          await updateEvent(owner, eventId, manualDraftInput({ ...form, sections: [form.sections[0]] }));
+          expect((await getVenueWithZones(tx, venueId)).zones).toMatchObject([{ id: form.sections[0].id, slug: "general" }]);
+          expect((await getTicketTypes(tx, otherId)).map((type) => type.sectionId)).toEqual([form.sections[0].id]);
+        }));
+    });
+
     it("con un recinto aprobado, pasar a uno a mano crea otro pendiente y no toca el aprobado", () =>
       inRolledBackTransaction(async (tx) => {
         const { owner, venue, eventId } = await setupDraft(tx);

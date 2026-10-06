@@ -73,14 +73,19 @@ function uniqueZoneSlug(name: string, taken: Set<string>): string {
   return slug;
 }
 
+/** Código y restricción de un error de Postgres (directo o envuelto en `DrizzleQueryError`). */
+function pgErrorOf(error: unknown): { code?: unknown; constraint?: unknown } {
+  const cause = error instanceof DrizzleQueryError ? error.cause : error;
+  return (cause ?? {}) as { code?: unknown; constraint?: unknown };
+}
+
 /**
  * Guarda el recinto ingresado a mano (spec organizer-manual-venue, Decisiones 4 y 7) y devuelve su id y `sectionIds`: actualiza el que
  * ya tiene el evento (`currentVenueId`) si sigue `pending_review` y es de `organizerId`; si no (sin recinto, uno
- * `approved` o uno pendiente ajeno, que nunca se editan desde aquí), crea otro `pending_review` de `organizerId`. Sus
- * zonas se reemplazan (delete + insert, como los tipos de entrada) por las del formulario: generales, con su aforo, un
- * slug único y su posición como orden. Al actualizar conservan sus ids; un recinto nuevo les da ids nuevos, porque los
- * del formulario pueden ser de las zonas de otro recinto (el pendiente del organizador anterior) y chocarían con su
- * clave primaria. `sectionIds` traduce cada id del formulario al de la zona guardada.
+ * `approved` o uno pendiente ajeno, que nunca se editan desde aquí), crea otro `pending_review` de `organizerId`. Al
+ * actualizar, las zonas conservan sus ids (`saveManualZones`); un recinto nuevo les da ids nuevos, porque los del
+ * formulario pueden ser de las zonas de otro recinto (el pendiente del organizador anterior) y chocarían con su clave
+ * primaria. `sectionIds` traduce cada id del formulario al de la zona guardada.
  */
 async function saveManualVenue(
   venue: ManualVenueInput,
@@ -99,31 +104,85 @@ async function saveManualVenue(
         )
         .returning({ id: venues.id })
     : [];
-  let venueId = own?.id;
-  if (venueId) {
-    // ponytail: si otro evento del mismo organizador usa este recinto pendiente con tipos de entrada, el delete falla
-    // por FK (23503) y no se guarda nada; actualizar las zonas en su sitio si llega a pasar.
-    await tx.delete(venueSections).where(eq(venueSections.venueId, venueId));
-  } else {
-    [{ id: venueId }] = await tx
-      .insert(venues)
-      .values({ ...fields, status: "pending_review", organizerId, createdBy })
-      .returning({ id: venues.id });
-  }
+  const [{ id }] = own
+    ? [own]
+    : await tx
+        .insert(venues)
+        .values({ ...fields, status: "pending_review", organizerId, createdBy })
+        .returning({ id: venues.id });
   const sectionIds = new Map(venue.sections.map((zone) => [zone.id, own ? zone.id : randomUUID()]));
-  const slugs = new Set<string>();
-  await tx.insert(venueSections).values(
-    venue.sections.map((zone, sortOrder) => ({
-      id: sectionIds.get(zone.id),
-      venueId,
-      slug: uniqueZoneSlug(zone.name, slugs),
-      name: zone.name,
-      sortOrder,
-      seating: "general" as const,
-      capacity: zone.capacity,
-    })),
+  await saveManualZones(
+    id,
+    venue.sections.map((zone) => ({ ...zone, id: sectionIds.get(zone.id)! })),
+    tx,
   );
-  return { id: venueId, sectionIds };
+  return { id, sectionIds };
+}
+
+/**
+ * Deja las zonas del recinto `venueId` como las del formulario (generales, con su aforo y su posición como orden),
+ * en su sitio: otro evento del organizador puede usar el mismo recinto pendiente (Decisión 3) y sus tipos de entrada
+ * referencian estas zonas. Borra solo las quitadas (si otro evento usa alguna, `venue_section_in_use` y no se guarda
+ * nada), actualiza las que cambian y crea las nuevas; si nada cambia, no escribe. Una zona que conserva su nombre
+ * conserva su slug; una renombrada o nueva recibe uno único.
+ */
+async function saveManualZones(venueId: string, zones: ManualVenueInput["sections"], tx: Tx): Promise<void> {
+  const saved = new Map(
+    (
+      await tx
+        .select({
+          id: venueSections.id,
+          name: venueSections.name,
+          slug: venueSections.slug,
+          sortOrder: venueSections.sortOrder,
+          capacity: venueSections.capacity,
+        })
+        .from(venueSections)
+        .where(eq(venueSections.venueId, venueId))
+    ).map((section) => [section.id, section]),
+  );
+
+  const keptIds = new Set(zones.map((zone) => zone.id));
+  const removedIds = [...saved.keys()].filter((id) => !keptIds.has(id));
+  if (removedIds.length > 0) {
+    const [used] = await tx
+      .select({ id: ticketTypes.id })
+      .from(ticketTypes)
+      .where(inArray(ticketTypes.sectionId, removedIds))
+      .limit(1);
+    if (used) throw new EventDraftError("venue_section_in_use");
+    try {
+      await tx.delete(venueSections).where(inArray(venueSections.id, removedIds));
+    } catch (error) {
+      // Otro evento creó a la vez un tipo de entrada en una zona quitada (FK de `ticket_types`).
+      if (pgErrorOf(error).code === "23503") throw new EventDraftError("venue_section_in_use");
+      throw error;
+    }
+  }
+
+  const keepsName = (zone: { id: string; name: string }) => saved.get(zone.id)?.name === zone.name;
+  const slugs = new Set(zones.filter(keepsName).map((zone) => saved.get(zone.id)!.slug));
+  const rows = zones.map((zone, sortOrder) => ({
+    ...zone,
+    sortOrder,
+    slug: keepsName(zone) ? saved.get(zone.id)!.slug : uniqueZoneSlug(zone.name, slugs),
+  }));
+  const changed = rows.filter((row) => {
+    const section = saved.get(row.id);
+    return section && (section.name !== row.name || section.capacity !== row.capacity || section.sortOrder !== row.sortOrder);
+  });
+  // Las renombradas pasan antes por un nombre y slug provisionales (su id): intercambiar dos nombres no choca con los
+  // UNIQUE del recinto, que Postgres comprueba fila a fila.
+  for (const row of changed.filter((row) => !keepsName(row))) {
+    await tx.update(venueSections).set({ name: row.id, slug: row.id }).where(eq(venueSections.id, row.id));
+  }
+  for (const { id, name, slug, sortOrder, capacity } of changed) {
+    await tx.update(venueSections).set({ name, slug, sortOrder, capacity }).where(eq(venueSections.id, id));
+  }
+  const added = rows.filter((row) => !saved.has(row.id));
+  if (added.length > 0) {
+    await tx.insert(venueSections).values(added.map((row) => ({ ...row, venueId, seating: "general" as const })));
+  }
 }
 
 /** Fila de `ticket_types` que escribe el formulario, ya con la sección guardada y su slug. */
@@ -297,8 +356,7 @@ async function inTransaction<T>(database: Database, run: (tx: Tx) => Promise<T>)
   try {
     return await database.transaction(run);
   } catch (error) {
-    const cause = error instanceof DrizzleQueryError ? error.cause : error;
-    const { code, constraint } = (cause ?? {}) as { code?: unknown; constraint?: unknown };
+    const { code, constraint } = pgErrorOf(error);
     if (code === "23505" && constraint === "events_slug_unique") throw new EventDraftError("slug_taken");
     throw error;
   }
@@ -405,7 +463,7 @@ async function updateDraftEvent(
 ): Promise<{ slug: string; venueId: string | null }> {
   const organizerId = await resolveOrganizerId(actor, input.organizerId, tx);
   if (await hasActivity(current.id, tx)) throw new EventDraftError("has_activity");
-  // Antes de guardar el recinto: las zonas de uno ingresado a mano se reemplazan y estos tipos las referencian.
+  // Antes de guardar el recinto: estos tipos referencian las zonas de uno ingresado a mano, y las quitadas se borran.
   await tx.delete(ticketTypes).where(eq(ticketTypes.eventId, current.id));
   const venue = await resolveVenue(input, organizerId, actor, tx, current.venueId);
   const slug =

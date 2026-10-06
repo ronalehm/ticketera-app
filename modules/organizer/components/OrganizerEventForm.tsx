@@ -143,6 +143,10 @@ export function OrganizerEventForm({
   // Un recinto pendiente solo lo usa su organizador (spec organizer-manual-venue, Decisión 5). Para un organizador, él.
   const ownerId = organizers ? values.organizerId : userId;
   const venueOptions = venues.filter((option) => option.status === "approved" || option.organizerId === ownerId);
+  const venueItems = venueOptions.map(({ id, name, city, status }) => ({
+    value: id,
+    label: `${name} · ${city}${status === "pending_review" ? " · en revisión" : ""}`,
+  }));
   const venue = venueOptions.find((candidate) => candidate.id === values.venueId);
   // Con el checkbox marcado, el recinto es el ingresado a mano (el Select se ignora).
   const manualVenue = values.manualVenue?.enabled ? values.manualVenue : null;
@@ -401,7 +405,7 @@ export function OrganizerEventForm({
             <Field data-invalid={!!errors.venueId}>
               <FieldLabel htmlFor="organizer-event-venueId">Recinto</FieldLabel>
               <Select
-                items={venueOptions.map(({ id, name, city }) => ({ value: id, label: `${name} · ${city}` }))}
+                items={venueItems}
                 disabled={structureLocked || !!manualVenue}
                 value={values.venueId}
                 onValueChange={selectVenue}
@@ -410,9 +414,9 @@ export function OrganizerEventForm({
                   <SelectValue placeholder="Elige el recinto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {venueOptions.map(({ id, name, city }) => (
-                    <SelectItem key={id} value={id} className="min-h-11 cursor-pointer">
-                      {name} · {city}
+                  {venueItems.map(({ value, label }) => (
+                    <SelectItem key={value} value={value} className="min-h-11 cursor-pointer">
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -475,15 +475,15 @@ describe("OrganizerEventForm", () => {
       });
     });
 
-    it("un organizador ve los aprobados y sus recintos pendientes, no los de otros", async () => {
+    it("un organizador ve los aprobados y sus recintos pendientes (con « · en revisión»), no los de otros", async () => {
       const own = pendingVenue("7d2c5e3a-4b6f-4c8d-8e1f-2a3b4c5d6e7f", "Café Propio", "user-1");
       const other = pendingVenue("8e3d6f4b-5c7a-4d9e-9f2a-3b4c5d6e7f8a", "Bar Ajeno", "user-2");
       renderForm({ venues: [...VENUES, own, other] });
 
-      expect(await optionsAndChoose("Recinto", "Café Propio · Lima")).toEqual([
+      expect(await optionsAndChoose("Recinto", "Café Propio · Lima · en revisión")).toEqual([
         "Estadio Nacional · Lima",
         "Teatro Municipal · Arequipa",
-        "Café Propio · Lima",
+        "Café Propio · Lima · en revisión",
       ]);
     });
 
@@ -495,13 +495,13 @@ describe("OrganizerEventForm", () => {
 
       expect(await optionsAndChoose("Recinto", "Estadio Nacional · Lima")).toEqual(approved);
       await choose("Organizador", "Ana Pérez");
-      expect(await optionsAndChoose("Recinto", "Bar Ana · Lima")).toEqual([...approved, "Bar Ana · Lima"]);
+      expect(await optionsAndChoose("Recinto", "Bar Ana · Lima · en revisión")).toEqual([...approved, "Bar Ana · Lima · en revisión"]);
       expect(section("General").getByText("80 lugares de pie")).toBeTruthy();
 
       await choose("Organizador", "Pulso Producciones S.A.C.");
       expect(selectText(combobox("Recinto"))).toBe("Elige el recinto");
       expect(screen.getByText("Elige el recinto para configurar los tipos de entrada.")).toBeTruthy();
-      expect(await optionsAndChoose("Recinto", "Café Pulso · Lima")).toEqual([...approved, "Café Pulso · Lima"]);
+      expect(await optionsAndChoose("Recinto", "Café Pulso · Lima · en revisión")).toEqual([...approved, "Café Pulso · Lima · en revisión"]);
     });
   });
 
