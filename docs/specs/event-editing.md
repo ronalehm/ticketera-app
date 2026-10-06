@@ -18,8 +18,12 @@ admin/super_admin), pero es demasiado restrictiva para el uso real:
 2. **Cambio de fecha con ventas:** el formulario pide confirmación («Este evento tiene N entradas vendidas. Los
    compradores verán la nueva fecha.») y los compradores ven un aviso «Fecha actualizada» en el detalle del evento y en
    «Mis entradas». Sin correos ni reembolsos en esta spec.
-3. **Precio con ventas:** el cambio solo afecta a ventas nuevas; lo ya pagado no cambia (`order_items.unit_price_cents`
-   guarda el precio de cada compra) y una reserva `pending` vigente mantiene el precio con el que se creó.
+3. **Precio con ventas (enmienda 1):** el cambio solo afecta a ventas nuevas; las entradas ya pagadas conservan su
+   `tickets.unit_price_cents`. Como el webhook de Stripe escribe ese precio al confirmar el pago leyendo el precio
+   **actual** del tipo de entrada (`modules/checkout/services/webhook.service.ts`), **no se permite cambiar el precio de
+   un tipo de entrada mientras tenga reservas `pending` vigentes** (`isActiveSaleOrder` con estado `pending`): el
+   servidor responde `price_locked_pending` con «Hay compras en curso para esta entrada; inténtalo en unos minutos» y
+   no guarda nada. El nombre sí se puede cambiar. No se toca el checkout ni la BD.
 4. **Edición en revisión:** el organizador dueño y los admins pueden editar un evento `pending_review` con las mismas
    reglas que un borrador (aún no tiene inventario). Al guardar **sigue en revisión** y el admin aprueba la versión
    nueva. Se siguen exigiendo los requisitos de envío a revisión (`publishRequirements`) para no dejar en la cola un
@@ -73,8 +77,11 @@ admin/super_admin), pero es demasiado restrictiva para el uso real:
   guarda y `schedule_changed_at` queda informado.
 - [ ] El detalle público muestra «Fecha actualizada el …» y «Mis entradas» marca las entradas compradas antes del
   cambio.
-- [ ] Un cambio de precio con ventas no altera los pedidos existentes ni las reservas `pending` vigentes; las ventas
-  nuevas usan el precio nuevo.
+- [ ] Un cambio de precio con ventas no altera los pedidos ni las entradas existentes; las ventas nuevas usan el precio
+  nuevo.
+- [ ] Si el tipo de entrada tiene reservas `pending` vigentes, el cambio de precio se rechaza con `price_locked_pending`
+  («Hay compras en curso para esta entrada; inténtalo en unos minutos») y no se guarda nada; cambiar su nombre sí
+  funciona.
 - [ ] Un evento `pending_review` tiene botón Editar en `/organizador` para su organizador y para admins; al guardar
   sigue en `pending_review`; si falta un requisito de revisión, no se guarda y se explica qué falta.
 - [ ] `cancelled` y `finished` siguen sin botón Editar y la acción responde `edit_locked`.
@@ -85,7 +92,8 @@ admin/super_admin), pero es demasiado restrictiva para el uso real:
 
 ## Tests
 - `eventDrafts.service.test.ts`: matriz de la Decisión 1 (cada estado y con/sin ventas); `schedule_changed_at` solo se
-  informa con ventas y cambio de fecha; precio nuevo no toca `order_items` ni reservas `pending`;
+  informa con ventas y cambio de fecha; precio nuevo no toca pedidos ni `tickets`; precio con reserva `pending` vigente → `price_locked_pending`, y sin
+  ella se guarda;
   `pending_review` sigue en revisión y exige requisitos.
 - `eventDrafts.actions.test.ts`: `getEventEditHref` (dueño, admin, otro organizador, customer, sin sesión).
 - `OrganizerEventForm.test.tsx`: campos habilitados según la matriz; confirmación al cambiar fecha con ventas.

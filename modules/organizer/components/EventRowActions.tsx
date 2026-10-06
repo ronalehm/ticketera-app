@@ -33,10 +33,10 @@ export type EventRowAction = "delete" | EventTransition;
 export type EventRowActionsLayout = "table" | "card";
 
 /**
- * Estados que se editan (Decisión 11): borrador libre; publicado con límites. En revisión no (lo que se aprueba es lo que
- * se revisó: para cambiarlo, el admin lo rechaza).
+ * Estados que se editan (spec event-editing, Decisión 1): borrador y en revisión libres (sigue en revisión al guardar);
+ * publicado con límites. Cancelado y finalizado no.
  */
-const EDITABLE_STATUSES: ReadonlySet<ManagedEvent["status"]> = new Set(["draft", "published"]);
+const EDITABLE_STATUSES: ReadonlySet<ManagedEvent["status"]> = new Set(["draft", "pending_review", "published"]);
 
 type Tone = "primary" | "outline" | "destructive";
 
@@ -82,10 +82,11 @@ type EventRowActionsProps = {
 };
 
 /**
- * Acciones de un evento según su estado y el rol (spec admin-panel, F5b): Editar (borrador y publicado), Eliminar y
- * Enviar a revisión (borrador), Aprobar y Rechazar (en revisión, admin), Cancelar evento (publicado, admin;
- * deshabilitado con el motivo si tiene ventas) y Destacar / Quitar destacado (admin, en cualquier estado; spec
- * events-dynamic-landing). En revisión, cancelado y finalizado, un organizador no tiene acciones. En la tabla son compactas (spec organizer-events-view, Requisito 6).
+ * Acciones de un evento según su estado y el rol (spec admin-panel, F5b): Editar (borrador, en revisión y publicado;
+ * spec event-editing), Eliminar y Enviar a revisión (borrador), Aprobar y Rechazar (en revisión, admin), Cancelar
+ * evento (publicado, admin; deshabilitado con el motivo si tiene ventas) y Destacar / Quitar destacado (admin, en
+ * cualquier estado; spec events-dynamic-landing). En cancelado y finalizado, un organizador no tiene acciones. En la
+ * tabla son compactas (spec organizer-events-view, Requisito 6).
  */
 export function EventRowActions({
   event,

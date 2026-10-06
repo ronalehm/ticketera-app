@@ -12,6 +12,7 @@ import {
   getMinTicketPrice,
   getSelectedCapacity,
   getTicketTypeErrors,
+  hasScheduleChanged,
   toCents,
   toEventDraftFormValues,
   toEventDraftInput,
@@ -243,13 +244,25 @@ describe("filas de tipos de entrada", () => {
 });
 
 describe("getEventFormLock", () => {
+  // Con ventas solo sigue bloqueada la estructura (spec event-editing, Decisión 1).
   it.each([
     [undefined, null],
-    [{ status: "draft", hasSales: false }, null],
-    [{ status: "pending_review", hasSales: false }, null],
-    [{ status: "published", hasSales: false }, "structure"],
-    [{ status: "published", hasSales: true }, "sales"],
+    [{ status: "draft" }, null],
+    [{ status: "pending_review" }, null],
+    [{ status: "published" }, "structure"],
   ] as const)("%j → %s", (event, expected) => {
     expect(getEventFormLock(event)).toBe(expected);
+  });
+});
+
+describe("hasScheduleChanged", () => {
+  const saved = { date: "2030-01-01", time: "20:00", doorsOpen: "18:00" };
+
+  it("sin cambios de fecha, hora ni apertura → false", () => {
+    expect(hasScheduleChanged(saved, { ...saved })).toBe(false);
+  });
+
+  it.each([{ date: "2030-01-02" }, { time: "21:00" }, { doorsOpen: "19:00" }])("%j → true", (change) => {
+    expect(hasScheduleChanged(saved, { ...saved, ...change })).toBe(true);
   });
 });

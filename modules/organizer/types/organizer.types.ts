@@ -70,10 +70,10 @@ export type EditableEvent = {
 };
 
 /**
- * Campos bloqueados al editar un evento publicado (Decisión 11): `structure` (recinto, secciones a la venta y
- * organizador) o, con ventas, `sales` (además categoría, fecha, nombres y precios de los tipos de entrada).
+ * Campos bloqueados al editar un evento publicado, con o sin ventas (spec event-editing, Decisión 1): `structure`
+ * (recinto, secciones a la venta y organizador).
  */
-export type EventFormLock = "structure" | "sales";
+export type EventFormLock = "structure";
 
 /** Fallo de una acción de borradores: mensaje en español y `code` si es un error de dominio. */
 export type EventDraftActionFailure = { ok: false; error: string; code?: EventDraftErrorCode };

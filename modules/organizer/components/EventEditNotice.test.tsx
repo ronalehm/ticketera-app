@@ -16,14 +16,16 @@ describe("EventEditNotice", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("en revisión no muestra nada (Editar no muestra el formulario)", () => {
-    const { container } = render(<EventEditNotice status="pending_review" reviewNote={null} hasSales={false} />);
-    expect(container.textContent).toBe("");
+  it("en revisión avisa que sigue en revisión al guardar", () => {
+    render(<EventEditNotice status="pending_review" reviewNote={null} hasSales={false} />);
+    expect(screen.getByText("Este evento está en revisión")).toBeTruthy();
+    expect(screen.getByText(/Al guardar sigue en revisión/)).toBeTruthy();
   });
 
-  it("publicado: con ventas solo título, descripción, portada y edad; sin ventas, sin recinto ni secciones", () => {
+  it("publicado: con ventas también fecha, categoría y entradas; con o sin ventas, sin recinto ni secciones", () => {
     const { unmount } = render(<EventEditNotice status="published" reviewNote={null} hasSales />);
-    expect(screen.getByText("Solo puedes cambiar el título, la descripción, la portada y la edad mínima.")).toBeTruthy();
+    expect(screen.getByText(/la fecha y los nombres y precios de las entradas/)).toBeTruthy();
+    expect(screen.getByText(/El recinto y las secciones a la venta ya no se cambian/)).toBeTruthy();
     unmount();
 
     render(<EventEditNotice status="published" reviewNote={null} hasSales={false} />);

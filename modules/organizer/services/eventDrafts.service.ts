@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, DrizzleQueryError, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, DrizzleQueryError, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { db } from "@/lib/db/client";
@@ -341,7 +341,8 @@ const sameInstant = (a: Date | null, b: Date | null) => (a?.getTime() ?? null) =
  * - nunca cambian el recinto, las secciones a la venta ni el organizador (`structure_locked`): el inventario generado al
  *   aprobar depende de ellos; tampoco el slug;
  * - sí cambian textos, portada, edad, categoría, fecha/hora y nombre y precio de cada tipo de entrada. Un precio nuevo
- *   solo afecta a ventas nuevas: no toca órdenes ni entradas ya creadas;
+ *   solo afecta a ventas nuevas: no toca órdenes ni entradas ya creadas; no cambia mientras el tipo tenga reservas
+ *   `pending` vigentes (`price_locked_pending`, enmienda 1); su nombre sí;
  * - con ventas activas (`hasActiveSales`), un cambio de inicio o apertura de puertas informa `schedule_changed_at`
  *   (aviso «Fecha actualizada» a los compradores, Decisión 2);
  * - sigue cumpliendo los requisitos para publicar (`incomplete`); la fecha tiene que ser futura solo si cambia.
@@ -354,10 +355,10 @@ async function updatePublishedEvent(
   now: Date,
 ): Promise<void> {
   const currentTypes = await tx
-    .select({ sectionId: ticketTypes.sectionId })
+    .select({ id: ticketTypes.id, sectionId: ticketTypes.sectionId, priceCents: ticketTypes.priceCents })
     .from(ticketTypes)
     .where(eq(ticketTypes.eventId, current.id));
-  const currentSections = new Set(currentTypes.map((type) => type.sectionId));
+  const currentSections = new Map(currentTypes.map((type) => [type.sectionId, type]));
   const organizerChanged = roleCan(actor.role, "events:manageAny") && input.organizerId !== current.organizerId;
   const sectionsChanged =
     input.ticketTypes.length !== currentTypes.length ||
@@ -372,6 +373,13 @@ async function updatePublishedEvent(
     checkFutureDate: startsAtChanged,
   });
   if (issues.length > 0) throw new EventDraftError("incomplete", issues);
+
+  // Enmienda 1: el webhook cobra el precio actual del tipo al confirmar un pago; con reservas en curso no cambia.
+  const repricedTypeIds = input.ticketTypes.flatMap((type) => {
+    const saved = currentSections.get(type.sectionId);
+    return saved && saved.priceCents !== type.priceCents ? [saved.id] : [];
+  });
+  if (await hasPendingReservations(repricedTypeIds, tx)) throw new EventDraftError("price_locked_pending");
 
   const scheduleChanged = startsAtChanged || !sameInstant(input.doorsOpenAt, current.doorsOpenAt);
   const notifyBuyers = scheduleChanged && (await hasActiveSales(current.id, tx));
@@ -393,6 +401,21 @@ async function updatePublishedEvent(
       .set({ name: type.name, priceCents: type.priceCents })
       .where(and(eq(ticketTypes.eventId, current.id), eq(ticketTypes.sectionId, type.sectionId)));
   }
+}
+
+/**
+ * ¿Algún asiento de estos tipos de entrada está en una reserva en curso? Orden `pending` vigente: `isActiveSaleOrder`
+ * restringida a `pending` (spec event-editing, enmienda 1).
+ */
+async function hasPendingReservations(ticketTypeIds: string[], tx: Tx): Promise<boolean> {
+  if (ticketTypeIds.length === 0) return false;
+  const [seat] = await tx
+    .select({ id: eventSeats.id })
+    .from(eventSeats)
+    .innerJoin(orders, eq(orders.id, eventSeats.orderId))
+    .where(and(inArray(eventSeats.ticketTypeId, ticketTypeIds), eq(orders.status, "pending"), isActiveSaleOrder))
+    .limit(1);
+  return seat !== undefined;
 }
 
 /** Elimina un borrador sin órdenes ni inventario, con sus tipos de entrada. */

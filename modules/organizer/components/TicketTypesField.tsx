@@ -67,8 +67,6 @@ type TicketTypesFieldProps = {
   onBlur: () => void;
   /** Evento publicado: las secciones a la venta no cambian (el inventario ya se generó). */
   selectionLocked?: boolean;
-  /** Evento publicado con ventas: tampoco cambian nombres ni precios (Decisión 11). */
-  valuesLocked?: boolean;
 };
 
 /**
@@ -82,7 +80,6 @@ export function TicketTypesField({
   onChange,
   onBlur,
   selectionLocked = false,
-  valuesLocked = false,
 }: TicketTypesFieldProps) {
   if (!sections) {
     return <p className="text-sm text-muted-foreground">Elige el recinto para configurar los tipos de entrada.</p>;
@@ -140,7 +137,7 @@ export function TicketTypesField({
                 label="Nombre del tipo de entrada"
                 value={row.name}
                 error={rowErrors.name}
-                disabled={!row.selected || valuesLocked}
+                disabled={!row.selected}
                 onValueChange={(name) => updateRow(row.sectionId, { name })}
                 onBlur={onBlur}
                 inputProps={{ placeholder: section.name, maxLength: EVENT_DRAFT_LIMITS.ticketTypeName }}
@@ -151,7 +148,7 @@ export function TicketTypesField({
                 label="Precio (S/)"
                 value={row.price}
                 error={rowErrors.price}
-                disabled={!row.selected || valuesLocked}
+                disabled={!row.selected}
                 onValueChange={(price) => updateRow(row.sectionId, { price })}
                 onBlur={onBlur}
                 inputProps={{ type: "number", inputMode: "decimal", min: 0, step: 0.01, placeholder: "0.00" }}

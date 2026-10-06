@@ -217,17 +217,18 @@ describe("OrganizerEventsList", () => {
   });
 
   describe("acciones de borrador", () => {
-    it("con canMutate, borrador y publicado se editan (en revisión no); solo el borrador se elimina", () => {
+    it("con canMutate, borrador, en revisión y publicado se editan; solo el borrador se elimina", () => {
       renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canMutate />);
 
       const list = cards();
       expect(list.getAllByRole("link", { name: /^Editar/ }).map((link) => link.getAttribute("href"))).toEqual([
         "/organizador/eventos/a/editar",
+        "/organizador/eventos/b/editar",
         "/organizador/eventos/c/editar",
       ]);
-      // En revisión, un organizador no tiene acciones (ni Editar).
+      // En revisión, un organizador solo tiene Editar (spec event-editing).
       const pending = cards().getByRole("heading", { name: "Evento b" }).closest("li") as HTMLElement;
-      expect(within(pending).queryAllByRole("link")).toHaveLength(0);
+      expect(within(pending).getAllByRole("link").map((link) => link.textContent)).toEqual(["Editar"]);
       expect(within(pending).queryAllByRole("button")).toHaveLength(0);
       expect(list.getAllByRole("button", { name: /^Eliminar/ })).toHaveLength(1);
       expect(list.getByRole("button", { name: "Eliminar Evento c" })).toBeTruthy();
@@ -444,9 +445,11 @@ describe("OrganizerEventsList", () => {
       expect(row.queryByRole("button", { name: /^Más acciones/ })).toBeNull();
     });
 
-    it("en revisión, un admin tiene [•••] con Aprobar y Rechazar y sin [Editar]", async () => {
-      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="admin" />);
-      expect(rowOf("Evento b").queryByRole("link", { name: /^Editar/ })).toBeNull();
+    it.each(["admin", "super_admin"] as const)("en revisión, %s tiene [Editar] y [•••] con Aprobar y Rechazar", async (role) => {
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role={role} />);
+      expect(rowOf("Evento b").getByRole("link", { name: "Editar Evento b" }).getAttribute("href")).toBe(
+        "/organizador/eventos/b/editar",
+      );
 
       const menu = await openRowMenu("Evento b");
       expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Aprobar", "Rechazar", "Destacar"]);

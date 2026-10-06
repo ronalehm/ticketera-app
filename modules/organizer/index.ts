@@ -6,4 +6,3 @@ export { EventFormHeader } from "./components/EventFormHeader";
 export { OrganizerDashboard } from "./components/OrganizerDashboard";
 export { OrganizerEventForm } from "./components/OrganizerEventForm";
 export { savedStatusSchema } from "./schemas/organizer.schema";
-export { EDIT_IN_REVIEW_MESSAGE } from "./utils/eventDraftError";

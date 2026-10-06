@@ -15,6 +15,7 @@ export type EventDraftErrorCode =
   // Edición fuera de borrador (spec event-editing, Decisión 1: cancelado o finalizado, `edit_locked`).
   | "edit_locked"
   | "structure_locked"
+  | "price_locked_pending"
   // F5b: moderación.
   | "incomplete"
   | "not_moderator"
@@ -50,9 +51,6 @@ export const EVENT_DRAFT_GENERIC_ERROR = "No pudimos completar la solicitud. Int
 /** El organizador de la sesión está `pending`, `suspended` o no tiene fila de organizador (`OrganizerNotApprovedError`). */
 export const ACTOR_NOT_APPROVED_ERROR = "Tu cuenta de organizador no está aprobada.";
 
-/** Un evento en revisión no se edita (Editar y `edit_locked`): lo que se aprueba es lo que se revisó. */
-export const EDIT_IN_REVIEW_MESSAGE = "Está en revisión: si necesitas cambios, pide al administrador que lo rechace.";
-
 /** Cancelar un evento con ventas está bloqueado hasta que lleguen los reembolsos (Decisión 12). */
 export const CANCEL_WITH_SALES_MESSAGE = "Cancelación con reembolsos: Próximamente";
 
@@ -69,6 +67,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   invalid_category: "Categoría no válida",
   edit_locked: "Un evento cancelado o finalizado ya no se puede editar.",
   structure_locked: "En un evento publicado no se pueden cambiar el recinto, las secciones a la venta ni el organizador.",
+  price_locked_pending: "Hay compras en curso para esta entrada; inténtalo en unos minutos",
   incomplete: "Faltan datos para publicar el evento.",
   not_moderator: "Solo un administrador puede aprobar, rechazar o cancelar eventos.",
   submit_not_draft: "Solo se pueden enviar a revisión borradores.",

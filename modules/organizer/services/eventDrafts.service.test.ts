@@ -542,56 +542,72 @@ describeWithDb("eventDrafts.service", () => {
         expect(await getEvent(tx, withoutSales.eventId)).toMatchObject({ startsAt, scheduleChangedAt: null });
       }));
 
+    /** Publicado con un asiento de Campo vendido (orden paid, con su entrada) y uno de Platea reservado (pending vigente). */
+    async function setupWithSoldAndHeldSeats(tx: Tx) {
+      const setup = await setupEvent(tx, "published");
+      const { eventId, venue } = setup;
+      const typeId = async (sectionId: string) =>
+        (
+          await tx
+            .select({ id: ticketTypes.id })
+            .from(ticketTypes)
+            .where(and(eq(ticketTypes.eventId, eventId), eq(ticketTypes.sectionId, sectionId)))
+        )[0].id;
+      const [soldSeat, heldSeat] = await tx
+        .insert(eventSeats)
+        .values([
+          { eventId, ticketTypeId: await typeId(venue.campoId) },
+          { eventId, ticketTypeId: await typeId(venue.plateaId) },
+        ])
+        .returning({ id: eventSeats.id });
+      const order = (status: "paid" | "pending") => ({
+        code: `TK-TEST-${randomUUID().slice(0, 8)}`,
+        eventId,
+        status,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        buyerName: "Comprador de prueba",
+        buyerEmail: "comprador.prueba@example.com",
+        buyerPhone: "+51900000000",
+        buyerDocumentType: "dni" as const,
+        buyerDocumentNumber: "00000000",
+        ticketCount: 1,
+        subtotalCents: 5000,
+        platformFeeCents: 500,
+        organizerAmountCents: 4500,
+      });
+      const [paid, pending] = await tx
+        .insert(orders)
+        .values([order("paid"), order("pending")])
+        .returning({ id: orders.id });
+      await tx.update(eventSeats).set({ status: "sold", orderId: paid.id }).where(eq(eventSeats.id, soldSeat.id));
+      await tx
+        .update(eventSeats)
+        .set({ status: "held", orderId: pending.id, heldUntil: new Date(Date.now() + 10 * 60_000) })
+        .where(eq(eventSeats.id, heldSeat.id));
+      await tx.insert(tickets).values({
+        orderId: paid.id,
+        eventSeatId: soldSeat.id,
+        code: `TK-TEST-${randomUUID().slice(0, 8)}-01`,
+        holderName: "Comprador de prueba",
+        unitPriceCents: 5000,
+        qrToken: randomUUID(),
+      });
+      return { ...setup, paidOrderId: paid.id, pendingOrderId: pending.id };
+    }
+
     it("un precio nuevo no toca las órdenes, las entradas pagadas ni las reservas pending vigentes", () =>
       inRolledBackTransaction(async (tx) => {
-        const { owner, venue, eventId } = await setupEvent(tx, "published");
-        const [campo] = await tx
-          .select({ id: ticketTypes.id })
-          .from(ticketTypes)
-          .where(and(eq(ticketTypes.eventId, eventId), eq(ticketTypes.sectionId, venue.campoId)));
-        const [soldSeat, heldSeat] = await tx
-          .insert(eventSeats)
-          .values([{ eventId, ticketTypeId: campo.id }, { eventId, ticketTypeId: campo.id }])
-          .returning({ id: eventSeats.id });
-        const order = (status: "paid" | "pending") => ({
-          code: `TK-TEST-${randomUUID().slice(0, 8)}`,
-          eventId,
-          status,
-          expiresAt: new Date(Date.now() + 10 * 60_000),
-          buyerName: "Comprador de prueba",
-          buyerEmail: "comprador.prueba@example.com",
-          buyerPhone: "+51900000000",
-          buyerDocumentType: "dni" as const,
-          buyerDocumentNumber: "00000000",
-          ticketCount: 1,
-          subtotalCents: 5000,
-          platformFeeCents: 500,
-          organizerAmountCents: 4500,
-        });
-        const [paid, pending] = await tx
-          .insert(orders)
-          .values([order("paid"), order("pending")])
-          .returning({ id: orders.id });
-        await tx.update(eventSeats).set({ status: "sold", orderId: paid.id }).where(eq(eventSeats.id, soldSeat.id));
-        await tx
-          .update(eventSeats)
-          .set({ status: "held", orderId: pending.id, heldUntil: new Date(Date.now() + 10 * 60_000) })
-          .where(eq(eventSeats.id, heldSeat.id));
-        await tx.insert(tickets).values({
-          orderId: paid.id,
-          eventSeatId: soldSeat.id,
-          code: `TK-TEST-${randomUUID().slice(0, 8)}-01`,
-          holderName: "Comprador de prueba",
-          unitPriceCents: 5000,
-          qrToken: randomUUID(),
-        });
+        const { owner, venue, eventId, paidOrderId } = await setupWithSoldAndHeldSeats(tx);
         const snapshot = async () => ({
           orders: await tx
             .select({ id: orders.id, status: orders.status, subtotalCents: orders.subtotalCents, expiresAt: orders.expiresAt })
             .from(orders)
             .where(eq(orders.eventId, eventId))
             .orderBy(orders.id),
-          tickets: await tx.select({ unitPriceCents: tickets.unitPriceCents }).from(tickets).where(eq(tickets.orderId, paid.id)),
+          tickets: await tx
+            .select({ unitPriceCents: tickets.unitPriceCents })
+            .from(tickets)
+            .where(eq(tickets.orderId, paidOrderId)),
           seats: await tx
             .select({ id: eventSeats.id, status: eventSeats.status, orderId: eventSeats.orderId, heldUntil: eventSeats.heldUntil })
             .from(eventSeats)
@@ -600,14 +616,50 @@ describeWithDb("eventDrafts.service", () => {
         });
         const before = await snapshot();
 
-        const newPrices = draftInput(venue).ticketTypes.map((type) => ({ ...type, priceCents: 9900 }));
+        // Solo cambia Campo (con una entrada pagada); Platea, con una reserva en curso, conserva su precio.
+        const newPrices = draftInput(venue).ticketTypes.map((type) =>
+          type.sectionId === venue.campoId ? { ...type, priceCents: 9900 } : type,
+        );
         await updateEvent(owner, eventId, draftInput(venue, { ticketTypes: newPrices }));
 
         expect(await snapshot()).toEqual(before);
         expect(before.tickets).toEqual([{ unitPriceCents: 5000 }]);
         expect(before.orders.map((row) => row.subtotalCents)).toEqual([5000, 5000]);
         // Las ventas nuevas leen el precio de `ticket_types`.
-        expect((await getTicketTypes(tx, eventId)).map((type) => type.priceCents)).toEqual([9900, 9900]);
+        expect((await getTicketTypes(tx, eventId)).map((type) => type.priceCents)).toEqual([9900, 12000]);
+      }));
+
+    it("precio de un tipo con una reserva pending vigente: price_locked_pending y no guarda nada; el nombre sí cambia", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId } = await setupWithSoldAndHeldSeats(tx);
+        const plateaPrice = draftInput(venue).ticketTypes.map((type) =>
+          type.sectionId === venue.plateaId ? { ...type, priceCents: 13000 } : type,
+        );
+        await expect(
+          updateEvent(owner, eventId, draftInput(venue, { title: "No se guarda", ticketTypes: plateaPrice })),
+        ).rejects.toEqual(domainError("price_locked_pending"));
+        expect((await getEvent(tx, eventId)).title).toBe("Festival de prueba");
+        expect((await getTicketTypes(tx, eventId)).map((type) => type.priceCents)).toEqual([5000, 12000]);
+
+        const plateaName = draftInput(venue).ticketTypes.map((type) =>
+          type.sectionId === venue.plateaId ? { ...type, name: "Platea Preferencial" } : type,
+        );
+        await updateEvent(owner, eventId, draftInput(venue, { ticketTypes: plateaName }));
+        expect((await getTicketTypes(tx, eventId)).map(({ name, priceCents }) => ({ name, priceCents }))).toEqual([
+          { name: "General", priceCents: 5000 },
+          { name: "Platea Preferencial", priceCents: 12000 },
+        ]);
+      }));
+
+    it("precio de un tipo cuya reserva pending ya venció: se guarda", () =>
+      inRolledBackTransaction(async (tx) => {
+        const { owner, venue, eventId, pendingOrderId } = await setupWithSoldAndHeldSeats(tx);
+        await tx.update(orders).set({ expiresAt: new Date(Date.now() - 60_000) }).where(eq(orders.id, pendingOrderId));
+        const plateaPrice = draftInput(venue).ticketTypes.map((type) =>
+          type.sectionId === venue.plateaId ? { ...type, priceCents: 13000 } : type,
+        );
+        await updateEvent(owner, eventId, draftInput(venue, { ticketTypes: plateaPrice }));
+        expect((await getTicketTypes(tx, eventId)).map((type) => type.priceCents)).toEqual([5000, 13000]);
       }));
 
     it.each(activeSales)("publicado con %s: sí cambian título, descripción, portada y edad", (_label, status, expiresAt) =>
