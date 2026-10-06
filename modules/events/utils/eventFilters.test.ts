@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Event } from "../types/events.types";
+import type { Event, EventCategory } from "../types/events.types";
 import {
   buildEventsHref,
   filterEvents,
@@ -18,6 +18,7 @@ function makeEvent(overrides: Partial<Event> & Pick<Event, "id">): Event {
     slug: overrides.id,
     title: "Evento",
     category: "conciertos",
+    categoryName: "Conciertos",
     startsAt: "2026-11-15T20:00:00-05:00",
     venue: "Recinto",
     city: "Lima",
@@ -30,6 +31,15 @@ function makeEvent(overrides: Partial<Event> & Pick<Event, "id">): Event {
 }
 
 const ids = (events: Event[]) => events.map((event) => event.id);
+
+// Categorías de la BD (no las del código): incluye una que no está en el seed.
+const CATEGORIES: EventCategory[] = [
+  ["conciertos", "Conciertos"],
+  ["teatro", "Teatro"],
+  ["deportes", "Deportes"],
+  ["stand-up", "Stand-up"],
+  ["tecnologia", "Tecnología"],
+].map(([slug, name], index) => ({ id: `00000000-0000-4000-8000-00000000000${index}`, slug, name }));
 
 describe("parseEventFilters", () => {
   it("acepta valores válidos", () => {
@@ -44,7 +54,7 @@ describe("parseEventFilters", () => {
       ciudad: "Tokio",
       fecha: "2027-13-45",
       precio: "xyz",
-      categoria: "opera",
+      categoria: "Ópera Rock",
       pagina: "2",
     });
     expect(filters).toEqual({ q: "ok" });
@@ -70,9 +80,19 @@ describe("parseEventFilters", () => {
     });
   });
 
+  it("acepta un slug bien formado aunque no exista en la BD", () => {
+    expect(parseEventFilters({ categoria: ["cafe-shop", "inexistente"] })).toEqual({
+      categoria: ["cafe-shop", "inexistente"],
+    });
+  });
+
+  it.each(["Teatro", "cafe_shop", "-teatro", "teatro-", "a".repeat(61)])("descarta el slug mal formado %s", (slug) => {
+    expect(parseEventFilters({ categoria: slug }).categoria).toBeUndefined();
+  });
+
   it("descarta los valores inválidos de un array y conserva los válidos en orden de llegada", () => {
     expect(
-      parseEventFilters({ categoria: ["opera", "teatro", "conciertos"], ciudad: ["Tokio", "Cusco", ""] }),
+      parseEventFilters({ categoria: ["Opera", "teatro", "conciertos"], ciudad: ["Tokio", "Cusco", ""] }),
     ).toEqual({ categoria: ["teatro", "conciertos"], ciudad: ["Cusco"] });
   });
 
@@ -81,7 +101,7 @@ describe("parseEventFilters", () => {
   });
 
   it("un multivalor con todos los valores inválidos queda undefined", () => {
-    const filters = parseEventFilters({ categoria: ["opera", "cine"], ciudad: ["Tokio"] });
+    const filters = parseEventFilters({ categoria: ["cine!", "-cine"], ciudad: ["Tokio"] });
     expect(filters.categoria).toBeUndefined();
     expect(filters.ciudad).toBeUndefined();
   });
@@ -115,7 +135,7 @@ describe("parseEventFilters", () => {
   it("aplica solo los valores válidos de una URL con varios inválidos", () => {
     expect(
       parseEventFilters({
-        categoria: ["opera", "teatro"],
+        categoria: ["teatro--rock", "teatro"],
         ciudad: "Tokio",
         mes: "2027-13",
         orden: "xyz",
@@ -207,6 +227,10 @@ describe("filterEvents", () => {
   it("filtra por categoría", () => {
     const events = [makeEvent({ id: "rock" }), makeEvent({ id: "obra", category: "teatro" })];
     expect(ids(filterEvents(events, { categoria: ["teatro"] }))).toEqual(["obra"]);
+  });
+
+  it("una categoría inexistente devuelve 0 resultados", () => {
+    expect(filterEvents([makeEvent({ id: "rock" })], parseEventFilters({ categoria: "inexistente" }))).toEqual([]);
   });
 
   it("combina todos los filtros con AND", () => {
@@ -416,32 +440,38 @@ describe("getFacetCounts", () => {
   ];
 
   it("sin filtros devuelve los totales por valor, incluidos los ceros", () => {
-    expect(getFacetCounts(events, {})).toEqual({
-      categoria: { conciertos: 2, teatro: 2, deportes: 1, festivales: 0, "stand-up": 0, familia: 0 },
+    expect(getFacetCounts(events, {}, CATEGORIES)).toEqual({
+      categoria: { conciertos: 2, teatro: 2, deportes: 1, "stand-up": 0, tecnologia: 0 },
       ciudad: { Lima: 3, Arequipa: 1, Cusco: 1, Trujillo: 0, Piura: 0 },
     });
   });
 
   it("con categoria, las ciudades solo cuentan esa categoría y las categorías no cambian por su propia selección", () => {
-    expect(getFacetCounts(events, { categoria: ["teatro"] })).toEqual({
-      categoria: { conciertos: 2, teatro: 2, deportes: 1, festivales: 0, "stand-up": 0, familia: 0 },
+    expect(getFacetCounts(events, { categoria: ["teatro"] }, CATEGORIES)).toEqual({
+      categoria: { conciertos: 2, teatro: 2, deportes: 1, "stand-up": 0, tecnologia: 0 },
       ciudad: { Lima: 1, Arequipa: 0, Cusco: 1, Trujillo: 0, Piura: 0 },
     });
   });
 
   it("con ciudad, las categorías solo cuentan esa ciudad", () => {
-    expect(getFacetCounts(events, { ciudad: ["Lima"] })).toEqual({
-      categoria: { conciertos: 2, teatro: 1, deportes: 0, festivales: 0, "stand-up": 0, familia: 0 },
+    expect(getFacetCounts(events, { ciudad: ["Lima"] }, CATEGORIES)).toEqual({
+      categoria: { conciertos: 2, teatro: 1, deportes: 0, "stand-up": 0, tecnologia: 0 },
       ciudad: { Lima: 3, Arequipa: 1, Cusco: 1, Trujillo: 0, Piura: 0 },
     });
   });
 
+  it("cuenta solo las categorías de la BD: las que no tienen eventos quedan en 0", () => {
+    const counts = getFacetCounts([...events, makeEvent({ id: "6", category: "festivales" })], {}, CATEGORIES);
+    expect(Object.keys(counts.categoria)).toEqual(CATEGORIES.map(({ slug }) => slug));
+    expect(counts.categoria.tecnologia).toBe(0);
+  });
+
   it("aplica los demás filtros activos a ambas facetas", () => {
-    const counts = getFacetCounts(events, { precio: "0-50" });
+    const counts = getFacetCounts(events, { precio: "0-50" }, CATEGORIES);
     expect(counts.categoria.conciertos).toBe(0);
     expect(counts.ciudad.Lima).toBe(0);
     expect(counts.categoria.teatro).toBe(0);
-    expect(getFacetCounts(events, { precio: "200-mas" }).ciudad.Lima).toBe(1);
+    expect(getFacetCounts(events, { precio: "200-mas" }, CATEGORIES).ciudad.Lima).toBe(1);
   });
 });
 
@@ -477,17 +507,20 @@ describe("getEventMonths", () => {
 
 describe("getActiveFilterChips", () => {
   it("sin filtros de faceta no hay chips (ni para q ni para orden)", () => {
-    expect(getActiveFilterChips({ q: "rock", orden: "precio" })).toEqual([]);
+    expect(getActiveFilterChips({ q: "rock", orden: "precio" }, CATEGORIES)).toEqual([]);
   });
 
   it("ordena y etiqueta los chips: categorías, ciudades, mes, fecha y precio", () => {
-    const chips = getActiveFilterChips({
-      precio: "100-200",
-      fecha: "2027-01-01",
-      mes: "2026-11",
-      ciudad: ["Lima", "Cusco"],
-      categoria: ["teatro", "stand-up"],
-    });
+    const chips = getActiveFilterChips(
+      {
+        precio: "100-200",
+        fecha: "2027-01-01",
+        mes: "2026-11",
+        ciudad: ["Lima", "Cusco"],
+        categoria: ["teatro", "stand-up"],
+      },
+      CATEGORIES,
+    );
     expect(chips.map((chip) => chip.label)).toEqual([
       "Teatro",
       "Stand-up",
@@ -500,14 +533,22 @@ describe("getActiveFilterChips", () => {
     expect(new Set(chips.map((chip) => chip.id)).size).toBe(chips.length);
   });
 
+  it("usa el nombre de la BD y, si la categoría no existe, el slug", () => {
+    const chips = getActiveFilterChips({ categoria: ["tecnologia", "inexistente"] }, CATEGORIES);
+    expect(chips.map((chip) => chip.label)).toEqual(["Tecnología", "inexistente"]);
+  });
+
   it("el href de cada chip quita solo ese valor y conserva el resto", () => {
-    const chips = getActiveFilterChips({
-      q: "rock",
-      categoria: ["teatro"],
-      ciudad: ["Lima", "Cusco"],
-      precio: "100-200",
-      orden: "precio",
-    });
+    const chips = getActiveFilterChips(
+      {
+        q: "rock",
+        categoria: ["teatro"],
+        ciudad: ["Lima", "Cusco"],
+        precio: "100-200",
+        orden: "precio",
+      },
+      CATEGORIES,
+    );
     expect(chips.map(({ label, href }) => [label, href])).toEqual([
       ["Teatro", "/eventos?q=rock&ciudad=Lima&ciudad=Cusco&precio=100-200&orden=precio"],
       ["Lima", "/eventos?q=rock&categoria=teatro&ciudad=Cusco&precio=100-200&orden=precio"],
@@ -517,7 +558,7 @@ describe("getActiveFilterChips", () => {
   });
 
   it("los chips de mes y fecha enlazan a la URL sin ese parámetro", () => {
-    const chips = getActiveFilterChips({ mes: "2027-01", fecha: "2027-01-01" });
+    const chips = getActiveFilterChips({ mes: "2027-01", fecha: "2027-01-01" }, CATEGORIES);
     expect(chips).toEqual([
       { id: "mes", label: "Enero 2027", href: "/eventos?fecha=2027-01-01" },
       { id: "fecha", label: "Desde el 1 de enero de 2027", href: "/eventos?mes=2027-01" },

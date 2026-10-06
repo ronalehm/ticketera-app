@@ -4,6 +4,8 @@ import { uploadPresigned } from "@vercel/blob/client";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { EventCategory } from "@/modules/events";
+
 import { createEventAction, updateEventAction } from "../actions/eventDrafts.actions";
 import type { EditableEvent, OrganizerOption, VenueOption } from "../types/organizer.types";
 import { OrganizerEventForm } from "./OrganizerEventForm";
@@ -31,6 +33,14 @@ const THEATER: VenueOption = {
   sections: [{ id: "33333333-3333-4333-8333-333333333333", name: "Platea", seating: "numbered", capacity: 300 }],
 };
 const VENUES = [STADIUM, THEATER];
+// Categorías de la BD (`listEventCategories`), incluidas las de la migración 0009.
+const CATEGORIES: EventCategory[] = [
+  { id: "c0000000-0000-4000-8000-000000000001", slug: "bar-shop", name: "Bares" },
+  { id: "c0000000-0000-4000-8000-000000000002", slug: "cafe-shop", name: "Café" },
+  { id: "c0000000-0000-4000-8000-000000000003", slug: "conciertos", name: "Conciertos" },
+  { id: "c0000000-0000-4000-8000-000000000004", slug: "drink", name: "Drinks" },
+  { id: "c0000000-0000-4000-8000-000000000005", slug: "festivales", name: "Festivales" },
+];
 const ORGANIZERS: OrganizerOption[] = [
   { id: "00000000-0000-8000-8000-000000000001", name: "Pulso Producciones S.A.C." },
   { id: "00000000-0000-8000-8000-000000000002", name: "Ana Pérez" },
@@ -66,11 +76,17 @@ async function choose(name: string, option: string) {
   await waitFor(() => expect(selectText(trigger)).toBe(option));
 }
 
+/** Lo mínimo para guardar un borrador: nombre y categoría. */
+async function fillRequired(title = "Festival", category = "Conciertos") {
+  type(input("Nombre del evento"), title);
+  await choose("Categoría", category);
+}
+
 function renderForm(props: Partial<ComponentProps<typeof OrganizerEventForm>> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OrganizerEventForm userId="user-1" venues={VENUES} {...props} />
+      <OrganizerEventForm userId="user-1" categories={CATEGORIES} venues={VENUES} {...props} />
     </QueryClientProvider>,
   );
 }
@@ -97,24 +113,43 @@ describe("OrganizerEventForm", () => {
     expect(screen.getByRole("link", { name: "Cancelar" }).getAttribute("href")).toBe("/organizador");
   });
 
-  it("vacío solo pide el nombre, lo enfoca y no guarda", async () => {
+  it("vacío pide el nombre y la categoría, enfoca el nombre y no guarda", async () => {
     renderForm();
+    expect(selectText(combobox("Categoría"))).toBe("Elige una categoría");
     fireEvent.click(saveButton());
 
     expect(screen.getByText("Ingresa el nombre del evento")).toBeTruthy();
+    expect(document.getElementById("organizer-event-category-error")?.textContent).toBe("Elige una categoría");
+    expect(combobox("Categoría").getAttribute("aria-invalid")).toBe("true");
     expect(input("Nombre del evento").getAttribute("aria-invalid")).toBe("true");
     expect(input("Nombre del evento").getAttribute("aria-describedby")).toBe("organizer-event-title-error");
     await waitFor(() => expect(document.activeElement).toBe(input("Nombre del evento")));
     expect(createEventAction).not.toHaveBeenCalled();
   });
 
-  it("con solo el nombre crea el borrador y vuelve a Eventos con el aviso", async () => {
+  it("el Select lista las categorías de la BD (con Café, Drinks y Bares) y la vista previa muestra la elegida", async () => {
     renderForm();
-    type(input("Nombre del evento"), "  Mi borrador ");
+    const preview = within(screen.getByRole("complementary", { name: "Vista previa" }));
+    expect(preview.getByText("Categoría")).toBeTruthy();
+
+    fireEvent.click(combobox("Categoría"));
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual(["Bares", "Café", "Conciertos", "Drinks", "Festivales"]);
+    fireEvent.pointerDown(options[1], { pointerType: "mouse" });
+    fireEvent.click(options[1]);
+    await waitFor(() => expect(selectText(combobox("Categoría"))).toBe("Café"));
+    expect(preview.getByText("Café")).toBeTruthy();
+  });
+
+  it("con el nombre y la categoría crea el borrador y vuelve a Eventos con el aviso", async () => {
+    renderForm();
+    await fillRequired("  Mi borrador ", "Drinks");
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=borrador"));
-    expect(createEventAction).toHaveBeenCalledWith(expect.objectContaining({ title: "Mi borrador", ticketTypes: [] }));
+    expect(createEventAction).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Mi borrador", category: "drink", ticketTypes: [] }),
+    );
     expect(updateEventAction).not.toHaveBeenCalled();
     // Sigue deshabilitado hasta que llega Eventos: un segundo clic no crea otro borrador.
     expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
@@ -123,7 +158,7 @@ describe("OrganizerEventForm", () => {
   it("un error del servidor se muestra y no navega", async () => {
     vi.mocked(createEventAction).mockResolvedValue({ ok: false, error: "Tu cuenta de organizador no está aprobada." });
     renderForm();
-    type(input("Nombre del evento"), "Mi borrador");
+    await fillRequired("Mi borrador");
     fireEvent.click(saveButton());
 
     expect((await screen.findByRole("alert")).textContent).toBe("Tu cuenta de organizador no está aprobada.");
@@ -134,7 +169,7 @@ describe("OrganizerEventForm", () => {
   it("si la acción falla por red, mensaje genérico", async () => {
     vi.mocked(createEventAction).mockRejectedValue(new Error("fetch failed"));
     renderForm();
-    type(input("Nombre del evento"), "Mi borrador");
+    await fillRequired("Mi borrador");
     fireEvent.click(saveButton());
 
     expect((await screen.findByRole("alert")).textContent).toBe("No pudimos completar la solicitud. Inténtalo de nuevo.");
@@ -190,7 +225,7 @@ describe("OrganizerEventForm", () => {
 
     it("envía las filas con el recinto y la vista previa muestra lugar y precio", async () => {
       renderForm();
-      type(input("Nombre del evento"), "Festival");
+      await fillRequired();
       await choose("Recinto", "Estadio Nacional · Lima");
       fireEvent.click(sellCheckbox("Campo"));
       type(sectionInput("Campo", "Precio (S/)"), "50");
@@ -227,7 +262,7 @@ describe("OrganizerEventForm", () => {
 
     it("elegir la fecha en el DatePicker la envía como YYYY-MM-DD", async () => {
       renderForm();
-      type(input("Nombre del evento"), "Festival");
+      await fillRequired();
       fireEvent.click(dateTrigger());
       fireEvent.click(dayButton("20 de octubre de 2026"));
       type(input("Hora de inicio"), "20:00");
@@ -293,7 +328,7 @@ describe("OrganizerEventForm", () => {
         }),
       );
       const { container } = renderForm();
-      type(input("Nombre del evento"), "Festival");
+      await fillRequired();
       expect(screen.getByRole("tab", { name: "Subir imagen" }).getAttribute("aria-selected")).toBe("true");
 
       const file = new File(["x"], "portada.jpg", { type: "image/jpeg" });
@@ -317,7 +352,7 @@ describe("OrganizerEventForm", () => {
 
     it("un admin tiene que elegirlo y se envía el elegido", async () => {
       renderForm({ organizers: ORGANIZERS });
-      type(input("Nombre del evento"), "Festival");
+      await fillRequired();
       fireEvent.click(saveButton());
 
       expect(document.getElementById("organizer-event-organizerId-error")?.textContent).toBe(
@@ -348,6 +383,7 @@ describe("OrganizerEventForm", () => {
       imageUrl: "https://images.unsplash.com/a.jpg",
       ticketTypes: [{ sectionId: STADIUM.sections[1].id, name: "Platea VIP", priceCents: 12050 }],
       reviewNote: null,
+      featured: false,
       hasSales: false,
     };
 

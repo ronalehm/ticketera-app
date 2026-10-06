@@ -163,6 +163,7 @@ describeWithDb("orders.service", () => {
         slug: testEvent.slug,
         title: expect.stringMatching(/^Evento de prueba /),
         category: expect.any(String),
+        categoryName: expect.any(String),
         startsAt: STARTS_AT.toISOString(),
         venue: expect.stringMatching(/^Recinto /),
         city: "Lima",

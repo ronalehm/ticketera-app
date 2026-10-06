@@ -1,12 +1,18 @@
 import { z } from "zod";
 
-export const eventCategorySchema = z.enum(["conciertos", "teatro", "deportes", "festivales", "stand-up", "familia"]);
+/** Slug de categoría (`categories.slug`): kebab-case en minúsculas. La lista de categorías vive en la BD. */
+export const categorySlugSchema = z
+  .string()
+  .max(60)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export const eventCategorySchema = z.object({ id: z.uuid(), slug: categorySlugSchema, name: z.string().min(1) });
 export const eventStatusSchema = z.enum(["available", "low-stock", "sold-out"]);
 export const eventSchema = z.object({
   id: z.string(),
   slug: z.string(),
   title: z.string().min(1),
-  category: eventCategorySchema,
+  category: categorySlugSchema,
+  categoryName: z.string(),
   startsAt: z.iso.datetime({ offset: true }),
   venue: z.string(),
   city: z.string(),

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { EventCategory, EventDetail } from "@/modules/events";
+import type { EventDetail } from "@/modules/events";
 import type { checkoutBuyerSchema } from "../schemas/payment.schema";
 
 export type CheckoutOrderItem = {
@@ -12,7 +12,10 @@ export type CheckoutOrderItem = {
 };
 
 export type CheckoutOrder = {
-  event: Pick<EventDetail, "slug" | "title" | "category" | "startsAt" | "venue" | "city" | "imageUrl">;
+  event: Pick<
+    EventDetail,
+    "slug" | "title" | "category" | "categoryName" | "startsAt" | "venue" | "city" | "imageUrl"
+  >;
   items: CheckoutOrderItem[];
   quantities: Record<string, number>;
   ticketCount: number;
@@ -55,7 +58,16 @@ export type OrderTicket = {
 export type Order = {
   code: string; // "TK-<n>" (orders.code)
   createdAt: string; // ISO
-  event: { slug: string; title: string; category: EventCategory; startsAt: string; venue: string; city: string; imageUrl: string };
+  event: {
+    slug: string;
+    title: string;
+    category: string;
+    categoryName: string;
+    startsAt: string;
+    venue: string;
+    city: string;
+    imageUrl: string;
+  };
   items: { ticketTypeId: string; name: string; unitPrice: number; quantity: number; seats?: { id: string; label: string }[] }[];
   ticketCount: number;
   total: number; // PEN

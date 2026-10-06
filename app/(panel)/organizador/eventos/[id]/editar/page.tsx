@@ -4,7 +4,14 @@ import { FilePen, Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
-import { EDIT_IN_REVIEW_MESSAGE, EventEditNotice, EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
+import { listEventCategories } from "@/modules/events/catalog";
+import {
+  EDIT_IN_REVIEW_MESSAGE,
+  EventEditNotice,
+  EventFeaturedControl,
+  EventFormHeader,
+  OrganizerEventForm,
+} from "@/modules/organizer";
 import {
   getEventForEdit,
   listApprovedOrganizers,
@@ -42,12 +49,18 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
   const event = await getEventForEdit(user, id);
   if (!event) notFound();
 
+  const manageAny = roleCan(user.role, "events:manageAny");
+  // Destacar: un admin, en cualquier estado (readOnly ya salió arriba).
+  const featuredControl = manageAny ? (
+    <EventFeaturedControl userId={user.id} eventId={event.id} featured={event.featured} />
+  ) : undefined;
+
   // En revisión, cancelado y finalizado no se editan (Decisión 11); borrador y publicado sí, con los límites de su estado.
   if (event.status === "pending_review" || event.status === "cancelled" || event.status === "finished") {
     const inReview = event.status === "pending_review";
     return (
       <div className="flex flex-col gap-8 md:gap-10">
-        <EventFormHeader title="Editar evento" />
+        <EventFormHeader title="Editar evento" action={featuredControl} />
         <EmptyState
           icon={FilePen}
           title={inReview ? "Este evento está en revisión" : "Este evento ya no se puede editar"}
@@ -63,8 +76,8 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
     );
   }
 
-  const manageAny = roleCan(user.role, "events:manageAny");
-  const [venues, organizers] = await Promise.all([
+  const [categories, venues, organizers] = await Promise.all([
+    listEventCategories(),
     listApprovedVenuesWithSections(),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
@@ -72,10 +85,13 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
   return (
     <div className="flex flex-col gap-8 md:gap-10">
       <div className="flex flex-col gap-6">
-        <EventFormHeader title={event.status === "draft" ? "Editar borrador" : "Editar evento"} />
+        <EventFormHeader
+          title={event.status === "draft" ? "Editar borrador" : "Editar evento"}
+          action={featuredControl}
+        />
         <EventEditNotice status={event.status} reviewNote={event.reviewNote} hasSales={event.hasSales} />
       </div>
-      <OrganizerEventForm userId={user.id} venues={venues} organizers={organizers} event={event} />
+      <OrganizerEventForm userId={user.id} categories={categories} venues={venues} organizers={organizers} event={event} />
     </div>
   );
 }

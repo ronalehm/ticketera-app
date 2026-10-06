@@ -8,6 +8,7 @@ export type EventRecord = {
   slug: string;
   title: string;
   category: string;
+  categoryName: string;
   startsAt: Date | null;
   venue: string;
   city: string;
@@ -54,7 +55,8 @@ export function toEvent(record: EventRecord): z.input<typeof eventSchema> {
     id: record.id,
     slug: record.slug,
     title: record.title,
-    category: record.category as z.input<typeof eventSchema>["category"],
+    category: record.category,
+    categoryName: record.categoryName,
     startsAt: required(record.startsAt, record.slug, "startsAt").toISOString(),
     venue: record.venue,
     city: record.city,

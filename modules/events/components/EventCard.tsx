@@ -8,7 +8,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORY_LABELS } from "../data/categories";
 import { EVENT_STATUS_BADGE } from "../data/eventStatus";
 import type { Event, EventStatus } from "../types/events.types";
 import { formatEventPrice, formatShortDayMonth, getDateChipParts } from "../utils/formatEvent";
@@ -196,7 +195,7 @@ export function EventCard({ event, layout = "grid", surface = "background", clas
       <div className={mainVariants({ layout })}>
         <CardContent className={contentVariants({ layout })}>
           <p className="text-xs font-bold tracking-wider text-primary-strong uppercase">
-            {EVENT_CATEGORY_LABELS[event.category]}
+            {event.categoryName}
           </p>
           <h3 className="line-clamp-2 text-base leading-snug font-bold md:text-lg">
             <Link href={href} className={titleLinkVariants({ layout })}>

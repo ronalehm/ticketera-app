@@ -7,6 +7,7 @@ const record: EventDetailRecord = {
   slug: "noche-de-sintetizadores-lima",
   title: "Noche de Sintetizadores",
   category: "conciertos",
+  categoryName: "Conciertos",
   startsAt: new Date("2026-11-15T02:00:00Z"),
   venue: "Estadio Nacional",
   city: "Lima",
@@ -24,7 +25,7 @@ const record: EventDetailRecord = {
 
 const ticketTypes: TicketTypeRecord[] = [
   { slug: "general", name: "General", description: null, priceCents: 18000, totalSeats: 10, availableSeats: 10 },
-  { slug: "vip", name: "VIP", description: "Zona frente al escenario", priceCents: 45050, totalSeats: 10, availableSeats: 2 },
+  { slug: "vip", name: "VIP", description: "Zona frente al escenario", priceCents: 45050, totalSeats: 10, availableSeats: 1 },
   { slug: "tribuna-norte", name: "Tribuna Norte", description: null, priceCents: 9000, totalSeats: 10, availableSeats: 0 },
 ];
 
@@ -38,12 +39,20 @@ describe("toEvent", () => {
 
   it("calcula el status desde los conteos", () => {
     expect(toEvent(record).status).toBe("available");
-    expect(toEvent({ ...record, availableSeats: 20 }).status).toBe("low-stock");
+    expect(toEvent({ ...record, availableSeats: 10 }).status).toBe("low-stock");
     expect(toEvent({ ...record, availableSeats: 0 }).status).toBe("sold-out");
   });
 
-  it("una categoría desconocida hace fallar eventSchema.parse", () => {
-    expect(() => eventSchema.parse(toEvent({ ...record, category: "opera" }))).toThrow();
+  it("conserva el slug y el nombre de la categoría", () => {
+    expect(toEvent(record)).toMatchObject({ category: "conciertos", categoryName: "Conciertos" });
+  });
+
+  it("una categoría que no está en el código pasa eventSchema.parse (la BD es la fuente de verdad)", () => {
+    expect(eventSchema.parse(toEvent({ ...record, category: "cafe-shop", categoryName: "Café" })).category).toBe("cafe-shop");
+  });
+
+  it("un slug de categoría mal formado hace fallar eventSchema.parse", () => {
+    expect(() => eventSchema.parse(toEvent({ ...record, category: "Ópera" }))).toThrow();
   });
 
   it.each(["startsAt", "imageUrl"] as const)("lanza con el slug si %s es null", (field) => {

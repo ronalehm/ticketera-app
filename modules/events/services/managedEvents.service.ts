@@ -76,6 +76,7 @@ export async function listManagedEvents(
       venue: venues.name,
       city: venues.city,
       imageUrl: events.imageUrl,
+      featured: events.featured,
       organizer: sql<string>`coalesce(${organizers.legalName}, trim(${users.firstName} || ' ' || ${users.lastName}))`,
       sold: paidOrdersSum(orders.ticketCount),
       hasActiveSales: sql<boolean>`exists (select 1 from ${orders} where ${orders.eventId} = ${events.id} and ${isActiveSaleOrder})`,

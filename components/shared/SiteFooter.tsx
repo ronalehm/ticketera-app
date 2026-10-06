@@ -3,21 +3,16 @@ import { BookOpen } from "lucide-react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import type { EventCategory } from "@/modules/events/catalog";
 
 const FOCUS = "cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-highlight";
 
 const LINK =
   `${FOCUS} inline-flex min-h-11 items-center gap-2 text-sm text-white/70 transition-colors duration-200 hover:text-white md:min-h-0`;
 
-const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
-  {
-    title: "Explorar",
-    links: EVENT_CATEGORIES.map((slug) => ({
-      href: `/eventos?categoria=${slug}`,
-      label: EVENT_CATEGORY_LABELS[slug],
-    })),
-  },
+type FooterColumn = { title: string; links: { href: string; label: string }[] };
+
+const STATIC_COLUMNS: FooterColumn[] = [
   {
     title: "Mentec Tickets",
     links: [
@@ -73,7 +68,16 @@ const SOCIALS = [
   },
 ];
 
-export function SiteFooter() {
+export function SiteFooter({ categories }: { categories: Pick<EventCategory, "slug" | "name">[] }) {
+  // «Explorar» lista todas las categorías de la BD.
+  const columns: FooterColumn[] = [
+    {
+      title: "Explorar",
+      links: categories.map(({ slug, name }) => ({ href: `/eventos?categoria=${slug}`, label: name })),
+    },
+    ...STATIC_COLUMNS,
+  ];
+
   return (
     <footer className="bg-brand-navy text-white print:hidden">
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
@@ -113,7 +117,7 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          {COLUMNS.map((column) => (
+          {columns.map((column) => (
             <nav key={column.title} aria-label={column.title}>
               <h2 className="mb-3 text-xs font-bold tracking-wider uppercase">{column.title}</h2>
               <ul className="md:space-y-2">

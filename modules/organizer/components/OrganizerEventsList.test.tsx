@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteEventAction } from "../actions/eventDrafts.actions";
+import { setEventFeaturedAction } from "../actions/eventFeatured.actions";
 import {
   approveEventAction,
   cancelEventAction,
@@ -14,6 +15,7 @@ import { OrganizerEventsList } from "./OrganizerEventsList";
 
 vi.mock("../actions/managedEvents.actions", () => ({ listManagedEventsAction: vi.fn() }));
 vi.mock("../actions/eventDrafts.actions", () => ({ deleteEventAction: vi.fn() }));
+vi.mock("../actions/eventFeatured.actions", () => ({ setEventFeaturedAction: vi.fn() }));
 vi.mock("../actions/eventModeration.actions", () => ({
   submitForReviewAction: vi.fn(),
   approveEventAction: vi.fn(),
@@ -233,8 +235,8 @@ describe("OrganizerEventsList", () => {
       expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeTruthy();
     });
 
-    it("cancelado y finalizado no tienen acciones (ni el pie de acciones de la tarjeta)", () => {
-      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="admin" />);
+    it("para un organizador, cancelado y finalizado no tienen acciones (ni el pie de acciones de la tarjeta)", () => {
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="organizer" />);
       for (const title of ["Evento d", "Evento e"]) {
         const card = cards().getByRole("heading", { name: title }).closest("li") as HTMLElement;
         expect(within(card).queryAllByRole("button")).toHaveLength(0);
@@ -447,7 +449,7 @@ describe("OrganizerEventsList", () => {
       expect(rowOf("Evento b").queryByRole("link", { name: /^Editar/ })).toBeNull();
 
       const menu = await openRowMenu("Evento b");
-      expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Aprobar", "Rechazar"]);
+      expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Aprobar", "Rechazar", "Destacar"]);
     });
 
     it("publicado con ventas (admin): Cancelar evento deshabilitado con el motivo y no se ejecuta", async () => {
@@ -472,6 +474,79 @@ describe("OrganizerEventsList", () => {
       expect(list.getByRole("button", { name: "Eliminar Evento c" }).textContent).toBe("Eliminar");
       expect(list.getByRole("button", { name: "Enviar a revisión Evento c" }).textContent).toBe("Enviar a revisión");
       expect(list.queryByRole("button", { name: /^Más acciones/ })).toBeNull();
+    });
+  });
+
+  describe("destacar (admin)", () => {
+    const cardOf = (title: string) => within(cards().getByRole("heading", { name: title }).closest("li") as HTMLElement);
+
+    it.each(["admin", "super_admin"] as const)("%s puede destacar en todos los estados (tarjeta y menú)", async (role) => {
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role={role} />);
+      for (const title of ["Evento a", "Evento b", "Evento c", "Evento d", "Evento e"]) {
+        const button = cardOf(title).getByRole("button", { name: `Destacar ${title}` });
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+        expect(button.className).toContain("h-11");
+      }
+      // Cancelado: sin Editar, solo [•••] con Destacar.
+      expect(rowOf("Evento d").queryByRole("link", { name: /^Editar/ })).toBeNull();
+      const menu = await openRowMenu("Evento d");
+      expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Destacar"]);
+    });
+
+    it("un destacado ofrece «Quitar destacado» (pulsado)", async () => {
+      const events = [makeEvent("a", { featured: true })];
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={events} canMutate role="admin" />);
+      expect(cardOf("Evento a").getByRole("button", { name: "Quitar destacado Evento a" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      const menu = await openRowMenu("Evento a");
+      expect(menu.getByRole("menuitem", { name: "Quitar destacado" })).toBeTruthy();
+    });
+
+    it("un organizador no ve la acción; sin canMutate, tampoco el admin", () => {
+      const { unmount } = renderWithQuery(
+        <OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="organizer" />,
+      );
+      expect(screen.queryByRole("button", { name: /^Destacar/ })).toBeNull();
+      unmount();
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} role="admin" />);
+      expect(screen.queryByRole("button", { name: /^Destacar/ })).toBeNull();
+    });
+
+    it("destacar desde la tarjeta llama a la acción sin diálogo, avisa y recarga el listado", async () => {
+      vi.mocked(setEventFeaturedAction).mockResolvedValue({ ok: true, featured: true });
+      vi.mocked(listManagedEventsAction).mockResolvedValue(EVENTS);
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="admin" />);
+
+      fireEvent.click(cardOf("Evento c").getByRole("button", { name: "Destacar Evento c" }));
+      await waitFor(() => expect(screen.getByText("Evento destacado.")).toBeTruthy());
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      expect(setEventFeaturedAction).toHaveBeenCalledWith("c", true);
+      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "", from: "", to: "" });
+    });
+
+    it("quitar destacado desde el menú de la tabla avisa", async () => {
+      vi.mocked(setEventFeaturedAction).mockResolvedValue({ ok: true, featured: false });
+      vi.mocked(listManagedEventsAction).mockResolvedValue(EVENTS);
+      const events = [makeEvent("a", { featured: true })];
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={events} canMutate role="admin" />);
+
+      fireEvent.click((await openRowMenu("Evento a")).getByRole("menuitem", { name: "Quitar destacado" }));
+      await waitFor(() => expect(screen.getByText("Evento retirado de destacados.")).toBeTruthy());
+      expect(setEventFeaturedAction).toHaveBeenCalledWith("a", false);
+    });
+
+    it("si falla, el aviso muestra el error", async () => {
+      vi.mocked(setEventFeaturedAction).mockResolvedValue({
+        ok: false,
+        error: "El evento no existe o no tienes acceso a él.",
+        code: "not_found",
+      });
+      vi.mocked(listManagedEventsAction).mockResolvedValue(EVENTS);
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="admin" />);
+
+      fireEvent.click(cardOf("Evento a").getByRole("button", { name: "Destacar Evento a" }));
+      await waitFor(() => expect(screen.getByText("El evento no existe o no tienes acceso a él.")).toBeTruthy());
     });
   });
 

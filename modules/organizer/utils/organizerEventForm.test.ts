@@ -109,6 +109,7 @@ describe("toEventDraftFormValues", () => {
     imageUrl: null,
     ticketTypes: [{ sectionId: SECTION_A, name: "General", priceCents: 5000 }],
     reviewNote: null,
+    featured: false,
     hasSales: false,
   };
 

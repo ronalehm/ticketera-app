@@ -12,6 +12,7 @@ export type EventDraftErrorCode =
   | "venue_not_approved"
   | "section_not_in_venue"
   | "slug_taken"
+  | "invalid_category"
   // F5b: edición fuera de borrador (Decisión 11; en revisión, cancelado o finalizado, `edit_locked`).
   | "edit_locked"
   | "structure_locked"
@@ -26,7 +27,9 @@ export type EventDraftErrorCode =
   | "inventory_exists"
   | "owner_not_approved"
   | "event_venue_not_approved"
-  | "review_note_required";
+  | "review_note_required"
+  // Destacados (spec events-dynamic-landing).
+  | "feature_not_allowed";
 
 /**
  * Error de dominio de los eventos del panel: la acción traduce `code` a un mensaje (`getEventDraftErrorMessage`).
@@ -67,6 +70,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   venue_not_approved: "El recinto elegido no existe o no está aprobado.",
   section_not_in_venue: "Alguna sección elegida no pertenece al recinto.",
   slug_taken: "Otro evento con un nombre parecido se guardó a la vez. Inténtalo de nuevo.",
+  invalid_category: "Categoría no válida",
   edit_locked: "Un evento cancelado o finalizado ya no se puede editar.",
   structure_locked: "En un evento publicado no se pueden cambiar el recinto, las secciones a la venta ni el organizador.",
   sensitive_locked:
@@ -81,6 +85,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   owner_not_approved: "El organizador del evento ya no está aprobado: no se puede publicar hasta que lo esté.",
   event_venue_not_approved: "El recinto del evento ya no está aprobado: no se puede publicar hasta que lo esté.",
   review_note_required: "Escribe el motivo del rechazo.",
+  feature_not_allowed: "Solo un administrador puede destacar eventos.",
 } satisfies Record<EventDraftErrorCode, string>;
 
 /** Mensaje de un error de dominio; con `incomplete`, qué falta exactamente; con `edit_locked` en revisión, qué hacer. */

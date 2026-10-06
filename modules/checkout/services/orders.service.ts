@@ -7,7 +7,6 @@ import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/eve
 import { orders, tickets } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { stripe } from "@/lib/stripe";
-import type { EventCategory } from "@/modules/events";
 import type { CheckoutOrder, Order, OrderConfirmationResult, PendingCheckoutResult } from "../types/checkout.types";
 import { getConfirmationState } from "../utils/orderRules";
 import { buildOrderView, buildPendingCheckoutOrder } from "../utils/orderViews";
@@ -39,6 +38,7 @@ function selectOrdersWithEvent(database: typeof db) {
       slug: events.slug,
       title: events.title,
       category: categories.slug,
+      categoryName: categories.name,
       startsAt: events.startsAt,
       venue: venues.name,
       city: venues.city,
@@ -99,7 +99,8 @@ function toEventView(row: OrderWithEvent): CheckoutOrder["event"] {
   return {
     slug: row.slug,
     title: row.title,
-    category: row.category as EventCategory,
+    category: row.category,
+    categoryName: row.categoryName,
     startsAt: required(row.startsAt, row.slug).toISOString(),
     venue: row.venue,
     city: row.city,

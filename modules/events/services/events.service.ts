@@ -1,4 +1,5 @@
-import { and, count, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, gte, isNull, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers } from "@/lib/db/schema/identity";
@@ -19,6 +20,7 @@ const eventFields = {
   slug: events.slug,
   title: events.title,
   category: categories.slug,
+  categoryName: categories.name,
   startsAt: events.startsAt,
   venue: venues.name,
   city: venues.city,
@@ -34,9 +36,14 @@ const eventFields = {
   organizer: organizers.legalName,
 };
 
-/** Eventos publicados con sus conteos de `event_seats`, en el orden del catálogo (Decisión 13). */
-function selectPublishedEvents(where?: SQL) {
-  return db
+/** Lo destacado en la portada de la landing (Hero y rail): como máximo 5 (Decisión 12). */
+export const FEATURED_EVENTS_LIMIT = 5;
+
+type PublishedEventsQuery = { where?: SQL; orderBy?: (AnyPgColumn | SQL)[]; limit?: number };
+
+/** Eventos publicados con sus conteos de `event_seats`; por defecto en el orden del catálogo (Decisión 13). */
+function selectPublishedEvents({ where, orderBy = [events.createdAt, events.id], limit }: PublishedEventsQuery = {}) {
+  const query = db
     .select(eventFields)
     .from(events)
     .innerJoin(categories, eq(categories.id, events.categoryId))
@@ -46,21 +53,36 @@ function selectPublishedEvents(where?: SQL) {
     .leftJoin(eventSeats, inventorySeatsJoin)
     .where(and(eq(events.status, "published"), where))
     .groupBy(events.id, categories.id, venues.id, organizers.userId)
-    .orderBy(events.createdAt, events.id);
+    .orderBy(...orderBy)
+    .$dynamic();
+  return limit === undefined ? query : query.limit(limit);
 }
+
+const byStartsAt = [events.startsAt, events.id];
 
 export async function getEvents() {
   const records = await selectPublishedEvents();
   return eventSchema.array().parse(records.map(toEvent));
 }
 
-export async function getFeaturedEvents() {
-  const events = await getEvents();
-  return events.filter((event) => event.featured);
+/** Destacados publicados que aún no empiezan, por fecha, hasta `FEATURED_EVENTS_LIMIT` (Hero y rail de la landing). */
+export async function getFeaturedEvents({ now = new Date() }: { now?: Date } = {}) {
+  const records = await selectPublishedEvents({
+    where: and(eq(events.featured, true), gte(events.startsAt, now)),
+    orderBy: byStartsAt,
+    limit: FEATURED_EVENTS_LIMIT,
+  });
+  return eventSchema.array().parse(records.map(toEvent));
+}
+
+/** Publicados que aún no empiezan, por fecha (solo la landing; `/eventos` sigue con `getEvents`). */
+export async function getUpcomingEvents({ now = new Date() }: { now?: Date } = {}) {
+  const records = await selectPublishedEvents({ where: gte(events.startsAt, now), orderBy: byStartsAt });
+  return eventSchema.array().parse(records.map(toEvent));
 }
 
 export async function getEventBySlug(slug: string): Promise<EventDetail | null> {
-  const [record] = await selectPublishedEvents(eq(events.slug, slug));
+  const [record] = await selectPublishedEvents({ where: eq(events.slug, slug) });
   if (!record) return null;
 
   const types = await db

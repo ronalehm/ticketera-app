@@ -26,7 +26,7 @@ export type TicketTypeRowErrors = { name?: string; price?: string };
 /** Borrador listo para la BD (`toEventDraftInput`): lo recibe el servicio. */
 export type EventDraftInput = {
   title: string;
-  category: EventCategory;
+  category: EventCategory["slug"];
   description: string | null;
   startsAt: Date | null;
   doorsOpenAt: Date | null;
@@ -51,7 +51,7 @@ export type EditableEvent = {
   status: ManagedEventStatus;
   organizerId: string;
   title: string;
-  category: EventCategory;
+  category: EventCategory["slug"];
   description: string | null;
   startsAt: string | null;
   doorsOpenAt: string | null;
@@ -61,6 +61,8 @@ export type EditableEvent = {
   ticketTypes: { sectionId: string; name: string; priceCents: number }[];
   /** Motivo del último rechazo (lo ve el organizador en su borrador); `null` si no lo hay. */
   reviewNote: string | null;
+  /** Destacado en la landing (solo lo cambia un admin, `EventFeaturedControl`). */
+  featured: boolean;
   /** Ventas activas (órdenes `paid`, `partially_refunded` o `pending` vigentes, `lib/db/activeSales.ts`): bloquean los cambios sensibles de un evento publicado (Decisión 11). */
   hasSales: boolean;
 };
@@ -78,7 +80,8 @@ export type EventDraftActionResult<T extends object = object> = ({ ok: true } & 
 /** Datos de la tarjeta de vista previa; `null` = marcador por falta de datos. */
 export type EventPreview = {
   title: string | null;
-  categoryLabel: string;
+  /** Nombre de la categoría elegida; `null` si aún no se eligió. */
+  categoryLabel: string | null;
   /** Fecha corta de la tarjeta ("sáb 5 dic"). */
   dateLabel: string | null;
   /** Partes del chip de fecha ({ month: "DIC", day: "05" }). */

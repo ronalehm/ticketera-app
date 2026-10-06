@@ -117,7 +117,7 @@ Los componentes de Clerk (`<SignIn/>`, `<SignUp/>`, `<UserProfile/>`) toman los 
 
 - `lucide-react` (ya instalado). Tamaños `size-4` en metadatos, `size-5` en botones, `size-6`–`size-8` en categorías.
 - Sin emojis como iconos. Iconos decorativos con `aria-hidden`; botones solo-icono con `aria-label` o `<span className="sr-only">`.
-- Mapa de categorías: Conciertos `Music`, Teatro `Drama`, Deportes `Trophy`, Festivales `PartyPopper`, Stand-up `Mic`, Familia `Baby` / `Users`.
+- Mapa de categorías (`CATEGORY_ICONS` en `CategoryGrid.tsx`; las categorías vienen de la BD): Conciertos `Music`, Teatro `Drama`, Deportes `Trophy`, Festivales `PartyPopper`, Stand-up `Mic`, Familia `Baby` / `Users`, Café `Coffee`, Drinks `Martini`, Bares `Beer`. Cualquier categoría nueva sin icono usa `Tag`.
 
 ---
 
@@ -132,7 +132,7 @@ Regla: primero shadcn (`base-nova`, Base UI). Componentes propios solo componien
 | Hero slider y rails | `Carousel` (Embla) + `embla-carousel-autoplay` (solo hero) | `components/ui` / `modules/events` |
 | Buscador | `Input` + `NativeSelect` + `Button` (barra píldora única para la landing y `/eventos`; `<select>` nativo, funciona sin JS). En móvil (`< md`), solo el campo de texto con lupa y "Buscar" en una fila de 56 px; Fecha y Precio, en el panel de filtros de `/eventos` | `modules/events/components/EventSearchBar.tsx` |
 | Filtro por categoría | Landing (Próximos eventos, filtro local): `ToggleGroup` (chips). `/eventos`: chips-enlace que cambian `?categoria=` (ver `pages/events-list.md`) | `modules/events` |
-| Menú móvil | `Sheet` (bloque de cuenta arriba, luego categorías) | `components/shared/SiteHeader.tsx` |
+| Menú móvil | `Sheet` (bloque de cuenta arriba, luego el enlace «Eventos») | `components/shared/SiteHeader.tsx` |
 | Menú de usuario | `DropdownMenu` (Base UI `Menu`) + `UserAvatar` + `UserSummary` | `modules/auth/components/UserMenu.tsx` |
 | Avatar de usuario | `Avatar` + `AvatarFallback` con iniciales (`getInitials` de `lib/userName.ts`) | `components/shared/UserAvatar.tsx` |
 | Acceso (login, registro y Google) | `<SignIn/>` / `<SignUp/>` de Clerk con el tema `shadcn` y `esES` (§2 "Componentes de Clerk"); el botón de Google lo pone Clerk. Dentro del layout `(auth)` con `AuthBrandPanel`. Detalle en `pages/auth.md` | `app/(auth)/login/[[...rest]]`, `app/(auth)/registro/[[...rest]]` |
@@ -208,7 +208,7 @@ Menú (w-72 = 288 px, align end, 8 px bajo el botón, p-2)
 - Items: `h-11 rounded-lg px-3 gap-3 text-sm font-medium`; foco y hover `bg-accent`. Los enlaces son `DropdownMenuItem render={<Link />}` (un `<a role="menuitem">`); la ruta actual lleva `aria-current="page"` con `bg-accent font-semibold text-accent-foreground`.
 - Teclado (Base UI, sin código propio): abre con clic, Enter, Espacio o flecha abajo y el foco entra en el primer item; flechas, Inicio/Fin y letras mueven el foco; Escape o clic fuera cierran y devuelven el foco al botón; elegir un enlace navega y cierra.
 - "Cerrar sesión" borra la sesión sin navegar (se queda en la URL actual).
-- `Sheet` (< xl): el bloque de cuenta va **arriba**, separado de las categorías por `border-b pb-6`. Con sesión: `UserSummary` sobre `rounded-2xl bg-muted p-4`, `<nav aria-label="Tu cuenta">` con los mismos `ACCOUNT_LINKS` (`h-11`, icono `size-5`, `text-base font-medium`, `aria-current` con `bg-accent`) y "Cerrar sesión" outline a todo el ancho. Sin sesión: "Crear cuenta" (primario) e "Iniciar sesión" (outline) a todo el ancho.
+- `Sheet` (< xl): el bloque de cuenta va **arriba**, separado del enlace «Eventos» por `border-b pb-6`. Con sesión: `UserSummary` sobre `rounded-2xl bg-muted p-4`, `<nav aria-label="Tu cuenta">` con los mismos `ACCOUNT_LINKS` (`h-11`, icono `size-5`, `text-base font-medium`, `aria-current` con `bg-accent`) y "Cerrar sesión" outline a todo el ancho. Sin sesión: "Crear cuenta" (primario) e "Iniciar sesión" (outline) a todo el ancho.
 - Nombres y correos largos hacen salto de línea (`wrap-break-word` / `wrap-anywhere`) en la tarjeta; solo el nombre del disparador se trunca.
 
 ### Botones
@@ -266,11 +266,11 @@ Si cambia un token en §2 / `app/globals.css`, se actualiza también esta tabla 
 ## 8. Layout de la landing
 
 ```
-Header sticky  [logo] [categorías xl+] sin sesión: [Iniciar sesión] [Crear cuenta] (sm+) · con sesión: [avatar · nombre (sm+) ▾] → menú de usuario · ☰ menú < xl (cuenta arriba + categorías)
+Header sticky  [logo] [Eventos xl+] sin sesión: [Iniciar sesión] [Crear cuenta] (sm+) · con sesión: [avatar · nombre (sm+) ▾] → menú de usuario · ☰ menú < xl (cuenta arriba + Eventos)
 Título         h1 "Encuentra tu próximo plan en vivo" + subtítulo (dentro de HeroCarousel)
 Hero slider    imagen full-bleed + overlay navy, título (h2), fecha, lugar, CTA "Comprar entradas"
 Buscador       barra píldora (EventSearchBar, la misma de /eventos): texto "Qué quieres ver" + fecha (mes) + precio + Buscar
-Categorías     6 tiles con icono (scroll horizontal en móvil)
+Categorías     una tile por categoría de la BD (hoy 9), grilla auto-fill (3 col. en 375 px … 9 en 1440 px), icono de respaldo `Tag`
 Destacados     rail (carousel) de EventCard
 Próximos       chips de categoría + grilla 1/2/3/4 columnas + "Ver todos"
 Organizadores  banner con degradado de marca + CTA

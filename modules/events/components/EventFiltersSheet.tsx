@@ -8,12 +8,14 @@ import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeader, SheetTitle, 
 import { cn } from "@/lib/utils";
 
 import type { EventFilters } from "../schemas/eventFilters.schema";
+import type { EventCategory } from "../types/events.types";
 import { buildEventsHref, type FacetCounts, type MonthOption } from "../utils/eventFilters";
 import { EventFiltersForm } from "./EventFiltersForm";
 
 type EventFiltersSheetProps = {
   filters: EventFilters;
   facets: FacetCounts;
+  categories: EventCategory[];
   months: MonthOption[];
   resultCount: number;
   className?: string;
@@ -21,7 +23,14 @@ type EventFiltersSheetProps = {
 
 // Filtros en móvil y tablet (< lg). Categoría va en las pills, así que aquí no se muestra.
 // Al aplicar un filtro solo cambian los searchParams y Next conserva el estado del Sheet (sigue abierto).
-export function EventFiltersSheet({ filters, facets, months, resultCount, className }: EventFiltersSheetProps) {
+export function EventFiltersSheet({
+  filters,
+  facets,
+  categories,
+  months,
+  resultCount,
+  className,
+}: EventFiltersSheetProps) {
   const activeCount = (filters.ciudad?.length ?? 0) + (filters.mes ? 1 : 0) + (filters.precio ? 1 : 0);
   const clearHref = buildEventsHref({ ...filters, ciudad: undefined, mes: undefined, precio: undefined });
 
@@ -68,7 +77,13 @@ export function EventFiltersSheet({ filters, facets, months, resultCount, classN
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-4 pb-4">
-          <EventFiltersForm filters={filters} facets={facets} months={months} sections={["ciudad", "mes", "precio"]} />
+          <EventFiltersForm
+            filters={filters}
+            facets={facets}
+            categories={categories}
+            months={months}
+            sections={["ciudad", "mes", "precio"]}
+          />
         </div>
 
         <SheetFooter className="mt-0 shrink-0 flex-row gap-3 border-t border-border">

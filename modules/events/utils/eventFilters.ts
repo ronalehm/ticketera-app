@@ -1,5 +1,4 @@
 import { normalizeText } from "@/lib/text";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
 import { CITIES, PRICE_RANGES } from "../data/searchOptions";
 import { eventFiltersSchema, type City, type EventFilters } from "../schemas/eventFilters.schema";
 import type { Event, EventCategory } from "../types/events.types";
@@ -8,7 +7,7 @@ type PriceRange = NonNullable<EventFilters["precio"]>;
 type MultiValueKey = "categoria" | "ciudad";
 type MultiValue<K extends MultiValueKey> = NonNullable<EventFilters[K]>[number];
 
-export type FacetCounts = { categoria: Record<EventCategory, number>; ciudad: Record<City, number> };
+export type FacetCounts = { categoria: Record<string, number>; ciudad: Record<City, number> };
 export type MonthOption = { value: string; label: string };
 export type FilterChip = { id: string; label: string; href: string };
 
@@ -100,12 +99,12 @@ function countBy<K extends string>(keys: readonly K[], values: string[]): Record
   return counts;
 }
 
-/** Conteos por valor con los demás filtros activos, ignorando la propia faceta (incluye ceros). */
-export function getFacetCounts(events: Event[], filters: EventFilters): FacetCounts {
+/** Conteos por valor con los demás filtros activos, ignorando la propia faceta (incluye ceros por cada categoría de BD). */
+export function getFacetCounts(events: Event[], filters: EventFilters, categories: EventCategory[]): FacetCounts {
   const matching = (others: EventFilters) => events.filter((event) => matchesFilters(event, others));
   return {
     categoria: countBy(
-      EVENT_CATEGORIES,
+      categories.map((category) => category.slug),
       matching({ ...filters, categoria: undefined }).map((event) => event.category),
     ),
     ciudad: countBy(
@@ -127,12 +126,13 @@ export function getEventMonths(events: Event[]): MonthOption[] {
 }
 
 /** Un chip por valor activo (categorías, ciudades, mes, fecha, precio); su href es la URL sin ese valor. */
-export function getActiveFilterChips(filters: EventFilters): FilterChip[] {
+export function getActiveFilterChips(filters: EventFilters, categories: EventCategory[]): FilterChip[] {
   const { categoria = [], ciudad = [], mes, fecha, precio } = filters;
   const chips: FilterChip[] = [
     ...categoria.map((category) => ({
       id: `categoria-${category}`,
-      label: EVENT_CATEGORY_LABELS[category],
+      // Un slug que no está en la BD se muestra tal cual.
+      label: categories.find(({ slug }) => slug === category)?.name ?? category,
       href: buildEventsHref(toggleFilterValue(filters, "categoria", category)),
     })),
     ...ciudad.map((city) => ({

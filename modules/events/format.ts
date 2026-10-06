@@ -1,4 +1,4 @@
-// Entrada pública separada del barrel: el código cliente formatea fechas, precios, categorías y ciudades sin arrastrar los componentes de `events`.
+// Entrada pública separada del barrel: el código cliente usa formatos de fecha y precio, ciudades y `categorySlugSchema` sin arrastrar los componentes de `events`.
 export {
   formatEventDate,
   formatEventPrice,
@@ -8,5 +8,5 @@ export {
   formatTime,
   getDateChipParts,
 } from "./utils/formatEvent";
-export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
 export { CITIES } from "./data/searchOptions";
+export { categorySlugSchema } from "./schemas/events.schema";

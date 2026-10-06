@@ -34,6 +34,11 @@ describe("EventCard", () => {
       expect(within(chip).getByText("14")).toBeTruthy();
     });
 
+    it("muestra el nombre de la categoría que llega de la BD", () => {
+      render(<EventCard event={{ ...event, category: "cafe-shop", categoryName: "Café" }} />);
+      expect(screen.getByText("Café")).toBeTruthy();
+    });
+
     it("muestra 'Desde' y el precio", () => {
       render(<EventCard event={event} />);
       expect(screen.getByText("Desde")).toBeTruthy();

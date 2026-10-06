@@ -12,6 +12,7 @@ function makeOrder(code: string, title: string, startsAt: string, ticketCount: n
       slug: code.toLowerCase(),
       title,
       category: "conciertos",
+      categoryName: "Conciertos",
       startsAt,
       venue: "Estadio Nacional",
       city: "Lima",

@@ -1,16 +1,12 @@
 // Se ejecuta en el cliente: sin valores del barrel de events, solo su entrada `format` y tipos (Decisión 17).
 import { z } from "zod";
-import type { EventCategory } from "@/modules/events";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
-
-// Record<EventCategory, string> garantiza por tipo que estén todas las claves; el test lo compara con EVENT_CATEGORIES.
-export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]];
+import { categorySlugSchema } from "@/modules/events/format";
 
 // Borradores de ejemplo del seed (`ORGANIZER_DRAFTS_MOCK`): los valida `buildSeedData` antes de sembrarlos.
 export const organizerEventSchema = z.object({
   id: z.string(),
   title: z.string().min(1),
-  category: z.enum(EVENT_CATEGORY_OPTIONS),
+  category: categorySlugSchema,
   startsAt: z.iso.datetime({ offset: true }).nullable(), // null: borrador sin fecha/hora
   venue: z.string(),
   city: z.string(),
@@ -79,6 +75,7 @@ const PRICE_PATTERN = /^\d+(\.\d{1,2})?$/;
 
 const MESSAGES = {
   title: "Ingresa el nombre del evento",
+  category: "Elige una categoría",
   titleTooLong: `El nombre admite hasta ${EVENT_DRAFT_LIMITS.title} caracteres`,
   descriptionTooLong: `La descripción admite hasta ${EVENT_DRAFT_LIMITS.description} caracteres`,
   date: "Elige una fecha válida",
@@ -128,7 +125,8 @@ export function getTicketTypeRowErrors(row: z.input<typeof eventDraftTicketTypeS
 
 const eventDraftShape = {
   title: z.string().trim().min(1, MESSAGES.title).max(EVENT_DRAFT_LIMITS.title, MESSAGES.titleTooLong),
-  category: z.enum(EVENT_CATEGORY_OPTIONS),
+  // Slug de `categories` (la lista viene de la BD); que exista lo comprueba el servicio (`invalid_category`).
+  category: z.string().refine((slug) => categorySlugSchema.safeParse(slug).success, MESSAGES.category),
   minAge: minAgeSchema,
   description: z.string().trim().max(EVENT_DRAFT_LIMITS.description, MESSAGES.descriptionTooLong),
   date: z.string().trim(), // "YYYY-MM-DD" o ""
@@ -143,7 +141,7 @@ const eventDraftShape = {
 
 /**
  * Borrador de evento (spec admin-panel, F5a): valida el formulario y la entrada de `createEventAction`/`updateEventAction`.
- * Solo el nombre es obligatorio; el resto puede faltar, pero lo que se indique tiene que ser válido (una fecha sin hora,
+ * Solo el nombre y la categoría son obligatorios; el resto puede faltar, pero lo que se indique tiene que ser válido (una fecha sin hora,
  * una portada `http` o una sección marcada sin precio no se guardan). `requireOrganizer` (admin y super_admin) exige
  * elegir el organizador dueño. Las comprobaciones de la BD (recinto aprobado, secciones del recinto, organizador
  * aprobado) las hace el servicio. La salida se convierte con `toEventDraftInput`.

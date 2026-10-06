@@ -7,11 +7,11 @@
 
 ```
 Header sticky        (layout del grupo (site))
-HeroCarousel         h1 "Encuentra tu próximo plan en vivo" (único h1) + slider
-EventSearchBar       buscador píldora, months={getEventMonths(events)}
-CategoryGrid         6 tiles
-FeaturedEventsRail   Destacados
-UpcomingEvents       Próximos eventos + "Ver todos los eventos" → /eventos
+HeroCarousel         h1 "Encuentra tu próximo plan en vivo" (único h1) + slider de destacados
+EventSearchBar       buscador píldora, months={getEventMonths(events)} (meses de los próximos eventos)
+CategoryGrid         un tile por categoría de la BD
+FeaturedEventsRail   Destacados (no se renderiza sin destacados)
+UpcomingEvents       Próximos eventos (chips «Todos» + categorías de la BD) + "Ver todos los eventos" → /eventos
 HowItWorks           NUEVO · "Cómo funciona" (3 pasos)
 OrganizerBanner      banner de organizadores
 TrustHighlights      Compra con confianza
@@ -20,8 +20,31 @@ Footer navy          (layout del grupo (site))
 ```
 
 - `app/(site)/page.tsx` es un Server Component que solo compone, en este orden. `OrganizerBanner` y `TrustHighlights` no están en el diseño de referencia pero se conservan entre las dos secciones nuevas.
+- Datos (spec `events-dynamic-landing`, F5): `Promise.all([listEventCategories(), getUpcomingEvents(), getFeaturedEvents()])`. `events` = publicados que aún no empiezan, por fecha (`/eventos` sigue usando `getEvents`). `featuredEvents` = como máximo `FEATURED_EVENTS_LIMIT` (5) destacados publicados futuros, por fecha; los borradores destacados y los eventos pasados no salen.
 - Un solo `<h1>` en `/` (el del hero). Las secciones nuevas usan `h2` y `h3`.
 - Ambas secciones: `<section>` sobre `bg-background`, contenedor `mx-auto max-w-7xl px-4 md:px-6 lg:px-8`; "Cómo funciona" con `py-12 md:py-16` y el newsletter, más compacto, con `py-10 md:py-12`.
+
+## Hero (`HeroCarousel`)
+
+El h1 y el subtítulo se muestran siempre. Debajo, según el número de destacados:
+
+| Destacados | Se muestra |
+|---|---|
+| 0 | Solo h1 y subtítulo: sin `Carousel` ni portada. |
+| 1 | La portada del evento (badge con `categoryName`, h2, fecha, lugar y "Comprar entradas") sin `Carousel`: sin flechas, puntos, autoplay ni loop. |
+| 2–5 | `Carousel` con loop, flechas, un punto por slide y autoplay de 6 s que no arranca con `prefers-reduced-motion: reduce` y se detiene al pasar el ratón, interactuar o enfocar. |
+
+`FeaturedEventsRail` devuelve `null` sin destacados: no queda la sección "Destacados" vacía.
+
+## Categorías (`CategoryGrid`)
+
+- Props `{ categories: EventCategory[] }` (`listEventCategories`, orden alfabético español). Cada tile enlaza a `/eventos?categoria=<slug>`.
+- Icono de `CATEGORY_ICONS` (Conciertos `Music`, Teatro `Drama`, Deportes `Trophy`, Festivales `PartyPopper`, Stand-up `Mic`, Familia `Users`, Café `Coffee`, Drinks `Martini`, Bares `Beer`); una categoría nueva de la BD usa `Tag`, sin cambiar código.
+- Rejilla `auto-fill` para cualquier número de categorías sin desbordar: `minmax(6rem,1fr)` con `gap-4` y, desde `md`, `minmax(7rem,1fr)` con `gap-6`. Con 9 categorías: 3 columnas a 375 px, 5 a 768, 7 a 1024 y 9 (una fila) a 1440. Tile `p-4 md:py-6`, nombre `text-sm font-medium` con `wrap-break-word hyphens-auto`.
+
+## Próximos eventos (`UpcomingEvents`)
+
+- Props `{ events, categories }`. Chips (`ToggleGroup`, filtro local de selección única): "Todos" + una por categoría de la BD; deseleccionar vuelve a "Todos". Una categoría sin eventos muestra "No hay eventos en esta categoría por ahora.".
 
 ## "Cómo funciona" (`HowItWorks`)
 

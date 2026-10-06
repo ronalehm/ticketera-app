@@ -75,7 +75,7 @@ export default async function EventDetailPage({ params }: PageProps<"/eventos/[s
           <EventDetailInfo event={event} />
         </div>
       </div>
-      <RelatedEvents events={relatedEvents} category={event.category} />
+      <RelatedEvents events={relatedEvents} category={event.category} categoryName={event.categoryName} />
       {venueMap && event.status !== "sold-out" && <MobileBuyBar slug={event.slug} priceFrom={event.priceFrom} />}
     </>
   );

@@ -3,6 +3,7 @@ import { Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
+import { listEventCategories } from "@/modules/events/catalog";
 import { EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
 import { listApprovedOrganizers, listApprovedVenuesWithSections } from "@/modules/organizer/server";
 import { getPanelContext } from "@/modules/panel/server";
@@ -31,7 +32,8 @@ export default async function CreateOrganizerEventPage() {
   }
   // Admin y super_admin eligen el organizador dueño entre los aprobados.
   const manageAny = roleCan(user.role, "events:manageAny");
-  const [venues, organizers] = await Promise.all([
+  const [categories, venues, organizers] = await Promise.all([
+    listEventCategories(),
     listApprovedVenuesWithSections(),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
@@ -39,7 +41,7 @@ export default async function CreateOrganizerEventPage() {
   return (
     <div className="flex flex-col gap-8 md:gap-10">
       <EventFormHeader title="Crear evento" />
-      <OrganizerEventForm userId={user.id} venues={venues} organizers={organizers} />
+      <OrganizerEventForm userId={user.id} categories={categories} venues={venues} organizers={organizers} />
     </div>
   );
 }

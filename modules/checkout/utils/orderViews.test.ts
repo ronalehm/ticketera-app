@@ -6,6 +6,7 @@ const event: CheckoutOrder["event"] = {
   slug: "evento-prueba",
   title: "Evento de prueba",
   category: "conciertos",
+  categoryName: "Conciertos",
   startsAt: "2026-11-15T02:00:00.000Z",
   venue: "Estadio",
   city: "Lima",

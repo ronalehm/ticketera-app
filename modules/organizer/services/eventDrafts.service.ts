@@ -12,8 +12,8 @@ import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { normalizeText, slugify } from "@/lib/text";
 import { roleCan } from "@/modules/auth/permissions";
 import { getOrganizerStatus, requireApprovedOrganizer, type SessionUser } from "@/modules/auth/server";
+import { categorySlugSchema } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
-import { EVENT_CATEGORY_OPTIONS } from "../schemas/organizer.schema";
 import type {
   EditableEvent,
   EventDraftInput,
@@ -88,9 +88,10 @@ async function resolveVenue(input: EventDraftInput, tx: Tx) {
   return { ...venue, sectionSlugs };
 }
 
+/** Id de la categoría del borrador; un slug que no está en `categories` → `invalid_category`. */
 async function getCategoryId(category: EventDraftInput["category"], tx: Tx): Promise<string> {
   const [row] = await tx.select({ id: categories.id }).from(categories).where(eq(categories.slug, category));
-  if (!row) throw new Error(`Falta la categoría "${category}" en la BD`);
+  if (!row) throw new EventDraftError("invalid_category");
   return row.id;
 }
 
@@ -399,6 +400,7 @@ export async function getEventForEdit(
       venueId: events.venueId,
       imageUrl: events.imageUrl,
       reviewNote: events.reviewNote,
+      featured: events.featured,
     })
     .from(events)
     .innerJoin(categories, eq(categories.id, events.categoryId))
@@ -413,7 +415,7 @@ export async function getEventForEdit(
 
   return {
     ...event,
-    category: z.enum(EVENT_CATEGORY_OPTIONS).parse(event.category),
+    category: categorySlugSchema.parse(event.category),
     startsAt: event.startsAt?.toISOString() ?? null,
     doorsOpenAt: event.doorsOpenAt?.toISOString() ?? null,
     ticketTypes: eventTicketTypes,
