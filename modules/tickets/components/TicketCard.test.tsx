@@ -209,6 +209,26 @@ describe("TicketCard", () => {
     expect(vi.mocked(downloadIcs).mock.calls[0][0]).toBe("clasico-del-pacifico.ics");
   });
 
+  describe("aviso de fecha actualizada", () => {
+    // TWO_TICKETS se pagó el 20 de septiembre de 2026 (23:42 UTC).
+    const withChange = (scheduleChangedAt: string): Order => ({
+      ...TWO_TICKETS,
+      event: { ...TWO_TICKETS.event, scheduleChangedAt },
+    });
+
+    it("pedido anterior al cambio: «Fecha actualizada el …» en hora de Lima", () => {
+      const card = renderCard(withChange("2026-10-06T03:30:00.000Z"));
+      expect(card.getByText(/Fecha actualizada el/).textContent).toBe("Fecha actualizada el lunes 5 de octubre");
+    });
+
+    it("pedido posterior al cambio o evento sin cambio: sin aviso", () => {
+      expect(renderCard(withChange("2026-09-01T12:00:00.000Z")).queryByText(/Fecha actualizada/)).toBeNull();
+      cleanup();
+
+      expect(renderCard(TWO_TICKETS).queryByText(/Fecha actualizada/)).toBeNull();
+    });
+  });
+
   it("en Pasadas no hay Agregar al calendario pero sí Descargar PDF", () => {
     const card = renderCard(TWO_TICKETS, "past");
 

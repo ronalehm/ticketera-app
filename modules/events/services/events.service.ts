@@ -34,6 +34,7 @@ const eventFields = {
   doorsOpenAt: events.doorsOpenAt,
   minAge: events.minAge,
   organizer: organizers.legalName,
+  scheduleChangedAt: events.scheduleChangedAt,
 };
 
 /** Lo destacado en la portada de la landing (Hero y rail): como máximo 5 (Decisión 12). */

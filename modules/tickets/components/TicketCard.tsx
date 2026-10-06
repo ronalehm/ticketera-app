@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
+import { CalendarClock, CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
 
 import { DateChip } from "@/components/shared/DateChip";
 import { EventCoverImage } from "@/components/shared/EventCoverImage";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
 import { buildTicketPdfInput, type Order } from "@/modules/checkout/orders";
-import { formatLongDate, formatTime } from "@/modules/events/format";
+import { formatLongDate, formatLongDayMonth, formatTime } from "@/modules/events/format";
 import type { OrderTimeframe } from "../types/tickets.types";
 import { formatTicketCount, getDateChipParts } from "../utils/myOrders";
 
@@ -38,6 +38,11 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
   const { event, tickets } = order;
   const ticket = tickets[ticketIndex];
   const chip = getDateChipParts(event.startsAt);
+  // Pedido anterior al último cambio de fecha: el comprador vio otra fecha al comprar.
+  const scheduleChangedAt =
+    event.scheduleChangedAt && Date.parse(order.createdAt) < Date.parse(event.scheduleChangedAt)
+      ? event.scheduleChangedAt
+      : null;
 
   function handleAddToCalendar() {
     downloadIcs(
@@ -83,6 +88,14 @@ export function TicketCard({ order, timeframe }: TicketCardProps) {
             {event.venue}, {event.city}
           </li>
         </ul>
+        {scheduleChangedAt && (
+          <p className="inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground">
+            <CalendarClock aria-hidden className="size-4 shrink-0" />
+            <span>
+              Fecha actualizada el <time dateTime={scheduleChangedAt}>{formatLongDayMonth(scheduleChangedAt)}</time>
+            </span>
+          </p>
+        )}
       </div>
 
       <div aria-hidden className="relative border-t-2 border-dashed border-border">

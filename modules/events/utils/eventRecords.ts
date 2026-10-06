@@ -26,6 +26,7 @@ export type EventDetailRecord = EventRecord & {
   minAge: number;
   /** `legal_name` del organizador: nullable salvo si está `approved` (CHECK `organizers_approved_complete_check`). */
   organizer: string | null;
+  scheduleChangedAt: Date | null;
 };
 
 export type TicketTypeRecord = {
@@ -79,6 +80,7 @@ export function toEventDetail(
     doorsOpenAt: required(record.doorsOpenAt, record.slug, "doorsOpenAt").toISOString(),
     minAge: record.minAge,
     organizer: required(record.organizer, record.slug, "organizer"),
+    ...(record.scheduleChangedAt && { scheduleChangedAt: record.scheduleChangedAt.toISOString() }),
     ticketTypes: ticketTypes.map((ticketType) => ({
       id: ticketType.slug,
       name: ticketType.name,

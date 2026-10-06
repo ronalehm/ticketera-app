@@ -123,21 +123,21 @@ como BD de Preview; hotfixes a los previews activos.
 Nuevo: columna `schedule_changed_at`, `EventEditLink`, `getEventEditHref`.
 
 ## Plan de tareas
-- [ ] T1. Reglas de edición en el servidor y migración.
+- [x] T1. Reglas de edición en el servidor y migración.
   - Archivos: `drizzle/00NN_*.sql` (+ meta), `lib/db/schema/events.ts`,
     `modules/organizer/services/eventDrafts.service.ts` (+ test), `modules/organizer/utils/eventDraftError.ts`,
     `modules/organizer/actions/eventDrafts.actions.ts` (+ test, incluye `getEventEditHref`).
   - Depende de: —.
-- [ ] T2. Formulario y listado.
+- [x] T2. Formulario y listado.
   - Archivos: `modules/organizer/components/OrganizerEventForm.tsx` (+ test), `EventRowActions.tsx`,
     `OrganizerEventsList.test.tsx`, `app/(panel)/organizador/eventos/[id]/editar/page.tsx`.
   - Depende de: T1.
-- [ ] T3. Aviso y botón públicos.
+- [x] T3. Aviso y botón públicos.
   - Archivos: `modules/events/components/EventEditLink.tsx` (+ test), `EventDetailHeader.tsx` (+ test),
     `app/(site)/eventos/[slug]/page.tsx`, `modules/tickets/components/TicketCard.tsx` (+ test) y el servicio de
     lectura que alimente `schedule_changed_at`.
   - Depende de: T1. Paralelo con T2.
-- [ ] T4. Documentación (`design-system/ticketera/pages/organizer.md`, `MASTER.md` si aplica).
+- [x] T4. Documentación (`design-system/ticketera/pages/organizer.md`, `MASTER.md` si aplica).
   - Depende de: T2 y T3.
 
 ## Preguntas abiertas

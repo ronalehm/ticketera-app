@@ -33,7 +33,7 @@ const CONFIRM_COPY: Record<
   submit: {
     title: (title) => `¿Enviar «${title}» a revisión?`,
     description:
-      "Un administrador lo revisará antes de publicarlo. Mientras está en revisión no se edita: si necesitas cambios, pide al administrador que lo rechace.",
+      "Un administrador lo revisará antes de publicarlo. Mientras está en revisión puedes seguir editándolo: el administrador aprobará la última versión guardada.",
     confirmLabel: "Enviar a revisión",
     pendingLabel: "Enviando…",
     notice: (title) => ({
