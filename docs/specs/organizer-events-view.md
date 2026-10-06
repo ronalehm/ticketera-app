@@ -349,7 +349,7 @@ Coordinación:
     `modules/panel/components/PanelNav.test.tsx`.
   - Depende de: —.
   - Paralelo con T6.
-- [ ] T8. Solo lectura, super_admin y revisión final.
+- [x] T8. Solo lectura, super_admin y revisión final.
   - Archivos: `app/(panel)/organizador/eventos/nuevo/page.tsx`, `app/(panel)/organizador/eventos/[id]/editar/page.tsx`,
     `design-system/ticketera/pages/organizer.md` y `design-system/ticketera/MASTER.md`, más las correcciones de la
     revisión UI dentro de `/organizador/**`.
