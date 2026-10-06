@@ -1,10 +1,12 @@
 "use server";
 
+import { after } from "next/server";
 import { z } from "zod";
 import { roleCan } from "@/modules/auth/permissions";
 import { requirePermission, type SessionUser } from "@/modules/auth/server";
 import { createEventDraftSchema } from "../schemas/organizer.schema";
-import { createEvent, deleteEvent, updateEvent } from "../services/eventDrafts.service";
+import { deleteOwnCoverBestEffort } from "../services/eventCoverCleanup.service";
+import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../services/eventDrafts.service";
 import type { EventDraftActionFailure, EventDraftActionResult, EventDraftInput } from "../types/organizer.types";
 import { toEventDraftInput } from "../utils/organizerEventForm";
 import { invalidInput as invalid, toEventActionFailure as failure } from "./eventActionFailure";
@@ -39,7 +41,8 @@ export async function createEventAction(input: unknown): Promise<EventDraftActio
 
 /**
  * Guarda los cambios de un evento: libre en borrador, limitada si está publicado (y entonces invalida sus páginas
- * públicas); en revisión, cancelado o finalizado no se edita.
+ * públicas); en revisión, cancelado o finalizado no se edita. Si la portada cambió, borra la anterior (si era nuestra)
+ * después de guardar y de responder.
  */
 export async function updateEventAction(id: unknown, input: unknown): Promise<EventDraftActionResult> {
   const actor = await requirePermission("events:manageOwn");
@@ -48,21 +51,27 @@ export async function updateEventAction(id: unknown, input: unknown): Promise<Ev
   const draft = parseDraft(actor, input);
   if (!draft.ok) return draft;
   try {
+    const previousImageUrl = (await getEventForEdit(actor, parsedId.data))?.imageUrl;
     const { status, slug } = await updateEvent(actor, parsedId.data, draft.data);
     if (status === "published") revalidatePublicEvent(slug);
+    if (previousImageUrl && previousImageUrl !== draft.data.imageUrl) {
+      after(() => deleteOwnCoverBestEffort(previousImageUrl));
+    }
     return { ok: true };
   } catch (error) {
     return failure("updateEventAction", error);
   }
 }
 
-/** Elimina un borrador sin órdenes ni inventario. */
+/** Elimina un borrador sin órdenes ni inventario y, después de responder, su portada si era nuestra. */
 export async function deleteEventAction(id: unknown): Promise<EventDraftActionResult> {
   const actor = await requirePermission("events:manageOwn");
   const parsedId = eventIdSchema.safeParse(id);
   if (!parsedId.success) return invalid(parsedId.error);
   try {
+    const imageUrl = (await getEventForEdit(actor, parsedId.data))?.imageUrl;
     await deleteEvent(actor, parsedId.data);
+    if (imageUrl) after(() => deleteOwnCoverBestEffort(imageUrl));
     return { ok: true };
   } catch (error) {
     return failure("deleteEventAction", error);
