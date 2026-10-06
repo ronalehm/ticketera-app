@@ -3,6 +3,8 @@ import { createEventDraftSchema, MIN_AGE_LABELS } from "../schemas/organizer.sch
 import type { EditableEvent, EventDraftFormValues, TicketTypeRow, VenueOption } from "../types/organizer.types";
 import {
   buildStartsAt,
+  createManualVenue,
+  createManualZone,
   createTicketTypeRows,
   EMPTY_EVENT_DRAFT,
   formatPriceInput,
@@ -13,9 +15,11 @@ import {
   getSelectedCapacity,
   getTicketTypeErrors,
   hasScheduleChanged,
+  syncTicketTypeRows,
   toCents,
   toEventDraftFormValues,
   toEventDraftInput,
+  toManualVenueSections,
 } from "./organizerEventForm";
 
 const SECTION_A = "11111111-1111-4111-8111-111111111111";
@@ -93,6 +97,46 @@ describe("createTicketTypeRows", () => {
   });
 });
 
+describe("recinto manual", () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it("createManualVenue abre el bloque vacío con una zona con uuid; cada zona nueva lleva otro", () => {
+    const venue = createManualVenue();
+    expect(venue).toEqual({ enabled: true, name: "", address: "", city: "", sections: [expect.any(Object)] });
+    expect(venue.sections[0]).toEqual({ id: expect.stringMatching(UUID), name: "", capacity: "" });
+    expect(createManualZone().id).not.toBe(createManualZone().id);
+  });
+
+  it("toManualVenueSections: zonas generales; sin nombre, «Zona n»; aforo no válido, 0", () => {
+    const zones = [
+      { id: SECTION_A, name: " VIP ", capacity: "50" },
+      { id: SECTION_B, name: "", capacity: "abc" },
+    ];
+    expect(toManualVenueSections(zones)).toEqual([
+      { id: SECTION_A, name: "VIP", seating: "general", capacity: 50 },
+      { id: SECTION_B, name: "Zona 2", seating: "general", capacity: 0 },
+    ]);
+  });
+
+  it("syncTicketTypeRows conserva las filas que siguen, renombra las sin marcar y añade las nuevas", () => {
+    const sections = toManualVenueSections([
+      { id: SECTION_A, name: "General", capacity: "200" },
+      { id: SECTION_B, name: "Palco", capacity: "20" },
+    ]);
+    const rows = [
+      row(SECTION_A, { selected: false, name: "Gral", price: "10" }),
+      row("33333333-3333-4333-8333-333333333333", { name: "Quitada" }),
+    ];
+    expect(syncTicketTypeRows(sections, rows)).toEqual([
+      { sectionId: SECTION_A, selected: false, name: "General", price: "10" },
+      { sectionId: SECTION_B, selected: false, name: "Palco", price: "" },
+    ]);
+    // Una marcada conserva su nombre; sin secciones, sin filas.
+    expect(syncTicketTypeRows(sections, [row(SECTION_A, { name: "Campo VIP" })])[0].name).toBe("Campo VIP");
+    expect(syncTicketTypeRows([], rows)).toEqual([]);
+  });
+});
+
 describe("getMinAgeLabels", () => {
   it("con una edad de la lista, solo la lista; con una mayor conservada, también esa", () => {
     expect(getMinAgeLabels("18")).toBe(MIN_AGE_LABELS);
@@ -166,6 +210,29 @@ describe("toEventDraftFormValues", () => {
 
   it("con un recinto que ya no está en la lista no hay filas", () => {
     expect(toEventDraftFormValues(event, []).ticketTypes).toEqual([]);
+  });
+
+  it("un recinto pendiente (ingresado a mano) abre el bloque manual relleno, con los ids de sus zonas", () => {
+    const pending: VenueOption = {
+      ...VENUE,
+      name: "Café La Esquina",
+      address: "Av. Larco 1150, Miraflores",
+      status: "pending_review",
+      organizerId: event.organizerId,
+      sections: [{ id: SECTION_A, name: "General", seating: "general", capacity: 80 }],
+    };
+    const values = toEventDraftFormValues(event, [pending]);
+    expect(values.manualVenue).toEqual({
+      enabled: true,
+      name: "Café La Esquina",
+      address: "Av. Larco 1150, Miraflores",
+      city: "Lima",
+      sections: [{ id: SECTION_A, name: "General", capacity: "80" }],
+    });
+    expect(values.ticketTypes).toEqual([{ sectionId: SECTION_A, selected: true, name: "General", price: "50.00" }]);
+    expect(createEventDraftSchema({ requireOrganizer: false }).safeParse(values).success).toBe(true);
+    // Uno aprobado no abre el bloque.
+    expect(toEventDraftFormValues(event, [VENUE]).manualVenue).toBeUndefined();
   });
 
   it("el resultado es válido para el schema", () => {

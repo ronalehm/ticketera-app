@@ -56,6 +56,14 @@ describe("buildEventPreview", () => {
     });
   });
 
+  it("con el recinto manual a medio escribir, solo lo que haya", () => {
+    const place = (name: string, city: string) => buildEventPreview(EMPTY_EVENT_DRAFT, { name, city }, undefined).place;
+    expect(place(" Café La Esquina ", "Cusco")).toBe("Café La Esquina · Cusco");
+    expect(place("Café La Esquina", "")).toBe("Café La Esquina");
+    expect(place("", "Cusco")).toBe("Cusco");
+    expect(place(" ", "")).toBeNull();
+  });
+
   it("sin hora no hay fecha ni chip", () => {
     const preview = buildEventPreview({ ...EMPTY_EVENT_DRAFT, date: "2026-12-05" }, undefined, undefined);
     expect(preview.dateLabel).toBeNull();

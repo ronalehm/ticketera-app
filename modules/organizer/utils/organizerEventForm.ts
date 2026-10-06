@@ -12,6 +12,7 @@ import type {
   EventFormLock,
   EventDraftInput,
   EventDraftValues,
+  ManualVenueFormValues,
   ManualVenueInput,
   TicketTypeRow,
   OrganizerOption,
@@ -78,6 +79,53 @@ export function createTicketTypeRows(
 }
 
 /**
+ * Filas para otras secciones (las zonas del recinto manual al cambiar, o al alternar el checkbox): conserva las de las
+ * secciones que siguen; una sin marcar toma el nombre actual de su sección (sin marcar no se edita); las nuevas, sin
+ * marcar, como en `createTicketTypeRows`.
+ */
+export function syncTicketTypeRows(sections: VenueSectionOption[], rows: TicketTypeRow[]): TicketTypeRow[] {
+  return sections.map((section) => {
+    const row = rows.find((candidate) => candidate.sectionId === section.id);
+    if (!row) return { sectionId: section.id, selected: false, name: section.name, price: "" };
+    return row.selected ? row : { ...row, name: section.name };
+  });
+}
+
+/** Zona nueva del recinto manual, con su uuid del cliente: los tipos de entrada la referencian antes de guardar. */
+export function createManualZone(): ManualVenueFormValues["sections"][number] {
+  return { id: crypto.randomUUID(), name: "", capacity: "" };
+}
+
+/** Bloque manual al marcar el checkbox por primera vez: vacío y con una zona (mínimo 1). */
+export function createManualVenue(): ManualVenueFormValues {
+  return { enabled: true, name: "", address: "", city: "", sections: [createManualZone()] };
+}
+
+/** Zonas del recinto manual como secciones generales de `TicketTypesField`: sin nombre, «Zona n»; aforo no válido, 0. */
+export function toManualVenueSections(zones: ManualVenueFormValues["sections"]): VenueSectionOption[] {
+  return zones.map((zone, index) => {
+    const capacity = zone.capacity.trim();
+    return {
+      id: zone.id,
+      name: zone.name.trim() || `Zona ${index + 1}`,
+      seating: "general",
+      capacity: /^\d+$/.test(capacity) ? Number(capacity) : 0,
+    };
+  });
+}
+
+/** Bloque manual relleno con un recinto pendiente (al editar su evento): sus zonas conservan sus ids. */
+function toManualVenueValues(venue: VenueOption): ManualVenueFormValues {
+  return {
+    enabled: true,
+    name: venue.name,
+    address: venue.address,
+    city: venue.city,
+    sections: venue.sections.map(({ id, name, capacity }) => ({ id, name, capacity: String(capacity) })),
+  };
+}
+
+/**
  * Edad mínima del formulario para la guardada: la menor de la lista que no rebaje la restricción o, si es mayor que
  * todas (p. ej. 21), la misma.
  */
@@ -91,8 +139,9 @@ export function getMinAgeLabels(minAge: string): Record<string, string> {
 }
 
 /**
- * Valores del formulario de Editar a partir del evento guardado y los recintos aprobados. Con `organizers` (admin y
- * super_admin), si el dueño ya no está entre los aprobados, el organizador queda vacío para que se elija otro.
+ * Valores del formulario de Editar a partir del evento guardado y los recintos de la lista. Con `organizers` (admin y
+ * super_admin), si el dueño ya no está entre los aprobados, el organizador queda vacío para que se elija otro. Un recinto
+ * aún pendiente (ingresado a mano, spec organizer-manual-venue) abre el bloque manual relleno para poder corregirlo.
  */
 export function toEventDraftFormValues(
   event: EditableEvent,
@@ -115,6 +164,7 @@ export function toEventDraftFormValues(
     imageUrl: event.imageUrl ?? "",
     // Un recinto que ya no está aprobado no tiene filas: al guardar, el servicio lo rechaza (nada se pierde en silencio).
     ticketTypes: venue ? createTicketTypeRows(venue.sections, event.ticketTypes) : [],
+    ...(venue?.status === "pending_review" && { manualVenue: toManualVenueValues(venue) }),
   };
 }
 

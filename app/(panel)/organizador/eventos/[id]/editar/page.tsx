@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { FilePen, Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
+import { publicEnv } from "@/lib/env";
 import { roleCan } from "@/modules/auth/permissions";
 import { listEventCategories } from "@/modules/events/catalog";
 import {
@@ -86,7 +87,14 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
         />
         <EventEditNotice status={event.status} reviewNote={event.reviewNote} hasSales={event.hasSales} />
       </div>
-      <OrganizerEventForm userId={user.id} categories={categories} venues={venues} organizers={organizers} event={event} />
+      <OrganizerEventForm
+        userId={user.id}
+        categories={categories}
+        venues={venues}
+        organizers={organizers}
+        event={event}
+        mapsEmbedKey={publicEnv.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY}
+      />
     </div>
   );
 }

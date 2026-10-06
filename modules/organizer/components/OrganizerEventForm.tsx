@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/shared/DatePicker";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,11 +22,17 @@ import { cn } from "@/lib/utils";
 import type { EventCategory } from "@/modules/events";
 
 import { useSaveEventDraft } from "../hooks/useEventDrafts";
-import { createEventDraftSchema, EVENT_DRAFT_LIMITS, getTodayInLima } from "../schemas/organizer.schema";
+import {
+  createEventDraftSchema,
+  EVENT_DRAFT_LIMITS,
+  getManualVenueErrors,
+  getTodayInLima,
+} from "../schemas/organizer.schema";
 import type {
   EditableEvent,
   EventDraftFormValues,
   EventDraftValues,
+  ManualVenueFormValues,
   OrganizerOption,
   TicketTypeRow,
   VenueOption,
@@ -33,6 +40,7 @@ import type {
 import { EVENT_DRAFT_GENERIC_ERROR } from "../utils/eventDraftError";
 import { buildEventPreview } from "../utils/eventPreview";
 import {
+  createManualVenue,
   createTicketTypeRows,
   EMPTY_EVENT_DRAFT,
   formatTicketCount,
@@ -40,17 +48,22 @@ import {
   getMinAgeLabels,
   getTicketTypeErrors,
   hasScheduleChanged,
+  syncTicketTypeRows,
   toEventDraftFormValues,
+  toManualVenueSections,
 } from "../utils/organizerEventForm";
 import { CoverImageField } from "./CoverImageField";
 import { EventPreviewCard } from "./EventPreviewCard";
 import { FORM_CONTROL_SCROLL, FORM_INPUT_CLASS, FORM_SELECT_TRIGGER_CLASS } from "./formStyles";
+import { ManualVenueFields } from "./ManualVenueFields";
 import { TicketTypesField } from "./TicketTypesField";
+import { VenueLocationPreview } from "./VenueLocationPreview";
 
 type TextField = "title" | "description" | "date" | "time" | "doorsOpen";
 type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
+const MANUAL_VENUE_CHECKBOX_ID = "organizer-event-manualVenue-enabled";
 /**
  * Tras guardar, Eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". Uno en
  * revisión sigue en revisión: vuelve a Eventos sin aviso (ninguno de los dos lo describe).
@@ -80,12 +93,17 @@ type OrganizerEventFormProps = {
   userId: string;
   /** Categorías de la BD (`listEventCategories`). */
   categories: EventCategory[];
-  /** Recintos aprobados con sus secciones (`listApprovedVenuesWithSections`). */
+  /**
+   * Recintos con sus secciones (`listApprovedVenuesWithSections`): aprobados y pendientes. El Select muestra los
+   * aprobados y los pendientes del organizador del evento (para el admin, el elegido).
+   */
   venues: VenueOption[];
   /** Organizadores aprobados (`listApprovedOrganizers`): solo para admin y super_admin, que eligen el dueño. */
   organizers?: OrganizerOption[];
   /** Evento que se edita (`getEventForEdit`); sin él, se crea un borrador nuevo. */
   event?: EditableEvent;
+  /** `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` (la página la lee de `publicEnv`): vista previa del mapa del recinto. */
+  mapsEmbedKey?: string;
 };
 
 /**
@@ -94,7 +112,14 @@ type OrganizerEventFormProps = {
  * se bloquea la estructura (`getEventFormLock`, spec event-editing, Decisión 1) y, si tiene entradas vendidas, cambiar la
  * fecha u hora pide confirmación (Decisión 3). Enviar a revisión se hace desde Eventos.
  */
-export function OrganizerEventForm({ userId, categories, venues, organizers, event }: OrganizerEventFormProps) {
+export function OrganizerEventForm({
+  userId,
+  categories,
+  venues,
+  organizers,
+  event,
+  mapsEmbedKey,
+}: OrganizerEventFormProps) {
   const router = useRouter();
   const requireOrganizer = organizers !== undefined;
   const [schema] = useState(() => createEventDraftSchema({ requireOrganizer }));
@@ -115,7 +140,16 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
   const isDraft = !event || event.status === "draft";
   const sold = event?.sold ?? 0;
 
-  const venue = venues.find((candidate) => candidate.id === values.venueId);
+  // Un recinto pendiente solo lo usa su organizador (spec organizer-manual-venue, Decisión 5). Para un organizador, él.
+  const ownerId = organizers ? values.organizerId : userId;
+  const venueOptions = venues.filter((option) => option.status === "approved" || option.organizerId === ownerId);
+  const venue = venueOptions.find((candidate) => candidate.id === values.venueId);
+  // Con el checkbox marcado, el recinto es el ingresado a mano (el Select se ignora).
+  const manualVenue = values.manualVenue?.enabled ? values.manualVenue : null;
+  const ticketSections = manualVenue ? toManualVenueSections(manualVenue.sections) : (venue?.sections ?? null);
+  const location = manualVenue
+    ? { venue: manualVenue.name.trim(), address: manualVenue.address.trim(), city: manualVenue.city }
+    : venue && { venue: venue.name, address: venue.address, city: venue.city };
   const categoryName = categories.find((category) => category.slug === values.category)?.name;
   const minAgeLabels = getMinAgeLabels(values.minAge);
 
@@ -149,8 +183,10 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
     return null;
   }
 
-  // useZodForm agrupa los errores de las filas en `ticketTypes`; los mensajes por campo salen de las mismas reglas.
+  // useZodForm agrupa los errores de las filas en `ticketTypes` (y los del bloque manual en `manualVenue`); los mensajes
+  // por campo salen de las mismas reglas.
   const ticketTypeErrors = errors.ticketTypes ? getTicketTypeErrors(values.ticketTypes) : null;
+  const manualVenueErrors = errors.manualVenue && manualVenue ? getManualVenueErrors(manualVenue) : null;
 
   // Selects y DatePicker: el valor llega ya elegido, así que se revalida en el momento (no hay blur).
   function selectValue<K extends SelectField | "date">(name: K, value: EventDraftFormValues[K] | null) {
@@ -166,6 +202,38 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
     setValue("venueId", venueId);
     setValue("ticketTypes", createTicketTypeRows(sections));
     handleBlur("venueId");
+    handleBlur("ticketTypes");
+  }
+
+  // Un recinto pendiente de otro organizador ya no se puede elegir: se quita (con sus filas).
+  function selectOrganizer(organizerId: string | null) {
+    selectValue("organizerId", organizerId);
+    const current = venues.find((candidate) => candidate.id === values.venueId);
+    if (organizerId === null || !current || current.status === "approved" || current.organizerId === organizerId) return;
+    setValue("venueId", "");
+    if (!manualVenue) setValue("ticketTypes", []);
+  }
+
+  // Marcar: el bloque manual (el que había o uno nuevo con una zona) y sus zonas como secciones. Desmarcar: vuelve el
+  // recinto del Select; el bloque conserva lo escrito, pero no se envía.
+  function toggleManualVenue(enabled: boolean) {
+    const next = values.manualVenue ? { ...values.manualVenue, enabled } : createManualVenue();
+    const sections = enabled ? toManualVenueSections(next.sections) : (venue?.sections ?? []);
+    setValue("manualVenue", next);
+    setValue("ticketTypes", syncTicketTypeRows(sections, values.ticketTypes));
+    handleBlur("manualVenue");
+    handleBlur("venueId");
+    handleBlur("ticketTypes");
+  }
+
+  // Zonas nuevas, quitadas o renombradas: las filas de tipos de entrada las siguen.
+  function changeManualVenue(next: ManualVenueFormValues) {
+    setValue("manualVenue", next);
+    setValue("ticketTypes", syncTicketTypeRows(toManualVenueSections(next.sections), values.ticketTypes));
+  }
+
+  function revalidateManualVenue() {
+    handleBlur("manualVenue");
     handleBlur("ticketTypes");
   }
 
@@ -276,7 +344,7 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
                   items={organizers.map(({ id, name }) => ({ value: id, label: name }))}
                   disabled={structureLocked}
                   value={values.organizerId}
-                  onValueChange={(value) => selectValue("organizerId", value)}
+                  onValueChange={selectOrganizer}
                 >
                   <SelectTrigger {...selectTriggerProps("organizerId")}>
                     <SelectValue placeholder="Elige el organizador" />
@@ -333,8 +401,8 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
             <Field data-invalid={!!errors.venueId}>
               <FieldLabel htmlFor="organizer-event-venueId">Recinto</FieldLabel>
               <Select
-                items={venues.map(({ id, name, city }) => ({ value: id, label: `${name} · ${city}` }))}
-                disabled={structureLocked}
+                items={venueOptions.map(({ id, name, city }) => ({ value: id, label: `${name} · ${city}` }))}
+                disabled={structureLocked || !!manualVenue}
                 value={values.venueId}
                 onValueChange={selectVenue}
               >
@@ -342,16 +410,53 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
                   <SelectValue placeholder="Elige el recinto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {venues.map(({ id, name, city }) => (
+                  {venueOptions.map(({ id, name, city }) => (
                     <SelectItem key={id} value={id} className="min-h-11 cursor-pointer">
                       {name} · {city}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <FieldDescription>Solo recintos aprobados. Sus secciones definen los tipos de entrada.</FieldDescription>
+              <FieldDescription>
+                Recintos aprobados y los del organizador en revisión. Sus secciones definen los tipos de entrada.
+              </FieldDescription>
               {fieldError("venueId")}
             </Field>
+
+            <Field orientation="horizontal" data-disabled={structureLocked} className="min-h-11 items-center">
+              <Checkbox
+                id={MANUAL_VENUE_CHECKBOX_ID}
+                checked={!!manualVenue}
+                disabled={structureLocked}
+                onCheckedChange={toggleManualVenue}
+                className={cn("cursor-pointer", FORM_CONTROL_SCROLL)}
+              />
+              <FieldLabel
+                htmlFor={MANUAL_VENUE_CHECKBOX_ID}
+                className={cn("font-normal", !structureLocked && "cursor-pointer")}
+              >
+                Mi recinto no está en la lista
+              </FieldLabel>
+            </Field>
+
+            {manualVenue && (
+              <ManualVenueFields
+                value={manualVenue}
+                errors={manualVenueErrors}
+                onChange={changeManualVenue}
+                onBlur={revalidateManualVenue}
+              />
+            )}
+
+            {location?.venue && location.address && location.city ? (
+              <VenueLocationPreview {...location} embedKey={mapsEmbedKey} />
+            ) : (
+              manualVenue && (
+                <p className="text-sm text-muted-foreground">
+                  Completa el nombre, la dirección y la ciudad para ver el recinto en el mapa.
+                </p>
+              )
+            )}
           </FieldGroup>
         </FormSection>
 
@@ -372,7 +477,7 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
           description="Elige qué secciones del recinto se venden, con qué nombre y a qué precio."
         >
           <TicketTypesField
-            sections={venue ? venue.sections : null}
+            sections={ticketSections}
             rows={values.ticketTypes}
             errors={ticketTypeErrors}
             onChange={changeTicketTypes}
@@ -389,7 +494,7 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
         <h2 id={PREVIEW_TITLE_ID} className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
           Vista previa
         </h2>
-        <EventPreviewCard {...buildEventPreview(values, venue, categoryName)} />
+        <EventPreviewCard {...buildEventPreview(values, manualVenue ?? venue, categoryName)} />
         <p className="text-sm text-muted-foreground">Así verán tu evento los compradores en el listado.</p>
       </aside>
 
