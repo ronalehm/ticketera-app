@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { EventDraftFormValues, TicketTypeRow } from "../types/organizer.types";
+import type { EventDraftFormValues, ManualVenueFormValues, TicketTypeRow } from "../types/organizer.types";
 import {
   coverImageUrlSchema,
   createEventDraftSchema,
+  getManualVenueErrors,
   getTicketTypeRowErrors,
   MIN_AGE_LABELS,
   MIN_AGE_OPTIONS,
@@ -232,6 +233,113 @@ describe("createEventDraftSchema", () => {
 
     it("para un organizador se ignora", () => {
       expect(organizerSchema.safeParse({ ...complete, organizerId: "cualquier-cosa" }).success).toBe(true);
+    });
+  });
+
+  describe("recinto ingresado a mano (spec organizer-manual-venue)", () => {
+    const manualVenue: ManualVenueFormValues = {
+      enabled: true,
+      name: "Café La Esquina",
+      address: "Av. Larco 1150, Miraflores",
+      city: "Lima",
+      sections: [
+        { id: SECTION_A, name: "General", capacity: "200" },
+        { id: SECTION_B, name: "VIP", capacity: "50" },
+      ],
+    };
+    const withManual = (overrides: Partial<ManualVenueFormValues> = {}): EventDraftFormValues => ({
+      ...complete,
+      venueId: "",
+      manualVenue: { ...manualVenue, ...overrides },
+    });
+
+    it("con el checkbox marcado, el recinto a mano sustituye al de la lista para vender entradas", () => {
+      expect(messages(withManual())).toEqual({});
+    });
+
+    it("desmarcado, sus valores (aunque no sean válidos) se ignoran", () => {
+      expect(messages({ ...complete, manualVenue: { ...manualVenue, enabled: false, name: "", city: "Tokio" } })).toEqual({});
+    });
+
+    it.each<[Partial<ManualVenueFormValues>, string, string]>([
+      [{ name: "" }, "manualVenue.name", "Ingresa el nombre del recinto"],
+      [{ name: " A " }, "manualVenue.name", "El nombre del recinto debe tener al menos 2 caracteres"],
+      [{ name: "a".repeat(121) }, "manualVenue.name", "El nombre del recinto admite hasta 120 caracteres"],
+      [{ address: "" }, "manualVenue.address", "Ingresa la dirección exacta del recinto"],
+      [
+        { address: "Larco 11" },
+        "manualVenue.address",
+        "La dirección es muy corta: indica calle y número, distrito. Ej.: Av. Larco 1150, Miraflores",
+      ],
+      [{ address: "a".repeat(201) }, "manualVenue.address", "La dirección admite hasta 200 caracteres"],
+      [{ city: "" }, "manualVenue.city", "Elige una ciudad de la lista"],
+      [{ city: "Tokio" }, "manualVenue.city", "Elige una ciudad de la lista"],
+      [{ sections: [] }, "manualVenue.sections", "Agrega al menos una zona"],
+    ])("rechaza %o", (overrides, path, message) => {
+      expect(messages(withManual(overrides))).toEqual({ [path]: message });
+    });
+
+    it("acepta los límites: nombre de 2 y 120, dirección de 10 y 200, cada ciudad de la app", () => {
+      for (const overrides of [
+        { name: "Yo" },
+        { name: "a".repeat(120) },
+        { address: "Jr. Ica 10" },
+        { address: "a".repeat(200) },
+        ...["Lima", "Arequipa", "Cusco", "Trujillo", "Piura"].map((city) => ({ city })),
+      ]) {
+        expect(messages(withManual(overrides))).toEqual({});
+      }
+    });
+
+    it("de 1 a 10 zonas, con nombres distintos (sin distinguir mayúsculas ni tildes)", () => {
+      const zones = (count: number) =>
+        Array.from({ length: count }, (_, index) => ({ id: crypto.randomUUID(), name: `Zona ${index}`, capacity: "10" }));
+      expect(messages(withManual({ sections: zones(10) }))).toEqual({});
+      expect(messages(withManual({ sections: zones(11) }))).toEqual({
+        "manualVenue.sections": "Puedes agregar hasta 10 zonas",
+      });
+      const duplicated = [
+        { id: SECTION_A, name: "Platea", capacity: "10" },
+        { id: SECTION_B, name: "PLATÉA ", capacity: "10" },
+      ];
+      expect(messages(withManual({ sections: duplicated }))).toEqual({
+        "manualVenue.sections": "Cada zona necesita un nombre distinto",
+      });
+    });
+
+    it.each([
+      [{ name: "" }, "name", "Ingresa el nombre de la zona"],
+      [{ name: "a".repeat(101) }, "name", "El nombre de la zona admite hasta 100 caracteres"],
+      [{ capacity: "" }, "capacity", "Ingresa el aforo de la zona"],
+      [{ capacity: "0" }, "capacity", "El aforo debe ser un número entero de 1 a 100,000"],
+      [{ capacity: "-5" }, "capacity", "El aforo debe ser un número entero de 1 a 100,000"],
+      [{ capacity: "12.5" }, "capacity", "El aforo debe ser un número entero de 1 a 100,000"],
+      [{ capacity: "100001" }, "capacity", "El aforo debe ser un número entero de 1 a 100,000"],
+    ] as const)("rechaza una zona con %o", (overrides, field, message) => {
+      const sections = [{ ...manualVenue.sections[0], ...overrides }];
+      expect(messages(withManual({ sections }))).toEqual({ [`manualVenue.sections.0.${field}`]: message });
+    });
+
+    it("acepta aforos de 1 y 100000", () => {
+      const sections = [
+        { id: SECTION_A, name: "Mínima", capacity: "1" },
+        { id: SECTION_B, name: "Máxima", capacity: "100000" },
+      ];
+      expect(messages(withManual({ sections }))).toEqual({});
+    });
+
+    it("rechaza una zona sin uuid", () => {
+      const sections = [{ ...manualVenue.sections[0], id: "zona-1" }];
+      expect(messages(withManual({ sections }))).toEqual({ "manualVenue.sections.0.id": "Zona no válida" });
+    });
+
+    it("getManualVenueErrors da un mensaje por campo y por zona; desmarcado, ninguno", () => {
+      const invalid = { ...manualVenue, name: "", sections: [{ id: SECTION_A, name: "", capacity: "0" }] };
+      expect(getManualVenueErrors(invalid)).toEqual({
+        name: "Ingresa el nombre del recinto",
+        sectionRows: [{ name: "Ingresa el nombre de la zona", capacity: "El aforo debe ser un número entero de 1 a 100,000" }],
+      });
+      expect(getManualVenueErrors({ ...invalid, enabled: false })).toEqual({ sectionRows: [] });
     });
   });
 });

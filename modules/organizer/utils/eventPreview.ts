@@ -4,12 +4,12 @@ import type { EventDraftFormValues, EventPreview, VenueOption } from "../types/o
 import { buildStartsAt, getMinTicketPrice } from "./organizerEventForm";
 
 /**
- * Datos de la tarjeta de vista previa a partir del formulario, del recinto y del nombre de la categoría elegidos; `null`
- * donde falta información.
+ * Datos de la tarjeta de vista previa a partir del formulario, del recinto (el de la lista o el ingresado a mano) y del
+ * nombre de la categoría elegidos; `null` donde falta información.
  */
 export function buildEventPreview(
   values: EventDraftFormValues,
-  venue: VenueOption | undefined,
+  venue: Pick<VenueOption, "name" | "city"> | undefined,
   categoryName: string | undefined,
 ): EventPreview {
   const startsAt = buildStartsAt(values.date, values.time);
@@ -20,7 +20,8 @@ export function buildEventPreview(
     categoryLabel: categoryName ?? null,
     dateLabel: startsAt ? formatShortDayMonth(startsAt) : null,
     dateChip: startsAt ? getDateChipParts(startsAt) : null,
-    place: venue ? `${venue.name} · ${venue.city}` : null,
+    // El recinto manual puede estar a medio escribir: solo lo que haya.
+    place: [venue?.name.trim(), venue?.city].filter(Boolean).join(" · ") || null,
     priceFrom: getMinTicketPrice(values.ticketTypes),
     // Solo una URL https válida: la misma regla que al guardar.
     imageUrl: coverImageUrlSchema.safeParse(imageUrl).success ? imageUrl : null,

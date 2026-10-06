@@ -112,12 +112,12 @@ Smoke test de Production: crear un borrador con recinto manual, comprobar el map
 `eventDrafts.service.ts`).
 
 ## Plan de tareas
-- [ ] T1. Contrato y servicio: schema del recinto manual, `createEvent`/`updateEvent`, visibilidad en
+- [x] T1. Contrato y servicio: schema del recinto manual, `createEvent`/`updateEvent`, visibilidad en
   `listApprovedVenuesWithSections` (+ tests).
-- [ ] T2. Moderación: aprobación conjunta en `approveEvent` (+ tests). Paralelo con T3.
-- [ ] T3. UI: bloque manual en `OrganizerEventForm`, zonas, vista previa con `VenueMap`, `TicketTypesField` (+ tests).
+- [x] T2. Moderación: aprobación conjunta en `approveEvent` (+ tests). Paralelo con T3.
+- [x] T3. UI: bloque manual en `OrganizerEventForm`, zonas, vista previa con `VenueMap`, `TicketTypesField` (+ tests).
   Depende de T1.
-- [ ] T4. Documentación (`design-system/ticketera/pages/organizer.md`).
+- [x] T4. Documentación (`design-system/ticketera/pages/organizer.md`).
 
 ## Preguntas abiertas
 (ninguna)

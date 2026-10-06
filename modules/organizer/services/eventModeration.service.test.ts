@@ -13,7 +13,17 @@ import { getEventBySlug } from "@/modules/events/catalog";
 import type { EventDraftInput } from "../types/organizer.types";
 import { createEvent, updateEvent } from "./eventDrafts.service";
 import { approveEvent, cancelEvent, rejectEvent, submitForReview } from "./eventModeration.service";
-import { createUser, createVenue, domainError, draftInput, insertOrder, setupDraft } from "./eventTestHelpers";
+import {
+  createUser,
+  createVenue,
+  domainError,
+  draftInput,
+  getVenueWithZones,
+  insertOrder,
+  manualDraftInput,
+  manualVenueInput,
+  setupDraft,
+} from "./eventTestHelpers";
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
@@ -197,22 +207,68 @@ describeWithDb("eventModeration.service", () => {
 
     it.each([
       ["el organizador ya no está aprobado", "owner_not_approved"],
-      ["el recinto ya no está aprobado", "event_venue_not_approved"],
+      ["el recinto es un pendiente de otro organizador", "event_venue_not_approved"],
     ] as const)("si %s falla con un mensaje claro y no publica ni genera nada", (_label, code) =>
       inRolledBackTransaction(async (tx) => {
         const { owner, venue, eventId } = await setupPending(tx);
         if (code === "owner_not_approved") {
           await tx.update(organizers).set({ status: "suspended" }).where(eq(organizers.userId, owner.id));
         } else {
+          const stranger = await createUser(tx, "approved");
           await tx
             .update(venues)
-            .set({ status: "pending_review", organizerId: owner.id })
+            .set({ status: "pending_review", organizerId: stranger.id })
             .where(eq(venues.id, venue.id));
         }
         await expect(approveEvent(await createAdmin(tx), eventId)).rejects.toEqual(domainError(code));
         expect((await getEvent(tx, eventId)).status).toBe("pending_review");
         expect(await countSeats(tx, eventId)).toMatchObject({ total: 0 });
       }));
+
+    describe("recinto ingresado a mano (spec organizer-manual-venue, Decisión 6)", () => {
+      /** Evento en revisión con un recinto a mano (General 200, VIP 50), corregido en borrador a General 120. */
+      async function setupManualPending(tx: Tx) {
+        const owner = await createUser(tx, "approved");
+        const venue = manualVenueInput();
+        const { id: eventId } = await createEvent(owner, manualDraftInput(venue));
+        const corrected = { ...venue, sections: [{ ...venue.sections[0], capacity: 120 }, venue.sections[1]] };
+        await updateEvent(owner, eventId, manualDraftInput(corrected));
+        await setStatus(tx, eventId, "pending_review");
+        const { venueId } = await getEvent(tx, eventId);
+        return { owner, venue: corrected, eventId, venueId: venueId! };
+      }
+
+      it("aprobar el evento aprueba su recinto pendiente y genera el inventario con las zonas vigentes", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, venueId } = await setupManualPending(tx);
+          expect(await approveEvent(await createAdmin(tx), eventId)).toMatchObject({ status: "published" });
+          expect((await getEvent(tx, eventId)).status).toBe("published");
+          expect(await getVenueWithZones(tx, venueId)).toMatchObject({ status: "approved", organizerId: owner.id });
+          expect(await countSeats(tx, eventId)).toEqual({ total: 170, general: 170, numbered: 0 });
+        }));
+
+      it("si la aprobación falla, el recinto sigue pendiente", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, venueId } = await setupManualPending(tx);
+          await tx.update(organizers).set({ status: "suspended" }).where(eq(organizers.userId, owner.id));
+          await expect(approveEvent(await createAdmin(tx), eventId)).rejects.toEqual(domainError("owner_not_approved"));
+          expect(await getVenueWithZones(tx, venueId)).toMatchObject({ status: "pending_review" });
+        }));
+
+      it("rechazar no toca el recinto: sigue pendiente y el organizador lo corrige", () =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, venue, eventId, venueId } = await setupManualPending(tx);
+          await rejectEvent(await createAdmin(tx), eventId, "La dirección no ubica el local");
+          expect(await getVenueWithZones(tx, venueId)).toMatchObject({ status: "pending_review" });
+
+          await updateEvent(owner, eventId, manualDraftInput({ ...venue, address: "Calle Berlín 245, Miraflores" }));
+          expect(await getEvent(tx, eventId)).toMatchObject({ status: "draft", venueId });
+          expect(await getVenueWithZones(tx, venueId)).toMatchObject({
+            address: "Calle Berlín 245, Miraflores",
+            status: "pending_review",
+          });
+        }));
+    });
 
     it("con inventario activo previo falla y no genera más", () =>
       inRolledBackTransaction(async (tx) => {

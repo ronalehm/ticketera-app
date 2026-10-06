@@ -303,6 +303,8 @@ evento con las acciones como botones con texto
 
 > Portada con pestañas «Subir imagen» (Vercel Blob) / «Usar URL», estados de la subida y recortes: `docs/specs/event-cover-upload.md`. Prevalece sobre la "portada por URL" de F5a.
 
+> Recinto ingresado a mano («Mi recinto no está en la lista»), dirección y mapa del recinto en las dos opciones y aprobación conjunta del recinto con el evento: `docs/specs/organizer-manual-venue.md`. Prevalece sobre el "recinto existente" de F5a.
+
 ### Layout
 
 ```
@@ -318,7 +320,13 @@ h1 "Crear evento" | "Editar borrador" | "Editar evento"
 ├──────────────────────────────────┤              │
 │ Fecha y recinto                  │              │
 │ Fecha | Hora | Apertura puertas  │              │
-│ Recinto [Estadio Nacional · Lima]│              │
+│ Recinto [Estadio Nacional · Lima]│              │  deshabilitado con el checkbox marcado
+│ ☐ Mi recinto no está en la lista │              │
+│ [Datos del recinto] (marcado)    │              │  nombre, dirección, ciudad, zonas
+│ ┌ mapa (Ver mapa) ─────────────┐ │              │  recinto de la lista o el escrito
+│ │ Nombre · dirección, ciudad   │ │              │
+│ │        [Abrir en Google Maps]│ │              │
+│ └──────────────────────────────┘ │              │
 ├──────────────────────────────────┤              │
 │ Imagen de portada                │              │
 │ [Subir imagen] [Usar URL]        │              │
@@ -336,7 +344,7 @@ h1 "Crear evento" | "Editar borrador" | "Editar evento"
 Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Cancelar | Guardar borrador]
 ```
 
-- **Rutas** (Server Components): ambas llaman a `getPanelContext("events:manageOwn", …)`; en solo lectura (organizador no aprobado) muestran el `EmptyState` de "Solo lectura" (ver Layout común) en lugar del formulario, sin redirigir. Leen en el servidor los recintos (`listApprovedVenuesWithSections`) y, para admin y super_admin, los organizadores (`listApprovedOrganizers`), de `@/modules/organizer/server`, y renderizan `OrganizerEventForm` (cliente). Editar precarga el evento con `getEventForEdit(user, id)` (el suyo o, para admin, cualquiera): si no existe, no es suyo o el id no es un uuid → `notFound()`. En lugar del formulario muestra `EmptyState` (`FilePen`, acción "Volver a Eventos" → `/organizador`) solo si está cancelado o finalizado ("Este evento ya no se puede editar" / "Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual."). h1: "Editar borrador" en un borrador; "Editar evento" en revisión y publicado.
+- **Rutas** (Server Components): ambas llaman a `getPanelContext("events:manageOwn", …)`; en solo lectura (organizador no aprobado) muestran el `EmptyState` de "Solo lectura" (ver Layout común) en lugar del formulario, sin redirigir. Leen en el servidor los recintos (`listApprovedVenuesWithSections`: aprobados y pendientes, ver "Recinto") y, para admin y super_admin, los organizadores (`listApprovedOrganizers`), de `@/modules/organizer/server`, y renderizan `OrganizerEventForm` (cliente) con la clave del mapa (`mapsEmbedKey`, `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` vía `publicEnv`: `lib/env` no se importa en el cliente). Editar precarga el evento con `getEventForEdit(user, id)` (el suyo o, para admin, cualquiera): si no existe, no es suyo o el id no es un uuid → `notFound()`. En lugar del formulario muestra `EmptyState` (`FilePen`, acción "Volver a Eventos" → `/organizador`) solo si está cancelado o finalizado ("Este evento ya no se puede editar" / "Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual."). h1: "Editar borrador" en un borrador; "Editar evento" en revisión y publicado.
 - **Matriz de edición** (spec `event-editing`, Decisión 1; las reglas las garantiza `updateEvent` y el formulario las refleja con `getEventFormLock`). "Ventas" son órdenes `paid`, `partially_refunded` o `pending` vigentes (`hasActiveSales`). La **estructura** de un publicado (recinto, secciones a la venta, altas o bajas de tipos de entrada y organizador) nunca cambia: su inventario de asientos ya está generado.
 
   | Estado | Campos editables | Estado tras guardar | Aviso (`EventEditNotice`) |
@@ -372,12 +380,35 @@ Un borrador solo exige el nombre y la categoría; lo demás puede faltar, pero l
 | Organizador (solo admin y super_admin) | `Select` de organizadores `approved` (razón social o nombre), placeholder "Elige el organizador", ayuda "Dueño del evento: solo organizadores aprobados." | Obligatorio | "Elige el organizador del evento" |
 | Fecha / Hora de inicio | `DatePicker` (MASTER §7; `min` = hoy en Lima, solo en cliente; deshabilitado en un publicado con ventas; `aria-invalid`/`aria-describedby` hacia su error y `aria-labelledby` con la etiqueta) / `Input type="time"` | Las dos o ninguna | "Elige la fecha del evento" / "Indica la hora de inicio" / "Elige una fecha válida" |
 | Apertura de puertas | `Input type="time"`, mismo día | Opcional; exige fecha y hora de inicio y ser a esa hora o antes | "Indica primero la fecha y la hora de inicio" / "La apertura de puertas debe ser a la hora de inicio o antes" |
-| Recinto | `Select` de recintos `approved` ("Nombre · Ciudad"), placeholder "Elige el recinto", ayuda "Solo recintos aprobados. Sus secciones definen los tipos de entrada." | Opcional; obligatorio si se vende alguna sección | "Elige el recinto para vender entradas" |
+| Recinto | `Select` de recintos ("Nombre · Ciudad": los `approved` y los `pending_review` del organizador del evento), placeholder "Elige el recinto", ayuda "Recintos aprobados y los del organizador en revisión. Sus secciones definen los tipos de entrada." Deshabilitado con «Mi recinto no está en la lista» marcado (ver "Recinto") | Opcional; obligatorio si se vende alguna sección (salvo con el recinto manual) | "Elige el recinto para vender entradas" |
+| Recinto manual | Bloque «Datos del recinto» tras marcar «Mi recinto no está en la lista» (ver "Recinto") | Solo con el checkbox marcado (`getManualVenueErrors`) | ver "Recinto" |
 | Imagen de portada | `CoverImageField` (ver "Imagen de portada"). En «Usar URL»: "URL de la imagen", `Input type="url"`, placeholder "https://…", ayuda "Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla la recorta de forma distinta." | Opcional; URL absoluta `https` con dominio (Decisión 5) | "Ingresa una URL válida que empiece por https://" |
 
 - Fechas en `America/Lima` (UTC−5 todo el año): se guardan como `timestamptz` y al editar se muestran en Lima.
 - **Rejillas por ancho de sección, no de viewport** (container queries): a 1024 px, con sidebar y vista previa, la columna del formulario mide ~260 px. Categoría | Edad mínima van en dos columnas desde `@md/field-group` (28rem); Fecha, Hora de inicio y Apertura de puertas en tres desde `@lg/field-group` (32rem) y, por debajo, Fecha a todo el ancho (el `DatePicker` necesita ~140 px) con Hora | Apertura debajo. En cada fila de tipos de entrada (`@container`), Nombre | Precio en `@md:grid-cols-[minmax(0,1fr)_160px]`.
 - El organizador de un evento creado por un organizador es siempre él mismo (el campo no se muestra y lo que llegue se ignora). Un admin puede cambiar el dueño de un borrador al editarlo.
+
+### Recinto (spec `organizer-manual-venue`)
+
+- **Por defecto, el `Select`** de recintos. `listApprovedVenuesWithSections` devuelve los aprobados y, para un organizador, sus pendientes; para admin y super_admin, todos los pendientes. El formulario filtra: `status === "approved"` o `organizerId` = organizador del evento (el propio usuario si es organizador; el elegido en "Organizador" si es admin). Si el admin cambia de organizador y el recinto elegido es un pendiente de otro, se quita (con sus tipos de entrada).
+- **Checkbox «Mi recinto no está en la lista»** (`Checkbox` de shadcn en `Field orientation="horizontal"` `min-h-11`), desmarcado por defecto, bajo el `Select`. Deshabilitado en un evento publicado (estructura bloqueada).
+  - **Marcado:** el `Select` se deshabilita y aparece el bloque manual (`ManualVenueFields`, `FieldSet` `rounded-xl p-4 ring-1 ring-border` con la leyenda "Datos del recinto" y la ayuda "Queda en revisión: el administrador lo aprueba junto con el evento."). La primera vez se abre vacío con una zona (uuid de `crypto.randomUUID()`, `createManualVenue`).
+  - **Desmarcado:** vuelve el `Select` y el bloque se oculta; lo escrito se conserva (al volver a marcarlo sigue ahí) pero no se valida ni se envía (`manualVenue.enabled: false`).
+  - Al alternar, los tipos de entrada pasan a las secciones del modo activo (`syncTicketTypeRows`).
+- **Campos del bloque manual** (controles `h-11`, `aria-invalid` y `aria-describedby` hacia la ayuda y el error, ids `organizer-event-manualVenue-<campo>`):
+
+  | Campo | Control | Regla | Mensaje |
+  |---|---|---|---|
+  | Nombre del recinto | `Input`, placeholder "Ej.: Café La Esquina", `maxLength` 120 | Obligatorio, 2–120 caracteres | "Ingresa el nombre del recinto" / "El nombre del recinto debe tener al menos 2 caracteres" |
+  | Dirección exacta | `Input`, ayuda "Calle y número, distrito. Ej.: Av. Larco 1150, Miraflores", `maxLength` 200 | Obligatoria, 10–200 caracteres | "Ingresa la dirección exacta del recinto" / "La dirección es muy corta: indica calle y número, distrito. Ej.: Av. Larco 1150, Miraflores" |
+  | Ciudad | `Select` de `CITIES` (Lima, Arequipa, Cusco, Trujillo, Piura), placeholder "Elige la ciudad" | Una de la lista | "Elige una ciudad de la lista" |
+  | Zonas | Filas (`role="group"` "Zona n", `rounded-lg bg-muted/50 p-3`): "Nombre de la zona" (placeholder "Ej.: General") \| "Aforo" (`type="number"`, 1–100 000) \| botón ghost `size-11` `Trash2` "Quitar zona n" (deshabilitado con una sola zona); debajo, "Agregar zona" (outline `h-11`, `Plus`; deshabilitado con 10 y "Máximo 10 zonas."). En una fila desde `@md` (container query) | 1–10 zonas generales, nombres distintos | "Ingresa el nombre de la zona" / "Ingresa el aforo de la zona" / "El aforo debe ser un número entero de 1 a 100,000" / "Cada zona necesita un nombre distinto" |
+
+- **Dirección y mapa en las dos opciones** (`VenueLocationPreview`): con un recinto de la lista, su dirección (solo lectura, no se edita desde el evento); con el bloque manual, los valores escritos. Tarjeta `rounded-xl ring-1 ring-border` con `VenueMap` (el del detalle, click-to-load: Google no carga hasta pulsar «Ver mapa»; sin clave, solo el marcador decorativo), el nombre y "dirección, ciudad" en `<address>` y el enlace outline `h-11` «Abrir en Google Maps» (`ExternalLink`, pestaña nueva, `buildDirectionsUrl`). La consulta es la del detalle (`buildMapEmbedUrl` → `buildVenueQuery`: "Nombre, dirección, ciudad, Perú"), de la entrada `@/modules/events/map`. Si cambia la dirección, el mapa vuelve a «Ver mapa» (no recarga Google con cada tecla). En modo manual, mientras falte el nombre, la dirección o la ciudad: "Completa el nombre, la dirección y la ciudad para ver el recinto en el mapa.".
+- **Tipos de entrada sobre las zonas:** `TicketTypesField` recibe las zonas como secciones generales (`toManualVenueSections`: sin nombre, "Zona n"; aforo no válido, 0) y funciona igual que con un recinto de la lista ("200 lugares de pie"). Añadir, quitar o renombrar zonas actualiza las filas: se conservan las de las zonas que siguen y una sin marcar toma el nombre nuevo.
+- **Vista previa:** el lugar es el recinto manual ("Café La Esquina · Cusco", o lo que haya escrito).
+- **Guardar:** crea (o, en borrador o en revisión, corrige) el recinto `pending_review` del organizador del evento con sus zonas, en la misma transacción que el evento. **Aprobación conjunta:** al aprobar el evento, el recinto pasa a `approved`; si se rechaza, sigue pendiente y editable.
+- **Editar** un evento cuyo recinto sigue pendiente (ingresado a mano): el checkbox aparece marcado y el bloque relleno con su nombre, dirección, ciudad y zonas (con sus ids, así los tipos de entrada guardados siguen marcados).
 
 ### Imagen de portada (`CoverImageField` + `ImageUpload`)
 
@@ -398,7 +429,7 @@ Un borrador solo exige el nombre y la categoría; lo demás puede faltar, pero l
 
 ### Tipos de entrada (`TicketTypesField`)
 
-- Sin recinto: `<p className="text-sm text-muted-foreground">` "Elige el recinto para configurar los tipos de entrada."; recinto sin secciones: "Este recinto aún no tiene secciones configuradas.".
+- Sin recinto: `<p className="text-sm text-muted-foreground">` "Elige el recinto para configurar los tipos de entrada."; recinto sin secciones: "Este recinto aún no tiene secciones configuradas.". Con el recinto manual, las secciones son sus zonas (ver "Recinto").
 - **Una fila por sección** del recinto, en su orden: `<div role="group" aria-labelledby>` `rounded-xl p-4 ring-1 ring-border` (`ring-primary/40` si está marcada) con h3 del nombre de la sección (`font-semibold`) y su capacidad a la derecha (`text-sm text-muted-foreground tabular-nums`: "1,000 lugares de pie" en una general; "240 asientos numerados" en una numerada).
   - `Checkbox` "Vender entradas en esta sección" (`Field orientation="horizontal"`, `min-h-11`), sin marcar por defecto.
   - "Nombre del tipo de entrada" (por defecto, el nombre de la sección; `maxLength` 100) y "Precio (S/)" (`type="number"`, `min` 0, `step` 0.01), en `@md:grid-cols-[minmax(0,1fr)_160px]` (container query de la fila); deshabilitados mientras la sección no se vende.
@@ -429,7 +460,7 @@ lg (vertical, columna de 340 px)            < lg (horizontal, tipo entrada)
 └──────────────────────────────┘
 ```
 
-- **Datos** (`buildEventPreview`, tipo `EventPreview`): `dateLabel` es la fecha corta de la tarjeta ("sáb 5 dic", `formatShortDayMonth`) y `dateChip` las partes del chip (`{ month: "DIC", day: "05" }`, `getDateChipParts`), ambas de `@/modules/events/format`; las dos son `null` sin fecha válida. `place` es el recinto elegido y su ciudad ("Estadio Nacional · Lima"; `null` sin recinto). `priceFrom` es el menor precio válido de las secciones marcadas. `imageUrl` es la URL de la portada solo si es una URL `https` válida (la misma regla que al guardar). Sin hora en la tarjeta, como `EventCard`.
+- **Datos** (`buildEventPreview`, tipo `EventPreview`): `dateLabel` es la fecha corta de la tarjeta ("sáb 5 dic", `formatShortDayMonth`) y `dateChip` las partes del chip (`{ month: "DIC", day: "05" }`, `getDateChipParts`), ambas de `@/modules/events/format`; las dos son `null` sin fecha válida. `place` es el recinto elegido (o el manual) y su ciudad ("Estadio Nacional · Lima"; del manual, solo lo escrito; `null` sin recinto). `priceFrom` es el menor precio válido de las secciones marcadas. `imageUrl` es la URL de la portada solo si es una URL `https` válida (la misma regla que al guardar). Sin hora en la tarjeta, como `EventCard`.
 - **Contenedor:** `Card` `gap-0 overflow-hidden rounded-2xl py-0 ring-1 ring-border`; por debajo de `lg`, `max-lg:flex-row max-lg:min-h-32`.
 - **Imagen:** `relative h-44 shrink-0` (`max-lg:h-auto max-lg:w-27`, 108 px) con la portada (`next/image` `fill` `unoptimized`, porque la URL puede ser de cualquier dominio; `object-cover`, `alt=""`: ya está descrita en "Imagen de portada") o, sin portada, un bloque `bg-muted` con `ImageIcon` (`size-8 text-muted-foreground`, `aria-hidden`).
 - **Chip de fecha:** `DateChip` compartido en `absolute top-3 left-3` (`max-lg:top-2 max-lg:left-2`). Sin fecha muestra el marcador "MES" / "--" atenuado (`placeholder`).

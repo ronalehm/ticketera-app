@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventCategory } from "@/modules/events";
 
 import { createEventAction, updateEventAction } from "../actions/eventDrafts.actions";
-import type { EditableEvent, OrganizerOption, VenueOption } from "../types/organizer.types";
+import type { EditableEvent, EventDraftFormValues, OrganizerOption, VenueOption } from "../types/organizer.types";
 import { OrganizerEventForm } from "./OrganizerEventForm";
 
 const push = vi.fn();
@@ -20,6 +20,12 @@ const BLOB_URL = "https://abc.public.blob.vercel-storage.com/events/draft/portad
 const STADIUM: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
   name: "Estadio Nacional",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Lima",
   sections: [
     { id: "11111111-1111-4111-8111-111111111111", name: "Campo", seating: "general", capacity: 1000 },
@@ -29,10 +35,30 @@ const STADIUM: VenueOption = {
 const THEATER: VenueOption = {
   id: "6c1b4d2f-3a5e-4b7c-9d0e-1f2a3b4c5d6e",
   name: "Teatro Municipal",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Arequipa",
   sections: [{ id: "33333333-3333-4333-8333-333333333333", name: "Platea", seating: "numbered", capacity: 300 }],
 };
 const VENUES = [STADIUM, THEATER];
+const ZONE_ID = "44444444-4444-4444-8444-444444444444";
+/** Recinto pendiente (ingresado a mano) de un organizador: solo él (o el admin con él elegido) lo ve en el Select. */
+const pendingVenue = (id: string, name: string, organizerId: string): VenueOption => ({
+  id,
+  name,
+  address: "Av. Larco 1150, Miraflores",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "pending_review",
+  organizerId,
+  city: "Lima",
+  sections: [{ id: ZONE_ID, name: "General", seating: "general", capacity: 80 }],
+});
 // Categorías de la BD (`listEventCategories`), incluidas las de la migración 0009.
 const CATEGORIES: EventCategory[] = [
   { id: "c0000000-0000-4000-8000-000000000001", slug: "bar-shop", name: "Bares" },
@@ -55,6 +81,18 @@ const section = (name: string) => within(screen.getByRole("group", { name }));
 const sectionInput = (name: string, label: string) => section(name).getByLabelText(label) as HTMLInputElement;
 const sellCheckbox = (name: string) => section(name).getByRole("checkbox", { name: "Vender entradas en esta sección" });
 /** Deshabilitado como control nativo o como control de Base UI. */
+const manualCheckbox = () => screen.getByRole("checkbox", { name: "Mi recinto no está en la lista" });
+/** Bloque «Datos del recinto» (fieldset) y una de sus zonas. */
+const manualBlock = () => within(screen.getByRole("group", { name: "Datos del recinto" }));
+const zoneInput = (n: number, label: "Nombre de la zona" | "Aforo") =>
+  within(manualBlock().getByRole("group", { name: `Zona ${n}` })).getByLabelText(label) as HTMLInputElement;
+const addZoneButton = () => manualBlock().getByRole("button", { name: "Agregar zona" });
+const removeZoneButton = (n: number) => manualBlock().getByRole("button", { name: `Quitar zona ${n}` });
+/** Consulta del mapa del detalle (`buildVenueQuery`). */
+const mapQuery = (venue: string, address: string, city: string) => `${venue}, ${address}, ${city}, Perú`;
+const directionsHref = (query: string) =>
+  `https://www.google.com/maps/dir/?${new URLSearchParams({ api: "1", destination: query })}`;
+const mapsLink = () => screen.getByRole("link", { name: /Abrir en Google Maps/ });
 const isDisabled = (element: Element) =>
   element.hasAttribute("disabled") ||
   element.getAttribute("aria-disabled") === "true" ||
@@ -74,6 +112,19 @@ async function choose(name: string, option: string) {
   fireEvent.pointerDown(item, { pointerType: "mouse" });
   fireEvent.click(item);
   await waitFor(() => expect(selectText(trigger)).toBe(option));
+}
+
+/** Abre un `Select`, devuelve el texto de sus opciones y elige `option` (lo cierra). */
+async function optionsAndChoose(name: string, option: string) {
+  const trigger = combobox(name);
+  fireEvent.click(trigger);
+  const options = await screen.findAllByRole("option");
+  const item = options.find((candidate) => candidate.textContent === option);
+  if (!item) throw new Error(`Sin la opción ${option}`);
+  fireEvent.pointerDown(item, { pointerType: "mouse" });
+  fireEvent.click(item);
+  await waitFor(() => expect(selectText(trigger)).toBe(option));
+  return options.map((candidate) => candidate.textContent);
 }
 
 /** Lo mínimo para guardar un borrador: nombre y categoría. */
@@ -246,6 +297,214 @@ describe("OrganizerEventForm", () => {
     });
   });
 
+  describe("recinto manual (spec organizer-manual-venue)", () => {
+    /** Datos del bloque manual válidos: nombre, dirección, ciudad y una zona. */
+    async function fillManualVenue() {
+      fireEvent.click(manualCheckbox());
+      type(input("Nombre del recinto"), "Café La Esquina");
+      type(input("Dirección exacta"), "Av. Larco 1150, Miraflores");
+      await choose("Ciudad", "Cusco");
+      type(zoneInput(1, "Nombre de la zona"), "General");
+      type(zoneInput(1, "Aforo"), "200");
+    }
+
+    it("el checkbox está desmarcado; al marcarlo deshabilita el Select y abre el bloque; al desmarcarlo vuelve", async () => {
+      renderForm();
+      expect(manualCheckbox().getAttribute("aria-checked")).toBe("false");
+      expect(screen.queryByLabelText("Nombre del recinto")).toBeNull();
+      expect(isDisabled(combobox("Recinto"))).toBe(false);
+
+      fireEvent.click(manualCheckbox());
+      expect(isDisabled(combobox("Recinto"))).toBe(true);
+      expect(input("Nombre del recinto").placeholder).toBe("Ej.: Café La Esquina");
+      expect(screen.getByText("Calle y número, distrito. Ej.: Av. Larco 1150, Miraflores")).toBeTruthy();
+      expect(selectText(combobox("Ciudad"))).toBe("Elige la ciudad");
+      expect(screen.getByText("Completa el nombre, la dirección y la ciudad para ver el recinto en el mapa.")).toBeTruthy();
+      type(input("Nombre del recinto"), "Café La Esquina");
+
+      fireEvent.click(manualCheckbox());
+      expect(screen.queryByLabelText("Nombre del recinto")).toBeNull();
+      expect(isDisabled(combobox("Recinto"))).toBe(false);
+      // Lo escrito se conserva al volver a marcarlo.
+      fireEvent.click(manualCheckbox());
+      expect(input("Nombre del recinto").value).toBe("Café La Esquina");
+    });
+
+    it("desmarcado no se envía: el recinto es el del Select", async () => {
+      renderForm();
+      await fillRequired();
+      fireEvent.click(manualCheckbox());
+      type(input("Nombre del recinto"), "C");
+      fireEvent.click(manualCheckbox());
+      await choose("Recinto", "Estadio Nacional · Lima");
+      fireEvent.click(saveButton());
+
+      await waitFor(() => expect(createEventAction).toHaveBeenCalled());
+      expect(vi.mocked(createEventAction).mock.calls[0][0]).toMatchObject({
+        venueId: STADIUM.id,
+        manualVenue: { enabled: false, name: "C" },
+      });
+    });
+
+    it("zonas: empieza con una (no se quita), se añaden hasta 10 y se quitan", () => {
+      renderForm();
+      fireEvent.click(manualCheckbox());
+      expect(manualBlock().getAllByLabelText("Nombre de la zona")).toHaveLength(1);
+      expect(isDisabled(removeZoneButton(1))).toBe(true);
+
+      fireEvent.click(addZoneButton());
+      expect(manualBlock().getAllByLabelText("Nombre de la zona")).toHaveLength(2);
+      expect(isDisabled(removeZoneButton(1))).toBe(false);
+      type(zoneInput(1, "Nombre de la zona"), "General");
+      type(zoneInput(2, "Nombre de la zona"), "VIP");
+      fireEvent.click(removeZoneButton(1));
+      expect(manualBlock().getAllByLabelText("Nombre de la zona")).toHaveLength(1);
+      expect(zoneInput(1, "Nombre de la zona").value).toBe("VIP");
+
+      for (let zone = 2; zone <= 10; zone++) fireEvent.click(addZoneButton());
+      expect(manualBlock().getAllByLabelText("Nombre de la zona")).toHaveLength(10);
+      expect(isDisabled(addZoneButton())).toBe(true);
+      expect(manualBlock().getByText("Máximo 10 zonas.")).toBeTruthy();
+    });
+
+    it("valida nombre, dirección, ciudad y zonas con sus mensajes en cada campo y no guarda", async () => {
+      renderForm();
+      await fillRequired();
+      fireEvent.click(manualCheckbox());
+      type(input("Nombre del recinto"), "C");
+      type(input("Dirección exacta"), "Larco");
+      fireEvent.click(saveButton());
+
+      const block = manualBlock();
+      expect(block.getByText("El nombre del recinto debe tener al menos 2 caracteres")).toBeTruthy();
+      expect(block.getByText(/^La dirección es muy corta/)).toBeTruthy();
+      expect(block.getByText("Elige una ciudad de la lista")).toBeTruthy();
+      expect(block.getByText("Ingresa el nombre de la zona")).toBeTruthy();
+      expect(block.getByText("Ingresa el aforo de la zona")).toBeTruthy();
+      const address = input("Dirección exacta");
+      expect(address.getAttribute("aria-invalid")).toBe("true");
+      expect(address.getAttribute("aria-describedby")).toBe(
+        "organizer-event-manualVenue-address-help organizer-event-manualVenue-address-error",
+      );
+      expect(combobox("Ciudad").getAttribute("aria-invalid")).toBe("true");
+      await waitFor(() => expect(document.activeElement).toBe(input("Nombre del recinto")));
+      expect(createEventAction).not.toHaveBeenCalled();
+
+      // Tras el primer intento, se revalida al salir del campo.
+      type(input("Nombre del recinto"), "");
+      fireEvent.blur(input("Nombre del recinto"));
+      expect(block.getByText("Ingresa el nombre del recinto")).toBeTruthy();
+      type(zoneInput(1, "Aforo"), "0");
+      fireEvent.blur(zoneInput(1, "Aforo"));
+      expect(block.getByText("El aforo debe ser un número entero de 1 a 100,000")).toBeTruthy();
+      expect(zoneInput(1, "Aforo").getAttribute("aria-invalid")).toBe("true");
+    });
+
+    it("los tipos de entrada se definen sobre las zonas y se envían con su id", async () => {
+      renderForm();
+      await fillRequired();
+      await fillManualVenue();
+      fireEvent.click(addZoneButton());
+      type(zoneInput(2, "Nombre de la zona"), "VIP");
+      type(zoneInput(2, "Aforo"), "50");
+
+      expect(section("General").getByText("200 lugares de pie")).toBeTruthy();
+      expect(section("VIP").getByText("50 lugares de pie")).toBeTruthy();
+      fireEvent.click(sellCheckbox("VIP"));
+      type(sectionInput("VIP", "Precio (S/)"), "80");
+      expect(screen.getByText("50 entradas")).toBeTruthy();
+      const preview = within(screen.getByRole("complementary", { name: "Vista previa" }));
+      expect(preview.getByText("Café La Esquina · Cusco")).toBeTruthy();
+
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(createEventAction).toHaveBeenCalled());
+      const values = vi.mocked(createEventAction).mock.calls[0][0] as EventDraftFormValues;
+      const zones = values.manualVenue?.sections ?? [];
+      expect(values.manualVenue).toMatchObject({
+        enabled: true,
+        name: "Café La Esquina",
+        address: "Av. Larco 1150, Miraflores",
+        city: "Cusco",
+        sections: [
+          { name: "General", capacity: "200" },
+          { name: "VIP", capacity: "50" },
+        ],
+      });
+      expect(values.ticketTypes).toEqual([
+        { sectionId: zones[0].id, selected: false, name: "General", price: "" },
+        { sectionId: zones[1].id, selected: true, name: "VIP", price: "80" },
+      ]);
+    });
+
+    describe("dirección y mapa", () => {
+      const stadiumQuery = mapQuery("Estadio Nacional", STADIUM.address, "Lima");
+
+      it("con un recinto de la lista: su dirección, «Ver mapa» con la consulta del detalle y «Abrir en Google Maps»", async () => {
+        renderForm({ mapsEmbedKey: "test-key" });
+        await choose("Recinto", "Estadio Nacional · Lima");
+
+        expect(screen.getByText(`${STADIUM.address}, Lima`)).toBeTruthy();
+        expect(mapsLink().getAttribute("href")).toBe(directionsHref(stadiumQuery));
+        expect(mapsLink().getAttribute("target")).toBe("_blank");
+        expect(document.querySelector("iframe")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Ver mapa" }));
+        const src = new URL(document.querySelector("iframe")?.getAttribute("src") ?? "");
+        expect(src.searchParams.get("q")).toBe(stadiumQuery);
+        expect(src.searchParams.get("key")).toBe("test-key");
+      });
+
+      it("sin clave: sin mapa, pero con la dirección y «Abrir en Google Maps»", async () => {
+        renderForm();
+        await choose("Recinto", "Estadio Nacional · Lima");
+
+        expect(screen.queryByRole("button", { name: "Ver mapa" })).toBeNull();
+        expect(screen.getByText(`${STADIUM.address}, Lima`)).toBeTruthy();
+        expect(mapsLink().getAttribute("href")).toBe(directionsHref(stadiumQuery));
+      });
+
+      it("en modo manual, con los valores escritos", async () => {
+        renderForm({ mapsEmbedKey: "test-key" });
+        await choose("Recinto", "Estadio Nacional · Lima");
+        await fillManualVenue();
+
+        const query = mapQuery("Café La Esquina", "Av. Larco 1150, Miraflores", "Cusco");
+        expect(mapsLink().getAttribute("href")).toBe(directionsHref(query));
+        fireEvent.click(screen.getByRole("button", { name: "Ver mapa" }));
+        expect(new URL(document.querySelector("iframe")?.getAttribute("src") ?? "").searchParams.get("q")).toBe(query);
+      });
+    });
+
+    it("un organizador ve los aprobados y sus recintos pendientes (con « · en revisión»), no los de otros", async () => {
+      const own = pendingVenue("7d2c5e3a-4b6f-4c8d-8e1f-2a3b4c5d6e7f", "Café Propio", "user-1");
+      const other = pendingVenue("8e3d6f4b-5c7a-4d9e-9f2a-3b4c5d6e7f8a", "Bar Ajeno", "user-2");
+      renderForm({ venues: [...VENUES, own, other] });
+
+      expect(await optionsAndChoose("Recinto", "Café Propio · Lima · en revisión")).toEqual([
+        "Estadio Nacional · Lima",
+        "Teatro Municipal · Arequipa",
+        "Café Propio · Lima · en revisión",
+      ]);
+    });
+
+    it("el admin ve los pendientes solo del organizador elegido; al cambiarlo, se quita el pendiente elegido", async () => {
+      const ofPulso = pendingVenue("7d2c5e3a-4b6f-4c8d-8e1f-2a3b4c5d6e7f", "Café Pulso", ORGANIZERS[0].id);
+      const ofAna = pendingVenue("8e3d6f4b-5c7a-4d9e-9f2a-3b4c5d6e7f8a", "Bar Ana", ORGANIZERS[1].id);
+      renderForm({ organizers: ORGANIZERS, venues: [...VENUES, ofPulso, ofAna] });
+      const approved = ["Estadio Nacional · Lima", "Teatro Municipal · Arequipa"];
+
+      expect(await optionsAndChoose("Recinto", "Estadio Nacional · Lima")).toEqual(approved);
+      await choose("Organizador", "Ana Pérez");
+      expect(await optionsAndChoose("Recinto", "Bar Ana · Lima · en revisión")).toEqual([...approved, "Bar Ana · Lima · en revisión"]);
+      expect(section("General").getByText("80 lugares de pie")).toBeTruthy();
+
+      await choose("Organizador", "Pulso Producciones S.A.C.");
+      expect(selectText(combobox("Recinto"))).toBe("Elige el recinto");
+      expect(screen.getByText("Elige el recinto para configurar los tipos de entrada.")).toBeTruthy();
+      expect(await optionsAndChoose("Recinto", "Café Pulso · Lima · en revisión")).toEqual([...approved, "Café Pulso · Lima · en revisión"]);
+    });
+  });
+
   describe("fecha y portada", () => {
     // Hoy en Lima: 5 oct 2026 (10:00). Solo se finge Date: los timers reales siguen para waitFor y Base UI.
     beforeEach(() => {
@@ -412,6 +671,32 @@ describe("OrganizerEventForm", () => {
       expect(createEventAction).not.toHaveBeenCalled();
     });
 
+    it("con su recinto aún pendiente (ingresado a mano) abre el bloque relleno y guarda las correcciones", async () => {
+      const own = pendingVenue("7d2c5e3a-4b6f-4c8d-8e1f-2a3b4c5d6e7f", "Café Pulso", ORGANIZERS[0].id);
+      renderForm({
+        event: { ...event, venueId: own.id, ticketTypes: [{ sectionId: ZONE_ID, name: "General", priceCents: 3000 }] },
+        organizers: ORGANIZERS,
+        venues: [...VENUES, own],
+      });
+
+      expect(manualCheckbox().getAttribute("aria-checked")).toBe("true");
+      expect(isDisabled(combobox("Recinto"))).toBe(true);
+      expect(input("Nombre del recinto").value).toBe("Café Pulso");
+      expect(input("Dirección exacta").value).toBe("Av. Larco 1150, Miraflores");
+      expect(selectText(combobox("Ciudad"))).toBe("Lima");
+      expect(zoneInput(1, "Aforo").value).toBe("80");
+      expect((sellCheckbox("General") as HTMLElement).getAttribute("aria-checked")).toBe("true");
+      expect(sectionInput("General", "Precio (S/)").value).toBe("30.00");
+
+      type(zoneInput(1, "Aforo"), "120");
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(updateEventAction).toHaveBeenCalled());
+      expect(vi.mocked(updateEventAction).mock.calls[0][1]).toMatchObject({
+        manualVenue: { enabled: true, name: "Café Pulso", sections: [{ id: ZONE_ID, name: "General", capacity: "120" }] },
+        ticketTypes: [{ sectionId: ZONE_ID, selected: true, name: "General", price: "30.00" }],
+      });
+    });
+
     it("si su organizador ya no está aprobado, el admin tiene que elegir otro", async () => {
       renderForm({ event: { ...event, organizerId: "00000000-0000-8000-8000-000000000099" }, organizers: ORGANIZERS });
 
@@ -433,6 +718,7 @@ describe("OrganizerEventForm", () => {
       renderForm({ event: { ...event, status: "published" }, organizers: ORGANIZERS });
 
       for (const name of ["Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
+      expect(isDisabled(manualCheckbox())).toBe(true);
       expect(isDisabled(sellCheckbox("Campo"))).toBe(true);
       expect(isDisabled(sellCheckbox("Occidente"))).toBe(true);
       // Fecha, categoría y precios siguen editables.

@@ -14,7 +14,8 @@ export type PublishIssue =
   | "startsAtPast";
 
 export type PublishCandidate = {
-  venueId: string | null;
+  /** Tiene recinto (de la lista o ingresado a mano, que aún no tiene id antes de guardarse). */
+  hasVenue: boolean;
   description: string | null;
   imageUrl: string | null;
   startsAt: Date | null;
@@ -37,7 +38,7 @@ export function getPublishIssues(
   { checkFutureDate = true }: { checkFutureDate?: boolean } = {},
 ): PublishIssue[] {
   const issues: PublishIssue[] = [];
-  if (!event.venueId) issues.push("venue");
+  if (!event.hasVenue) issues.push("venue");
   if (!event.description?.trim()) issues.push("description");
   if (!event.imageUrl) issues.push("image");
   if (!event.startsAt) issues.push("startsAt");

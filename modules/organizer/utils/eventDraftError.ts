@@ -10,6 +10,7 @@ export type EventDraftErrorCode =
   | "venue_required"
   | "venue_not_approved"
   | "section_not_in_venue"
+  | "venue_section_in_use"
   | "slug_taken"
   | "invalid_category"
   // Edición fuera de borrador (spec event-editing, Decisión 1: cancelado o finalizado, `edit_locked`).
@@ -63,6 +64,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   venue_required: "Elige el recinto para vender entradas.",
   venue_not_approved: "El recinto elegido no existe o no está aprobado.",
   section_not_in_venue: "Alguna sección elegida no pertenece al recinto.",
+  venue_section_in_use: "Una zona que quitaste la usa otro de tus eventos: no se puede quitar.",
   slug_taken: "Otro evento con un nombre parecido se guardó a la vez. Inténtalo de nuevo.",
   invalid_category: "Categoría no válida",
   edit_locked: "Un evento cancelado o finalizado ya no se puede editar.",

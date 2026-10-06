@@ -127,7 +127,7 @@ describe("createEventAction", () => {
       startsAt: new Date("2026-12-06T01:00:00Z"),
       doorsOpenAt: null,
       minAge: 18,
-      venueId: VENUE_ID,
+      venue: { kind: "existing", id: VENUE_ID },
       imageUrl: "https://images.unsplash.com/a.jpg",
       organizerId: null,
       ticketTypes: [{ sectionId: SECTION_ID, name: "General", priceCents: 5000, sortOrder: 0 }],

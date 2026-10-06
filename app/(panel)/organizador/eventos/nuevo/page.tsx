@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
+import { publicEnv } from "@/lib/env";
 import { roleCan } from "@/modules/auth/permissions";
 import { listEventCategories } from "@/modules/events/catalog";
 import { EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
@@ -34,14 +35,20 @@ export default async function CreateOrganizerEventPage() {
   const manageAny = roleCan(user.role, "events:manageAny");
   const [categories, venues, organizers] = await Promise.all([
     listEventCategories(),
-    listApprovedVenuesWithSections(),
+    listApprovedVenuesWithSections(user),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
 
   return (
     <div className="flex flex-col gap-8 md:gap-10">
       <EventFormHeader title="Crear evento" />
-      <OrganizerEventForm userId={user.id} categories={categories} venues={venues} organizers={organizers} />
+      <OrganizerEventForm
+        userId={user.id}
+        categories={categories}
+        venues={venues}
+        organizers={organizers}
+        mapsEmbedKey={publicEnv.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY}
+      />
     </div>
   );
 }

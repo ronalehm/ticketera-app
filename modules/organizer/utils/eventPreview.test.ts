@@ -8,6 +8,12 @@ const SECTION_B = "22222222-2222-4222-8222-222222222222";
 const VENUE: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
   name: "Teatro Municipal",
+  address: "Av. Prueba 123, Cercado",
+  lat: null,
+  lng: null,
+  placeId: null,
+  status: "approved",
+  organizerId: null,
   city: "Lima",
   sections: [],
 };
@@ -48,6 +54,14 @@ describe("buildEventPreview", () => {
       priceFrom: 80,
       imageUrl: "https://images.unsplash.com/hamlet.jpg",
     });
+  });
+
+  it("con el recinto manual a medio escribir, solo lo que haya", () => {
+    const place = (name: string, city: string) => buildEventPreview(EMPTY_EVENT_DRAFT, { name, city }, undefined).place;
+    expect(place(" Café La Esquina ", "Cusco")).toBe("Café La Esquina · Cusco");
+    expect(place("Café La Esquina", "")).toBe("Café La Esquina");
+    expect(place("", "Cusco")).toBe("Cusco");
+    expect(place(" ", "")).toBeNull();
   });
 
   it("sin hora no hay fecha ni chip", () => {
