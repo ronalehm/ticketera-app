@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ManagedEventsFilters, ManagedEventStatus } from "@/modules/events";
+import type { EventCategory, ManagedEventsFilters, ManagedEventStatus } from "@/modules/events";
 import type {
   createEventDraftSchema,
   eventDraftTicketTypeSchema,
@@ -26,8 +26,7 @@ export type TicketTypeRowErrors = { name?: string; price?: string };
 /** Borrador listo para la BD (`toEventDraftInput`): lo recibe el servicio. */
 export type EventDraftInput = {
   title: string;
-  /** Slug de `categories`. */
-  category: string;
+  category: EventCategory["slug"];
   description: string | null;
   startsAt: Date | null;
   doorsOpenAt: Date | null;
@@ -52,8 +51,7 @@ export type EditableEvent = {
   status: ManagedEventStatus;
   organizerId: string;
   title: string;
-  /** Slug de `categories`. */
-  category: string;
+  category: EventCategory["slug"];
   description: string | null;
   startsAt: string | null;
   doorsOpenAt: string | null;
@@ -80,7 +78,8 @@ export type EventDraftActionResult<T extends object = object> = ({ ok: true } & 
 /** Datos de la tarjeta de vista previa; `null` = marcador por falta de datos. */
 export type EventPreview = {
   title: string | null;
-  categoryLabel: string;
+  /** Nombre de la categoría elegida; `null` si aún no se eligió. */
+  categoryLabel: string | null;
   /** Fecha corta de la tarjeta ("sáb 5 dic"). */
   dateLabel: string | null;
   /** Partes del chip de fecha ({ month: "DIC", day: "05" }). */

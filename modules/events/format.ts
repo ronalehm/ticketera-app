@@ -10,3 +10,4 @@ export {
 } from "./utils/formatEvent";
 export { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "./data/categories";
 export { CITIES } from "./data/searchOptions";
+export { categorySlugSchema } from "./schemas/events.schema";

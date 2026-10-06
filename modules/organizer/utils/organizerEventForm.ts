@@ -23,10 +23,10 @@ import type {
 const LIMA_OFFSET = "-05:00";
 const LIMA_OFFSET_MS = -5 * 3_600_000;
 
-/** Formulario vacío de Crear evento: solo el nombre es obligatorio para guardar el borrador. */
+/** Formulario vacío de Crear evento: el nombre y la categoría son obligatorios para guardar el borrador. */
 export const EMPTY_EVENT_DRAFT: EventDraftFormValues = {
   title: "",
-  category: "conciertos",
+  category: "",
   minAge: "0",
   description: "",
   date: "",

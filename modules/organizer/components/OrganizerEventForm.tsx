@@ -17,15 +17,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useZodForm } from "@/hooks/useZodForm";
 import { cn } from "@/lib/utils";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import type { EventCategory } from "@/modules/events";
 
 import { useSaveEventDraft } from "../hooks/useEventDrafts";
-import {
-  createEventDraftSchema,
-  EVENT_CATEGORY_OPTIONS,
-  EVENT_DRAFT_LIMITS,
-  getTodayInLima,
-} from "../schemas/organizer.schema";
+import { createEventDraftSchema, EVENT_DRAFT_LIMITS, getTodayInLima } from "../schemas/organizer.schema";
 import type {
   EditableEvent,
   EventDraftFormValues,
@@ -75,6 +70,8 @@ function FormSection({ title, description, children }: { title: string; descript
 type OrganizerEventFormProps = {
   /** Id del usuario de la sesión: separa la caché del listado de Eventos de cada usuario. */
   userId: string;
+  /** Categorías de la BD (`listEventCategories`). */
+  categories: EventCategory[];
   /** Recintos aprobados con sus secciones (`listApprovedVenuesWithSections`). */
   venues: VenueOption[];
   /** Organizadores aprobados (`listApprovedOrganizers`): solo para admin y super_admin, que eligen el dueño. */
@@ -88,7 +85,7 @@ type OrganizerEventFormProps = {
  * vuelve a Eventos (`/organizador`). En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
  * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Eventos.
  */
-export function OrganizerEventForm({ userId, venues, organizers, event }: OrganizerEventFormProps) {
+export function OrganizerEventForm({ userId, categories, venues, organizers, event }: OrganizerEventFormProps) {
   const router = useRouter();
   const requireOrganizer = organizers !== undefined;
   const [schema] = useState(() => createEventDraftSchema({ requireOrganizer }));
@@ -110,6 +107,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   const published = event?.status === "published";
 
   const venue = venues.find((candidate) => candidate.id === values.venueId);
+  const categoryName = categories.find((category) => category.slug === values.category)?.name;
   const minAgeLabels = getMinAgeLabels(values.minAge);
 
   const onSubmit = handleSubmit(async (data) => {
@@ -196,25 +194,26 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
 
             {/* Por el ancho de la sección: a 1024 px (con sidebar y vista previa) mide ~260 px y van apiladas. */}
             <div className="grid gap-4 @md/field-group:grid-cols-2">
-              <Field>
+              <Field data-invalid={!!errors.category}>
                 <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
                 <Select
-                  items={EVENT_CATEGORY_LABELS}
+                  items={categories.map(({ slug, name }) => ({ value: slug, label: name }))}
                   disabled={salesLocked}
                   value={values.category}
                   onValueChange={(value) => selectValue("category", value)}
                 >
                   <SelectTrigger {...selectTriggerProps("category")}>
-                    <SelectValue />
+                    <SelectValue placeholder="Elige una categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    {EVENT_CATEGORY_OPTIONS.map((category) => (
-                      <SelectItem key={category} value={category} className="min-h-11 cursor-pointer">
-                        {EVENT_CATEGORY_LABELS[category]}
+                    {categories.map(({ slug, name }) => (
+                      <SelectItem key={slug} value={slug} className="min-h-11 cursor-pointer">
+                        {name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {fieldError("category")}
               </Field>
 
               {/* Siempre es una opción válida del Select (la lista o la mayor que conserva el borrador): sin mensaje de error. */}
@@ -369,7 +368,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
         <h2 id={PREVIEW_TITLE_ID} className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
           Vista previa
         </h2>
-        <EventPreviewCard {...buildEventPreview(values, venue)} />
+        <EventPreviewCard {...buildEventPreview(values, venue, categoryName)} />
         <p className="text-sm text-muted-foreground">Así verán tu evento los compradores en el listado.</p>
       </aside>
 

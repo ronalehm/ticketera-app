@@ -4,6 +4,7 @@ import { FilePen, Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
+import { listEventCategories } from "@/modules/events/catalog";
 import { EDIT_IN_REVIEW_MESSAGE, EventEditNotice, EventFormHeader, OrganizerEventForm } from "@/modules/organizer";
 import {
   getEventForEdit,
@@ -64,7 +65,8 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
   }
 
   const manageAny = roleCan(user.role, "events:manageAny");
-  const [venues, organizers] = await Promise.all([
+  const [categories, venues, organizers] = await Promise.all([
+    listEventCategories(),
     listApprovedVenuesWithSections(),
     manageAny ? listApprovedOrganizers() : undefined,
   ]);
@@ -75,7 +77,7 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
         <EventFormHeader title={event.status === "draft" ? "Editar borrador" : "Editar evento"} />
         <EventEditNotice status={event.status} reviewNote={event.reviewNote} hasSales={event.hasSales} />
       </div>
-      <OrganizerEventForm userId={user.id} venues={venues} organizers={organizers} event={event} />
+      <OrganizerEventForm userId={user.id} categories={categories} venues={venues} organizers={organizers} event={event} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ export type EventDraftErrorCode =
   | "venue_not_approved"
   | "section_not_in_venue"
   | "slug_taken"
+  | "invalid_category"
   // F5b: edición fuera de borrador (Decisión 11; en revisión, cancelado o finalizado, `edit_locked`).
   | "edit_locked"
   | "structure_locked"
@@ -67,6 +68,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   venue_not_approved: "El recinto elegido no existe o no está aprobado.",
   section_not_in_venue: "Alguna sección elegida no pertenece al recinto.",
   slug_taken: "Otro evento con un nombre parecido se guardó a la vez. Inténtalo de nuevo.",
+  invalid_category: "Categoría no válida",
   edit_locked: "Un evento cancelado o finalizado ya no se puede editar.",
   structure_locked: "En un evento publicado no se pueden cambiar el recinto, las secciones a la venta ni el organizador.",
   sensitive_locked:

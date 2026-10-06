@@ -123,6 +123,22 @@ describeWithDb("eventDrafts.service", () => {
         expect(await getTicketTypes(tx, id)).toEqual([]);
       }));
 
+    it("guarda con una categoría nueva de la BD (cafe-shop)", () =>
+      inRolledBackTransaction(async (tx) => {
+        const owner = await createUser(tx, "approved");
+        const { id } = await createEvent(owner, { ...titleOnlyInput("Cata de café"), category: "cafe-shop" });
+        const [cafe] = await tx.select({ id: categories.id }).from(categories).where(eq(categories.slug, "cafe-shop"));
+        expect((await getEvent(tx, id)).categoryId).toBe(cafe.id);
+      }));
+
+    it("una categoría que no está en la BD da invalid_category («Categoría no válida») sin crear nada", () =>
+      inRolledBackTransaction(async (tx) => {
+        const owner = await createUser(tx, "approved");
+        const input = { ...titleOnlyInput("Sin categoría"), category: "inexistente" };
+        await expect(createEvent(owner, input)).rejects.toEqual(domainError("invalid_category"));
+        expect(await tx.select().from(events).where(eq(events.title, "Sin categoría"))).toEqual([]);
+      }));
+
     it("un admin sin organizador no puede crear", () =>
       inRolledBackTransaction(async (tx) => {
         const venue = await createVenue(tx, (await createUser(tx)).id);

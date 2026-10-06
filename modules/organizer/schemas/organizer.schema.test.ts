@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { EVENT_CATEGORIES } from "@/modules/events/format";
 import type { EventDraftFormValues, TicketTypeRow } from "../types/organizer.types";
 import {
   coverImageUrlSchema,
   createEventDraftSchema,
-  EVENT_CATEGORY_OPTIONS,
   getTicketTypeRowErrors,
   MIN_AGE_LABELS,
   MIN_AGE_OPTIONS,
@@ -32,7 +30,7 @@ const row = (sectionId: string, overrides: Partial<TicketTypeRow> = {}): TicketT
 
 const empty: EventDraftFormValues = {
   title: "",
-  category: "conciertos",
+  category: "",
   minAge: "0",
   description: "",
   date: "",
@@ -65,12 +63,6 @@ function messages(values: EventDraftFormValues, schema = organizerSchema): Recor
   return Object.fromEntries(result.error.issues.map((issue) => [issue.path.join("."), issue.message]));
 }
 
-describe("EVENT_CATEGORY_OPTIONS", () => {
-  it("coincide con las categorías del proyecto y en el mismo orden", () => {
-    expect(EVENT_CATEGORY_OPTIONS).toEqual(EVENT_CATEGORIES);
-  });
-});
-
 describe("organizerEventSchema (borradores de ejemplo del seed)", () => {
   it("acepta un borrador sin fecha, imagen ni precio", () => {
     const draft = {
@@ -92,13 +84,22 @@ describe("organizerEventSchema (borradores de ejemplo del seed)", () => {
 
 describe("createEventDraftSchema", () => {
   describe("borrador mínimo", () => {
-    it("solo exige el nombre", () => {
-      expect(organizerSchema.safeParse({ ...empty, title: "Mi borrador" }).success).toBe(true);
-      expect(messages(empty)).toEqual({ title: "Ingresa el nombre del evento" });
+    it("solo exige el nombre y la categoría", () => {
+      expect(organizerSchema.safeParse({ ...empty, title: "Mi borrador", category: "conciertos" }).success).toBe(true);
+      expect(messages(empty)).toEqual({ title: "Ingresa el nombre del evento", category: "Elige una categoría" });
+    });
+
+    it("acepta cualquier slug de categoría bien formado (la BD decide si existe) y rechaza uno mal formado", () => {
+      for (const category of ["cafe-shop", "drink", "bar-shop", "tecnologia"]) {
+        expect(organizerSchema.safeParse({ ...complete, category }).success, category).toBe(true);
+      }
+      for (const category of ["Cine", "cafe_shop", "-bar", "a".repeat(61)]) {
+        expect(messages({ ...complete, category }), category).toEqual({ category: "Elige una categoría" });
+      }
     });
 
     it("trata un nombre con solo espacios como vacío y recorta los textos", () => {
-      expect(messages({ ...empty, title: "   " })).toEqual({ title: "Ingresa el nombre del evento" });
+      expect(messages({ ...complete, title: "   " })).toEqual({ title: "Ingresa el nombre del evento" });
       const result = organizerSchema.safeParse({ ...complete, title: "  Festival  ", imageUrl: ` ${complete.imageUrl} ` });
       expect(result.data?.title).toBe("Festival");
       expect(result.data?.imageUrl).toBe(complete.imageUrl);
@@ -109,13 +110,13 @@ describe("createEventDraftSchema", () => {
     });
 
     it("rechaza un nombre de más de 100 caracteres", () => {
-      expect(messages({ ...empty, title: "x".repeat(101) })).toEqual({
+      expect(messages({ ...complete, title: "x".repeat(101) })).toEqual({
         title: "El nombre admite hasta 100 caracteres",
       });
     });
 
-    it("rechaza una categoría o una edad fuera de la lista", () => {
-      const values = { ...complete, category: "cine", minAge: "15" } as unknown as EventDraftFormValues;
+    it("rechaza una categoría mal formada o una edad fuera de la lista", () => {
+      const values = { ...complete, category: "Cine", minAge: "15" } as unknown as EventDraftFormValues;
       expect(Object.keys(messages(values)).sort()).toEqual(["category", "minAge"]);
     });
 

@@ -173,6 +173,18 @@ describe("createEventAction", () => {
       code: "section_not_in_venue",
     });
   });
+
+  it("sin categoría no llama al servicio; una que no está en la BD → «Categoría no válida»", async () => {
+    expect(await createEventAction({ ...VALUES, category: "" })).toEqual({ ok: false, error: "Elige una categoría" });
+    expect(createEvent).not.toHaveBeenCalled();
+
+    vi.mocked(createEvent).mockRejectedValue(new EventDraftError("invalid_category"));
+    expect(await createEventAction({ ...VALUES, category: "inexistente" })).toEqual({
+      ok: false,
+      error: "Categoría no válida",
+      code: "invalid_category",
+    });
+  });
 });
 
 describe("updateEventAction", () => {

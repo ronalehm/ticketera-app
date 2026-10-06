@@ -59,7 +59,9 @@ export function EventPreviewCard({ title, categoryLabel, dateLabel, dateChip, pl
 
       <div className="flex min-w-0 flex-1 flex-col max-lg:border-l max-lg:border-dashed max-lg:border-border">
         <CardContent className="flex flex-1 flex-col gap-1.5 p-4 max-lg:gap-1 max-lg:px-3.5 max-lg:pt-3 max-lg:pb-2">
-          <p className="text-xs font-bold tracking-wider text-primary-strong uppercase">{categoryLabel}</p>
+          <p className={cn("text-xs font-bold tracking-wider text-primary-strong uppercase", !categoryLabel && PLACEHOLDER_CLASS)}>
+            {categoryLabel ?? "Categoría"}
+          </p>
           <h3 className={cn("line-clamp-2 text-base leading-snug font-bold md:text-lg", !title && PLACEHOLDER_CLASS)}>
             {title ?? "Nombre del evento"}
           </h3>

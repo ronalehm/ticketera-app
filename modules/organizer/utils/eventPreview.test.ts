@@ -14,9 +14,9 @@ const VENUE: VenueOption = {
 
 describe("buildEventPreview", () => {
   it("con el formulario vacío deja los marcadores en null", () => {
-    expect(buildEventPreview(EMPTY_EVENT_DRAFT, undefined)).toEqual({
+    expect(buildEventPreview(EMPTY_EVENT_DRAFT, undefined, undefined)).toEqual({
       title: null,
-      categoryLabel: "Conciertos",
+      categoryLabel: null,
       dateLabel: null,
       dateChip: null,
       place: null,
@@ -39,7 +39,7 @@ describe("buildEventPreview", () => {
         { sectionId: SECTION_B, selected: true, name: "Mezanine", price: "80" },
       ],
     };
-    expect(buildEventPreview(values, VENUE)).toEqual({
+    expect(buildEventPreview(values, VENUE, "Teatro")).toEqual({
       title: "Hamlet",
       categoryLabel: "Teatro",
       dateLabel: "sáb 5 dic",
@@ -51,12 +51,12 @@ describe("buildEventPreview", () => {
   });
 
   it("sin hora no hay fecha ni chip", () => {
-    const preview = buildEventPreview({ ...EMPTY_EVENT_DRAFT, date: "2026-12-05" }, undefined);
+    const preview = buildEventPreview({ ...EMPTY_EVENT_DRAFT, date: "2026-12-05" }, undefined, undefined);
     expect(preview.dateLabel).toBeNull();
     expect(preview.dateChip).toBeNull();
   });
 
   it.each(["http://images.unsplash.com/a.jpg", "https://", "portada"])("una portada no válida (%s) no se muestra", (imageUrl) => {
-    expect(buildEventPreview({ ...EMPTY_EVENT_DRAFT, imageUrl }, undefined).imageUrl).toBeNull();
+    expect(buildEventPreview({ ...EMPTY_EVENT_DRAFT, imageUrl }, undefined, undefined).imageUrl).toBeNull();
   });
 });
