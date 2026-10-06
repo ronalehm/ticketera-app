@@ -43,6 +43,7 @@ function selectOrdersWithEvent(database: typeof db) {
       venue: venues.name,
       city: venues.city,
       imageUrl: events.imageUrl,
+      scheduleChangedAt: events.scheduleChangedAt,
     })
     .from(orders)
     .innerJoin(events, eq(events.id, orders.eventId))
@@ -105,6 +106,7 @@ function toEventView(row: OrderWithEvent): CheckoutOrder["event"] {
     venue: row.venue,
     city: row.city,
     imageUrl: required(row.imageUrl, row.slug),
+    ...(row.scheduleChangedAt && { scheduleChangedAt: row.scheduleChangedAt.toISOString() }),
   };
 }
 

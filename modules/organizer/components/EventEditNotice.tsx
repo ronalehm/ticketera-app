@@ -6,9 +6,9 @@ import type { EditableEvent } from "../types/organizer.types";
 type EventEditNoticeProps = Pick<EditableEvent, "status" | "reviewNote" | "hasSales">;
 
 /**
- * Aviso sobre el formulario de Editar según el estado (spec admin-panel, F5b): el motivo del rechazo en un borrador
- * rechazado o qué se puede cambiar de un evento publicado. Un evento en revisión no llega al formulario (Editar muestra
- * que no se edita).
+ * Aviso sobre el formulario de Editar según el estado (spec admin-panel, F5b; spec event-editing): el motivo del rechazo
+ * en un borrador rechazado, que un evento en revisión sigue en revisión al guardar o qué se puede cambiar de un evento
+ * publicado.
  */
 export function EventEditNotice({ status, reviewNote, hasSales }: EventEditNoticeProps) {
   if (status === "draft" && reviewNote) {
@@ -24,11 +24,22 @@ export function EventEditNotice({ status, reviewNote, hasSales }: EventEditNotic
     );
   }
 
+  if (status === "pending_review") {
+    return (
+      <Alert className="px-4 py-3">
+        <Info aria-hidden />
+        <AlertTitle className="font-semibold">Este evento está en revisión</AlertTitle>
+        <AlertDescription>Al guardar sigue en revisión y el administrador revisa la versión nueva.</AlertDescription>
+      </Alert>
+    );
+  }
+
   if (status !== "published") return null;
   const notice = hasSales
     ? {
         title: "Este evento tiene ventas o reservas en curso",
-        description: "Solo puedes cambiar el título, la descripción, la portada y la edad mínima.",
+        description:
+          "Puedes cambiar los textos, la portada, la categoría, la fecha y los nombres y precios de las entradas (si cambias la fecha, los compradores la verán actualizada). El recinto y las secciones a la venta ya no se cambian.",
       }
     : {
         title: "Este evento está publicado",

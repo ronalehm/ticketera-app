@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
 import { listEventCategories } from "@/modules/events/catalog";
 import {
-  EDIT_IN_REVIEW_MESSAGE,
   EventEditNotice,
   EventFeaturedControl,
   EventFormHeader,
@@ -55,20 +54,16 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
     <EventFeaturedControl userId={user.id} eventId={event.id} featured={event.featured} />
   ) : undefined;
 
-  // En revisión, cancelado y finalizado no se editan (Decisión 11); borrador y publicado sí, con los límites de su estado.
-  if (event.status === "pending_review" || event.status === "cancelled" || event.status === "finished") {
-    const inReview = event.status === "pending_review";
+  // Cancelado y finalizado no se editan; borrador, en revisión y publicado sí, con los límites de su estado (spec
+  // event-editing, Decisión 1).
+  if (event.status === "cancelled" || event.status === "finished") {
     return (
       <div className="flex flex-col gap-8 md:gap-10">
         <EventFormHeader title="Editar evento" action={featuredControl} />
         <EmptyState
           icon={FilePen}
-          title={inReview ? "Este evento está en revisión" : "Este evento ya no se puede editar"}
-          description={
-            inReview
-              ? EDIT_IN_REVIEW_MESSAGE
-              : "Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual."
-          }
+          title="Este evento ya no se puede editar"
+          description="Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual."
           actionLabel="Volver a Eventos"
           actionHref="/organizador"
         />

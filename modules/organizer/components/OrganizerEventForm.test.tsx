@@ -385,6 +385,7 @@ describe("OrganizerEventForm", () => {
       reviewNote: null,
       featured: false,
       hasSales: false,
+      sold: 0,
     };
 
     it("precarga el borrador y guarda los cambios sobre él", async () => {
@@ -447,20 +448,102 @@ describe("OrganizerEventForm", () => {
       });
     });
 
-    it("un evento publicado con ventas solo deja cambiar título, descripción, portada y edad", () => {
-      renderForm({ event: { ...event, status: "published", hasSales: true }, organizers: ORGANIZERS });
+    it("un evento publicado con ventas deja cambiar categoría, fecha y hora y nombre y precio; la estructura no", () => {
+      renderForm({ event: { ...event, status: "published", hasSales: true, sold: 3 }, organizers: ORGANIZERS });
 
-      expect(isDisabled(dateTrigger())).toBe(true);
-      fireEvent.click(dateTrigger());
-      expect(screen.queryByRole("grid")).toBeNull();
-      for (const label of ["Hora de inicio", "Apertura de puertas"]) expect(isDisabled(input(label))).toBe(true);
-      for (const name of ["Categoría", "Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
-      expect(isDisabled(sectionInput("Occidente", "Nombre del tipo de entrada"))).toBe(true);
-      expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(true);
-      for (const label of ["Nombre del evento", "Descripción", "URL de la imagen"]) {
+      expect(isDisabled(dateTrigger())).toBe(false);
+      for (const label of ["Hora de inicio", "Apertura de puertas", "Nombre del evento", "Descripción"]) {
         expect(isDisabled(input(label))).toBe(false);
       }
-      expect(isDisabled(combobox("Edad mínima"))).toBe(false);
+      for (const name of ["Categoría", "Edad mínima"]) expect(isDisabled(combobox(name))).toBe(false);
+      expect(isDisabled(sectionInput("Occidente", "Nombre del tipo de entrada"))).toBe(false);
+      expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(false);
+      for (const name of ["Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
+      expect(isDisabled(sellCheckbox("Campo"))).toBe(true);
+      expect(isDisabled(sellCheckbox("Occidente"))).toBe(true);
+    });
+
+    describe("cambio de fecha con entradas vendidas (Decisión 3)", () => {
+      const soldEvent: EditableEvent = { ...event, status: "published", hasSales: true, sold: 3 };
+      const saveChanges = () => fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+      it("cambiar la hora pide confirmación con las entradas vendidas; al confirmar, guarda", async () => {
+        renderForm({ event: soldEvent, organizers: ORGANIZERS });
+        type(input("Hora de inicio"), "21:00");
+        saveChanges();
+
+        const dialog = await screen.findByRole("alertdialog");
+        expect(
+          within(dialog).getByText("Este evento tiene 3 entradas vendidas. Los compradores verán la nueva fecha."),
+        ).toBeTruthy();
+        expect(updateEventAction).not.toHaveBeenCalled();
+
+        fireEvent.click(within(dialog).getByRole("button", { name: "Cambiar fecha" }));
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=cambios"));
+        expect(vi.mocked(updateEventAction).mock.calls[0][1]).toMatchObject({ time: "21:00" });
+      });
+
+      it("con 1 entrada vendida lo dice en singular; cancelar no guarda", async () => {
+        renderForm({ event: { ...soldEvent, sold: 1 }, organizers: ORGANIZERS });
+        type(input("Apertura de puertas"), "19:00");
+        saveChanges();
+
+        const dialog = await screen.findByRole("alertdialog");
+        expect(within(dialog).getByText(/^Este evento tiene 1 entrada vendida\./)).toBeTruthy();
+        fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+        await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+        expect(updateEventAction).not.toHaveBeenCalled();
+      });
+
+      it("sin cambio de fecha, o sin entradas vendidas, guarda sin confirmación", async () => {
+        const { unmount } = renderForm({ event: soldEvent, organizers: ORGANIZERS });
+        type(sectionInput("Occidente", "Precio (S/)"), "99");
+        saveChanges();
+        await waitFor(() => expect(updateEventAction).toHaveBeenCalledTimes(1));
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+        unmount();
+
+        renderForm({ event: { ...soldEvent, sold: 0 }, organizers: ORGANIZERS });
+        type(input("Hora de inicio"), "21:00");
+        saveChanges();
+        await waitFor(() => expect(updateEventAction).toHaveBeenCalledTimes(2));
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+      });
+
+      it("si el servidor rechaza el precio por compras en curso, el error se ve en el formulario", async () => {
+        vi.mocked(updateEventAction).mockResolvedValue({
+          ok: false,
+          error: "Hay compras en curso para esta entrada; inténtalo en unos minutos",
+          code: "price_locked_pending",
+        });
+        renderForm({ event: soldEvent, organizers: ORGANIZERS });
+        type(input("Hora de inicio"), "21:00");
+        type(sectionInput("Occidente", "Precio (S/)"), "99");
+        saveChanges();
+        fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Cambiar fecha" }));
+
+        await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+        expect(screen.getByRole("alert").textContent).toBe("Hay compras en curso para esta entrada; inténtalo en unos minutos");
+        expect(push).not.toHaveBeenCalled();
+      });
+    });
+
+    it("un evento en revisión se edita entero, guarda «cambios» y vuelve a Eventos; si falta algo, lo explica", async () => {
+      vi.mocked(updateEventAction).mockResolvedValueOnce({
+        ok: false,
+        error: "Falta la portada.",
+        code: "incomplete",
+      });
+      renderForm({ event: { ...event, status: "pending_review" }, organizers: ORGANIZERS });
+
+      for (const name of ["Categoría", "Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(false);
+      expect(isDisabled(sellCheckbox("Campo"))).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+      expect((await screen.findByRole("alert")).textContent).toBe("Falta la portada.");
+      expect(push).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador"));
     });
 
     it("conserva una edad mínima mayor que las de la lista (+21) y la guarda igual", async () => {

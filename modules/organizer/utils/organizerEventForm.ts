@@ -142,13 +142,19 @@ export function toEventDraftInput(values: EventDraftValues, { requireOrganizer }
 }
 
 /**
- * Qué bloquea el formulario de Editar: nada en un borrador; en un evento publicado, la estructura o, con ventas, todo
- * salvo título, descripción, portada y edad (mismas reglas que `updateEvent`, que es quien las garantiza). Un evento en
- * revisión, cancelado o finalizado no llega al formulario.
+ * Qué bloquea el formulario de Editar (spec event-editing, Decisión 1): nada en un borrador ni en revisión; en un evento
+ * publicado, con o sin ventas, la estructura (mismas reglas que `updateEvent`, que es quien las garantiza). Un evento
+ * cancelado o finalizado no llega al formulario.
  */
-export function getEventFormLock(event?: Pick<EditableEvent, "status" | "hasSales">): EventFormLock | null {
-  if (event?.status !== "published") return null;
-  return event.hasSales ? "sales" : "structure";
+export function getEventFormLock(event?: Pick<EditableEvent, "status">): EventFormLock | null {
+  return event?.status === "published" ? "structure" : null;
+}
+
+type Schedule = Pick<EventDraftFormValues, "date" | "time" | "doorsOpen">;
+
+/** ¿Cambia la fecha, la hora de inicio o la apertura de puertas respecto de las guardadas? */
+export function hasScheduleChanged(saved: Schedule, values: Schedule): boolean {
+  return saved.date !== values.date || saved.time !== values.time || saved.doorsOpen !== values.doorsOpen;
 }
 
 /** Primer mensaje por campo de cada fila (solo las marcadas para vender), con las mismas reglas que el schema. */

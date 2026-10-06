@@ -35,5 +35,7 @@ export const eventDetailSchema = eventSchema.extend({
   doorsOpenAt: z.iso.datetime({ offset: true }),
   minAge: z.number().int().nonnegative(), // 0 = todo público
   organizer: z.string(),
+  /** Último cambio de fecha u hora con ventas (`events.schedule_changed_at`); ausente si nunca cambió. */
+  scheduleChangedAt: z.iso.datetime({ offset: true }).optional(),
   ticketTypes: ticketTypeSchema.array().min(1),
 });

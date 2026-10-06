@@ -2,6 +2,7 @@
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
 > Spec: `docs/specs/events-ui-refresh.md` (Fases 2 y 5); la sección "Lugar" (mapa y "Cómo llegar") la redefine `docs/specs/events-venue-map.md`. Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
+> Aviso «Fecha actualizada» y botón «Editar evento» del hero: `docs/specs/event-editing.md` (Decisiones 2 y 4).
 
 ## Layout
 
@@ -11,11 +12,12 @@
 Header sticky   (igual que la landing)
 Breadcrumb      Inicio › Categoría › Título
 ┌──────────────────────── hero bg-brand-navy rounded-3xl ────────────────────────┐
-│ [Conciertos]                              │                                    │
+│ [Conciertos]           [✎ Editar evento]  │                                    │  Editar: solo dueño/admin
 │ h1 Título del evento                      │        imagen (fill, cover)        │
 │ ▢ sábado 14 de noviembre                  │                                    │
 │ ◷ 21:00 h                                 │                                    │
 │ ⌖ Estadio Nacional, Lima                  │                                    │
+│ (◷ Fecha actualizada el lunes 5 de oct.)  │                                    │  solo si cambió la fecha
 │ [ Comprar entradas · desde S/ 180.00 ] ♡ ⇪ │                                    │
 └───────────────────────────────────────────┴────────────────────────────────────┘
 ┌──────────────────────────────────────────┬──────────────┐
@@ -71,6 +73,8 @@ Footer
     - Fecha sin año y en minúscula ("sábado 14 de noviembre", `formatLongDayMonth`) dentro de `<time dateTime>` con el ISO completo. Días y meses en minúscula según la norma del español; la línea no es una oración. El año no hace falta: el catálogo solo tiene eventos de los próximos 12 meses.
     - Hora de inicio con sufijo " h" ("21:00 h").
     - "Lugar, Ciudad".
+  - **Aviso «Fecha actualizada»** (solo si `events.schedule_changed_at` no es nulo: la fecha u hora cambió con ventas; spec `event-editing`, Decisión 2): bajo la lista, píldora `inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground` (navy sobre cian, legible sobre el bloque navy) con `CalendarClock` (`size-4`, `aria-hidden`) y "Fecha actualizada el lunes 5 de octubre": día de la actualización en hora de Lima (`formatLongDayMonth`) dentro de `<time dateTime>` con el ISO. El dato llega en `EventDetail.scheduleChangedAt` (opcional) desde `getEventBySlug`; la página sigue estática y se revalida con `revalidatePublicEvent` al guardar.
+  - **Botón «Editar evento»** (`EventEditLink`, isla cliente; spec `event-editing`, Decisión 4): a la derecha de la badge de categoría (`flex items-center justify-between gap-3`). Tras montar llama a la server action `getEventEditHref(eventId)` (`@/modules/organizer/editLink`), que comprueba sesión, permiso y dueño, y solo se muestra si devuelve un href (`/organizador/eventos/<id>/editar`): organizador dueño, admin y super_admin. Visitantes, customers y otros organizadores no ven nada (no se reserva hueco). Enlace outline sobre navy `h-11 px-4 font-semibold` (`border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10`, foco claro como el resto del hero) con `Pencil` (`size-4`, `aria-hidden`) y el texto "Editar evento". Así la página no lee la sesión en el servidor y sigue prerenderizada (ISR).
 - Fila de acciones:
   - CTA primario `h-12` a `purchaseHref`: "Comprar entradas · desde S/ X", o "Ver entradas · Entrada libre" si el precio desde es 0.
   - En `lg`, también Guardar y Compartir: outline sobre navy (`border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10`, `size-12`).

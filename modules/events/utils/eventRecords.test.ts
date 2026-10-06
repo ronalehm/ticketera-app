@@ -21,6 +21,7 @@ const record: EventDetailRecord = {
   doorsOpenAt: new Date("2026-11-15T00:30:00Z"),
   minAge: 18,
   organizer: "Pulso Producciones",
+  scheduleChangedAt: null,
 };
 
 const ticketTypes: TicketTypeRecord[] = [
@@ -86,6 +87,13 @@ describe("toEventDetail", () => {
       organizer: "Pulso Producciones",
       address: "Av. José Díaz s/n",
     });
+  });
+
+  it("scheduleChangedAt: ausente si es null y en ISO si la fecha cambió", () => {
+    expect(detail).not.toHaveProperty("scheduleChangedAt");
+    const changed = toEventDetail({ ...record, scheduleChangedAt: new Date("2026-10-05T17:30:00Z") }, ticketTypes);
+    expect(changed.scheduleChangedAt).toBe("2026-10-05T17:30:00.000Z");
+    expect(eventDetailSchema.safeParse(changed).success).toBe(true);
   });
 
   it.each(["description", "doorsOpenAt", "organizer"] as const)("lanza con el slug si %s es null", (field) => {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { createEventDraftSchema, EVENT_DRAFT_LIMITS, getTodayInLima } from "../s
 import type {
   EditableEvent,
   EventDraftFormValues,
+  EventDraftValues,
   OrganizerOption,
   TicketTypeRow,
   VenueOption,
@@ -33,9 +35,11 @@ import { buildEventPreview } from "../utils/eventPreview";
 import {
   createTicketTypeRows,
   EMPTY_EVENT_DRAFT,
+  formatTicketCount,
   getEventFormLock,
   getMinAgeLabels,
   getTicketTypeErrors,
+  hasScheduleChanged,
   toEventDraftFormValues,
 } from "../utils/organizerEventForm";
 import { CoverImageField } from "./CoverImageField";
@@ -47,9 +51,13 @@ type TextField = "title" | "description" | "date" | "time" | "doorsOpen";
 type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
-/** Tras guardar, Eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
+/**
+ * Tras guardar, Eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". Uno en
+ * revisión sigue en revisión: vuelve a Eventos sin aviso (ninguno de los dos lo describe).
+ */
 const SAVED_HREF = "/organizador?guardado=borrador";
 const SAVED_CHANGES_HREF = "/organizador?guardado=cambios";
+const SAVED_IN_REVIEW_HREF = "/organizador";
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
 const subscribeToToday = () => () => {};
@@ -82,35 +90,37 @@ type OrganizerEventFormProps = {
 
 /**
  * Crear o editar un evento (spec admin-panel, F5a y F5b): se guarda en la BD (`createEventAction`/`updateEventAction`) y
- * vuelve a Eventos (`/organizador`). En un borrador solo el nombre y la categoría son obligatorios; en un evento publicado se bloquean los campos que
- * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Eventos.
+ * vuelve a Eventos (`/organizador`). En un borrador solo el nombre y la categoría son obligatorios; en un evento publicado
+ * se bloquea la estructura (`getEventFormLock`, spec event-editing, Decisión 1) y, si tiene entradas vendidas, cambiar la
+ * fecha u hora pide confirmación (Decisión 3). Enviar a revisión se hace desde Eventos.
  */
 export function OrganizerEventForm({ userId, categories, venues, organizers, event }: OrganizerEventFormProps) {
   const router = useRouter();
   const requireOrganizer = organizers !== undefined;
   const [schema] = useState(() => createEventDraftSchema({ requireOrganizer }));
+  const [initialValues] = useState(() => (event ? toEventDraftFormValues(event, venues, organizers) : EMPTY_EVENT_DRAFT));
   // `min` de la fecha solo en cliente: la página se renderiza en el servidor y "hoy" del servidor no hidrataría igual.
   const today = useSyncExternalStore(subscribeToToday, getTodayInLima, () => undefined);
-  const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
-    schema,
-    event ? toEventDraftFormValues(event, venues, organizers) : EMPTY_EVENT_DRAFT,
-  );
+  const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(schema, initialValues);
   const save = useSaveEventDraft(userId);
   const [serverError, setServerError] = useState<string | null>(null);
   // Guardado: el botón sigue deshabilitado hasta que llega Eventos (un segundo clic crearía otro borrador).
   const [saved, setSaved] = useState(false);
   // Portada subiéndose: guardar ahora enviaría la portada anterior.
   const [uploading, setUploading] = useState(false);
-  const lock = getEventFormLock(event);
-  const structureLocked = lock !== null;
-  const salesLocked = lock === "sales";
+  // Valores validados a la espera de confirmar el cambio de fecha (Decisión 3); `null` con el diálogo cerrado.
+  const [pendingSchedule, setPendingSchedule] = useState<EventDraftValues | null>(null);
+  const structureLocked = getEventFormLock(event) !== null;
   const published = event?.status === "published";
+  const isDraft = !event || event.status === "draft";
+  const sold = event?.sold ?? 0;
 
   const venue = venues.find((candidate) => candidate.id === values.venueId);
   const categoryName = categories.find((category) => category.slug === values.category)?.name;
   const minAgeLabels = getMinAgeLabels(values.minAge);
 
-  const onSubmit = handleSubmit(async (data) => {
+  // El error del servidor (también `incomplete` o `price_locked_pending`) se muestra en el formulario.
+  async function saveValues(data: EventDraftValues) {
     setServerError(null);
     try {
       const result = await save.mutateAsync({ eventId: event?.id, values: data });
@@ -119,11 +129,25 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
         return;
       }
       setSaved(true);
-      router.push(published ? SAVED_CHANGES_HREF : SAVED_HREF);
+      router.push(published ? SAVED_CHANGES_HREF : isDraft ? SAVED_HREF : SAVED_IN_REVIEW_HREF);
     } catch {
       setServerError(EVENT_DRAFT_GENERIC_ERROR);
     }
+  }
+
+  const onSubmit = handleSubmit(async (data) => {
+    if (published && sold > 0 && hasScheduleChanged(initialValues, data)) {
+      setPendingSchedule(data);
+      return;
+    }
+    await saveValues(data);
   });
+
+  async function confirmSchedule() {
+    if (pendingSchedule) await saveValues(pendingSchedule);
+    setPendingSchedule(null);
+    return null;
+  }
 
   // useZodForm agrupa los errores de las filas en `ticketTypes`; los mensajes por campo salen de las mismas reglas.
   const ticketTypeErrors = errors.ticketTypes ? getTicketTypeErrors(values.ticketTypes) : null;
@@ -198,7 +222,6 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
                 <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
                 <Select
                   items={categories.map(({ slug, name }) => ({ value: slug, label: name }))}
-                  disabled={salesLocked}
                   value={values.category}
                   onValueChange={(value) => selectValue("category", value)}
                 >
@@ -291,19 +314,18 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
                   value={values.date}
                   onChange={(value) => selectValue("date", value)}
                   min={today}
-                  disabled={salesLocked}
                   className={FORM_CONTROL_SCROLL}
                 />
                 {fieldError("date")}
               </Field>
               <Field data-invalid={!!errors.time}>
                 <FieldLabel htmlFor="organizer-event-time">Hora de inicio</FieldLabel>
-                <Input {...textProps("time")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
+                <Input {...textProps("time")} type="time" className={FORM_INPUT_CLASS} />
                 {fieldError("time")}
               </Field>
               <Field data-invalid={!!errors.doorsOpen}>
                 <FieldLabel htmlFor="organizer-event-doorsOpen">Apertura de puertas</FieldLabel>
-                <Input {...textProps("doorsOpen")} type="time" disabled={salesLocked} className={FORM_INPUT_CLASS} />
+                <Input {...textProps("doorsOpen")} type="time" className={FORM_INPUT_CLASS} />
                 {fieldError("doorsOpen")}
               </Field>
             </div>
@@ -356,7 +378,6 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
             onChange={changeTicketTypes}
             onBlur={revalidateTicketTypes}
             selectionLocked={structureLocked}
-            valuesLocked={salesLocked}
           />
         </FormSection>
       </div>
@@ -400,9 +421,20 @@ export function OrganizerEventForm({ userId, categories, venues, organizers, eve
           )}
         >
           {isSubmitting && <Spinner aria-hidden className="motion-reduce:animate-none" />}
-          {isSubmitting ? "Guardando…" : published ? "Guardar cambios" : "Guardar borrador"}
+          {isSubmitting ? "Guardando…" : isDraft ? "Guardar borrador" : "Guardar cambios"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={pendingSchedule !== null}
+        onOpenChange={(open) => !open && setPendingSchedule(null)}
+        title="¿Cambiar la fecha del evento?"
+        description={`Este evento tiene ${formatTicketCount(sold)} ${sold === 1 ? "vendida" : "vendidas"}. Los compradores verán la nueva fecha.`}
+        confirmLabel="Cambiar fecha"
+        pendingLabel="Guardando…"
+        onConfirm={confirmSchedule}
+        genericError={EVENT_DRAFT_GENERIC_ERROR}
+      />
     </form>
   );
 }

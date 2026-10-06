@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarDays, Clock, MapPin } from "lucide-react";
 
 import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 import type { EventDetail } from "../types/events.types";
 import { formatEventPrice, formatLongDayMonth, formatTime } from "../utils/formatEvent";
+import { EventEditLink } from "./EventEditLink";
 import { SaveEventButton } from "./SaveEventButton";
 import { ShareEventButton } from "./ShareEventButton";
 
@@ -92,9 +93,19 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
 
         <div className="flex flex-col gap-6 p-6 md:p-8 lg:p-10 xl:p-12">
           <div className="flex flex-col gap-4">
-            <Badge variant="outline" className="h-7 border-primary-foreground/30 px-3 text-primary-foreground">
-              {event.categoryName}
-            </Badge>
+            <div className="flex items-center justify-between gap-3">
+              <Badge variant="outline" className="h-7 border-primary-foreground/30 px-3 text-primary-foreground">
+                {event.categoryName}
+              </Badge>
+              {/* Solo para el organizador dueño y admins; se resuelve en el cliente para no romper la página estática. */}
+              <EventEditLink
+                eventId={event.id}
+                className={cn(
+                  "border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground",
+                  HERO_FOCUS,
+                )}
+              />
+            </div>
             <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance wrap-break-word md:text-5xl lg:text-4xl xl:text-5xl">
               {event.title}
             </h1>
@@ -114,6 +125,15 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
                 </span>
               </li>
             </ul>
+            {event.scheduleChangedAt && (
+              <p className="inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground">
+                <CalendarClock className="size-4 shrink-0" aria-hidden />
+                <span>
+                  Fecha actualizada el{" "}
+                  <time dateTime={event.scheduleChangedAt}>{formatLongDayMonth(event.scheduleChangedAt)}</time>
+                </span>
+              </p>
+            )}
           </div>
 
           <div className="mt-auto flex items-center gap-3">

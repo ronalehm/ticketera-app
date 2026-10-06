@@ -2,15 +2,15 @@
 import { DrizzleQueryError } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
+import { getSessionUser, OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
 import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../services/eventDrafts.service";
 import type { EventDraftFormValues } from "../types/organizer.types";
 import { EventDraftError } from "../utils/eventDraftError";
-import { createEventAction, deleteEventAction, updateEventAction } from "./eventDrafts.actions";
+import { createEventAction, deleteEventAction, getEventEditHref, updateEventAction } from "./eventDrafts.actions";
 
 vi.mock("@/modules/auth/server", async (importOriginal) => {
   const { OrganizerNotApprovedError } = await importOriginal<typeof import("@/modules/auth/server")>();
-  return { requirePermission: vi.fn(), OrganizerNotApprovedError };
+  return { requirePermission: vi.fn(), getSessionUser: vi.fn(), OrganizerNotApprovedError };
 });
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("../services/eventDrafts.service", () => ({
@@ -202,14 +202,19 @@ describe("updateEventAction", () => {
     );
   });
 
-  it("un evento en revisión no se edita: pide al admin que lo rechace", async () => {
-    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("edit_locked", [], "pending_review"));
+  it("un evento en revisión se guarda y no invalida páginas públicas", async () => {
+    vi.mocked(updateEvent).mockResolvedValue({ status: "pending_review", slug: "festival" });
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("un evento cancelado o finalizado → edit_locked", async () => {
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("edit_locked"));
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({
       ok: false,
-      error: "Está en revisión: si necesitas cambios, pide al administrador que lo rechace.",
+      error: "Un evento cancelado o finalizado ya no se puede editar.",
       code: "edit_locked",
     });
-    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("rechaza un id que no es un uuid", async () => {
@@ -217,13 +222,12 @@ describe("updateEventAction", () => {
     expect(updateEvent).not.toHaveBeenCalled();
   });
 
-  it("un cambio sensible con ventas → su mensaje y su code", async () => {
-    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("sensitive_locked"));
+  it("un cambio de estructura en un publicado → structure_locked", async () => {
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("structure_locked"));
     expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({
       ok: false,
-      error:
-        "El evento tiene ventas o reservas en curso: solo puedes cambiar el título, la descripción, la portada y la edad mínima.",
-      code: "sensitive_locked",
+      error: "En un evento publicado no se pueden cambiar el recinto, las secciones a la venta ni el organizador.",
+      code: "structure_locked",
     });
   });
 
@@ -262,7 +266,7 @@ describe("updateEventAction: portada anterior", () => {
 
   it("si el guardado falla, no borra nada: la anterior sigue en BD y en Blob", async () => {
     savedCover(OWN_COVER(EVENT_ID));
-    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("sensitive_locked"));
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("structure_locked"));
 
     expect((await updateEventAction(EVENT_ID, { ...VALUES, imageUrl: OWN_COVER(EVENT_ID) })).ok).toBe(false);
     await runAfterTasks();
@@ -331,5 +335,45 @@ describe("deleteEventAction", () => {
       error: "Solo se pueden eliminar borradores.",
       code: "delete_not_draft",
     });
+  });
+});
+
+describe("getEventEditHref", () => {
+  const CUSTOMER: SessionUser = { ...SESSION, id: "00000000-0000-8000-8000-000000000004", role: "customer" };
+  const SUPER_ADMIN: SessionUser = { ...SESSION, id: "00000000-0000-8000-8000-000000000005", role: "super_admin" };
+  const editable = () =>
+    vi.mocked(getEventForEdit).mockResolvedValue({ id: EVENT_ID } as Awaited<ReturnType<typeof getEventForEdit>>);
+
+  it.each([
+    ["el organizador dueño", ORGANIZER],
+    ["un admin", ADMIN],
+    ["un super_admin", SUPER_ADMIN],
+  ])("%s recibe el enlace a Editar, sin redirigir", async (_label, user) => {
+    vi.mocked(getSessionUser).mockResolvedValue(user);
+    editable();
+    expect(await getEventEditHref(EVENT_ID)).toBe(`/organizador/eventos/${EVENT_ID}/editar`);
+    expect(getEventForEdit).toHaveBeenCalledWith(user, EVENT_ID);
+    expect(requirePermission).not.toHaveBeenCalled();
+  });
+
+  it("otro organizador → null (getEventForEdit no lo encuentra en su alcance)", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue({ ...ORGANIZER, id: ORGANIZER_ID });
+    vi.mocked(getEventForEdit).mockResolvedValue(null);
+    expect(await getEventEditHref(EVENT_ID)).toBeNull();
+  });
+
+  it("un customer o sin sesión → null sin consultar el evento", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(CUSTOMER);
+    expect(await getEventEditHref(EVENT_ID)).toBeNull();
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+    expect(await getEventEditHref(EVENT_ID)).toBeNull();
+    expect(getEventForEdit).not.toHaveBeenCalled();
+    expect(requirePermission).not.toHaveBeenCalled();
+  });
+
+  it("un id que no es uuid → null", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(ADMIN);
+    expect(await getEventEditHref("no-es-un-uuid")).toBeNull();
+    expect(getEventForEdit).not.toHaveBeenCalled();
   });
 });

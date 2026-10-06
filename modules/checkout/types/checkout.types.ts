@@ -14,7 +14,7 @@ export type CheckoutOrderItem = {
 export type CheckoutOrder = {
   event: Pick<
     EventDetail,
-    "slug" | "title" | "category" | "categoryName" | "startsAt" | "venue" | "city" | "imageUrl"
+    "slug" | "title" | "category" | "categoryName" | "startsAt" | "venue" | "city" | "imageUrl" | "scheduleChangedAt"
   >;
   items: CheckoutOrderItem[];
   quantities: Record<string, number>;
@@ -67,6 +67,8 @@ export type Order = {
     venue: string;
     city: string;
     imageUrl: string;
+    /** ISO del último cambio de fecha con ventas; "Mis entradas" avisa a los pedidos anteriores. */
+    scheduleChangedAt?: string;
   };
   items: { ticketTypeId: string; name: string; unitPrice: number; quantity: number; seats?: { id: string; label: string }[] }[];
   ticketCount: number;
