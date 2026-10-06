@@ -26,6 +26,11 @@ export const serverEnvSchema = z.object({
   // Solo claves de test de Stripe en todos los entornos (las live llegan en F8).
   STRIPE_SECRET_KEY: z.string().startsWith("sk_test_"),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
+  // Vercel Blob por OIDC (spec event-cover-upload): opcionales; sin ellas la subida de portadas responde 503.
+  // `handleUploadPresigned` (@vercel/blob 2.8.0) lanza "Missing webhook public key" sin BLOB_WEBHOOK_PUBLIC_KEY, aunque
+  // no haya `onUploadCompleted`.
+  BLOB_STORE_ID: optional(z.string()),
+  BLOB_WEBHOOK_PUBLIC_KEY: optional(z.string()),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { uploadPresigned } from "@vercel/blob/client";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +11,9 @@ import { OrganizerEventForm } from "./OrganizerEventForm";
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../actions/eventDrafts.actions", () => ({ createEventAction: vi.fn(), updateEventAction: vi.fn() }));
+vi.mock("@vercel/blob/client", () => ({ uploadPresigned: vi.fn() }));
+
+const BLOB_URL = "https://abc.public.blob.vercel-storage.com/events/draft/portada.jpg";
 
 const STADIUM: VenueOption = {
   id: "5b0a3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d",
@@ -72,6 +76,9 @@ function renderForm(props: Partial<ComponentProps<typeof OrganizerEventForm>> = 
 }
 
 beforeEach(() => {
+  vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 1920, height: 1080, close: vi.fn() })));
+  URL.createObjectURL = vi.fn(() => "blob:local-preview");
+  URL.revokeObjectURL = vi.fn();
   vi.mocked(createEventAction).mockResolvedValue({ ok: true, id: "e0000000-0000-4000-8000-000000000001" });
   vi.mocked(updateEventAction).mockResolvedValue({ ok: true });
 });
@@ -79,6 +86,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("OrganizerEventForm", () => {
@@ -266,6 +274,7 @@ describe("OrganizerEventForm", () => {
     it("una portada http da error; una https se ve en la vista previa", () => {
       renderForm();
       type(input("Nombre del evento"), "Festival");
+      fireEvent.click(screen.getByRole("tab", { name: "Usar URL" }));
       type(input("URL de la imagen"), "http://images.unsplash.com/a.jpg");
       fireEvent.click(saveButton());
 
@@ -275,6 +284,28 @@ describe("OrganizerEventForm", () => {
       type(input("URL de la imagen"), "https://images.unsplash.com/a.jpg");
       const preview = screen.getByRole("complementary", { name: "Vista previa" });
       expect(preview.querySelector("img")?.getAttribute("src")).toBe("https://images.unsplash.com/a.jpg");
+    });
+    it("la portada subida llega al guardado; mientras sube no se puede guardar", async () => {
+      let finishUpload!: (result: { url: string }) => void;
+      vi.mocked(uploadPresigned).mockReturnValue(
+        new Promise((resolve) => {
+          finishUpload = (result) => resolve(result as Awaited<ReturnType<typeof uploadPresigned>>);
+        }),
+      );
+      const { container } = renderForm();
+      type(input("Nombre del evento"), "Festival");
+      expect(screen.getByRole("tab", { name: "Subir imagen" }).getAttribute("aria-selected")).toBe("true");
+
+      const file = new File(["x"], "portada.jpg", { type: "image/jpeg" });
+      await act(async () => void fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } }));
+      expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+
+      await act(async () => finishUpload({ url: BLOB_URL }));
+      expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(saveButton());
+
+      await waitFor(() => expect(createEventAction).toHaveBeenCalled());
+      expect(vi.mocked(createEventAction).mock.calls[0][0]).toMatchObject({ imageUrl: BLOB_URL });
     });
   });
 

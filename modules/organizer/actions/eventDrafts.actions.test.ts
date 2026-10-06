@@ -3,7 +3,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrganizerNotApprovedError, requirePermission, type SessionUser } from "@/modules/auth/server";
-import { createEvent, deleteEvent, updateEvent } from "../services/eventDrafts.service";
+import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../services/eventDrafts.service";
 import type { EventDraftFormValues } from "../types/organizer.types";
 import { EventDraftError } from "../utils/eventDraftError";
 import { createEventAction, deleteEventAction, updateEventAction } from "./eventDrafts.actions";
@@ -17,7 +17,22 @@ vi.mock("../services/eventDrafts.service", () => ({
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   deleteEvent: vi.fn(),
+  getEventForEdit: vi.fn(),
 }));
+
+// Limpieza de portadas: el servicio real, con Blob, la BD y `after` mockeados. `after` guarda las tareas para
+// ejecutarlas a mano "después de responder".
+const blob = vi.hoisted(() => ({ del: vi.fn(), count: vi.fn(), scheduled: [] as (() => Promise<void>)[] }));
+vi.mock("@vercel/blob", () => ({ del: blob.del }));
+vi.mock("@/lib/db/client", () => ({ db: { $count: blob.count } }));
+vi.mock("@/lib/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/env")>();
+  return { ...actual, env: { ...actual.env, BLOB_STORE_ID: "store_AbC123" } };
+});
+vi.mock("next/server", () => ({ after: vi.fn((task: () => Promise<void>) => blob.scheduled.push(task)) }));
+const runAfterTasks = () => Promise.all(blob.scheduled.splice(0).map((task) => task()));
+
+const OWN_COVER = (scope: string) => `https://abc123.public.blob.vercel-storage.com/events/${scope}/${crypto.randomUUID()}.jpg`;
 
 const SESSION: Omit<SessionUser, "id" | "role"> = {
   email: "ana@example.com",
@@ -56,8 +71,15 @@ beforeEach(() => {
   vi.mocked(requirePermission).mockResolvedValue(ORGANIZER);
   vi.mocked(createEvent).mockResolvedValue({ id: EVENT_ID });
   vi.mocked(updateEvent).mockResolvedValue({ status: "draft", slug: "festival" });
+  blob.count.mockResolvedValue(0);
+  blob.scheduled.length = 0;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
+
+/** `getEventForEdit` devuelve el evento guardado con esta portada (solo se usa `imageUrl`). */
+function savedCover(imageUrl: string | null) {
+  vi.mocked(getEventForEdit).mockResolvedValue({ imageUrl } as Awaited<ReturnType<typeof getEventForEdit>>);
+}
 
 afterEach(() => {
   // También las implementaciones (`mockRejectedValue`) de cada test.
@@ -203,7 +225,83 @@ describe("updateEventAction", () => {
   });
 });
 
+describe("updateEventAction: portada anterior", () => {
+  it("reemplazo Blob→Blob: borra la anterior después de guardar y de responder", async () => {
+    const previous = OWN_COVER(EVENT_ID);
+    savedCover(previous);
+
+    expect(await updateEventAction(EVENT_ID, { ...VALUES, imageUrl: OWN_COVER(EVENT_ID) })).toEqual({ ok: true });
+    expect(blob.del).not.toHaveBeenCalled();
+
+    await runAfterTasks();
+    expect(blob.del).toHaveBeenCalledExactlyOnceWith(previous);
+    expect(vi.mocked(updateEvent).mock.invocationCallOrder[0]).toBeLessThan(blob.del.mock.invocationCallOrder[0]);
+  });
+
+  it("reemplazo Blob→URL externa o vacío también borra la anterior", async () => {
+    for (const imageUrl of ["https://images.unsplash.com/b.jpg", ""]) {
+      const previous = OWN_COVER("draft");
+      savedCover(previous);
+      expect(await updateEventAction(EVENT_ID, { ...VALUES, imageUrl })).toEqual({ ok: true });
+      await runAfterTasks();
+      expect(blob.del).toHaveBeenLastCalledWith(previous);
+    }
+  });
+
+  it("si el guardado falla, no borra nada: la anterior sigue en BD y en Blob", async () => {
+    savedCover(OWN_COVER(EVENT_ID));
+    vi.mocked(updateEvent).mockRejectedValue(new EventDraftError("sensitive_locked"));
+
+    expect((await updateEventAction(EVENT_ID, { ...VALUES, imageUrl: OWN_COVER(EVENT_ID) })).ok).toBe(false);
+    await runAfterTasks();
+    expect(blob.del).not.toHaveBeenCalled();
+  });
+
+  it("una portada anterior externa nunca se borra", async () => {
+    savedCover("https://images.unsplash.com/a-anterior.jpg");
+    expect(await updateEventAction(EVENT_ID, { ...VALUES, imageUrl: OWN_COVER(EVENT_ID) })).toEqual({ ok: true });
+    await runAfterTasks();
+    expect(blob.del).not.toHaveBeenCalled();
+  });
+
+  it("la misma portada o ninguna anterior: no programa limpieza", async () => {
+    const cover = OWN_COVER(EVENT_ID);
+    savedCover(cover);
+    await updateEventAction(EVENT_ID, { ...VALUES, imageUrl: cover });
+    savedCover(null);
+    await updateEventAction(EVENT_ID, VALUES);
+    expect(blob.scheduled).toHaveLength(0);
+  });
+
+  it("si `del` falla, la acción responde ok y el fallo solo se registra", async () => {
+    savedCover(OWN_COVER(EVENT_ID));
+    blob.del.mockRejectedValue(new Error("blob caído"));
+
+    expect(await updateEventAction(EVENT_ID, VALUES)).toEqual({ ok: true });
+    await expect(runAfterTasks()).resolves.toBeDefined();
+    expect(console.error).toHaveBeenCalledWith("deleteOwnCoverBestEffort", expect.objectContaining({ error: "blob caído" }));
+  });
+});
+
 describe("deleteEventAction", () => {
+  it("borra la portada propia del borrador eliminado después de responder", async () => {
+    const cover = OWN_COVER(EVENT_ID);
+    savedCover(cover);
+
+    expect(await deleteEventAction(EVENT_ID)).toEqual({ ok: true });
+    expect(blob.del).not.toHaveBeenCalled();
+    await runAfterTasks();
+    expect(blob.del).toHaveBeenCalledExactlyOnceWith(cover);
+  });
+
+  it("si no se pudo eliminar, no borra la portada", async () => {
+    savedCover(OWN_COVER(EVENT_ID));
+    vi.mocked(deleteEvent).mockRejectedValue(new EventDraftError("delete_not_draft"));
+    await deleteEventAction(EVENT_ID);
+    await runAfterTasks();
+    expect(blob.del).not.toHaveBeenCalled();
+  });
+
   it("elimina con el id validado", async () => {
     expect(await deleteEventAction(EVENT_ID)).toEqual({ ok: true });
     expect(deleteEvent).toHaveBeenCalledWith(ORGANIZER, EVENT_ID);

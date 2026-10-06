@@ -7,3 +7,4 @@ export {
   listApprovedOrganizers,
   listApprovedVenuesWithSections,
 } from "./services/eventDrafts.service";
+export { COVER_UPLOAD_ERRORS, CoverUploadError, getCoverSignedToken } from "./services/eventCoverUpload.service";

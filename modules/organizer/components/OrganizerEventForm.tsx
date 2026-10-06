@@ -43,15 +43,15 @@ import {
   getTicketTypeErrors,
   toEventDraftFormValues,
 } from "../utils/organizerEventForm";
+import { CoverImageField } from "./CoverImageField";
 import { EventPreviewCard } from "./EventPreviewCard";
 import { FORM_CONTROL_SCROLL, FORM_INPUT_CLASS, FORM_SELECT_TRIGGER_CLASS } from "./formStyles";
 import { TicketTypesField } from "./TicketTypesField";
 
-type TextField = "title" | "description" | "date" | "time" | "doorsOpen" | "imageUrl";
+type TextField = "title" | "description" | "date" | "time" | "doorsOpen";
 type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
-const IMAGE_URL_DESCRIPTION_ID = "organizer-event-imageUrl-description";
 /** Tras guardar, Eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
 const SAVED_HREF = "/organizador?guardado=borrador";
 const SAVED_CHANGES_HREF = "/organizador?guardado=cambios";
@@ -102,6 +102,8 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   const [serverError, setServerError] = useState<string | null>(null);
   // Guardado: el botón sigue deshabilitado hasta que llega Eventos (un segundo clic crearía otro borrador).
   const [saved, setSaved] = useState(false);
+  // Portada subiéndose: guardar ahora enviaría la portada anterior.
+  const [uploading, setUploading] = useState(false);
   const lock = getEventFormLock(event);
   const structureLocked = lock !== null;
   const salesLocked = lock === "sales";
@@ -155,16 +157,15 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   }
 
   // id y a11y de la ayuda y del error, comunes a todos los controles.
-  const fieldProps = (name: TextField | SelectField, descriptionId?: string) => ({
+  const fieldProps = (name: TextField | SelectField) => ({
     id: `organizer-event-${name}`,
     "aria-invalid": !!errors[name],
-    "aria-describedby":
-      [descriptionId, errors[name] && `organizer-event-${name}-error`].filter(Boolean).join(" ") || undefined,
+    "aria-describedby": errors[name] ? `organizer-event-${name}-error` : undefined,
   });
 
   // Campos de texto: además, valor controlado y revalidación al salir.
-  const textProps = (name: TextField, descriptionId?: string) => ({
-    ...fieldProps(name, descriptionId),
+  const textProps = (name: TextField) => ({
+    ...fieldProps(name),
     value: values[name],
     onChange: (changeEvent: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, changeEvent.target.value),
     onBlur: () => handleBlur(name),
@@ -334,22 +335,15 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
         </FormSection>
 
         <FormSection title="Imagen de portada">
-          <Field data-invalid={!!errors.imageUrl}>
-            <FieldLabel htmlFor="organizer-event-imageUrl">URL de la imagen</FieldLabel>
-            <Input
-              {...textProps("imageUrl", IMAGE_URL_DESCRIPTION_ID)}
-              type="url"
-              inputMode="url"
-              placeholder="https://…"
-              maxLength={EVENT_DRAFT_LIMITS.imageUrl}
-              className={FORM_INPUT_CLASS}
-            />
-            <FieldDescription id={IMAGE_URL_DESCRIPTION_ID}>
-              Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla
-              la recorta de forma distinta.
-            </FieldDescription>
-            {fieldError("imageUrl")}
-          </Field>
+          <CoverImageField
+            id="organizer-event-imageUrl"
+            eventId={event?.id ?? null}
+            value={values.imageUrl}
+            onChange={(url) => setValue("imageUrl", url)}
+            onBlur={() => handleBlur("imageUrl")}
+            error={errors.imageUrl}
+            onUploadingChange={setUploading}
+          />
         </FormSection>
 
         <FormSection
@@ -400,7 +394,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
         </Link>
         <Button
           type="submit"
-          disabled={isSubmitting || saved}
+          disabled={isSubmitting || saved || uploading}
           className={cn(
             "h-11 cursor-pointer font-semibold duration-200 hover:bg-primary-strong md:h-12 lg:px-5",
             FORM_CONTROL_SCROLL,

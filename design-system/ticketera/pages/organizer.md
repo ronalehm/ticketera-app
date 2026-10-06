@@ -299,6 +299,8 @@ evento con las acciones como botones con texto
 
 > CRUD de borradores contra la BD (`createEvent`/`updateEvent`/`deleteEvent`), organizador obligatorio para admin, recinto existente, tipos de entrada por sección y portada por URL: `docs/specs/admin-panel.md` (Fase 5a). Prevalece sobre `organizer-event-seating` y `organizer-event-seating-mode` (lugar libre, ciudad, dirección y organizador de texto, modo de ubicación, zonas con filas × asientos, máximo y descripción por tipo, portada subida desde el equipo) y sobre el guardado en `localStorage` de `organizer-dashboard`.
 
+> Portada con pestañas «Subir imagen» (Vercel Blob) / «Usar URL», estados de la subida y recortes: `docs/specs/event-cover-upload.md`. Prevalece sobre la "portada por URL" de F5a.
+
 ### Layout
 
 ```
@@ -317,7 +319,8 @@ h1 "Crear evento" | "Editar borrador" | "Editar evento"
 │ Recinto [Estadio Nacional · Lima]│              │
 ├──────────────────────────────────┤              │
 │ Imagen de portada                │              │
-│ URL de la imagen [https://…    ] │              │
+│ [Subir imagen] [Usar URL]        │              │
+│ zona de arrastre | vista previa  │              │
 ├──────────────────────────────────┤              │
 │ Tipos de entrada                 │              │
 │ ┌ Campo ─────── 1,000 lugares… ┐ │              │  una fila por sección del recinto
@@ -358,11 +361,28 @@ Un borrador solo exige el nombre; lo demás puede faltar, pero lo que se indique
 | Fecha / Hora de inicio | `DatePicker` (MASTER §7; `min` = hoy en Lima, solo en cliente; deshabilitado en un publicado con ventas; `aria-invalid`/`aria-describedby` hacia su error y `aria-labelledby` con la etiqueta) / `Input type="time"` | Las dos o ninguna | "Elige la fecha del evento" / "Indica la hora de inicio" / "Elige una fecha válida" |
 | Apertura de puertas | `Input type="time"`, mismo día | Opcional; exige fecha y hora de inicio y ser a esa hora o antes | "Indica primero la fecha y la hora de inicio" / "La apertura de puertas debe ser a la hora de inicio o antes" |
 | Recinto | `Select` de recintos `approved` ("Nombre · Ciudad"), placeholder "Elige el recinto", ayuda "Solo recintos aprobados. Sus secciones definen los tipos de entrada." | Opcional; obligatorio si se vende alguna sección | "Elige el recinto para vender entradas" |
-| URL de la imagen | `Input type="url"`, placeholder "https://…", ayuda "Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla la recorta de forma distinta." | Opcional; URL absoluta `https` con dominio (Decisión 5) | "Ingresa una URL válida que empiece por https://" |
+| Imagen de portada | `CoverImageField` (ver "Imagen de portada"). En «Usar URL»: "URL de la imagen", `Input type="url"`, placeholder "https://…", ayuda "Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla la recorta de forma distinta." | Opcional; URL absoluta `https` con dominio (Decisión 5) | "Ingresa una URL válida que empiece por https://" |
 
 - Fechas en `America/Lima` (UTC−5 todo el año): se guardan como `timestamptz` y al editar se muestran en Lima.
 - **Rejillas por ancho de sección, no de viewport** (container queries): a 1024 px, con sidebar y vista previa, la columna del formulario mide ~260 px. Categoría | Edad mínima van en dos columnas desde `@md/field-group` (28rem); Fecha, Hora de inicio y Apertura de puertas en tres desde `@lg/field-group` (32rem) y, por debajo, Fecha a todo el ancho (el `DatePicker` necesita ~140 px) con Hora | Apertura debajo. En cada fila de tipos de entrada (`@container`), Nombre | Precio en `@md:grid-cols-[minmax(0,1fr)_160px]`.
 - El organizador de un evento creado por un organizador es siempre él mismo (el campo no se muestra y lo que llegue se ignora). Un admin puede cambiar el dueño de un borrador al editarlo.
+
+### Imagen de portada (`CoverImageField` + `ImageUpload`)
+
+- **Pestañas** (`Tabs`, `aria-label="Origen de la portada"`, triggers `h-11`, activa `bg-primary text-primary-foreground`): «Subir imagen» (por defecto) y «Usar URL». En Editar se abre en «Usar URL» si la portada guardada no es una URL de Vercel Blob (`*.public.blob.vercel-storage.com`); solo se decide al montar. Cambiar de pestaña no borra el valor. «Usar URL» queda deshabilitada mientras se comprueba o sube un archivo. El error de validación de la portada (`organizer-event-imageUrl-error`) va bajo las pestañas.
+- **Subir imagen → vacío:** zona `rounded-2xl border-2 border-dashed bg-muted py-8` con `ImageUp`, "Arrastra una imagen aquí", "o", botón outline `h-11` "Seleccionar archivo" (el control de teclado; `aria-describedby` a los requisitos) y "JPG, PNG o WebP · Máx. 5 MB" / "Tamaño recomendado: 1920 × 1080 px (16:9)". Arrastrar es una mejora: el botón siempre funciona.
+- **Estados:**
+  - **Drag over:** zona `border-primary bg-accent` y "Suelta la imagen"; con vista previa, `ring-2 ring-primary` y la capa "Suelta la imagen".
+  - **Validando** (tipo y peso al instante; luego medidas con `createImageBitmap`): "Comprobando la imagen…" (en la zona o en capa sobre la vista previa).
+  - **Subiendo:** vista previa local con capa `bg-background/80`, `Spinner` y "Subiendo…"; botones, «Usar URL» y "Guardar borrador"/"Guardar cambios" deshabilitados; un segundo archivo se ignora. Estado anunciado en `role="status"` (`sr-only`).
+  - **Éxito:** vista previa 16:9 de la URL de Blob, "1920 × 1080 px · 1.8 MB" (`tabular-nums`, peso `es-PE`), "Cambiar imagen" (outline) y "Eliminar" (destructive), ambos `h-11`.
+  - **Preview existente** (Editar): la portada actual con "Cambiar imagen" y "Eliminar", sin medidas ni peso.
+  - **Reemplazo:** como Subiendo; la portada actual sigue en `imageUrl` hasta que la nueva termina de subir.
+  - **Error:** `role="alert"` `text-sm text-destructive`; `imageUrl` no cambia.
+- **"Eliminar"** vacía la portada (un borrador puede quedar sin ella; "Enviar a revisión" la exige).
+- **Advertencia < 1200 px** (no bloquea, la imagen se sube): `TriangleAlert` `text-warning` + "La imagen mide {w} px de ancho; se recomienda al menos 1200 px para que no se vea borrosa".
+- **Recortes** (bajo la vista previa, también durante la subida, con `EventCoverImage` `object-cover`): "Detalle 16:9" (`w-36`), "Hero escritorio 21:8" (`w-48`) y "Hero móvil 4:5" (`w-20`), con la nota "Deja lo importante en el centro: cada pantalla la recorta de forma distinta.".
+- **Mensajes de error:** "Solo JPG, PNG o WebP", "La imagen pesa más de 5 MB", "No se pudo leer la imagen. Prueba con otro archivo" (sin llamar al servidor); de la ruta `/api/event-covers`: "Inicia sesión para subir imágenes" (401), "No tienes permiso para subir imágenes" (403), "No puedes cambiar la portada de este evento" (403), "No se pudo subir la imagen" (400), "La subida de imágenes no está configurada en este entorno. Usa la pestaña “Usar URL”." (503); fallo de Blob o de red: "No se pudo subir la imagen. Inténtalo de nuevo".
 
 ### Tipos de entrada (`TicketTypesField`)
 
