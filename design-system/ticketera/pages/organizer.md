@@ -1,4 +1,4 @@
-# Página: panel `/organizador`, `/organizador/eventos`, `/organizador/eventos/nuevo`, `/organizador/eventos/[id]/editar` y `/admin/usuarios`
+# Página: panel `/organizador` (Eventos), `/organizador/eventos/nuevo`, `/organizador/eventos/[id]/editar` y `/admin/usuarios`
 
 > Override de `../MASTER.md` para estas páginas. Lo no indicado aquí sigue el MASTER. Spec: `docs/specs/organizer-dashboard.md` (Fase 1: panel; Fase 2: formulario y guardado; Fase 3: portada y vista previa).
 > Datos reales de Resumen y la página "Mis eventos" `/organizador/eventos` (KPIs de ventas brutas, badges de los 5 estados, filtro y búsqueda, TanStack Query): `docs/specs/admin-panel.md` (Fase 3). Prevalece sobre las reglas de ingresos y badges de `organizer-dashboard`.
@@ -7,8 +7,9 @@
 > "Mis eventos" (tarjeta con barra de cabecera solo en `lg`) y la vista previa de Crear evento (anatomía de `EventCard`): `docs/specs/design-alignment-account-views.md` (Fase 2). Prevalece sobre el requisito 23 de `layout-fullscreen-shells` F3 y sobre la decisión 4 de `organizer-dashboard` (marcadores y badge "Disponible" de la vista previa).
 > Moderación en Mis eventos (Enviar a revisión, Aprobar, Rechazar con motivo, Cancelar evento), `ConfirmDialog` compartido, edición de eventos publicados con campos bloqueados (Decisión 11; un evento en revisión no se edita) y aviso del motivo de rechazo en Editar: `docs/specs/admin-panel.md` (Fase 5b). Prevalece sobre las "Acciones de borrador" y el "Sin Publicar ni Enviar a revisión" de F5a.
 > Crear y editar borradores contra la BD (`/organizador/eventos/nuevo` y `/organizador/eventos/[id]/editar`: recinto y organizador en `Select`, tipos de entrada por sección, portada por URL `https`) y acciones Editar/Eliminar de los borradores en Mis eventos: `docs/specs/admin-panel.md` (Fase 5a). Prevalece sobre `organizer-event-seating-mode` y `organizer-event-seating` (modo de ubicación, ciudad y dirección, portada subida, zonas con filas × asientos), que quedan sustituidas.
+> Vista «Eventos» unificada en `/organizador` (KPIs + listado con filtros de estado, nombre y rango de fechas, «Crear evento» dentro del listado y acciones compactas), `/organizador/eventos` como redirección, sidebar con un solo ítem «Eventos» activo también en sus subrutas, `DatePicker` compartido en filtros y formulario, y solo lectura sin rebote en Crear/Editar: `docs/specs/organizer-events-view.md`. Prevalece sobre todo lo anterior en esos puntos: donde las specs previas dicen «Resumen» o «Mis eventos» como página, hoy es «Eventos».
 
-Back-office de Mentec Tickets, compartido por organizadores y administradores. El organizador ve cómo van las ventas de sus eventos (KPIs y lista) y crea eventos; el admin gestiona además usuarios. El acceso exige sesión y rol (`panel:access`); Resumen y Mis eventos leen los eventos y sus ventas de la BD (`listManagedEvents`, F3 de `admin-panel`): el organizador ve los suyos y el admin, todos. Crear y editar guardan borradores en la BD (F5a): aparecen en Resumen y en Mis eventos, donde se editan o eliminan. Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`, "Panel · Escritorio/Móvil") se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es el logo de Mentec Tickets con "Panel" debajo (`PanelBrand`, en el sidebar y en la barra móvil).
+Back-office de Mentec Tickets, compartido por organizadores y administradores. El organizador ve cómo van las ventas de sus eventos (KPIs y lista) y crea eventos; el admin gestiona además usuarios. El acceso exige sesión y rol (`panel:access`); Eventos (`/organizador`) lee los eventos y sus ventas de la BD (`listManagedEvents`, F3 de `admin-panel`): el organizador ve los suyos y el admin, todos. Crear y editar guardan borradores en la BD (F5a): aparecen en el listado de Eventos, donde se editan, eliminan y moderan. Del diseño de referencia (`OrgDashboard*.dc.html`, `OrgCreate*.dc.html`, "Panel · Escritorio/Móvil") se toman estructura, flujo y textos; la identidad visual es la de Mentec (tokens, Creato Display), nunca el índigo/Poppins ni la marca "Ticketera" del diseño. La marca visible es el logo de Mentec Tickets con "Panel" debajo (`PanelBrand`, en el sidebar y en la barra móvil).
 
 ## Layout común del panel (`app/(panel)`)
 
@@ -16,10 +17,11 @@ Back-office de Mentec Tickets, compartido por organizadores y administradores. E
 
 ### Rutas y acceso
 
-- `app/(panel)/layout.tsx` (Server Component, `LayoutProps<"/">`, metadata `robots: { index: false }`): `getPanelContext("panel:access", { returnTo: "/organizador" })` (`@/modules/panel/server`) exige el permiso y, si el rol es `organizer`, lee su estado (`approved | pending | suspended | null`). Con eso construye `sections = buildPanelNav(role, organizerStatus)` (serializables: clave, etiqueta, clave de icono, estado y `href`) y `roleLabel = getPanelRoleLabel(role)`, y los pasa a `PanelSidebar`, `PanelMobileBar` y `PanelBreadcrumb`.
+- `app/(panel)/layout.tsx` (Server Component, `LayoutProps<"/">`, metadata `robots: { index: false }`): `getPanelContext("panel:access", { returnTo: "/organizador" })` (`@/modules/panel/server`) exige el permiso y, si el rol es `organizer`, lee su estado (`approved | pending | suspended | null`). Con eso construye `sections = buildPanelNav(role)` (el estado no cambia el menú) (serializables: clave, etiqueta, clave de icono, estado y `href`) y `roleLabel = getPanelRoleLabel(role)`, y los pasa a `PanelSidebar`, `PanelMobileBar` y `PanelBreadcrumb`.
 - `app/(panel)/admin/layout.tsx`: `requirePermission("users:manage", { returnTo: "/admin/usuarios" })`.
 - Redirecciones: un `customer` en `/organizador` o `/admin/**` va a `/`; un `organizer` en `/admin/**` va a `/organizador`. `proxy.ts` exige sesión en `/organizador(.*)` y `/admin(.*)`.
-- Las páginas del organizador (`/organizador`, `/organizador/eventos`, `/organizador/eventos/nuevo`, `/organizador/eventos/[id]/editar`) vuelven a llamar a `getPanelContext("events:manageOwn", …)`: layout y página se renderizan en paralelo y cada uno valida por su cuenta. Resumen y Mis eventos usan además su `user` para leer los eventos en el servidor.
+- Las páginas del organizador (`/organizador`, `/organizador/eventos/nuevo`, `/organizador/eventos/[id]/editar`) vuelven a llamar a `getPanelContext("events:manageOwn", …)`: layout y página se renderizan en paralelo y cada uno valida por su cuenta. Eventos usa además su `user` para leer los eventos en el servidor.
+- `/organizador/eventos` no es una página: redirige a `/organizador` (o a `/organizador?guardado=<valor>` si `guardado` es válido según `savedStatusSchema`; cualquier otro valor se descarta).
 
 ### Escritorio (`lg+`)
 
@@ -27,15 +29,13 @@ Back-office de Mentec Tickets, compartido por organizadores y administradores. E
 ┌── 264px · bg-background · border-r ───┬──────────── 1fr · bg-muted ─────────────────────┐
 │ [logo Mentec] → /              [⇤]    │  <main> px-10 py-10                              │
 │ Panel                                 │  ┌──────── mx-auto max-w-6xl ───────────────┐    │
-│                                       │  │ Organizador / Resumen      (breadcrumb)  │    │
+│                                       │  │ Organizador / Eventos      (breadcrumb)  │    │
 │ ADMINISTRACIÓN      (admin, super)    │  │ [Aviso de solo lectura]  (org. no aprob.)│    │
 │ ◔ Dashboard          [Próximamente]   │  │ contenido de la página                   │    │
 │ ◎ Usuarios                            │  │                                          │    │
 │ ▥ Organizadores      [Próximamente]   │  │                                          │    │
 │ ORGANIZADOR                           │  │                                          │    │
-│ ▣ Resumen          (activo: bg-accent)│  │                                          │    │
-│ ▦ Mis eventos                         │  │                                          │    │
-│ + Crear evento     (o [Solo lectura]) │  │                                          │    │
+│ ▦ Eventos          (activo: bg-accent)│  │                                          │    │
 │ ⌗ Check-in           [Próximamente]   │  │                                          │    │
 │ ▭ Pagos              [Próximamente]   │  │                                          │    │
 │ ───────────────────────────────────── │  │                                          │    │
@@ -97,7 +97,7 @@ Sheet desde la izquierda (al pulsar ≡):
 │ ◔ Dashboard  [Próximamente]  │
 │ …                            │
 │ ORGANIZADOR                  │
-│ ▣ Resumen                    │
+│ ▦ Eventos                    │
 │ …                            │
 │ ──────────────────────────── │
 │ (AQ) Ana Quispe              │
@@ -121,31 +121,33 @@ Sheet desde la izquierda (al pulsar ≡):
 
 ### Navegación por rol (`buildPanelNav` + `PanelNav`)
 
-`buildPanelNav(role, organizerStatus)` (función pura, `modules/panel/utils/panelNav.ts`) devuelve las secciones visibles:
+`buildPanelNav(role)` (función pura, `modules/panel/utils/panelNav.ts`) devuelve las secciones visibles:
 
 | Sección | Visible para | Ítems (icono lucide) |
 |---|---|---|
 | **Administración** | `admin`, `super_admin` (`users:manage`) | Dashboard (`Gauge`, Próximamente) · Usuarios (`Users`, `/admin/usuarios`) · Organizadores (`Building2`, Próximamente) |
-| **Organizador** | `organizer`, `admin`, `super_admin` (`events:manageOwn`) | Resumen (`LayoutDashboard`, `/organizador`) · Mis eventos (`CalendarDays`, `/organizador/eventos`) · Crear evento (`Plus`, `/organizador/eventos/nuevo`; "Solo lectura" para un organizador no aprobado) · Check-in (`ScanLine`, Próximamente) · Pagos (`Wallet`, Próximamente) |
+| **Organizador** | `organizer`, `admin`, `super_admin` (`events:manageOwn`) | Eventos (`CalendarDays`, `/organizador`) · Check-in (`ScanLine`, Próximamente) · Pagos (`Wallet`, Próximamente) |
 
-- Un `customer` no ve ninguna sección (ni entra al panel). El estado de organizador solo afecta al rol `organizer`.
+- Un `customer` no ve ninguna sección (ni entra al panel). El estado de organizador no cambia el menú (solo lectura lo avisa el layout y lo explican las páginas). Sin "Resumen", "Mis eventos" ni "Crear evento": "Crear evento" vive en el listado de Eventos.
 - **`PanelNav`** (cliente): `<nav aria-label="Panel" className="flex flex-col gap-4">`; por sección, un título `<p>` (`px-3 pb-1 text-xs font-bold tracking-wider text-muted-foreground uppercase`) que nombra su `<ul aria-labelledby className="flex flex-col gap-1">`. Los iconos se resuelven en el cliente con un mapa clave → componente (las secciones llegan serializadas del servidor). Icono `size-5` `aria-hidden`.
 - Items `flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium`, transición 200 ms, foco `focus-visible:ring-3 focus-visible:ring-ring/50`.
-  - Activo (ruta exacta): `aria-current="page"` + `bg-accent font-semibold text-accent-foreground`.
+  - Activo (`isPanelNavItemActive(pathname, item)`, la misma función que usa el breadcrumb): `aria-current="page"` + `bg-accent font-semibold text-accent-foreground`. Coincidencia exacta sin barra final, salvo "Eventos", que también queda activo en `/organizador/eventos` y `/organizador/eventos/*` (Crear y Editar), pero no en rutas como `/organizador/eventosx` o `/organizador/pagos`.
   - Inactivo: `text-muted-foreground hover:bg-muted hover:text-foreground`.
-  - **Deshabilitado** ("Próximamente" o "Solo lectura"): `<span>` (sin `aria-disabled`, que no aplica a un span genérico), no es enlace ni recibe foco, `cursor-not-allowed text-muted-foreground`, icono `opacity-50` y, a la derecha, `Badge` "Próximamente" (`variant="secondary"`) o "Solo lectura" (`variant="outline"`). El texto del badge y un `sr-only` "(no disponible)" anuncian el estado (nunca solo color).
+  - **Deshabilitado** ("Próximamente"): `<span>` (sin `aria-disabled`, que no aplica a un span genérico), no es enlace ni recibe foco, `cursor-not-allowed text-muted-foreground`, icono `opacity-50` y, a la derecha, `Badge` "Próximamente" (`variant="secondary"`). El texto del badge y un `sr-only` "(no disponible)" anuncian el estado (nunca solo color).
 - Prop opcional `onNavigate`, que se llama al pulsar cualquier enlace (la usa la barra móvil para cerrar el `Sheet`).
 
 ### Breadcrumb (`PanelBreadcrumb`, cliente)
 
-- Sobre el contenido, dentro del `max-w-6xl` (`mb-4`): `Breadcrumb` de shadcn con `aria-label="Ruta de navegación"` y "Sección / Título" (p. ej. "Organizador / Resumen", "Administración / Usuarios"). La sección es texto (no tiene página); el título es `BreadcrumbPage` `font-medium`.
-- Se deriva del pathname con la misma configuración del menú (`findNavItem`: ruta exacta, sin barra final, solo ítems enlace). Fuera del menú no se muestra.
+- Sobre el contenido, dentro del `max-w-6xl` (`mb-4`): `Breadcrumb` de shadcn con `aria-label="Ruta de navegación"` y "Sección / Título" (p. ej. "Organizador / Eventos", "Administración / Usuarios"). La sección es texto (no tiene página); el título es `BreadcrumbPage` `font-medium`.
+- Se deriva del pathname con la misma configuración del menú (`findNavItem`, sobre `isPanelNavItemActive`: solo ítems enlace, sin barra final y las subrutas de "Eventos"). En Crear y Editar es "Organizador / Eventos". Fuera del menú no se muestra.
 
 ### Solo lectura (organizador `pending`, `suspended` o sin fila)
 
 - **`PanelReadOnlyNotice`** (server): `Alert` (`mb-6 px-4 py-3`, icono `Info`) entre el breadcrumb y el contenido, con título "Tu cuenta de organizador está pendiente de aprobación" / "… está suspendida" / "Tu cuenta de organizador aún no está dada de alta" (estado `null`) (`font-semibold`) y "Puedes ver tu panel, pero no crear ni editar eventos.".
-- En el menú, "Crear evento" aparece deshabilitado con el badge "Solo lectura"; en Resumen y Mis eventos el botón "Crear evento" no se muestra ni hay acciones Editar/Eliminar; `/organizador/eventos/nuevo` y `/organizador/eventos/[id]/editar` redirigen a `/organizador`.
-- Un organizador sin fila de `organizers` (estado `null`) también queda en solo lectura en el menú y en las páginas, con su propio aviso ("Tu cuenta de organizador aún no está dada de alta").
+- El menú no cambia. En Eventos, "Crear evento" no se muestra (`canCreate = false`) ni hay acciones por fila (`canMutate = false`).
+- **Sin rebote:** `/organizador/eventos/nuevo` y `/organizador/eventos/[id]/editar` no redirigen. Muestran `EventFormHeader` ("Crear evento" / "Editar evento") y `EmptyState` (`Lock`): "No puedes crear eventos mientras tu cuenta esté en solo lectura" / "No puedes editar eventos mientras tu cuenta esté en solo lectura", con "Cuando tu cuenta de organizador esté aprobada podrás crear y editar eventos. En Eventos ves los que ya tienes." y la acción "Volver a Eventos" → `/organizador`. No se añade un segundo `PanelReadOnlyNotice` (el del layout es el único aviso). En Editar la comprobación va antes de consultar el evento.
+- Admin y super_admin nunca están en solo lectura (`isReadOnlyOrganizer` solo aplica al rol `organizer`): abren Crear evento con el selector de organizador.
+- Un organizador sin fila de `organizers` (estado `null`) también queda en solo lectura en las páginas, con su propio aviso ("Tu cuenta de organizador aún no está dada de alta").
 
 ### Tarjeta de usuario (`PanelUserCard`, cliente)
 
@@ -165,7 +167,7 @@ Con sesión                                Sin sesión
 ### Landmarks y accesibilidad
 
 - El sidebar (`lg`) y la barra móvil (`< lg`) son `<header>`; solo uno es visible en cada breakpoint y el otro tiene `display: none`, así que hay un único `banner` y una única `nav` "Panel" (con el `Sheet` cerrado).
-- Un único `<main>` (el del layout) y un único `<h1>` por página. El `<header>` interno de Resumen (h1 + "Crear evento") queda dentro de `<main>`, así que no es un `banner`.
+- Un único `<main>` (el del layout) y un único `<h1>` por página. El `<header>` interno de Eventos (h1 + subtítulo) queda dentro de `<main>`, así que no es un `banner`.
 - Todo lo interactivo mide 44 px o más (`h-11`, `min-h-11`, `size-11`) y muestra foco visible. La transición de ancho del sidebar se desactiva con `prefers-reduced-motion`.
 
 ## Usuarios y roles `/admin/usuarios` (F4)
@@ -174,7 +176,7 @@ Con sesión                                Sin sesión
 h1 "Usuarios y roles"                                   [+ Invitar usuario]
 8 usuarios registrados
 [✓ Ana Quispe fue aprobado.                                          ✕]   aviso descartable (solo tras una acción)
-lg: una sola tarjeta (misma sección que Mis eventos)
+lg: una sola tarjeta (misma sección que el listado de Eventos)
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │ h2 "Listado"                                                                        │  barra de cabecera px-6 py-4
 │ Buscar                                         Rol              Estado de organizador│
@@ -195,11 +197,11 @@ lg: una sola tarjeta (misma sección que Mis eventos)
 - **Datos:** la página llama a `getPanelContext("users:manage", { returnTo: "/admin/usuarios" })` (valida el permiso por su cuenta, además del layout de `/admin`) y a `listUsers(DEFAULT_USERS_FILTERS)`, y pasa `actor` (`id`, `role`) e `initialData` a `UsersManager` (cliente, `modules/users`). Filtros, búsqueda y paginación se resuelven **en el servidor** con `useUsers` (server action `listUsersAction`); los datos iniciales solo valen para los filtros por defecto. Al cambiar de filtros o de página se mantiene la anterior (`aria-busy` en la sección) hasta que llega la nueva. Cada mutación recarga el listado.
 - **Encabezado** (`UsersManager`): h1 `text-3xl md:text-4xl font-extrabold tracking-tight`; debajo "N usuarios registrados" (`text-muted-foreground tabular-nums`; total sin filtros, de la misma query que la primera página por defecto). "Invitar usuario" (`UserPlus`) es un botón primario `h-11 font-semibold hover:bg-primary-strong`, a todo el ancho en móvil y a la derecha desde `md`.
 - **Aviso de resultado:** región `aria-live="polite"` siempre presente bajo el encabezado; tras cada acción muestra un `Alert` (`CircleCheck`; `destructive` con `CircleAlert` si falló Aprobar/Suspender) con un botón `size-11` "Cerrar aviso" (`X`). Textos: "Invitación enviada a <correo>." (`invited`), "Invitación reenviada a <correo>." (`reinvited`), "<correo> ya tenía cuenta: ahora es organizador/administrador." (`roleUpdated`), "<nombre> fue aprobado." / "fue suspendido." / "fue eliminado.", "Cambios guardados para <nombre>.". Se borra al empezar otra acción.
-- **Sección** (`UsersTable`): mismas clases que "Mis eventos" (tarjeta solo en `lg`, barra de cabecera `lg:border-b lg:px-6 lg:py-4`, h2 "Listado" `text-lg font-bold`).
+- **Sección** (`UsersTable`): mismas clases que el listado de Eventos (tarjeta solo en `lg`, barra de cabecera `lg:border-b lg:px-6 lg:py-4`, h2 "Listado" `text-lg font-bold`).
   - **Buscar:** `<form role="search">` con `Label`, `Input type="search"` (`h-11`, lupa `aria-hidden`, placeholder "Nombre o correo", `maxLength` 100) y `Button` outline "Buscar". Busca al enviar, no por tecla.
   - **Rol:** `NativeSelect` (`h-11`, `md:w-48`) "Todos los roles", Super admin, Administrador, Organizador, Cliente. **Estado de organizador:** "Todos", Aprobado, Pendiente, Suspendido. Filtran al cambiar y vuelven a la página 1.
   - **"Limpiar"** (`Button` ghost `h-11`) solo con búsqueda o filtro activos; quita ambos y vacía el campo (conserva las filas por página).
-- **Lista** (`UsersTableRows`): tabla en `lg` y tarjetas por debajo (`display:none` en la otra), nombradas por el h2. Cabecera "Usuario", "Rol", "Organizador", "Registro", "Acciones" con las clases de Mis eventos.
+- **Lista** (`UsersTableRows`): tabla en `lg` y tarjetas por debajo (`display:none` en la otra), nombradas por el h2. Cabecera "Usuario", "Rol", "Organizador", "Registro", "Acciones" con las clases del listado de Eventos.
   - **Usuario** (`<th scope="row">`, `w-full max-w-0`): `UserAvatar size="lg"` + nombre completo `font-semibold truncate` (un invitado sin nombre muestra su correo y no repite la línea del correo) + `Badge` "Tú" (`bg-accent text-accent-foreground`) en la fila del actor + correo `text-sm text-muted-foreground`.
   - **Rol** (`Badge h-6 px-2.5 font-semibold`, etiqueta de `getPanelRoleLabel`): Super admin `bg-brand-navy text-primary-foreground`; Administrador `bg-highlight text-highlight-foreground`; Organizador `bg-secondary text-secondary-foreground`; Cliente `border-border bg-background text-muted-foreground`.
   - **Organizador:** badge de estado solo si el rol es `organizer` (un ex organizador conserva su fila `suspended`, pero no la muestra): Aprobado `bg-accent text-accent-foreground`; Pendiente `bg-warning text-warning-foreground`; Suspendido `bg-destructive text-foreground` (mismos tokens que Publicado / En revisión / Cancelado).
@@ -209,66 +211,81 @@ lg: una sola tarjeta (misma sección que Mis eventos)
     - **Editar** (`Pencil`) y **Eliminar** (`Trash2`, `text-destructive`): botones ghost solo icono `size-11` con `aria-label` "Editar a <nombre>" / "Eliminar a <nombre>".
   - **Tarjetas** (< `lg`): `<li>` `space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border` con la identidad (h3), los badges y "Registro: <fecha>", y las acciones.
 - **Vacío:** `Empty` (`rounded-2xl border-2 border-dashed`, `bg-card`; en `lg` `bg-muted` con 24 px de margen; icono `Users` en `bg-accent`) con h3 "Sin resultados", "Ningún usuario coincide con los filtros." y "Limpiar filtros" (outline `h-11`). Sin filtros: "Aún no hay usuarios registrados.".
-- **Error de carga:** `<p role="alert">` "No pudimos cargar los usuarios. Inténtalo de nuevo." (clases del error de Mis eventos); no se muestra el vacío ni la paginación.
+- **Error de carga:** `<p role="alert">` "No pudimos cargar los usuarios. Inténtalo de nuevo." (clases del error del listado de Eventos); no se muestra el vacío ni la paginación.
 - **Pie** (`UsersPagination`, `lg:border-t lg:px-6 lg:py-4`): "Mostrando a–b de N" (`aria-live="polite"`, `tabular-nums`), `Label` "Filas" + `NativeSelect` 8 / 16 / 24 (`USERS_PAGE_SIZES`, vuelve a la página 1) y `<nav aria-label="Paginación de usuarios">` con anterior (`ChevronLeft`, "Página anterior"), hasta 5 números consecutivos centrados en la actual (`getPageWindow`; `aria-label` "Página n", la actual con `aria-current="page"` y `bg-accent font-semibold text-accent-foreground`) y siguiente ("Página siguiente"); todos ghost `size-11`, anterior y siguiente deshabilitados (`focusableWhenDisabled`) en los extremos. Si se elimina el último usuario de la última página, se pasa a la anterior.
 - **Diálogos** (`Dialog` / `AlertDialog` de shadcn, `p-5`, título `text-xl font-bold`, sin botón ✕: cierran con Cancelar o Escape; pie a sangre con Cancelar outline y la acción, ambos `h-11 font-semibold`). El formulario vive dentro del popup, así que cada apertura empieza de cero. Errores del servidor: general en `Alert destructive` arriba; de campo bajo su campo (`FieldError`, `aria-invalid`, `aria-describedby`); el foco va al primer campo inválido.
   - **Invitar usuario** (`InviteUserDialog`, `sm:max-w-md`, `useZodForm` + `inviteUserSchema`): "Si el correo ya tiene cuenta, se cambia su rol. Si no, recibe una invitación."; Correo (`type="email"`) y Rol (`NativeSelect`: Organizador; Administrador solo si `getAssignRoleBlockReason` lo permite, es decir, para un super admin). "Cancelar" / "Enviar invitación" ("Enviando…" con `Spinner`).
   - **Editar usuario** (`EditUserDialog`, `sm:max-w-lg`, con scroll interno si no cabe): Nombre y Apellido (2 columnas desde `sm`), Correo deshabilitado con "El correo viene de la cuenta y no se edita.", Rol (Cliente, Organizador y, para un super admin, Administrador). Con rol Organizador aparece un `FieldSet` `rounded-xl bg-muted p-4` "Datos del organizador": Razón social, Tipo de documento fiscal ("Elige el tipo", RUC, DNI), RUC/DNI y Estado de organizador (Aprobado, Pendiente, Suspendido; quien pasa a organizador empieza en Pendiente) con la ayuda "Para aprobar hacen falta la razón social, el tipo y el número fiscal.". Valida con `updateUserSchema` en el cliente y muestra los errores por ruta (`organizer.taxId`…), igual que los `fieldErrors` de la acción. "Cancelar" / "Guardar cambios".
   - **Eliminar** (`DeleteUserDialog` sobre `ConfirmDialog` compartido, destructivo): "¿Eliminar a <nombre>?" / "Perderá el acceso a Mentec Tickets. Esta acción no se puede deshacer." / Cancelar / "Eliminar" (`bg-destructive text-foreground`, navy sobre rojo como "Cancelado"). Mientras elimina, Cancelar y Eliminar quedan deshabilitados ("Eliminando…"). Si falla, el error se muestra en el diálogo, que sigue abierto para reintentar.
 
-## Resumen `/organizador`
+## Eventos `/organizador` (vista unificada, spec `organizer-events-view`)
+
+> Desde `organizer-events-view` (Fase 2), «Resumen» y «Mis eventos» son una sola página, «Eventos» (`/organizador`): KPIs + listado completo con filtros, «Crear evento» y acciones. `/organizador/eventos` ya no es una página: redirige a `/organizador`, conservando solo un `?guardado=` válido (`savedStatusSchema`). Prevalece sobre las secciones «Resumen» y «Mis eventos» de `organizer-dashboard`, `admin-panel` (F3, F5a y F5b) y `design-alignment-account-views` en navegación, encabezado, filtros y acciones; las reglas de datos, badges, KPIs y diálogos se mantienen.
 
 ### Layout
 
 ```
-h1 "Resumen"                                         [+ Crear evento]
-Así van las ventas de tus eventos.
-[Alert de guardado]                                   (Fase 2, solo con ?guardado=)
+h1 "Eventos"
+Ventas y gestión de todos tus eventos
+[Alert de aviso]                     (región aria-live; ?guardado= o tras una acción)
 ┌──────────────┬──────────────┬──────────────┐
 │ ▥ Ingresos   │ ▤ Entradas   │ ▦ Eventos     │  <dl>; lg: 3 columnas
-│ S/ 13,500.50 │ vendidas 150 │ publicados 1  │  móvil: Ingresos fila completa,
-└──────────────┴──────────────┴──────────────┘  los otros dos en la siguiente
+│ S/ 13,500.50 │ vendidas 150 │ publicados 1  │  móvil: Ingresos fila completa
+└──────────────┴──────────────┴──────────────┘
 lg: una sola tarjeta (bg-card rounded-2xl ring-1 ring-border overflow-hidden), sin relleno propio
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│ h2 "Mis eventos" (18 px)                    [Todos|Publicados|Borradores]       │  barra de cabecera px-6 py-4
-├─────────────────────────────────────────────────────────────────────────────────┤  border-b
-│ EVENTO                       ESTADO     VENDIDAS              INGRESOS          │  cabecera: mayúsculas text-xs, sin fondo
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ [img] Título                 Publicado  7,420 / 8,000 vendidas  S/ 1,335,600.00 │  filas px-6 py-3.5, a sangre
-│       SÁB 14 NOV · 21:00 · Lima          ▓▓▓▓▓▓▓▓▓░                              │
-├─────────────────────────────────────────────────────────────────────────────────┤  border-b entre filas
-│ [img] Título                 Borrador   0 / 500 vendidas                     —  │  la última sin borde
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-< lg: sin contenedor, todo directamente sobre el bg-muted del panel
-h2 "Mis eventos"
-[ Todos | Publicados | Borradores ]          pista bg-secondary, segmento elegido bg-background
-┌──────────────────────────────────────┐
-│ [img] Título (2 líneas)   [Publicado]│     <li> bg-card rounded-2xl ring-1 ring-border p-4
-│       SÁB 14 NOV · 21:00 · Lima      │
-│ 7,420 / 8,000 vendidas  S/ 1,335,600 │
-│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░          │
-└──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ h2 "Mis eventos"  5 eventos                                      [+ Crear evento]    │  barra de cabecera px-6 py-4
+│ Estado               Buscar                                 Desde          Hasta     │
+│ [Todos los estados▾] [⌕ Título, recinto o ciudad ] [Buscar] [▣ Cualquier…][▣ Cualq…] │  1440: una fila
+│ [✕ Limpiar filtros]                                    (solo con algún filtro activo) │  1024: dos filas (wrap)
+├──────────────────────────────────────────────────────────────────────────────────────┤  border-b
+│ EVENTO                       ESTADO      VENDIDAS            INGRESOS     ACCIONES   │
+│ [img] Título (truncate)      Borrador    0 / 1,240 vendidas         —     [✎] [•••]  │
+│       SÁB 14 NOV · 21:00 · Lima          ▓▓▓▓▓░░░░                                   │
+│ …                            En revisión 0 / 500 vendidas           —         [•••]  │  admin: Aprobar/Rechazar
+│ …                            Publicado   30 / 500 vendidas   S/ 2,700.00  [✎] [•••]  │
+│ …                            Cancelado   …                                           │  sin acciones
+└──────────────────────────────────────────────────────────────────────────────────────┘
+< lg: sin contenedor; cabecera y controles apilados a todo el ancho (Desde | Hasta en 2 columnas) y una tarjeta por
+evento con las acciones como botones con texto
 ```
 
-- **"Mis eventos" sin tarjeta dentro de tarjeta** (Decisión 10 de `design-alignment-account-views`):
-  - **Sección:** `<section aria-labelledby className="flex flex-col gap-3 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:bg-card lg:ring-1 lg:ring-border">`. En `lg` es una sola tarjeta blanca sin relleno: la barra de cabecera y la tabla llevan su propio `px-6`. Por debajo de `lg` no tiene contenedor: el h2, el filtro y las tarjetas van directamente sobre el `bg-muted` del panel, como en el diseño móvil.
-  - **Barra de cabecera:** `<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between lg:border-b lg:px-6 lg:py-4">` con el h2 "Mis eventos" (`text-lg font-bold`, 18 px; antes `text-2xl md:text-3xl`) y el filtro a la derecha desde `md`. En `lg`, su `border-b` la separa de la tabla.
-  - **Pista del filtro:** `bg-secondary` por debajo de `lg` (sobre `bg-muted` no se vería) y `bg-muted` en `lg` (dentro de la tarjeta blanca). El segmento elegido es `bg-background`.
-
-- **Datos** (F3 de `admin-panel`): la página lee en el servidor todos los eventos que gestiona el usuario (`listManagedEvents(user)`: los suyos o, para admin y super_admin, todos) y se los pasa a `OrganizerDashboard` como `initialEvents`. El cliente los gestiona con TanStack Query (`useManagedEvents({ status: "all", q: "" }, initialEvents)`, query key `["managed-events", filtros]`, compartida con Mis eventos): no se vuelven a pedir al hidratar (`staleTime` 30 s en `app/providers.tsx`). Ya no se lee el store de zustand ni hay datos mock.
-- Encabezado: h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1), párrafo `text-muted-foreground`. "Crear evento" (`CreateEventLink`, compartido con Mis eventos) es un enlace con aspecto de botón primario (`Plus`, `h-11`, `font-semibold`, `hover:bg-primary-strong`): a todo el ancho en móvil y a la derecha en `md+`. No se muestra a un organizador no aprobado (solo lectura).
-- **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: el filtro no los cambia. **Ingresos** = ventas brutas MVP (Decisión 10): suma de las órdenes `paid` (sin `refunded`, `partially_refunded`, `pending` ni `expired`); para un organizador, su parte (`organizer_amount_cents`); para el admin, el subtotal (`subtotal_cents`). **Entradas vendidas** = `ticket_count` de esas órdenes. **Eventos publicados** = eventos en estado `published`.
-- **Filtro** (en el cliente, sobre la lista ya cargada): `ToggleGroup` de selección única, `aria-label="Filtrar eventos por estado"`, control segmentado `rounded-lg bg-secondary p-1 lg:bg-muted`; items `h-11 px-4 text-muted-foreground`, seleccionado (`aria-pressed`) `bg-background font-semibold text-foreground shadow-sm`. Móvil: `grid grid-cols-3 w-full`; desde `md`, `flex w-fit`. Deseleccionar vuelve a "Todos".
-- **Lista** (Decisión 13): tabla en `lg` (`hidden lg:block`) y tarjetas por debajo (`lg:hidden`); `display:none` evita duplicados en el árbol de accesibilidad. Ambas nombradas por el h2 (`aria-labelledby`).
-  - **Tabla a sangre** (`lg`): el contenedor es solo `hidden lg:block`, sin anillo, radio ni `overflow-hidden` propios (los pone la sección). `TableHeader` sin fondo; su fila, `hover:bg-transparent`.
-  - **Cabecera:** "Evento", "Estado", "Vendidas" e "Ingresos" (esta alineada a la derecha) con `h-11 px-6 text-xs font-semibold tracking-wider text-muted-foreground uppercase`. El `px-6` alinea las columnas con el h2 de la barra de cabecera.
-  - **Celdas:** `px-6 py-3.5`. Las filas conservan el `border-b` de shadcn; la última no lo tiene (`TableBody` de shadcn quita el borde a `tr:last-child`), así que la tarjeta termina sin línea doble.
-  - Celda Evento: `<th scope="row">` de peso normal (`h-auto w-full max-w-0`: ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla), miniatura `next/image` `unoptimized` (la portada es una URL `https` de cualquier dominio, fuera de `images.remotePatterns`) `size-12 rounded-lg object-cover` (`alt=""`), título `font-semibold truncate`, "fecha · ciudad" `text-sm text-muted-foreground` (para admin y super_admin, "fecha · ciudad · organizador": razón social o, sin ella, el nombre del usuario).
-  - Celda Vendidas: bloque `w-48 space-y-2` con el conteo y la barra. Celda Ingresos: `text-right font-semibold tabular-nums`.
-  - **Tarjetas** (< `lg`): `<ul className="space-y-3 lg:hidden">`; cada `<li>` `space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border` (blanca con anillo sobre el `bg-muted` del panel). Contenido: miniatura + h3 (`line-clamp-2 leading-snug font-bold`) + "fecha · ciudad" + badge; debajo, vendidas e ingresos; al final, la barra.
-  - **Sin columna de acción** en Resumen: Editar y Eliminar están en Mis eventos.
-- **Vacío:** `<p>` "Aún no tienes eventos." (filtro "Todos") o "No tienes eventos con este estado." con `rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0`. En `lg` es un bloque gris dentro de la tarjeta (con 24 px de margen); por debajo, un bloque blanco con anillo sobre el fondo gris del panel.
+- Metadata: `Eventos | Mentec Tickets`. Breadcrumb "Organizador / Eventos"; en el menú, "Eventos" activo (también en `/organizador/eventos/*`).
+- **Datos:** la página llama a `getPanelContext("events:manageOwn", { returnTo: "/organizador" })`, parsea `?guardado` con `savedStatusSchema` y lee en el servidor todos los eventos que gestiona el usuario (`listManagedEvents(user)`: los suyos o, para admin y super_admin, todos). Se los pasa a `OrganizerDashboard` (cliente) como `initialEvents`, con `role`, `showOrganizer` (`events:manageAny`), `canMutate = canCreate = !readOnly` y `saved`.
+- **`OrganizerDashboard`:** los KPIs y debajo `<OrganizerEventsList>`. Los KPIs usan siempre `useManagedEvents(userId, DEFAULT_MANAGED_EVENTS_FILTERS, initialEvents)` (la misma caché que el listado sin filtros); el listado tiene sus propios filtros. Las mutaciones invalidan `managedEventsBaseKey`, así que ambos se refrescan.
+- **Encabezado:** h1 `text-3xl md:text-4xl font-extrabold tracking-tight` (único h1) y el subtítulo `text-base leading-relaxed text-muted-foreground`. Sin "Crear evento" en el encabezado: está en la cabecera del listado.
+- **KPIs** (Decisión 14): `<dl>` `grid-cols-2 lg:grid-cols-3 gap-4`; cada tarjeta `rounded-2xl ring-1 ring-border bg-card p-5 md:p-6` con `<dt>` (icono + etiqueta, `text-sm text-muted-foreground`) y `<dd>` (`text-2xl md:text-3xl font-bold tabular-nums`). Orden único en el DOM: Ingresos (`ChartColumn`, `col-span-2 lg:col-span-1`), Entradas vendidas (`Ticket`), Eventos publicados (`CalendarDays`). La etiqueta es siempre "Eventos publicados". Los KPIs resumen todos los eventos: los filtros del listado no los cambian (Decisión 5 de `organizer-events-view`). **Ingresos** = ventas brutas MVP (Decisión 10): suma de las órdenes `paid` (sin `refunded`, `partially_refunded`, `pending` ni `expired`); para un organizador, su parte (`organizer_amount_cents`); para el admin, el subtotal (`subtotal_cents`). **Entradas vendidas** = `ticket_count` de esas órdenes. **Eventos publicados** = eventos en estado `published`.
+- **Sección del listado** (`OrganizerEventsList`, sin tarjeta dentro de tarjeta): `<section aria-labelledby aria-busy className="flex flex-col gap-3 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:bg-card lg:ring-1 lg:ring-border">`. En `lg` es una sola tarjeta blanca sin relleno (la barra y la tabla llevan su propio `px-6`); por debajo, todo va sobre el `bg-muted` del panel.
+- **Barra de cabecera** (`flex flex-col gap-4 lg:border-b lg:px-6 lg:py-4`):
+  - Primera línea (`flex flex-col gap-3 md:flex-row md:items-center md:justify-between`): h2 "Mis eventos" (`text-lg font-bold`) con el número de resultados al lado ("1 evento" / "N eventos", `text-sm text-muted-foreground tabular-nums`, `aria-live="polite"`) y, a la derecha desde `md`, **"Crear evento"** (`CreateEventLink`: enlace con aspecto de botón primario, `Plus`, `h-11 font-semibold hover:bg-primary-strong`, `w-full md:w-auto`). Solo con `canCreate` (no en solo lectura).
+  - **Filtros** (`flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end`): por debajo de `md`, columna a todo el ancho; desde `md`, fila con wrap, así que lo que no cabe baja de línea y nunca hay scroll horizontal. A 768 px y a 1024 px (con sidebar, ~630 px útiles) van en dos filas (Estado + Buscar; Desde/Hasta + Limpiar); a 1440 px, en una (con "Limpiar filtros" visible, ese botón baja).
+    - **Estado:** `Label` + `NativeSelect` (`h-11`, `md:w-52`, `bg-background`) con "Todos los estados" y los 5 estados. Filtra al cambiar.
+    - **Buscar:** `<form role="search">` (`md:min-w-72 md:flex-1`) con `Label`, `Input type="search"` controlado (`searchDraft`; `h-11`, lupa `aria-hidden`, placeholder "Título, recinto o ciudad", `maxLength` 100) y `Button` outline "Buscar" (`h-11`). Busca al enviar (pasa el texto a `filters.q`), no por tecla: las server actions se despachan de una en una. Coincide con el título o con título, recinto y ciudad sin tildes (`search_text`).
+    - **Desde / Hasta:** `grid grid-cols-2 gap-3 md:w-96`, cada uno `Label` + `DatePicker` (MASTER §7, placeholder "Cualquier fecha", `bg-background`, `aria-labelledby` con la etiqueta: se anuncia "Desde Cualquier fecha" o "Desde lun 5 oct 2026"). `Desde.max = to` y `Hasta.min = from`; filtran al elegir el día. Rango en días calendario de Lima (`-05:00`): `from` incluye desde las 00:00 y `to` hasta el final del día; con algún límite, los eventos sin fecha no aparecen. El schema rechaza `from > to` ("La fecha Hasta no puede ser anterior a Desde").
+    - **"Limpiar filtros"** (`Button` ghost `h-11`, `X`): solo con algún filtro activo; vuelve a `DEFAULT_MANAGED_EVENTS_FILTERS` (`{ status: "all", q: "", from: "", to: "" }`) y vacía el campo de búsqueda.
+  - Filtros, búsqueda y fechas se resuelven **en el servidor** (`useManagedEvents` → `listManagedEventsAction`, zod + `requirePermission`). Los datos iniciales solo valen para los filtros por defecto; al cambiar se mantiene la lista anterior (`aria-busy`) hasta que llega la nueva.
+- **Lista** (`OrganizerEventsTable`): tabla en `lg` (`hidden lg:block`) y tarjetas por debajo (`lg:hidden`); `display:none` evita duplicados en el árbol de accesibilidad. Ambas nombradas por el h2.
+  - **Tabla a sangre:** `TableHeader` sin fondo (`hover:bg-transparent`); cabecera "Evento", "Estado", "Vendidas", "Ingresos" (derecha) y, con acciones, "Acciones" (derecha), `h-11 text-xs font-semibold tracking-wider text-muted-foreground uppercase`. Celdas `px-6 py-3.5`; la última fila sin borde.
+  - Celda Evento: `<th scope="row">` de peso normal (`h-auto w-full max-w-0`: ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla), miniatura `size-12 rounded-lg object-cover` (`alt=""`; sin portada, bloque `bg-muted` con `ImageIcon`), título `font-semibold truncate`, "fecha · ciudad" (admin y super_admin: "· organizador") `text-sm text-muted-foreground truncate`.
+  - Celda Vendidas: bloque `xl:w-48 space-y-2` con el conteo y la barra. Celda Ingresos: `text-right font-semibold tabular-nums`. Columna Acciones: `w-36 whitespace-nowrap`, contenido `flex items-center justify-end gap-2` en una sola línea.
+  - **Tabla compacta entre `lg` y `xl` (1024–1279 px):** con el sidebar abierto la tabla mide ~680 px y las columnas fijas dejaban el título sin sitio (la tabla desbordaba su contenedor). En ese rango las celdas interiores pasan a `px-3` (los bordes izquierdo y derecho conservan `px-6`), la miniatura se oculta, "Vendidas" pierde el sufijo "vendidas" (lo dice la cabecera) y su ancho fijo, y la columna de acciones va a `w-auto`. El título conserva ~175 px en el peor caso ("S/ 1,335,600.00", "En revisión"). Desde `xl`, la tabla completa.
+  - **Tarjetas** (< `lg`): `<ul className="space-y-3 lg:hidden">`; cada `<li>` `space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border`: miniatura + h3 (`line-clamp-2 leading-snug font-bold`) + "fecha · ciudad" + badge; vendidas e ingresos; la barra; y, si hay acciones, un pie `flex flex-wrap gap-2 border-t pt-3 *:flex-1`.
+- **Acciones por estado y rol** (prop `rowActions(event, layout)`; solo con `canMutate`: no en solo lectura). `EventRowActions` con las transiciones de `getAvailableTransitions(rol, estado)`. Cancelado y finalizado no tienen acciones, ni un evento en revisión para el organizador (`hasEventRowActions`: sin pie en la tarjeta ni `[•••]` en la fila).
+  - **Tabla (`layout="table"`), compactas:** **[Editar]** es un enlace icono (`Pencil`, outline `size-11`, `aria-label="Editar <título>"`) a `/organizador/eventos/<id>/editar`, solo en borrador y publicado. **[•••]** (`Ellipsis`, outline `size-11`, `aria-label="Más acciones de <título>"`) abre un `DropdownMenu` (`align="end"`, `min-w-48 max-w-72 p-1.5`; Base UI lo mantiene dentro del viewport) con las acciones permitidas, en este orden: Eliminar, Enviar a revisión, Aprobar, Rechazar, Cancelar evento. Cada ítem `min-h-11 gap-3 px-3 text-sm font-medium` con su icono (el de Eliminar y Cancelar en `text-destructive`; el texto, en el color normal). Sin acciones de menú no hay `[•••]`. "Cancelar evento" con ventas (`hasActiveSales`) va deshabilitado (no se ejecuta), sin la opacidad por defecto para que se lea, con "Tiene ventas o reservas en curso · Cancelación con reembolsos: Próximamente" (`text-xs`, `aria-describedby`).
+  - **Tarjeta (`layout="card"`):** botones con texto `h-11 px-3 font-semibold` a partes iguales: "Editar" (outline), "Eliminar" (outline, `Trash2` rojo), "Enviar a revisión" y "Aprobar" (primarios), "Rechazar" (outline) y "Cancelar evento" (outline, `Ban` rojo; con ventas, deshabilitado y enfocable con el mismo motivo debajo).
+  - Detalle y confirmación de cada acción (los textos de los botones de arriba valen para el ítem del menú):
+    - **"Editar"** (borrador y publicado; en revisión no): enlace outline con `Pencil` a `/organizador/eventos/<id>/editar`.
+    - **"Eliminar"** (borrador): outline con `Trash2` en `text-destructive` (el texto, en el color normal: rojo sobre blanco no llega a 4.5:1). Abre `DeleteEventDialog`: "¿Eliminar el borrador «<título>»?" / "Se borran el evento y sus tipos de entrada. Esta acción no se puede deshacer." / "Cancelar" / "Eliminar" (destructiva, "Eliminando…").
+    - **"Enviar a revisión"** (borrador; organizador dueño o admin): primario con `Send`. Confirmación: "¿Enviar «<título>» a revisión?" / "Un administrador lo revisará antes de publicarlo. Mientras está en revisión no se edita: si necesitas cambios, pide al administrador que lo rechace." / "Cancelar" / "Enviar a revisión" ("Enviando…"). Si faltan datos, el error del servidor dice cuáles ("Faltan datos para publicar el evento: el recinto y la portada.", "Algún tipo de entrada es de una sección sin lugares: quítalo para publicar el evento." y/o "La fecha de inicio ya pasó: elige una fecha futura.").
+    - **"Aprobar"** (en revisión; admin y super_admin): primario con `Check`. Confirmación: "¿Aprobar y publicar «<título>»?" / "Se genera su inventario de entradas y queda a la venta en el catálogo." / "Cancelar" / "Aprobar y publicar" ("Publicando…"). Si el organizador o el recinto ya no están aprobados, el servidor lo rechaza ("El organizador del evento ya no está aprobado: no se puede publicar hasta que lo esté." / "El recinto del evento ya no está aprobado: …").
+    - **"Rechazar"** (en revisión; admin y super_admin): outline con `X`. Abre `RejectEventDialog` (`Dialog`, `p-5`, `sm:max-w-md`, sin ✕): "¿Rechazar «<título>»?" / "Vuelve a borrador. El organizador verá el motivo al editarlo y podrá enviarlo a revisión otra vez."; `Textarea` "Motivo del rechazo" (obligatorio, `maxLength` 1000, ayuda "Qué debe corregir el organizador.", `aria-invalid` y `aria-describedby` hacia la ayuda y el error "Escribe el motivo del rechazo"); "Cancelar" / "Rechazar" ("Rechazando…").
+    - **"Cancelar evento"** (publicado; admin y super_admin): outline con `Ban` en `text-destructive`. Con ventas activas (`hasActiveSales`: órdenes `paid`, `partially_refunded` o reservas `pending` vigentes) queda deshabilitado y enfocable (`focusableWhenDisabled`) con "Tiene ventas o reservas en curso · Cancelación con reembolsos: Próximamente" debajo (`text-xs text-muted-foreground`, `aria-describedby`). Confirmación destructiva: "¿Cancelar «<título>»?" / "Deja de estar a la venta y no se puede volver a publicar. Solo se cancelan eventos sin ventas." / "Volver" (no "Cancelar", que se confundiría) / "Cancelar evento" ("Cancelando…"). Si entre la carga de la lista y la confirmación entró una venta o una reserva, el servidor lo rechaza con el mismo mensaje y el diálogo sigue abierto. Aprobar, cancelar y guardar un evento publicado invalidan sus páginas públicas (inicio, catálogo, detalle y compra).
+- **Diálogos de confirmación** (`components/shared/ConfirmDialog`, compartido): `AlertDialog` `p-5`, título `text-xl font-bold`, descripción `text-base`, pie a sangre (`-mx-5 -mb-5 p-5`) con el botón de cerrar outline y la acción (`h-11 px-4 font-semibold`; primaria `hover:bg-primary-strong` o destructiva `bg-destructive text-foreground`). Mientras se ejecuta, ambos se deshabilitan y la acción muestra `Spinner` y su texto de carga. Un error del servidor se muestra en el diálogo (`Alert destructive`), que sigue abierto para reintentar; cada apertura empieza sin el error anterior. Tras cualquier acción (o un error de listado desactualizado: el evento ya cambió de estado o le entraron ventas) se recarga el listado (`useModerateEvent`/`useDeleteEventDraft` invalidan `["managed-events", userId]`).
+- **Avisos** (región `aria-live="polite"` sobre la sección; `Alert` con `CircleCheck` y "Cerrar aviso" `size-11`; uno a la vez, se borra al empezar otra acción):
+  - `?guardado=borrador`: "Borrador guardado" / "Está en el listado con el estado «Borrador». Aún no es visible para el público."; `?guardado=cambios`: "Cambios guardados" / "El evento publicado ya muestra los cambios." (cualquier otro valor se ignora).
+  - "Borrador «<título>» eliminado"; "«<título>» enviado a revisión" / "Un administrador lo revisará antes de publicarlo."; "«<título>» aprobado y publicado" / "Ya está a la venta en el catálogo."; "«<título>» rechazado" / "Volvió a borrador con el motivo para el organizador."; "«<título>» cancelado" / "Ya no está a la venta.".
+- **Vacío:** `<p>` "Aún no tienes eventos." (sin filtros) o "No hay eventos con estos filtros." con `rounded-2xl bg-card p-8 text-center text-muted-foreground ring-1 ring-border lg:m-6 lg:bg-muted lg:ring-0`.
+- **Error de carga:** `<p role="alert">` "No pudimos cargar los eventos. Inténtalo de nuevo." (`text-sm text-destructive`, bloque `bg-card rounded-2xl ring-1 ring-border p-4 lg:m-6 lg:mb-0`) sobre la lista; con error no se muestra el vacío.
 
 ### Reglas específicas
 
@@ -277,50 +294,6 @@ h2 "Mis eventos"
 - **Ingresos** por evento: `formatRevenue` (céntimos → `S/ 1,335,600.00`) con los ingresos de la BD (mismo cálculo que el KPI). Borradores: "—" `aria-hidden` + `sr-only` "Sin ingresos".
 - **Marcadores**: sin fecha → "Fecha por definir"; sin ciudad → se omite " · ciudad"; sin imagen → bloque `size-12 rounded-lg bg-muted` con `ImageIcon` `aria-hidden`.
 - Formatos: importes `S/ 1,387,530.00`, conteos `Intl.NumberFormat("es-PE")` (`8,146`), fechas `SÁB 14 NOV · 21:00`.
-- **Sin aviso de guardado**: desde F5a el formulario vuelve a Mis eventos, que muestra "Borrador guardado".
-- Metadata: `Panel de organizador | Mentec Tickets`.
-
-## Mis eventos `/organizador/eventos` (F3, acciones de borrador en F5a)
-
-```
-h1 "Mis eventos"                                     [+ Crear evento]
-Todos tus eventos, en cualquier estado: busca y filtra para encontrarlos.
-lg: una sola tarjeta (misma sección que Resumen)
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│ h2 "Listado"                                                        5 eventos   │  barra de cabecera px-6 py-4
-│ Estado                     Buscar                                               │
-│ [Todos los estados   ▾]    [⌕ Título, recinto o ciudad           ] [Buscar]      │
-├─────────────────────────────────────────────────────────────────────────────────┤  border-b
-│ EVENTO            ESTADO       VENDIDAS        INGRESOS  ACCIONES                      │  misma tabla que Resumen
-│ …                 Borrador     0 / 1,240 vend.        —  [Editar] [Eliminar] [▶ Enviar a revisión] │
-│ …                 En revisión  0 / 500 vend.          —  [✓ Aprobar] [✕ Rechazar]  (admin; organizador: sin acciones) │
-│ …                 Publicado    30 / 500 vend.  S/ 2,700  [Editar] [⊘ Cancelar evento]       (admin) │
-│                                                          Tiene ventas · Cancelación con reembolsos: Próximamente │
-│ …                 Cancelado    …                         (sin acciones)                │
-└─────────────────────────────────────────────────────────────────────────────────┘
-< lg: sin contenedor; controles apilados a todo el ancho y tarjetas como en Resumen
-```
-
-- Metadata: `Mis eventos | Mentec Tickets`. Breadcrumb "Organizador / Mis eventos"; en el menú, "Mis eventos" es un enlace (activo en esta ruta).
-- **Datos:** la página llama a `getPanelContext("events:manageOwn", { returnTo: "/organizador/eventos" })` y a `listManagedEvents(user)` (sin filtros), y pasa el resultado a `OrganizerEventsList` (cliente) como `initialEvents`. Filtros y búsqueda se resuelven **en el servidor**: `useManagedEvents(filtros)` llama a la server action `listManagedEventsAction` (zod + `requirePermission("events:manageOwn")`). Los datos iniciales solo se usan con los filtros por defecto; al cambiar de filtros se mantiene la lista anterior (`aria-busy` en la sección) hasta que llega la nueva.
-- **Encabezado:** igual que Resumen (h1, párrafo y `CreateEventLink`, oculto en solo lectura).
-- **Barra de cabecera:** h2 "Listado" (`text-lg font-bold`) y, a la derecha, el número de resultados ("1 evento" / "N eventos", `text-sm text-muted-foreground tabular-nums`, `aria-live="polite"`). Debajo, en fila desde `md` (apilados por debajo):
-  - **Estado:** `Label` + `NativeSelect` (`h-11`, `md:w-52`, `bg-background`) con "Todos los estados" y los 5 estados (Borrador, En revisión, Publicado, Cancelado, Finalizado). Filtra al cambiar.
-  - **Buscar:** `<form role="search">` con `Label`, `Input type="search"` (`h-11`, lupa `Search` a la izquierda `aria-hidden`, placeholder "Título, recinto o ciudad", `maxLength` 100) y `Button variant="outline"` "Buscar" (`h-11`). Busca al enviar (Enter o botón), no por tecla: las server actions se despachan de una en una. Coincide con el título (sin distinguir mayúsculas) o con el título, recinto y ciudad sin tildes (`search_text`).
-- **Lista:** `OrganizerEventsTable` (misma tabla y tarjetas que Resumen, mismos badges y reglas), nombrada por el h2.
-- **Acciones por estado y rol** (F5b; prop `rowActions` de la tabla; solo si el usuario puede mutar: no en solo lectura). En `lg`, columna "Acciones" alineada a la derecha (`flex flex-wrap items-start justify-end gap-2`: con tres botones se apilan en vez de ensanchar la tabla); en las tarjetas, una fila al final (`border-t pt-3`, `flex flex-wrap`, botones a partes iguales). Cancelado y finalizado no tienen acciones, ni un evento en revisión para el organizador (ni el pie de la tarjeta: `hasEventRowActions`). `EventRowActions`, con las transiciones de `getAvailableTransitions(rol, estado)` (`utils/eventTransitions.ts`). Todos los botones `h-11 px-3 font-semibold` con icono `size-4` `aria-hidden` y `aria-label` "<Acción> <título>":
-  - **"Editar"** (borrador y publicado; en revisión no): enlace outline con `Pencil` a `/organizador/eventos/<id>/editar`.
-  - **"Eliminar"** (borrador): outline con `Trash2` en `text-destructive` (el texto, en el color normal: rojo sobre blanco no llega a 4.5:1). Abre `DeleteEventDialog`: "¿Eliminar el borrador «<título>»?" / "Se borran el evento y sus tipos de entrada. Esta acción no se puede deshacer." / "Cancelar" / "Eliminar" (destructiva, "Eliminando…").
-  - **"Enviar a revisión"** (borrador; organizador dueño o admin): primario con `Send`. Confirmación: "¿Enviar «<título>» a revisión?" / "Un administrador lo revisará antes de publicarlo. Mientras está en revisión no se edita: si necesitas cambios, pide al administrador que lo rechace." / "Cancelar" / "Enviar a revisión" ("Enviando…"). Si faltan datos, el error del servidor dice cuáles ("Faltan datos para publicar el evento: el recinto y la portada.", "Algún tipo de entrada es de una sección sin lugares: quítalo para publicar el evento." y/o "La fecha de inicio ya pasó: elige una fecha futura.").
-  - **"Aprobar"** (en revisión; admin y super_admin): primario con `Check`. Confirmación: "¿Aprobar y publicar «<título>»?" / "Se genera su inventario de entradas y queda a la venta en el catálogo." / "Cancelar" / "Aprobar y publicar" ("Publicando…"). Si el organizador o el recinto ya no están aprobados, el servidor lo rechaza ("El organizador del evento ya no está aprobado: no se puede publicar hasta que lo esté." / "El recinto del evento ya no está aprobado: …").
-  - **"Rechazar"** (en revisión; admin y super_admin): outline con `X`. Abre `RejectEventDialog` (`Dialog`, `p-5`, `sm:max-w-md`, sin ✕): "¿Rechazar «<título>»?" / "Vuelve a borrador. El organizador verá el motivo al editarlo y podrá enviarlo a revisión otra vez."; `Textarea` "Motivo del rechazo" (obligatorio, `maxLength` 1000, ayuda "Qué debe corregir el organizador.", `aria-invalid` y `aria-describedby` hacia la ayuda y el error "Escribe el motivo del rechazo"); "Cancelar" / "Rechazar" ("Rechazando…").
-  - **"Cancelar evento"** (publicado; admin y super_admin): outline con `Ban` en `text-destructive`. Con ventas activas (`hasActiveSales`: órdenes `paid`, `partially_refunded` o reservas `pending` vigentes) queda deshabilitado y enfocable (`focusableWhenDisabled`) con "Tiene ventas · Cancelación con reembolsos: Próximamente" debajo (`text-xs text-muted-foreground`, `aria-describedby`). Confirmación destructiva: "¿Cancelar «<título>»?" / "Deja de estar a la venta y no se puede volver a publicar. Solo se cancelan eventos sin ventas." / "Volver" (no "Cancelar", que se confundiría) / "Cancelar evento" ("Cancelando…"). Si entre la carga de la lista y la confirmación entró una venta o una reserva, el servidor lo rechaza con el mismo mensaje y el diálogo sigue abierto. Aprobar, cancelar y guardar un evento publicado invalidan sus páginas públicas (inicio, catálogo, detalle y compra).
-- **Diálogos de confirmación** (`components/shared/ConfirmDialog`, compartido): `AlertDialog` `p-5`, título `text-xl font-bold`, descripción `text-base`, pie a sangre (`-mx-5 -mb-5 p-5`) con el botón de cerrar outline y la acción (`h-11 px-4 font-semibold`; primaria `hover:bg-primary-strong` o destructiva `bg-destructive text-foreground`). Mientras se ejecuta, ambos se deshabilitan y la acción muestra `Spinner` y su texto de carga. Un error del servidor se muestra en el diálogo (`Alert destructive`), que sigue abierto para reintentar; cada apertura empieza sin el error anterior. Tras cualquier acción (o un error de listado desactualizado: el evento ya cambió de estado o le entraron ventas) se recarga el listado (`useModerateEvent`/`useDeleteEventDraft` invalidan `["managed-events", userId]`).
-- **Avisos** (región `aria-live="polite"` sobre la sección; `Alert` con `CircleCheck` y "Cerrar aviso" `size-11`; uno a la vez, se borra al empezar otra acción):
-  - `?guardado=borrador`: "Borrador guardado" / "Está en el listado con el estado «Borrador». Aún no es visible para el público."; `?guardado=cambios`: "Cambios guardados" / "El evento publicado ya muestra los cambios." (cualquier otro valor se ignora).
-  - "Borrador «<título>» eliminado"; "«<título>» enviado a revisión" / "Un administrador lo revisará antes de publicarlo."; "«<título>» aprobado y publicado" / "Ya está a la venta en el catálogo."; "«<título>» rechazado" / "Volvió a borrador con el motivo para el organizador."; "«<título>» cancelado" / "Ya no está a la venta.".
-- **Vacío:** "Aún no tienes eventos." (sin filtros) o "No hay eventos con estos filtros.", con las clases del vacío de Resumen.
-- **Error de carga:** `<p role="alert">` "No pudimos cargar los eventos. Inténtalo de nuevo." (`text-sm text-destructive`, bloque `bg-card rounded-2xl ring-1 ring-border p-4`) sobre la lista.
 
 ## Crear y editar evento `/organizador/eventos/nuevo` y `/organizador/eventos/[id]/editar` (F5a, edición fuera de borrador en F5b)
 
@@ -329,7 +302,7 @@ lg: una sola tarjeta (misma sección que Resumen)
 ### Layout
 
 ```
-← Volver a Mis eventos                                → /organizador/eventos, ~8 px sobre el h1
+← Volver a Eventos                                    → /organizador, ~8 px sobre el h1
 h1 "Crear evento" | "Editar borrador" | "Editar evento"
 [Aviso según el estado (solo en Editar)]
 ┌──────────────────────────────────┬──────────────┐
@@ -349,7 +322,7 @@ h1 "Crear evento" | "Editar borrador" | "Editar evento"
 │ Tipos de entrada                 │              │
 │ ┌ Campo ─────── 1,000 lugares… ┐ │              │  una fila por sección del recinto
 │ │ ☑ Vender entradas en esta s. │ │              │
-│ │ Nombre del tipo | Precio (S/)│ │              │  md: 1fr | 160px
+│ │ Nombre del tipo | Precio (S/)│ │              │  @md: 1fr | 160px
 │ └──────────────────────────────┘ │              │
 │ Capacidad a la venta  1,000 ent. │              │
 └──────────────────────────────────┘              │
@@ -358,17 +331,17 @@ h1 "Crear evento" | "Editar borrador" | "Editar evento"
 Móvil: secciones → vista previa (tarjeta horizontal) → barra sticky [Cancelar | Guardar borrador]
 ```
 
-- **Rutas** (Server Components): ambas llaman a `getPanelContext("events:manageOwn", …)` y redirigen a `/organizador` si el usuario está en solo lectura (organizador no aprobado). Leen en el servidor los recintos (`listApprovedVenuesWithSections`) y, para admin y super_admin, los organizadores (`listApprovedOrganizers`), de `@/modules/organizer/server`, y renderizan `OrganizerEventForm` (cliente). Editar precarga el evento con `getEventForEdit(user, id)` (el suyo o, para admin, cualquiera): si no existe, no es suyo o el id no es un uuid → `notFound()`. En lugar del formulario muestra `EmptyState` (`FilePen`, acción "Volver a Mis eventos") si está en revisión ("Este evento está en revisión" / "Está en revisión: si necesitas cambios, pide al administrador que lo rechace.") o si está cancelado o finalizado ("Este evento ya no se puede editar" / "Los eventos cancelados o finalizados no se editan. En Mis eventos ves su estado actual.").
+- **Rutas** (Server Components): ambas llaman a `getPanelContext("events:manageOwn", …)`; en solo lectura (organizador no aprobado) muestran el `EmptyState` de "Solo lectura" (ver Layout común) en lugar del formulario, sin redirigir. Leen en el servidor los recintos (`listApprovedVenuesWithSections`) y, para admin y super_admin, los organizadores (`listApprovedOrganizers`), de `@/modules/organizer/server`, y renderizan `OrganizerEventForm` (cliente). Editar precarga el evento con `getEventForEdit(user, id)` (el suyo o, para admin, cualquiera): si no existe, no es suyo o el id no es un uuid → `notFound()`. En lugar del formulario muestra `EmptyState` (`FilePen`, acción "Volver a Eventos" → `/organizador`) si está en revisión ("Este evento está en revisión" / "Está en revisión: si necesitas cambios, pide al administrador que lo rechace.") o si está cancelado o finalizado ("Este evento ya no se puede editar" / "Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual.").
 - **Estados editables en Editar** (F5b, Decisión 11; las reglas las garantiza `updateEvent`, que con un evento en revisión, cancelado o finalizado responde `edit_locked`). "Ventas" son órdenes `paid`, `partially_refunded` o `pending` vigentes. En un publicado nunca se cambian recinto, secciones a la venta ni organizador:
   - **Borrador:** todo. Si un admin lo rechazó, `EventEditNotice` muestra `Alert` (`MessageSquareWarning`) "El administrador pidió cambios" con el motivo (`whitespace-pre-line text-foreground`) y "Corrígelo y vuelve a enviarlo a revisión desde Mis eventos.".
   - **En revisión:** nada (lo aprobado es lo revisado); ver el `EmptyState` de arriba. Para cambiarlo, el admin lo rechaza y vuelve a borrador.
   - **Publicado sin ventas** (`getEventFormLock` → `structure`): Recinto, Organizador y los checkboxes "Vender entradas en esta sección" deshabilitados (el inventario ya se generó con esas secciones); textos, categoría, fecha, nombres y precios editables. Aviso "Este evento está publicado" / "Puedes cambiar los textos, la portada, la categoría, la fecha y los precios. El recinto y las secciones a la venta ya no se cambian.".
   - **Publicado con ventas** (`sales`): además Categoría, Fecha, Hora de inicio, Apertura de puertas y nombre y precio de cada tipo de entrada deshabilitados; solo nombre, descripción, portada y edad mínima. Aviso "Este evento tiene ventas o reservas en curso" / "Solo puedes cambiar el título, la descripción, la portada y la edad mínima.".
   - El aviso va entre el encabezado y el formulario (`Alert` `px-4 py-3`, como el de solo lectura del panel).
-- **Encabezado** (`EventFormHeader`): enlace "Volver a Mis eventos" (`ArrowLeft size-4` `aria-hidden`, `inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`) pegado sobre el h1 (`text-3xl md:text-4xl font-extrabold tracking-tight`). Breadcrumb: "Organizador / Crear evento" en `nuevo`; Editar no está en el menú y no lo muestra.
+- **Encabezado** (`EventFormHeader`): enlace "Volver a Eventos" (→ `/organizador`; `ArrowLeft size-4` `aria-hidden`, `inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground`, foco `focus-visible:ring-3 focus-visible:ring-ring/50`) pegado sobre el h1 (`text-3xl md:text-4xl font-extrabold tracking-tight`). Breadcrumb: "Organizador / Eventos" en las dos (subrutas de "Eventos").
 - **Secciones** en `Card rounded-2xl` con h2 `text-lg font-bold` (blancas sobre el `bg-muted` del panel). Cada campo: `Field` con `data-invalid`, `aria-invalid`, `aria-describedby` hacia `FieldError` con id `organizer-event-<campo>-error`, controles `h-11` con `scroll-mt-24 scroll-mb-28 lg:scroll-mb-0` (`formStyles.ts`) para no quedar bajo la barra sticky. Validación al guardar y, tras el primer intento, al salir de cada campo; el foco va al primer campo inválido.
-- **Barra de acciones:** por debajo de `lg`, `sticky bottom-0` con `border-t bg-background` y `env(safe-area-inset-bottom)` (márgenes negativos `-mx-4 md:-mx-6`, los del `<main>`); en `lg`, estática a la derecha. "Cancelar" es un enlace outline a `/organizador/eventos`; "Guardar borrador" (o "Guardar cambios" en un evento publicado) es el botón primario (`hover:bg-primary-strong`, "Guardando…" con `Spinner` mientras guarda; sigue deshabilitado tras guardar hasta que llega Mis eventos, para no crear dos borradores). **Sin "Publicar" ni "Enviar a revisión"** en el formulario: se envía a revisión desde Mis eventos (F5b).
-- **Tras guardar:** se descartan los listados del usuario en caché (`useSaveEventDraft`) y se navega a `/organizador/eventos?guardado=borrador` o, si era un evento publicado, `?guardado=cambios` (ver "Mis eventos"). Un cambio bloqueado (con ventas, recinto o secciones de un publicado) o un publicado incompleto se rechaza en el servidor con su mensaje en el `Alert destructive`. Un fallo del servidor (organizador no aprobado, recinto no aprobado, sección ajena, ya no es borrador…) se muestra en un `Alert destructive` sobre la barra (`role="alert"`) y el formulario sigue editable.
+- **Barra de acciones:** por debajo de `lg`, `sticky bottom-0` con `border-t bg-background` y `env(safe-area-inset-bottom)` (márgenes negativos `-mx-4 md:-mx-6`, los del `<main>`); en `lg`, estática a la derecha. "Cancelar" es un enlace outline a `/organizador`; "Guardar borrador" (o "Guardar cambios" en un evento publicado) es el botón primario (`hover:bg-primary-strong`, "Guardando…" con `Spinner` mientras guarda; sigue deshabilitado tras guardar hasta que llega Eventos, para no crear dos borradores). **Sin "Publicar" ni "Enviar a revisión"** en el formulario: se envía a revisión desde el listado de Eventos (F5b).
+- **Tras guardar:** se descartan los listados del usuario en caché (`useSaveEventDraft`) y se navega a `/organizador?guardado=borrador` o, si era un evento publicado, `/organizador?guardado=cambios` (ver "Eventos", Avisos). Un cambio bloqueado (con ventas, recinto o secciones de un publicado) o un publicado incompleto se rechaza en el servidor con su mensaje en el `Alert destructive`. Un fallo del servidor (organizador no aprobado, recinto no aprobado, sección ajena, ya no es borrador…) se muestra en un `Alert destructive` sobre la barra (`role="alert"`) y el formulario sigue editable.
 - Metadata: `Crear evento | Mentec Tickets` y `Editar evento | Mentec Tickets`.
 
 ### Campos y reglas (`createEventDraftSchema`)
@@ -382,12 +355,13 @@ Un borrador solo exige el nombre; lo demás puede faltar, pero lo que se indique
 | Edad mínima | `Select` (`items={MIN_AGE_LABELS}`): "Todo público", "+12", "+14", "+16", "+18" | Una de la lista | — |
 | Descripción | `Textarea`, `maxLength` 2000 | Opcional | "La descripción admite hasta 2000 caracteres" |
 | Organizador (solo admin y super_admin) | `Select` de organizadores `approved` (razón social o nombre), placeholder "Elige el organizador", ayuda "Dueño del evento: solo organizadores aprobados." | Obligatorio | "Elige el organizador del evento" |
-| Fecha / Hora de inicio | `Input type="date"` (`min` = hoy en Lima, solo en cliente) / `type="time"` | Las dos o ninguna | "Elige la fecha del evento" / "Indica la hora de inicio" / "Elige una fecha válida" |
+| Fecha / Hora de inicio | `DatePicker` (MASTER §7; `min` = hoy en Lima, solo en cliente; deshabilitado en un publicado con ventas; `aria-invalid`/`aria-describedby` hacia su error y `aria-labelledby` con la etiqueta) / `Input type="time"` | Las dos o ninguna | "Elige la fecha del evento" / "Indica la hora de inicio" / "Elige una fecha válida" |
 | Apertura de puertas | `Input type="time"`, mismo día | Opcional; exige fecha y hora de inicio y ser a esa hora o antes | "Indica primero la fecha y la hora de inicio" / "La apertura de puertas debe ser a la hora de inicio o antes" |
 | Recinto | `Select` de recintos `approved` ("Nombre · Ciudad"), placeholder "Elige el recinto", ayuda "Solo recintos aprobados. Sus secciones definen los tipos de entrada." | Opcional; obligatorio si se vende alguna sección | "Elige el recinto para vender entradas" |
 | URL de la imagen | `Input type="url"`, placeholder "https://…", ayuda "Enlace https a la imagen (recomendado 1920 × 1080 px, 16:9). Deja lo importante en el centro: cada pantalla la recorta de forma distinta." | Opcional; URL absoluta `https` con dominio (Decisión 5) | "Ingresa una URL válida que empiece por https://" |
 
 - Fechas en `America/Lima` (UTC−5 todo el año): se guardan como `timestamptz` y al editar se muestran en Lima.
+- **Rejillas por ancho de sección, no de viewport** (container queries): a 1024 px, con sidebar y vista previa, la columna del formulario mide ~260 px. Categoría | Edad mínima van en dos columnas desde `@md/field-group` (28rem); Fecha, Hora de inicio y Apertura de puertas en tres desde `@lg/field-group` (32rem) y, por debajo, Fecha a todo el ancho (el `DatePicker` necesita ~140 px) con Hora | Apertura debajo. En cada fila de tipos de entrada (`@container`), Nombre | Precio en `@md:grid-cols-[minmax(0,1fr)_160px]`.
 - El organizador de un evento creado por un organizador es siempre él mismo (el campo no se muestra y lo que llegue se ignora). Un admin puede cambiar el dueño de un borrador al editarlo.
 
 ### Tipos de entrada (`TicketTypesField`)
@@ -395,7 +369,7 @@ Un borrador solo exige el nombre; lo demás puede faltar, pero lo que se indique
 - Sin recinto: `<p className="text-sm text-muted-foreground">` "Elige el recinto para configurar los tipos de entrada."; recinto sin secciones: "Este recinto aún no tiene secciones configuradas.".
 - **Una fila por sección** del recinto, en su orden: `<div role="group" aria-labelledby>` `rounded-xl p-4 ring-1 ring-border` (`ring-primary/40` si está marcada) con h3 del nombre de la sección (`font-semibold`) y su capacidad a la derecha (`text-sm text-muted-foreground tabular-nums`: "1,000 lugares de pie" en una general; "240 asientos numerados" en una numerada).
   - `Checkbox` "Vender entradas en esta sección" (`Field orientation="horizontal"`, `min-h-11`), sin marcar por defecto.
-  - "Nombre del tipo de entrada" (por defecto, el nombre de la sección; `maxLength` 100) y "Precio (S/)" (`type="number"`, `min` 0, `step` 0.01), en `md:grid-cols-[minmax(0,1fr)_160px]`; deshabilitados mientras la sección no se vende.
+  - "Nombre del tipo de entrada" (por defecto, el nombre de la sección; `maxLength` 100) y "Precio (S/)" (`type="number"`, `min` 0, `step` 0.01), en `@md:grid-cols-[minmax(0,1fr)_160px]` (container query de la fila); deshabilitados mientras la sección no se vende.
   - Una fila marcada exige nombre ("Ingresa el nombre del tipo de entrada") y precio ("Ingresa el precio"; "El precio debe ser un número de 0 o más, con hasta 2 decimales"; "El precio no puede superar S/ 100,000"). Las filas sin marcar no se validan ni se guardan.
 - Cambiar de recinto reinicia las filas (sin marcar, con el nombre de cada sección).
 - Pie "Capacidad a la venta": suma de la capacidad de las secciones marcadas ("1,240 entradas"). La capacidad la fija el recinto; no se piden filas, asientos ni cantidades.
@@ -446,5 +420,5 @@ lg (vertical, columna de 340 px)            < lg (horizontal, tipo entrada)
 
 ## Comunes
 
-- Breakpoint del panel: `lg` (1024 px) para sidebar, tabla, formulario en dos columnas y barra estática.
-- Sin scroll horizontal a 375 / 768 / 1024 / 1440; targets ≥ 44 px (`h-11`); foco visible; solo tokens; iconos `lucide-react` con `aria-hidden`; sin emojis.
+- Breakpoint del panel: `lg` (1024 px) para sidebar, tabla, formulario en dos columnas y barra estática. Entre `lg` y `xl` la tabla de Eventos es compacta (ver "Lista").
+- Sin scroll horizontal a 375 / 768 / 1024 / 1440 (tampoco dentro de la tabla); `Popover` del `DatePicker` (`collisionPadding` 16) y menú "Más acciones" dentro del viewport; targets ≥ 44 px (`h-11`); foco visible; solo tokens; iconos `lucide-react` con `aria-hidden`; sin emojis.

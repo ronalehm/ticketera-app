@@ -3,6 +3,7 @@
 import { useId, useState, type ComponentProps, type FormEvent } from "react";
 import { CircleCheck, Search, X } from "lucide-react";
 
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +15,9 @@ import type { ManagedEvent, ManagedEventsFilters } from "@/modules/events";
 import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
 import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
 import type { ManagedEventsStatusFilter, SavedStatus } from "../types/organizer.types";
+import { CreateEventLink } from "./CreateEventLink";
 import { EventActionDialog, type EventActionNotice, type EventActionTarget } from "./EventActionDialog";
-import { EventRowActions, hasEventRowActions } from "./EventRowActions";
+import { EventRowActions, type EventRowActionsLayout, hasEventRowActions } from "./EventRowActions";
 import { OrganizerEventsTable } from "./OrganizerEventsTable";
 
 const STATUS_OPTIONS = Object.entries(MANAGED_EVENT_STATUS_BADGE).map(([value, { label }]) => ({ value, label }));
@@ -37,6 +39,8 @@ type OrganizerEventsListProps = {
   canMutate?: boolean;
   /** Aviso tras guardar en el formulario (`?guardado=borrador` o `?guardado=cambios`). */
   saved?: SavedStatus;
+  /** Muestra «Crear evento» en la cabecera del listado (no es un organizador en solo lectura). */
+  canCreate?: boolean;
 };
 
 /** Aviso tras guardar: el evento ya está en la BD y, por tanto, en este listado. */
@@ -49,8 +53,9 @@ const SAVED_NOTICES: Record<NonNullable<SavedStatus>, EventActionNotice> = {
 };
 
 /**
- * "Mis eventos": listado completo con filtro de estado y búsqueda, ambos en el servidor (`useManagedEvents`). El estado
- * filtra al cambiar; la búsqueda, al enviar el formulario (las server actions van de una en una: no se pide por tecla).
+ * "Mis eventos": listado completo con filtros de estado, búsqueda y rango de fechas, todos en el servidor
+ * (`useManagedEvents`). Estado y fechas filtran al cambiar; la búsqueda, al enviar el formulario (las server actions van
+ * de una en una: no se pide por tecla), por eso el texto del campo (`searchDraft`) va aparte de `filters.q`.
  */
 export function OrganizerEventsList({
   userId,
@@ -59,8 +64,10 @@ export function OrganizerEventsList({
   role,
   canMutate = false,
   saved,
+  canCreate = false,
 }: OrganizerEventsListProps) {
   const [filters, setFilters] = useState<ManagedEventsFilters>(DEFAULT_MANAGED_EVENTS_FILTERS);
+  const [searchDraft, setSearchDraft] = useState("");
   const [notice, setNotice] = useState<EventActionNotice | null>(saved ? SAVED_NOTICES[saved] : null);
   // Acción en curso; al cerrar el diálogo se conserva para la animación de salida.
   const [target, setTarget] = useState<EventActionTarget | null>(null);
@@ -68,9 +75,14 @@ export function OrganizerEventsList({
   const headingId = useId();
   const statusId = useId();
   const searchId = useId();
+  const fromId = useId();
+  const toId = useId();
   // Filtros con los que el servidor trae `initialEvents`: sus datos solo valen para ellos.
   const isDefault =
-    filters.status === DEFAULT_MANAGED_EVENTS_FILTERS.status && filters.q === DEFAULT_MANAGED_EVENTS_FILTERS.q;
+    filters.status === DEFAULT_MANAGED_EVENTS_FILTERS.status &&
+    filters.q === DEFAULT_MANAGED_EVENTS_FILTERS.q &&
+    filters.from === DEFAULT_MANAGED_EVENTS_FILTERS.from &&
+    filters.to === DEFAULT_MANAGED_EVENTS_FILTERS.to;
   const { data: events = [], isError, isPlaceholderData } = useManagedEvents(
     userId,
     filters,
@@ -79,17 +91,22 @@ export function OrganizerEventsList({
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const q = String(new FormData(event.currentTarget).get("q") ?? "").trim();
-    setFilters((current) => ({ ...current, q }));
+    setFilters((current) => ({ ...current, q: searchDraft.trim() }));
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_MANAGED_EVENTS_FILTERS);
+    setSearchDraft("");
   }
 
   // Acciones por estado y rol (F5b); un organizador en solo lectura no tiene ninguna.
   const rowActions = canMutate
-    ? (event: ManagedEvent) =>
+    ? (event: ManagedEvent, layout: EventRowActionsLayout) =>
         hasEventRowActions(event.status, role) ? (
           <EventRowActions
             event={event}
             role={role}
+            layout={layout}
             onAction={(action) => {
               setNotice(null);
               setTarget({ action, event });
@@ -130,15 +147,19 @@ export function OrganizerEventsList({
         className="flex flex-col gap-3 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:bg-card lg:ring-1 lg:ring-border"
       >
         <div className="flex flex-col gap-4 lg:border-b lg:px-6 lg:py-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 id={headingId} className="text-lg font-bold">
-              Listado
-            </h2>
-            <p aria-live="polite" className="text-sm text-muted-foreground tabular-nums">
-              {events.length === 1 ? "1 evento" : `${formatCount(events.length)} eventos`}
-            </p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-baseline justify-between gap-3 md:justify-start">
+              <h2 id={headingId} className="text-lg font-bold">
+                Mis eventos
+              </h2>
+              <p aria-live="polite" className="text-sm text-muted-foreground tabular-nums">
+                {events.length === 1 ? "1 evento" : `${formatCount(events.length)} eventos`}
+              </p>
+            </div>
+            {canCreate && <CreateEventLink />}
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          {/* < md columna; md+ fila con wrap y la búsqueda flexible: lo que no cabe baja, sin scroll horizontal. */}
+          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={statusId}>Estado</Label>
               <NativeSelect
@@ -157,7 +178,7 @@ export function OrganizerEventsList({
                 ))}
               </NativeSelect>
             </div>
-            <form role="search" onSubmit={handleSearch} className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <form role="search" onSubmit={handleSearch} className="flex min-w-0 flex-col gap-1.5 md:min-w-72 md:flex-1">
               <Label htmlFor={searchId}>Buscar</Label>
               <div className="flex gap-2">
                 <div className="relative min-w-0 flex-1">
@@ -167,8 +188,9 @@ export function OrganizerEventsList({
                   />
                   <Input
                     id={searchId}
-                    name="q"
                     type="search"
+                    value={searchDraft}
+                    onChange={(event) => setSearchDraft(event.target.value)}
                     maxLength={100}
                     placeholder="Título, recinto o ciudad"
                     className="h-11 bg-background pl-9"
@@ -179,6 +201,47 @@ export function OrganizerEventsList({
                 </Button>
               </div>
             </form>
+            <div className="grid grid-cols-2 gap-3 md:w-96">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label id={`${fromId}-label`} htmlFor={fromId}>
+                  Desde
+                </Label>
+                <DatePicker
+                  id={fromId}
+                  aria-labelledby={`${fromId}-label`}
+                  value={filters.from}
+                  max={filters.to}
+                  placeholder="Cualquier fecha"
+                  onChange={(from) => setFilters((current) => ({ ...current, from }))}
+                  className="bg-background"
+                />
+              </div>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label id={`${toId}-label`} htmlFor={toId}>
+                  Hasta
+                </Label>
+                <DatePicker
+                  id={toId}
+                  aria-labelledby={`${toId}-label`}
+                  value={filters.to}
+                  min={filters.from}
+                  placeholder="Cualquier fecha"
+                  onChange={(to) => setFilters((current) => ({ ...current, to }))}
+                  className="bg-background"
+                />
+              </div>
+            </div>
+            {!isDefault && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={clearFilters}
+                className="h-11 cursor-pointer gap-2 px-4 font-semibold"
+              >
+                <X className="size-4" aria-hidden />
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         </div>
 

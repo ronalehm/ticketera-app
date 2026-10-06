@@ -18,7 +18,7 @@ export function EventEditNotice({ status, reviewNote, hasSales }: EventEditNotic
         <AlertTitle className="font-semibold">El administrador pidió cambios</AlertTitle>
         <AlertDescription>
           <p className="whitespace-pre-line text-foreground">{reviewNote}</p>
-          <p>Corrígelo y vuelve a enviarlo a revisión desde Mis eventos.</p>
+          <p>Corrígelo y vuelve a enviarlo a revisión desde Eventos.</p>
         </AlertDescription>
       </Alert>
     );

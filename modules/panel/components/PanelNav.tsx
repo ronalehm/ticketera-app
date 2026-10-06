@@ -3,38 +3,26 @@
 import { useId } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Building2,
-  CalendarDays,
-  Gauge,
-  LayoutDashboard,
-  type LucideIcon,
-  Plus,
-  ScanLine,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { Building2, CalendarDays, Gauge, type LucideIcon, ScanLine, Users, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { PanelNavIcon, PanelNavItem, PanelNavSection } from "../types/panel.types";
+import { isPanelNavItemActive } from "../utils/panelNav";
 
 // Las secciones llegan serializadas desde el servidor; los iconos se resuelven aquí.
 const ICONS: Record<PanelNavIcon, LucideIcon> = {
   dashboard: Gauge,
   users: Users,
   organizers: Building2,
-  summary: LayoutDashboard,
   events: CalendarDays,
-  create: Plus,
   checkIn: ScanLine,
   payouts: Wallet,
 };
 
 const DISABLED_BADGES = {
   "coming-soon": { label: "Próximamente", variant: "secondary" },
-  "read-only": { label: "Solo lectura", variant: "outline" },
 } as const;
 
 const ITEM = "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium";
@@ -122,7 +110,7 @@ function PanelNavEntry({ item, pathname, collapsed, onNavigate }: PanelNavEntryP
     );
   }
 
-  const active = pathname === item.href;
+  const active = isPanelNavItemActive(pathname, item);
   return (
     <Link
       href={item.href}

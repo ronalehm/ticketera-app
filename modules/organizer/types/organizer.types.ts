@@ -9,7 +9,7 @@ import type { EventDraftErrorCode } from "../utils/eventDraftError";
 
 /** Filtro de estado del panel: `all` o un estado de `event_status`. */
 export type ManagedEventsStatusFilter = ManagedEventsFilters["status"];
-/** KPIs de Resumen: ventas brutas MVP (órdenes `paid`, Decisión 10), entradas vendidas y eventos publicados. */
+/** KPIs de Eventos (`/organizador`): ventas brutas MVP (órdenes `paid`, Decisión 10), entradas vendidas y eventos publicados. */
 export type DashboardKpis = { revenueCents: number; ticketsSold: number; publishedCount: number };
 
 /** "borrador" | undefined */

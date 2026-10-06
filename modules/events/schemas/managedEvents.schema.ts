@@ -5,11 +5,24 @@ import { z } from "zod";
 /** Mismos valores que el enum `event_status` de la BD (el test lo compara con `eventStatusEnum`). */
 export const managedEventStatusSchema = z.enum(["draft", "pending_review", "published", "cancelled", "finished"]);
 
-/** Filtros de `listManagedEvents`: estado (`all` = todos) y texto libre. Valida la entrada de la server action. */
-export const managedEventsFiltersSchema = z.object({
-  status: z.union([z.literal("all"), managedEventStatusSchema]).default("all"),
-  q: z.string().trim().max(100).default(""),
-});
+/** Día calendario `YYYY-MM-DD`, o `""` sin límite. */
+const optionalDaySchema = z.union([z.literal(""), z.iso.date()]).default("");
+
+/**
+ * Filtros de `listManagedEvents`: estado (`all` = todos), texto libre y rango de días de Lima `from`–`to` (ambos
+ * inclusive). Valida la entrada de la server action.
+ */
+export const managedEventsFiltersSchema = z
+  .object({
+    status: z.union([z.literal("all"), managedEventStatusSchema]).default("all"),
+    q: z.string().trim().max(100).default(""),
+    from: optionalDaySchema,
+    to: optionalDaySchema,
+  })
+  .refine(({ from, to }) => !from || !to || from <= to, {
+    message: "La fecha Hasta no puede ser anterior a Desde",
+    path: ["to"],
+  });
 
 export const managedEventSchema = z.object({
   id: z.string(),

@@ -41,7 +41,7 @@ describe("useManagedEvents", () => {
   it("sin datos iniciales pide los eventos a la acción con los filtros", async () => {
     const events = [makeEvent("b", { status: "draft" })];
     vi.mocked(listManagedEventsAction).mockResolvedValue(events);
-    const filters: ManagedEventsFilters = { status: "draft", q: "feria" };
+    const filters: ManagedEventsFilters = { status: "draft", q: "feria", from: "2026-10-01", to: "2026-10-31" };
     const { result } = setup(filters);
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -56,7 +56,7 @@ describe("useManagedEvents", () => {
     vi.mocked(listManagedEventsAction).mockReturnValue(new Promise((done) => (resolve = done)));
     const { result, rerender } = setup(ALL, initial);
 
-    const draftFilters: ManagedEventsFilters = { status: "draft", q: "" };
+    const draftFilters: ManagedEventsFilters = { ...ALL, status: "draft" };
     rerender({ userId: USER, filters: draftFilters, data: undefined });
     expect(result.current.data).toEqual(initial);
     expect(result.current.isPlaceholderData).toBe(true);

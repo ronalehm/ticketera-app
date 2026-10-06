@@ -21,7 +21,7 @@ export const organizerEventSchema = z.object({
   status: z.enum(["published", "draft"]),
 });
 
-// Query param `guardado` de Mis eventos: "borrador" (se guardó un borrador) o
+// Query param `guardado` de Eventos (`/organizador`): "borrador" (se guardó un borrador) o
 // "cambios" (se editó un evento publicado, F5b). Cualquier otro valor (o un array) se ignora.
 export const savedStatusSchema = z.enum(["borrador", "cambios"]).optional().catch(undefined);
 

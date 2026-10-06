@@ -6,15 +6,7 @@ export type PanelRole = SessionUser["role"];
 export type PanelOrganizerStatus = OrganizerStatus | null;
 
 /** Clave serializable del icono: el cliente la resuelve a un componente de lucide-react (`PanelNav`). */
-export type PanelNavIcon =
-  | "dashboard"
-  | "users"
-  | "organizers"
-  | "summary"
-  | "events"
-  | "create"
-  | "checkIn"
-  | "payouts";
+export type PanelNavIcon = "dashboard" | "users" | "organizers" | "events" | "checkIn" | "payouts";
 
 type PanelNavItemBase = {
   key: string;
@@ -22,13 +14,10 @@ type PanelNavItemBase = {
   icon: PanelNavIcon;
 };
 
-/**
- * Ítem de la navegación. Solo `link` navega; `coming-soon` (sin página aún) y `read-only` (organizador no aprobado)
- * se muestran deshabilitados con su badge.
- */
+/** Ítem de la navegación. Solo `link` navega; `coming-soon` (sin página aún) se muestra deshabilitado con su badge. */
 export type PanelNavItem =
   | (PanelNavItemBase & { state: "link"; href: string })
-  | (PanelNavItemBase & { state: "coming-soon" | "read-only" });
+  | (PanelNavItemBase & { state: "coming-soon" });
 
 export type PanelNavSection = {
   key: "admin" | "organizer";

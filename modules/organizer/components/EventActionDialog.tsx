@@ -9,7 +9,7 @@ import { DeleteEventDialog } from "./DeleteEventDialog";
 import type { EventRowAction } from "./EventRowActions";
 import { RejectEventDialog } from "./RejectEventDialog";
 
-/** Aviso que muestra Mis eventos tras una acción. */
+/** Aviso que muestra el listado de Eventos tras una acción. */
 export type EventActionNotice = { title: string; description?: string };
 
 /** Acción pedida sobre un evento; se conserva al cerrar el diálogo para la animación de salida. */
@@ -65,11 +65,11 @@ type EventActionDialogProps = {
   target: EventActionTarget | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** La acción fue bien: se cierra el diálogo y Mis eventos muestra el aviso. */
+  /** La acción fue bien: se cierra el diálogo y el listado muestra el aviso. */
   onDone: (notice: EventActionNotice) => void;
 };
 
-/** Diálogo de la acción pedida en Mis eventos: eliminar, rechazar (con motivo) o confirmar una transición. */
+/** Diálogo de la acción pedida en el listado de Eventos: eliminar, rechazar (con motivo) o confirmar una transición. */
 export function EventActionDialog({ userId, target, open, onOpenChange, onDone }: EventActionDialogProps) {
   const moderate = useModerateEvent(userId);
   const event = target?.event ?? null;

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteEventAction } from "../actions/eventDrafts.actions";
 import {
   approveEventAction,
@@ -35,7 +35,19 @@ function renderWithQuery(ui: React.ReactElement) {
 }
 
 /** Lista de tarjetas (< lg); la tabla tiene las mismas filas. */
-const cards = () => within(screen.getByRole("list", { name: "Listado" }));
+const cards = () => within(screen.getByRole("list", { name: "Mis eventos" }));
+/** Tabla (lg): jsdom no aplica `hidden`, así que conviven las dos representaciones. */
+const table = () => within(screen.getByRole("table", { name: "Mis eventos" }));
+const rowOf = (title: string) =>
+  within(table().getByRole("rowheader", { name: new RegExp(title) }).closest("tr") as HTMLElement);
+
+const CANCEL_BLOCKED_REASON = "Tiene ventas o reservas en curso · Cancelación con reembolsos: Próximamente";
+
+/** Abre «Más acciones» de una fila de la tabla y devuelve el menú. */
+async function openRowMenu(title: string) {
+  fireEvent.click(rowOf(title).getByRole("button", { name: `Más acciones de ${title}` }));
+  return within(await screen.findByRole("menu"));
+}
 
 afterEach(() => {
   cleanup();
@@ -71,7 +83,7 @@ describe("OrganizerEventsList", () => {
     ]);
     fireEvent.change(select, { target: { value: "pending_review" } });
 
-    expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "pending_review", q: "" });
+    expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "pending_review", q: "", from: "", to: "" });
     await waitFor(() => expect(screen.getByText("1 evento")).toBeTruthy());
     expect(cards().getAllByRole("listitem")).toHaveLength(1);
   });
@@ -84,8 +96,89 @@ describe("OrganizerEventsList", () => {
     expect(listManagedEventsAction).not.toHaveBeenCalled();
     fireEvent.submit(screen.getByRole("search"));
 
-    expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "feria" });
+    expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "feria", from: "", to: "" });
     await waitFor(() => expect(screen.getByText("No hay eventos con estos filtros.")).toBeTruthy());
+  });
+
+  describe("filtros de fecha y limpiar", () => {
+    // Solo Date: el calendario abre en octubre de 2026 sin congelar los timers de TanStack Query.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 9, 5, 12));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const dayButton = (day: number) =>
+      screen.getByRole("button", { name: new RegExp(`\\b${day} de octubre de 2026`) });
+
+    it("Desde y Hasta filtran al elegir el día, y Hasta no permite días anteriores a Desde", async () => {
+      vi.mocked(listManagedEventsAction).mockResolvedValue([EVENTS[0]]);
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} />);
+
+      fireEvent.click(screen.getByLabelText("Desde"));
+      fireEvent.click(dayButton(5));
+      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "", from: "2026-10-05", to: "" });
+
+      fireEvent.click(screen.getByLabelText("Hasta"));
+      expect(dayButton(4).hasAttribute("disabled")).toBe(true);
+      expect(dayButton(5).hasAttribute("disabled")).toBe(false);
+      fireEvent.click(dayButton(10));
+      expect(listManagedEventsAction).toHaveBeenLastCalledWith({
+        status: "all",
+        q: "",
+        from: "2026-10-05",
+        to: "2026-10-10",
+      });
+      await waitFor(() => expect(screen.getByText("1 evento")).toBeTruthy());
+
+      // Desde ya no permite días posteriores a Hasta.
+      fireEvent.click(screen.getByLabelText("Desde"));
+      expect(dayButton(11).hasAttribute("disabled")).toBe(true);
+    });
+
+    it("Limpiar filtros vacía el campo de búsqueda, restablece los cuatro filtros y desaparece", async () => {
+      vi.mocked(listManagedEventsAction).mockResolvedValue([]);
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} />);
+      expect(screen.queryByRole("button", { name: "Limpiar filtros" })).toBeNull();
+
+      const search = screen.getByLabelText("Buscar") as HTMLInputElement;
+      fireEvent.change(search, { target: { value: "feria" } });
+      fireEvent.submit(screen.getByRole("search"));
+      fireEvent.change(screen.getByLabelText("Estado"), { target: { value: "draft" } });
+      fireEvent.click(screen.getByLabelText("Desde"));
+      fireEvent.click(dayButton(5));
+      expect(listManagedEventsAction).toHaveBeenLastCalledWith({
+        status: "draft",
+        q: "feria",
+        from: "2026-10-05",
+        to: "",
+      });
+      await waitFor(() => expect(screen.getByText("No hay eventos con estos filtros.")).toBeTruthy());
+
+      fireEvent.click(screen.getByRole("button", { name: "Limpiar filtros" }));
+
+      expect(search.value).toBe("");
+      expect((screen.getByLabelText("Estado") as HTMLSelectElement).value).toBe("all");
+      expect(screen.getByLabelText("Desde").textContent).toBe("Cualquier fecha");
+      // Vuelven los eventos del servidor (filtros por defecto), sin otra petición.
+      expect(screen.getByText("5 eventos")).toBeTruthy();
+      expect(listManagedEventsAction).toHaveBeenCalledTimes(3);
+      expect(screen.queryByRole("button", { name: "Limpiar filtros" })).toBeNull();
+    });
+  });
+
+  it("con canCreate, «Crear evento» está dentro de la sección del listado; sin él no aparece", () => {
+    const { unmount } = renderWithQuery(
+      <OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canCreate />,
+    );
+    const section = within(screen.getByRole("region", { name: "Mis eventos" }));
+    expect(section.getByRole("link", { name: "Crear evento" }).getAttribute("href")).toBe("/organizador/eventos/nuevo");
+    unmount();
+
+    renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} />);
+    expect(screen.queryByRole("link", { name: "Crear evento" })).toBeNull();
   });
 
   it("sin eventos lo dice", () => {
@@ -170,7 +263,7 @@ describe("OrganizerEventsList", () => {
 
       await waitFor(() => expect(screen.getByText("Borrador «Evento c» eliminado")).toBeTruthy());
       expect(deleteEventAction).toHaveBeenCalledWith("c");
-      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "" });
+      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "", from: "", to: "" });
       await waitFor(() => expect(screen.getByText("4 eventos")).toBeTruthy());
     });
 
@@ -217,7 +310,7 @@ describe("OrganizerEventsList", () => {
       const button = cardOf("Evento a").getByRole("button", { name: "Cancelar evento Evento a" });
       expect(button.getAttribute("aria-disabled") === "true" || button.hasAttribute("disabled")).toBe(true);
       const reason = document.getElementById(button.getAttribute("aria-describedby") ?? "");
-      expect(reason?.textContent).toBe("Tiene ventas · Cancelación con reembolsos: Próximamente");
+      expect(reason?.textContent).toBe(CANCEL_BLOCKED_REASON);
     });
 
     it("Enviar a revisión pide confirmación, envía, avisa y recarga el listado", async () => {
@@ -232,7 +325,7 @@ describe("OrganizerEventsList", () => {
 
       await waitFor(() => expect(screen.getByText("«Evento c» enviado a revisión")).toBeTruthy());
       expect(submitForReviewAction).toHaveBeenCalledWith("c");
-      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "" });
+      expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "all", q: "", from: "", to: "" });
     });
 
     it("si enviar a revisión falla por datos incompletos, el diálogo dice qué falta", async () => {
@@ -311,6 +404,74 @@ describe("OrganizerEventsList", () => {
       const dialog = await screen.findByRole("alertdialog");
       fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar evento" }));
       expect((await within(dialog).findByRole("alert")).textContent).toMatch(/^Cancelación con reembolsos: Próximamente/);
+    });
+  });
+
+  describe("acciones compactas en la tabla (lg)", () => {
+    it("un borrador muestra [Editar] de icono y [•••] con Eliminar y Enviar a revisión (ítems de 44 px)", async () => {
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canMutate />);
+
+      const row = rowOf("Evento c");
+      const edit = row.getByRole("link", { name: "Editar Evento c" });
+      expect(edit.getAttribute("href")).toBe("/organizador/eventos/c/editar");
+      expect(edit.textContent).toBe("");
+      expect(edit.className).toContain("size-11");
+      expect(row.getByRole("button", { name: "Más acciones de Evento c" }).className).toContain("size-11");
+      // Sin botones con texto en la fila.
+      expect(row.queryByRole("button", { name: /^Eliminar/ })).toBeNull();
+
+      const menu = await openRowMenu("Evento c");
+      const items = menu.getAllByRole("menuitem");
+      expect(items.map((item) => item.textContent)).toEqual(["Eliminar", "Enviar a revisión"]);
+      for (const item of items) expect(item.className).toContain("min-h-11");
+    });
+
+    it("Eliminar desde el menú pide la misma confirmación", async () => {
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canMutate />);
+
+      fireEvent.click((await openRowMenu("Evento c")).getByRole("menuitem", { name: "Eliminar" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText("¿Eliminar el borrador «Evento c»?")).toBeTruthy();
+      expect(deleteEventAction).not.toHaveBeenCalled();
+    });
+
+    it("un publicado sin acciones de menú (organizador) solo tiene [Editar], sin [•••]", () => {
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canMutate />);
+      const row = rowOf("Evento a");
+      expect(row.getByRole("link", { name: "Editar Evento a" })).toBeTruthy();
+      expect(row.queryByRole("button", { name: /^Más acciones/ })).toBeNull();
+    });
+
+    it("en revisión, un admin tiene [•••] con Aprobar y Rechazar y sin [Editar]", async () => {
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={EVENTS} canMutate role="admin" />);
+      expect(rowOf("Evento b").queryByRole("link", { name: /^Editar/ })).toBeNull();
+
+      const menu = await openRowMenu("Evento b");
+      expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Aprobar", "Rechazar"]);
+    });
+
+    it("publicado con ventas (admin): Cancelar evento deshabilitado con el motivo y no se ejecuta", async () => {
+      const events = [makeEvent("a", { sold: 3, hasActiveSales: true })];
+      renderWithQuery(<OrganizerEventsList userId="user-1" initialEvents={events} canMutate role="admin" />);
+
+      const menu = await openRowMenu("Evento a");
+      const cancel = menu.getByRole("menuitem", { name: "Cancelar evento" });
+      expect(cancel.getAttribute("aria-disabled")).toBe("true");
+      expect(document.getElementById(cancel.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
+        CANCEL_BLOCKED_REASON,
+      );
+      fireEvent.click(cancel);
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      expect(cancelEventAction).not.toHaveBeenCalled();
+    });
+
+    it("las tarjetas (< lg) siguen con botones con texto y sin [•••]", () => {
+      renderWithQuery(<OrganizerEventsList role="organizer" userId="user-1" initialEvents={EVENTS} canMutate />);
+      const list = cards();
+      expect(list.getByRole("link", { name: "Editar Evento c" }).textContent).toBe("Editar");
+      expect(list.getByRole("button", { name: "Eliminar Evento c" }).textContent).toBe("Eliminar");
+      expect(list.getByRole("button", { name: "Enviar a revisión Evento c" }).textContent).toBe("Enviar a revisión");
+      expect(list.queryByRole("button", { name: /^Más acciones/ })).toBeNull();
     });
   });
 

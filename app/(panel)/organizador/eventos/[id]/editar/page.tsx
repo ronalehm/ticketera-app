@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
-import { FilePen } from "lucide-react";
+import { notFound } from "next/navigation";
+import { FilePen, Lock } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/EmptyState";
 import { roleCan } from "@/modules/auth/permissions";
@@ -21,8 +21,22 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
   const { user, readOnly } = await getPanelContext("events:manageOwn", {
     returnTo: `/organizador/eventos/${encodeURIComponent(id)}/editar`,
   });
-  // Un organizador pendiente o suspendido no edita eventos.
-  if (readOnly) redirect("/organizador");
+  // Un organizador pendiente o suspendido no edita eventos: se le explica antes de consultar el evento (el aviso global
+  // ya lo pone el layout).
+  if (readOnly) {
+    return (
+      <div className="flex flex-col gap-8 md:gap-10">
+        <EventFormHeader title="Editar evento" />
+        <EmptyState
+          icon={Lock}
+          title="No puedes editar eventos mientras tu cuenta esté en solo lectura"
+          description="Cuando tu cuenta de organizador esté aprobada podrás crear y editar eventos. En Eventos ves los que ya tienes."
+          actionLabel="Volver a Eventos"
+          actionHref="/organizador"
+        />
+      </div>
+    );
+  }
 
   // No existe o no es suyo (un admin ve cualquiera): 404, sin distinguir los dos casos.
   const event = await getEventForEdit(user, id);
@@ -40,10 +54,10 @@ export default async function EditOrganizerEventPage({ params }: PageProps<"/org
           description={
             inReview
               ? EDIT_IN_REVIEW_MESSAGE
-              : "Los eventos cancelados o finalizados no se editan. En Mis eventos ves su estado actual."
+              : "Los eventos cancelados o finalizados no se editan. En Eventos ves su estado actual."
           }
-          actionLabel="Volver a Mis eventos"
-          actionHref="/organizador/eventos"
+          actionLabel="Volver a Eventos"
+          actionHref="/organizador"
         />
       </div>
     );

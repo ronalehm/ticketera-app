@@ -19,27 +19,43 @@ type OrganizerEventsTableProps = {
   labelledBy: string;
   /** Muestra el organizador de cada evento (admin, que ve los de todos). */
   showOrganizer?: boolean;
-  /** Acciones de cada fila (Mis eventos); sin ella no hay columna de acciones. `null` para una fila sin acciones. */
-  rowActions?: (event: ManagedEvent) => ReactNode;
+  /**
+   * Acciones de cada fila (listado de Eventos) para la tabla (lg) o la tarjeta (< lg); sin ella no hay columna de acciones.
+   * `null` para una fila sin acciones.
+   */
+  rowActions?: (event: ManagedEvent, layout: "table" | "card") => ReactNode;
 };
 
+// Entre lg y xl (1024–1279 px, con el sidebar abierto quedan ~680 px) la tabla se compacta para que el título no se
+// quede sin sitio: celdas interiores con px-3, sin miniatura y «Vendidas» sin el sufijo ni ancho fijo.
+const CELL_X = "px-6 lg:max-xl:px-3";
 // Cabecera en mayúsculas pequeñas, sin fondo; px-6 alinea las columnas con la barra de cabecera de la sección.
-const HEADER_CELL = "h-11 px-6 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+const HEADER_TEXT = "h-11 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+// Ancho fijo para dos botones de 44 px (+ gap y px-6), sin wrap; el borde derecho conserva px-6.
+const ACTIONS_COLUMN = "w-36 px-6 whitespace-nowrap lg:max-xl:w-auto lg:max-xl:pl-3";
 
 function StatusBadge({ status }: { status: ManagedEventStatus }) {
   const badge = MANAGED_EVENT_STATUS_BADGE[status];
   return <Badge className={cn("h-6 px-2.5 font-semibold", badge.className)}>{badge.label}</Badge>;
 }
 
-function EventThumbnail({ imageUrl }: { imageUrl: string | null }) {
+function EventThumbnail({ imageUrl, className }: { imageUrl: string | null; className?: string }) {
   if (!imageUrl) {
     return (
-      <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted">
+      <div className={cn("flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted", className)}>
         <ImageIcon className="size-5 text-muted-foreground" aria-hidden />
       </div>
     );
   }
-  return <EventCoverImage src={imageUrl} alt="" width={48} height={48} className="size-12 shrink-0 rounded-lg object-cover" />;
+  return (
+    <EventCoverImage
+      src={imageUrl}
+      alt=""
+      width={48}
+      height={48}
+      className={cn("size-12 shrink-0 rounded-lg object-cover", className)}
+    />
+  );
 }
 
 type EventMetaProps = Pick<ManagedEvent, "startsAt" | "city" | "organizer"> & { showOrganizer: boolean };
@@ -58,7 +74,11 @@ function SoldCount({ sold, capacity }: Pick<ManagedEvent, "sold" | "capacity">) 
   return (
     <p className="text-sm whitespace-nowrap tabular-nums">
       <strong className="font-semibold">{formatCount(sold)}</strong>{" "}
-      <span className="text-muted-foreground">/ {formatCount(capacity)} vendidas</span>
+      <span className="text-muted-foreground">
+        / {formatCount(capacity)}
+        {/* En la tabla compacta (lg–xl) la cabecera «Vendidas» ya lo dice. */}
+        <span className="lg:max-xl:hidden"> vendidas</span>
+      </span>
     </p>
   );
 }
@@ -95,20 +115,20 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
         <Table aria-labelledby={labelledBy}>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className={HEADER_CELL}>Evento</TableHead>
-              <TableHead className={HEADER_CELL}>Estado</TableHead>
-              <TableHead className={HEADER_CELL}>Vendidas</TableHead>
-              <TableHead className={cn(HEADER_CELL, "text-right")}>Ingresos</TableHead>
-              {rowActions && <TableHead className={cn(HEADER_CELL, "text-right")}>Acciones</TableHead>}
+              <TableHead className={cn(HEADER_TEXT, "px-6 lg:max-xl:pr-3")}>Evento</TableHead>
+              <TableHead className={cn(HEADER_TEXT, CELL_X)}>Estado</TableHead>
+              <TableHead className={cn(HEADER_TEXT, CELL_X)}>Vendidas</TableHead>
+              <TableHead className={cn(HEADER_TEXT, CELL_X, "text-right")}>Ingresos</TableHead>
+              {rowActions && <TableHead className={cn(HEADER_TEXT, ACTIONS_COLUMN, "text-right")}>Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.map((event) => (
               <TableRow key={event.id}>
                 {/* w-full + max-w-0: la columna ocupa el espacio libre y el título se trunca en vez de ensanchar la tabla. */}
-                <TableHead scope="row" className="h-auto w-full max-w-0 px-6 py-3.5 font-normal">
+                <TableHead scope="row" className="h-auto w-full max-w-0 px-6 py-3.5 font-normal lg:max-xl:pr-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <EventThumbnail imageUrl={event.imageUrl} />
+                    <EventThumbnail imageUrl={event.imageUrl} className="lg:max-xl:hidden" />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{event.title}</p>
                       <EventMeta
@@ -120,22 +140,22 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
                     </div>
                   </div>
                 </TableHead>
-                <TableCell className="px-6 py-3.5">
+                <TableCell className={cn(CELL_X, "py-3.5")}>
                   <StatusBadge status={event.status} />
                 </TableCell>
-                <TableCell className="px-6 py-3.5">
-                  <div className="w-48 space-y-2">
+                <TableCell className={cn(CELL_X, "py-3.5")}>
+                  <div className="space-y-2 xl:w-48">
                     <SoldCount sold={event.sold} capacity={event.capacity} />
                     <SoldProgress title={event.title} sold={event.sold} capacity={event.capacity} />
                   </div>
                 </TableCell>
-                <TableCell className="px-6 py-3.5 text-right font-semibold tabular-nums">
+                <TableCell className={cn(CELL_X, "py-3.5 text-right font-semibold tabular-nums")}>
                   <Revenue status={event.status} revenueCents={event.revenueCents} />
                 </TableCell>
                 {rowActions && (
-                  <TableCell className="px-6 py-3.5">
-                    {/* flex-wrap: con tres acciones la columna no ensancha la tabla, se apilan. */}
-                    <div className="flex flex-wrap items-start justify-end gap-2">{rowActions(event)}</div>
+                  <TableCell className={cn("py-3.5", ACTIONS_COLUMN)}>
+                    {/* Acciones compactas ([Editar] y [•••]) en una sola línea. */}
+                    <div className="flex items-center justify-end gap-2">{rowActions(event, "table")}</div>
                   </TableCell>
                 )}
               </TableRow>
@@ -146,7 +166,7 @@ export function OrganizerEventsTable({ events, labelledBy, showOrganizer = false
 
       <ul aria-labelledby={labelledBy} className="space-y-3 lg:hidden">
         {events.map((event) => {
-          const actions = rowActions?.(event);
+          const actions = rowActions?.(event, "card");
           return (
             <li key={event.id} className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-border">
               <div className="flex items-start gap-3">

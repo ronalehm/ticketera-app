@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { ManagedEvent, ManagedEventsFilters } from "@/modules/events";
 import { listManagedEventsAction } from "../actions/managedEvents.actions";
 
-/** Sin filtros: con ellos trae el servidor los eventos iniciales de Resumen y Mis eventos. */
-export const DEFAULT_MANAGED_EVENTS_FILTERS: ManagedEventsFilters = { status: "all", q: "" };
+/** Sin filtros: con ellos trae el servidor los eventos iniciales de Eventos (KPIs y listado). */
+export const DEFAULT_MANAGED_EVENTS_FILTERS: ManagedEventsFilters = { status: "all", q: "", from: "", to: "" };
 
 /**
- * Query keys de los eventos del panel: única para Resumen y Mis eventos (comparten caché con los mismos filtros). Incluye
- * el usuario: tras cerrar sesión y entrar con otra cuenta en la misma pestaña, nunca se sirven los datos del anterior.
+ * Query keys de los eventos del panel: única para los KPIs y el listado de Eventos (comparten caché con los mismos
+ * filtros). Incluye el usuario: tras cerrar sesión y entrar con otra cuenta en la misma pestaña, nunca se sirven los
+ * datos del anterior.
  * Las mutaciones de borradores invalidan todas las del usuario (`managedEventsBaseKey`).
  */
 export const managedEventsBaseKey = (userId: string) => ["managed-events", userId] as const;

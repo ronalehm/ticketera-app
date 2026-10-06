@@ -1,6 +1,6 @@
 import { roleCan } from "@/modules/auth/permissions";
 
-import type { PanelNavSection, PanelOrganizerStatus, PanelRole } from "../types/panel.types";
+import type { PanelNavItem, PanelNavSection, PanelOrganizerStatus, PanelRole } from "../types/panel.types";
 
 const ROLE_LABELS: Record<PanelRole, string> = {
   customer: "Cliente",
@@ -22,8 +22,8 @@ export function isReadOnlyOrganizer(role: PanelRole, organizerStatus: PanelOrgan
   return role === "organizer" && organizerStatus !== "approved";
 }
 
-/** Secciones visibles del sidebar para el rol y el estado de organizador (Decisión 3: sin página → "Próximamente"). */
-export function buildPanelNav(role: PanelRole, organizerStatus: PanelOrganizerStatus): PanelNavSection[] {
+/** Secciones visibles del sidebar para el rol (sin página → "Próximamente"). Solo lectura no cambia el menú. */
+export function buildPanelNav(role: PanelRole): PanelNavSection[] {
   const sections: PanelNavSection[] = [];
 
   if (roleCan(role, "users:manage")) {
@@ -39,16 +39,11 @@ export function buildPanelNav(role: PanelRole, organizerStatus: PanelOrganizerSt
   }
 
   if (roleCan(role, "events:manageOwn")) {
-    const readOnly = isReadOnlyOrganizer(role, organizerStatus);
     sections.push({
       key: "organizer",
       title: "Organizador",
       items: [
-        { key: "summary", label: "Resumen", icon: "summary", state: "link", href: "/organizador" },
-        { key: "events", label: "Mis eventos", icon: "events", state: "link", href: "/organizador/eventos" },
-        readOnly
-          ? { key: "create-event", label: "Crear evento", icon: "create", state: "read-only" }
-          : { key: "create-event", label: "Crear evento", icon: "create", state: "link", href: "/organizador/eventos/nuevo" },
+        { key: "events", label: "Eventos", icon: "events", state: "link", href: "/organizador" },
         { key: "check-in", label: "Check-in", icon: "checkIn", state: "coming-soon" },
         { key: "payouts", label: "Pagos", icon: "payouts", state: "coming-soon" },
       ],
@@ -58,17 +53,26 @@ export function buildPanelNav(role: PanelRole, organizerStatus: PanelOrganizerSt
   return sections;
 }
 
-/** Sección y título de la página actual para el breadcrumb (ruta exacta, sin barra final). `null` si no está en el menú. */
+// Ítems que también quedan activos en una ruta base y sus subrutas: Crear y Editar evento siguen en «Eventos».
+const SUBROUTE_PREFIXES: Partial<Record<string, string>> = { events: "/organizador/eventos" };
+
+/** ¿La ruta actual corresponde al ítem? Coincidencia exacta (sin barra final) o, en «Eventos», sus subrutas. */
+export function isPanelNavItemActive(pathname: string, item: PanelNavItem): boolean {
+  if (item.state !== "link") return false;
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (path === item.href) return true;
+  const prefix = SUBROUTE_PREFIXES[item.key];
+  return prefix !== undefined && (path === prefix || path.startsWith(`${prefix}/`));
+}
+
+/** Sección y título de la página actual para el breadcrumb (`isPanelNavItemActive`). `null` si no está en el menú. */
 export function findNavItem(
   pathname: string,
   sections: PanelNavSection[],
 ): { section: string; title: string } | null {
-  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-
   for (const section of sections) {
-    for (const item of section.items) {
-      if (item.state === "link" && item.href === path) return { section: section.title, title: item.label };
-    }
+    const item = section.items.find((candidate) => isPanelNavItemActive(pathname, candidate));
+    if (item) return { section: section.title, title: item.label };
   }
   return null;
 }
