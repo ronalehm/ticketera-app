@@ -1,7 +1,7 @@
 # Panel organizador: vista «Eventos» unificada, filtros por fecha y acciones compactas
 
 - Módulo: organizer (también events, panel y components/shared)
-- Estado: borrador
+- Estado: aprobado
 
 ## Objetivo
 Hoy el panel tiene dos páginas para lo mismo:
@@ -162,8 +162,9 @@ Cómo leer el resultado:
      - `[•••]`: botón `size-11` con `aria-label="Más acciones de <título>"` que abre un `DropdownMenu` con las
        acciones permitidas por rol y estado (Eliminar, Enviar a revisión, Aprobar, Rechazar, Cancelar evento).
        Cada ítem lleva `min-h-11`.
-     - Si «Cancelar evento» está bloqueado por ventas, va deshabilitado con «Tiene ventas ·
-       {CANCEL_WITH_SALES_MESSAGE}» y no se ejecuta.
+     - Si «Cancelar evento» está bloqueado (`hasActiveSales`: órdenes pagadas o reservas `pending` vigentes), va
+       deshabilitado con «Tiene ventas o reservas en curso · {CANCEL_WITH_SALES_MESSAGE}» y no se ejecuta. El mismo
+       texto reemplaza a «Tiene ventas» en el layout `card`.
      - Sin acciones de menú no se muestra `•••`.
      - La celda no hace wrap y la columna tiene ancho fijo.
 
@@ -305,36 +306,36 @@ Coordinación:
 - Se ejecuta una fase por sesión.
 
 ### Fase 1. Filtros y UI
-- [ ] T1. DatePicker shadcn compartido.
+- [x] T1. DatePicker shadcn compartido.
   - Archivos: `components/ui/calendar.tsx`, `components/ui/popover.tsx` (CLI), `package.json`, `package-lock.json`,
     `components/shared/DatePicker.tsx` y `components/shared/DatePicker.test.tsx`.
   - Depende de: —.
   - Paralelo con T2 y T5.
-- [ ] T2. Filtros de fecha en el servidor.
+- [x] T2. Filtros de fecha en el servidor.
   - Archivos: `modules/events/schemas/managedEvents.schema.ts`, `modules/events/schemas/managedEvents.schema.test.ts`,
     `modules/events/services/managedEvents.service.ts` y `modules/events/services/managedEvents.service.test.ts`.
   - Depende de: —.
   - Paralelo con T1 y T5.
-- [ ] T5. Acciones compactas responsive.
+- [x] T5. Acciones compactas responsive.
   - Archivos: `modules/organizer/components/EventRowActions.tsx`,
     `modules/organizer/components/OrganizerEventsTable.tsx`, `modules/organizer/components/OrganizerEventsList.tsx`
     (firma de `rowActions`) y `modules/organizer/components/OrganizerEventsList.test.tsx`.
   - Depende de: —.
   - Paralelo con T1 y T2. Va antes de T3, porque comparten `OrganizerEventsList`.
-- [ ] T3. Filtros y «Crear evento» en el listado.
+- [x] T3. Filtros y «Crear evento» en el listado.
   - Archivos: `modules/organizer/components/OrganizerEventsList.tsx`,
     `modules/organizer/components/OrganizerEventsList.test.tsx`, `modules/organizer/hooks/useManagedEvents.ts` y
     `modules/organizer/hooks/useManagedEvents.test.tsx`.
   - Depende de: T1, T2 y T5.
   - Paralelo con T4.
-- [ ] T4. DatePicker en Crear/Editar.
+- [x] T4. DatePicker en Crear/Editar.
   - Archivos: `modules/organizer/components/OrganizerEventForm.tsx` y
     `modules/organizer/components/OrganizerEventForm.test.tsx`.
   - Depende de: T1.
   - Paralelo con T3 y T5.
 
 ### Fase 2. Navegación y consolidación
-- [ ] T6. Vista `/organizador` unificada.
+- [x] T6. Vista `/organizador` unificada.
   - Archivos: `modules/organizer/components/OrganizerDashboard.tsx`,
     `modules/organizer/components/OrganizerDashboard.test.tsx`, `modules/organizer/utils/organizerStats.ts`,
     `modules/organizer/utils/organizerStats.test.ts`, `app/(panel)/organizador/page.tsx`,
@@ -342,7 +343,7 @@ Coordinación:
     `modules/organizer/components/OrganizerEventForm.test.tsx` y `modules/organizer/components/EventFormHeader.tsx`.
   - Depende de: Fase 1.
   - Paralelo con T7.
-- [ ] T7. Sidebar y breadcrumb.
+- [x] T7. Sidebar y breadcrumb.
   - Archivos: `modules/panel/utils/panelNav.ts`, `modules/panel/utils/panelNav.test.ts`,
     `modules/panel/types/panel.types.ts`, `modules/panel/components/PanelNav.tsx` y
     `modules/panel/components/PanelNav.test.tsx`.
