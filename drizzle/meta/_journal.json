@@ -64,6 +64,13 @@
       "when": 1791213868301,
       "tag": "0008_organizer_status",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791270700736,
+      "tag": "0009_new_event_categories",
+      "breakpoints": true
     }
   ]
 }

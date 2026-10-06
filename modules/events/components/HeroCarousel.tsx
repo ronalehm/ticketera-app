@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORY_LABELS } from "../data/categories";
 import type { Event } from "../types/events.types";
 import { formatEventDate } from "../utils/formatEvent";
 
@@ -84,7 +83,7 @@ export function HeroCarousel({ events }: { events: Event[] }) {
                 <div className="absolute inset-0 -z-10 bg-gradient-to-t from-brand-navy/90 via-brand-navy/40 to-transparent" />
                 <div className="flex max-w-2xl flex-col items-start gap-3 p-6 pb-16 text-white md:gap-4 md:p-10 md:pb-16">
                   <Badge className="h-6 bg-highlight px-2.5 font-bold text-highlight-foreground">
-                    {EVENT_CATEGORY_LABELS[event.category]}
+                    {event.categoryName}
                   </Badge>
                   <h2 className="line-clamp-3 text-3xl leading-[1.05] font-extrabold tracking-tight md:text-5xl lg:text-6xl">
                     {event.title}

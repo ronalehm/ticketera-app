@@ -61,6 +61,7 @@ const ORDER: CheckoutOrder = {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores",
     category: "conciertos",
+    categoryName: "Conciertos",
     startsAt: "2026-11-14T21:00:00-05:00",
     venue: "Estadio",
     city: "Lima",

@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { SiteHeader } from "@/components/shared/SiteHeader";
+import { listEventCategories } from "@/modules/events/catalog";
 
-export function SiteShell({ children }: { children: ReactNode }) {
+export async function SiteShell({ children }: { children: ReactNode }) {
+  const categories = await listEventCategories();
   return (
     <>
       <SiteHeader />
       <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <SiteFooter categories={categories} />
     </>
   );
 }

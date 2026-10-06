@@ -1,10 +1,9 @@
 // Se ejecuta en el cliente: sin valores del barrel de events, solo su entrada `format` y tipos (Decisión 17).
 import { z } from "zod";
-import type { EventCategory } from "@/modules/events";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
+import { EVENT_CATEGORIES } from "@/modules/events/format";
 
-// Record<EventCategory, string> garantiza por tipo que estén todas las claves; el test lo compara con EVENT_CATEGORIES.
-export const EVENT_CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as [EventCategory, ...EventCategory[]];
+// Transitorio hasta F3 (spec events-dynamic-landing): el formulario pasa a las categorías de la BD.
+export const EVENT_CATEGORY_OPTIONS = EVENT_CATEGORIES;
 
 // Borradores de ejemplo del seed (`ORGANIZER_DRAFTS_MOCK`): los valida `buildSeedData` antes de sembrarlos.
 export const organizerEventSchema = z.object({

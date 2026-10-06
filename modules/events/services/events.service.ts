@@ -19,6 +19,7 @@ const eventFields = {
   slug: events.slug,
   title: events.title,
   category: categories.slug,
+  categoryName: categories.name,
   startsAt: events.startsAt,
   venue: venues.name,
   city: venues.city,

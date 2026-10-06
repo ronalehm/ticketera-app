@@ -2,18 +2,25 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
 import type { EventFilters } from "../schemas/eventFilters.schema";
+import type { EventCategory } from "../types/events.types";
 import { buildEventsHref } from "../utils/eventFilters";
 
-const CHIPS = [
-  { category: undefined, label: "Todas" },
-  ...EVENT_CATEGORIES.map((category) => ({ category, label: EVENT_CATEGORY_LABELS[category] })),
-];
-
 // Server Component: pills-enlace de selección única; cada una deja solo esa categoría y conserva los demás filtros.
-export function CategoryFilter({ className, filters }: { className?: string; filters: EventFilters }) {
+export function CategoryFilter({
+  className,
+  filters,
+  categories,
+}: {
+  className?: string;
+  filters: EventFilters;
+  categories: EventCategory[];
+}) {
   const selected = filters.categoria?.length === 1 ? filters.categoria[0] : undefined;
+  const chips = [
+    { category: undefined, label: "Todas" },
+    ...categories.map(({ slug, name }) => ({ category: slug, label: name })),
+  ];
   return (
     <nav
       aria-label="Filtrar por categoría"
@@ -23,7 +30,7 @@ export function CategoryFilter({ className, filters }: { className?: string; fil
       )}
     >
       <ul className="flex w-max gap-2">
-        {CHIPS.map(({ category, label }) => {
+        {chips.map(({ category, label }) => {
           // "Todas" solo está activa sin categorías; una pill, si es la única seleccionada.
           const active = category ? selected === category : !filters.categoria;
           return (

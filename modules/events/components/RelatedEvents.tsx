@@ -5,15 +5,16 @@ import { SectionHeader } from "@/components/shared/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORY_LABELS } from "../data/categories";
-import type { Event, EventCategory } from "../types/events.types";
+import type { Event } from "../types/events.types";
 import { buildEventsHref } from "../utils/eventFilters";
 import { EventCard } from "./EventCard";
 
 // < sm: fila con scroll-snap que sangra hasta el borde del contenedor (`-mx-4 px-4`); desde sm, grilla.
 // Cada `li` es `relative` para que los `sr-only` (absolute) de EventCard queden dentro del scroll del carrusel
 // y no ensanchen la página.
-export function RelatedEvents({ events, category }: { events: Event[]; category: EventCategory }) {
+type RelatedEventsProps = { events: Event[] } & Pick<Event, "category" | "categoryName">;
+
+export function RelatedEvents({ events, category, categoryName }: RelatedEventsProps) {
   if (events.length === 0) return null;
 
   return (
@@ -29,7 +30,7 @@ export function RelatedEvents({ events, category }: { events: Event[]; category:
                 "h-11 cursor-pointer gap-1.5 px-0 text-base font-semibold text-primary-strong",
               )}
             >
-              Ver más en {EVENT_CATEGORY_LABELS[category]}
+              Ver más en {categoryName}
               <ArrowRight aria-hidden />
             </Link>
           }

@@ -4,7 +4,7 @@ import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import { TicketPager } from "@/components/shared/TicketPager";
 import { TicketQr } from "@/components/shared/TicketQr";
 import { cn } from "@/lib/utils";
-import { EVENT_CATEGORY_LABELS, formatEventPrice, formatLongDayMonth } from "@/modules/events/format";
+import { formatEventPrice, formatLongDayMonth } from "@/modules/events/format";
 import type { Order } from "../types/checkout.types";
 import { formatCompactSeats } from "../utils/summaryFormat";
 
@@ -37,7 +37,7 @@ export function ConfirmationTicketCard({ order }: ConfirmationTicketCardProps) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-5 md:p-6">
         <p className="text-xs font-bold tracking-wider text-primary-strong uppercase">
-          {EVENT_CATEGORY_LABELS[event.category]}
+          {event.categoryName}
         </p>
         <h2 id={titleId} className="text-xl leading-tight font-bold tracking-tight md:text-2xl">
           {event.title}

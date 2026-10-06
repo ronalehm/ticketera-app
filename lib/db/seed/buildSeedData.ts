@@ -10,7 +10,6 @@ import { normalizeText, slugify } from "@/lib/text";
 // Excepción documentada (spec data-foundation, Decisión 15; auth-clerk, Decisión 13): el seed es tooling y lee
 // internals de los módulos.
 import { EVENTS_MOCK } from "@/modules/events/data/events.mock";
-import { EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 import { MAX_TICKETS_PER_ORDER } from "@/modules/events/purchase";
 import { eventDetailSchema } from "@/modules/events/schemas/events.schema";
 import { LEGAL_DOCUMENTS_MOCK } from "@/modules/legal/data/legalDocuments.mock";
@@ -19,6 +18,7 @@ import { ORGANIZER_DRAFTS_MOCK } from "@/modules/organizer/data/organizerEvents.
 import { organizerEventSchema } from "@/modules/organizer/schemas/organizer.schema";
 import { VENUE_LAYOUTS_MOCK } from "@/modules/seating/data/venueMaps.mock";
 import { venueLayoutSchema } from "@/modules/seating/schemas/seating.schema";
+import { DEFAULT_EVENT_CATEGORIES } from "./defaultCategories";
 
 export const DEMO_GENERAL_CAPACITY = 200;
 const COMMISSION_BPS = 1000;
@@ -122,7 +122,7 @@ export function buildSeedData({ superAdminId, organizers: seedOrganizers, now }:
       commissionBps: COMMISSION_BPS,
       payoutsEnabled: false,
     })),
-    categories: Object.entries(EVENT_CATEGORY_LABELS).map(([slug, name]) => ({
+    categories: DEFAULT_EVENT_CATEGORIES.map(({ slug, name }) => ({
       id: seedUuid(`category:${slug}`),
       slug,
       name,

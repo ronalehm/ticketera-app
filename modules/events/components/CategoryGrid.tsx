@@ -1,18 +1,21 @@
 import Link from "next/link";
-import { Drama, type LucideIcon, Mic, Music, PartyPopper, Trophy, Users } from "lucide-react";
+import { Beer, Coffee, Drama, type LucideIcon, Martini, Mic, Music, PartyPopper, Tag, Trophy, Users } from "lucide-react";
 
 import { SectionHeader } from "@/components/shared/SectionHeader";
 
 import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
-import type { EventCategory } from "../types/events.types";
 
-const CATEGORY_ICONS: Record<EventCategory, LucideIcon> = {
+// Iconos de las categorías conocidas; una categoría nueva de la BD usa `Tag`.
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
   conciertos: Music,
   teatro: Drama,
   deportes: Trophy,
   festivales: PartyPopper,
   "stand-up": Mic,
   familia: Users,
+  "cafe-shop": Coffee,
+  drink: Martini,
+  "bar-shop": Beer,
 };
 
 export function CategoryGrid() {
@@ -21,7 +24,7 @@ export function CategoryGrid() {
       <SectionHeader title="Explora por categoría" />
       <ul className="grid grid-cols-3 gap-4 md:gap-6 lg:grid-cols-6">
         {EVENT_CATEGORIES.map((category) => {
-          const Icon = CATEGORY_ICONS[category];
+          const Icon = CATEGORY_ICONS[category] ?? Tag;
           return (
             <li key={category}>
               <Link

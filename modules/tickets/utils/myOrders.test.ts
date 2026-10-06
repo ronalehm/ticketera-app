@@ -12,6 +12,7 @@ function makeOrder(overrides: { code: string; ownerEmail?: string; startsAt?: st
       slug: "evento",
       title: "Evento",
       category: "conciertos",
+      categoryName: "Conciertos",
       startsAt,
       venue: "Estadio Nacional",
       city: "Lima",

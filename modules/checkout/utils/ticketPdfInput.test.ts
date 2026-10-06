@@ -9,6 +9,7 @@ const order: Order = {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores: Gira Neón 2026",
     category: "conciertos",
+    categoryName: "Conciertos",
     startsAt: "2026-11-14T21:00:00-05:00",
     venue: "Estadio Nacional",
     city: "Lima",

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EventFilters } from "../schemas/eventFilters.schema";
+import type { EventCategory } from "../types/events.types";
 import type { FacetCounts, MonthOption } from "../utils/eventFilters";
 import { EventFiltersForm, type FilterSection } from "./EventFiltersForm";
 
@@ -11,8 +12,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
+// Categorías de la BD: «Tecnología» no está en el código.
+const CATEGORIES: EventCategory[] = [
+  { id: "00000000-0000-4000-8000-000000000001", slug: "conciertos", name: "Conciertos" },
+  { id: "00000000-0000-4000-8000-000000000002", slug: "teatro", name: "Teatro" },
+  { id: "00000000-0000-4000-8000-000000000003", slug: "tecnologia", name: "Tecnología" },
+];
+
 const FACETS: FacetCounts = {
-  categoria: { conciertos: 2, teatro: 2, deportes: 2, festivales: 2, "stand-up": 2, familia: 1 },
+  categoria: { conciertos: 2, teatro: 2, tecnologia: 0 },
   ciudad: { Lima: 6, Arequipa: 2, Cusco: 1, Trujillo: 2, Piura: 1 },
 };
 
@@ -24,7 +32,9 @@ const MONTHS: MonthOption[] = [
 const ALL_SECTIONS: FilterSection[] = ["categoria", "ciudad", "mes", "precio"];
 
 const renderForm = (filters: EventFilters = {}, sections: FilterSection[] = ALL_SECTIONS) =>
-  render(<EventFiltersForm filters={filters} facets={FACETS} months={MONTHS} sections={sections} />);
+  render(
+    <EventFiltersForm filters={filters} facets={FACETS} categories={CATEGORIES} months={MONTHS} sections={sections} />,
+  );
 
 const checkbox = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 const radio = (name: string) => screen.getByRole("radio", { name }) as HTMLInputElement;
@@ -46,11 +56,12 @@ describe("EventFiltersForm", () => {
     expect(screen.queryByRole("checkbox", { name: /^Teatro/ })).toBeNull();
   });
 
-  it("con todas las secciones muestra 6 categorías, 5 ciudades, meses y rangos de precio", () => {
+  it("con todas las secciones muestra las categorías de la BD, 5 ciudades, meses y rangos de precio", () => {
     renderForm();
 
     expect(legends()).toEqual(["Categoría", "Ciudad", "Fecha", "Precio desde"]);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(11);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(8);
+    expect(checkbox("Tecnología, 0 eventos").value).toBe("tecnologia");
     expect(screen.getAllByRole("radio").map((input) => input.closest("label")?.textContent)).toEqual([
       "Cualquier fecha",
       "Noviembre 2026",
@@ -105,7 +116,13 @@ describe("EventFiltersForm", () => {
 
     // Respuesta del servidor: mismos nodos (sin remontar), así que el foco no se pierde.
     rerender(
-      <EventFiltersForm filters={{ categoria: ["teatro"] }} facets={FACETS} months={MONTHS} sections={ALL_SECTIONS} />,
+      <EventFiltersForm
+        filters={{ categoria: ["teatro"] }}
+        facets={FACETS}
+        categories={CATEGORIES}
+        months={MONTHS}
+        sections={ALL_SECTIONS}
+      />,
     );
     expect(checkbox("Teatro, 2 eventos")).toBe(teatro);
     expect(teatro.checked).toBe(true);

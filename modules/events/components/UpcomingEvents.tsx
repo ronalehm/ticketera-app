@@ -9,10 +9,10 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
-import type { Event, EventCategory } from "../types/events.types";
+import type { Event } from "../types/events.types";
 import { EventCard } from "./EventCard";
 
-type Filter = EventCategory | "all";
+type Filter = Event["category"] | "all";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Todos" },

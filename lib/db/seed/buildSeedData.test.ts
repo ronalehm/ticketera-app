@@ -106,8 +106,8 @@ describe("buildSeedData", () => {
     expect(() => buildSeedData({ ...INPUT, organizers: [] })).toThrow(/al menos un organizador/);
   });
 
-  it("siembra 6 categorías, 13 eventos publicados, 1 borrador y un asiento de recinto por butaca de los layouts", () => {
-    expect(data.categories).toHaveLength(6);
+  it("siembra 9 categorías, 13 eventos publicados, 1 borrador y un asiento de recinto por butaca de los layouts", () => {
+    expect(data.categories).toHaveLength(9);
     expect(data.events.filter((event) => event.status === "published")).toHaveLength(13);
     expect(data.events.filter((event) => event.status === "draft").map((event) => event.slug)).toEqual([
       "feria-familiar-de-verano",

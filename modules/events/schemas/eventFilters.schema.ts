@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { CITIES, PRICE_RANGE_VALUES, SORT_VALUES } from "../data/searchOptions";
-import { eventCategorySchema } from "./events.schema";
+import { categorySlugSchema } from "./events.schema";
 
 export const citySchema = z.enum(CITIES);
 
@@ -23,7 +23,8 @@ function multiValue<T extends z.ZodType>(item: T) {
 // Cada campo inválido cae a undefined (no rompe la página).
 export const eventFiltersSchema = z.object({
   q: z.string().trim().min(1).optional().catch(undefined),
-  categoria: multiValue(eventCategorySchema),
+  // Slug bien formado aunque no exista en la BD (→ 0 resultados); uno mal formado se descarta.
+  categoria: multiValue(categorySlugSchema),
   ciudad: multiValue(citySchema),
   mes: z
     .string()

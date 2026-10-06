@@ -7,6 +7,7 @@ const record: EventDetailRecord = {
   slug: "noche-de-sintetizadores-lima",
   title: "Noche de Sintetizadores",
   category: "conciertos",
+  categoryName: "Conciertos",
   startsAt: new Date("2026-11-15T02:00:00Z"),
   venue: "Estadio Nacional",
   city: "Lima",
@@ -42,8 +43,16 @@ describe("toEvent", () => {
     expect(toEvent({ ...record, availableSeats: 0 }).status).toBe("sold-out");
   });
 
-  it("una categoría desconocida hace fallar eventSchema.parse", () => {
-    expect(() => eventSchema.parse(toEvent({ ...record, category: "opera" }))).toThrow();
+  it("conserva el slug y el nombre de la categoría", () => {
+    expect(toEvent(record)).toMatchObject({ category: "conciertos", categoryName: "Conciertos" });
+  });
+
+  it("una categoría que no está en el código pasa eventSchema.parse (la BD es la fuente de verdad)", () => {
+    expect(eventSchema.parse(toEvent({ ...record, category: "cafe-shop", categoryName: "Café" })).category).toBe("cafe-shop");
+  });
+
+  it("un slug de categoría mal formado hace fallar eventSchema.parse", () => {
+    expect(() => eventSchema.parse(toEvent({ ...record, category: "Ópera" }))).toThrow();
   });
 
   it.each(["startsAt", "imageUrl"] as const)("lanza con el slug si %s es null", (field) => {

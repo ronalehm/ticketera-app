@@ -12,15 +12,9 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AuthHeaderActions } from "@/modules/auth/header";
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "@/modules/events/format";
 
 const NAV_LINK =
   "inline-flex cursor-pointer items-center rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring";
-
-const categoryLinks = EVENT_CATEGORIES.map((slug) => ({
-  href: `/eventos?categoria=${slug}`,
-  label: EVENT_CATEGORY_LABELS[slug],
-}));
 
 export function SiteHeader() {
   return (
@@ -34,12 +28,11 @@ export function SiteHeader() {
         </Link>
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
-          <nav aria-label="Categorías" className="hidden xl:flex">
-            {categoryLinks.map((link) => (
-              <Link key={link.href} href={link.href} className={cn(NAV_LINK, "h-10 px-3")}>
-                {link.label}
-              </Link>
-            ))}
+          {/* Las categorías se exploran en /eventos y en el footer: el header solo enlaza al listado. */}
+          <nav aria-label="Principal" className="hidden xl:flex">
+            <Link href="/eventos" className={cn(NAV_LINK, "h-10 px-3")}>
+              Eventos
+            </Link>
           </nav>
 
           <AuthHeaderActions variant="bar" />
@@ -60,17 +53,14 @@ export function SiteHeader() {
               </SheetHeader>
               <div className="flex flex-col gap-6 px-4 pb-6">
                 <AuthHeaderActions variant="sheet" />
-                <nav aria-label="Categorías" className="flex flex-col">
-                  {categoryLinks.map((link) => (
-                    <SheetClose
-                      key={link.href}
-                      nativeButton={false}
-                      render={<Link href={link.href} />}
-                      className={cn(NAV_LINK, "h-11 px-3 text-base")}
-                    >
-                      {link.label}
-                    </SheetClose>
-                  ))}
+                <nav aria-label="Principal" className="flex flex-col">
+                  <SheetClose
+                    nativeButton={false}
+                    render={<Link href="/eventos" />}
+                    className={cn(NAV_LINK, "h-11 px-3 text-base")}
+                  >
+                    Eventos
+                  </SheetClose>
                 </nav>
               </div>
             </SheetContent>

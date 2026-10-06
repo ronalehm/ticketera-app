@@ -18,4 +18,13 @@ describe("EventDetailHeader", () => {
     expect(img.getAttribute("src")).toBe(COVER);
     expect(img.getAttribute("srcset")).toBeNull();
   });
+
+  it("muestra el nombre de la categoría en la miga y la badge, y enlaza al filtro por slug", () => {
+    const { getAllByText } = render(
+      <EventDetailHeader event={{ ...event, category: "bar-shop", categoryName: "Bares" }} purchaseHref="#entradas" />,
+    );
+    const labels = getAllByText("Bares");
+    expect(labels).toHaveLength(2);
+    expect(labels[0].closest("a")?.getAttribute("href")).toBe("/eventos?categoria=bar-shop");
+  });
 });

@@ -6,9 +6,9 @@ import { startTransition, useOptimistic, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORIES, EVENT_CATEGORY_LABELS } from "../data/categories";
 import { CITIES, PRICE_RANGES } from "../data/searchOptions";
 import type { EventFilters } from "../schemas/eventFilters.schema";
+import type { EventCategory } from "../types/events.types";
 import {
   buildEventsHref,
   parseEventFilters,
@@ -23,6 +23,7 @@ export type FilterSection = "categoria" | "ciudad" | "mes" | "precio";
 type EventFiltersFormProps = {
   filters: EventFilters;
   facets: FacetCounts;
+  categories: EventCategory[];
   months: MonthOption[];
   sections: FilterSection[];
   className?: string;
@@ -102,7 +103,7 @@ function RadioOption({
  * Formulario GET de filtros (mejora progresiva): sin JS se envía con "Aplicar filtros";
  * con JS cada cambio navega al momento y el control responde sin esperar al servidor.
  */
-export function EventFiltersForm({ filters, facets, months, sections, className }: EventFiltersFormProps) {
+export function EventFiltersForm({ filters, facets, categories, months, sections, className }: EventFiltersFormProps) {
   const router = useRouter();
   const [optimistic, setOptimistic] = useOptimistic(filters);
 
@@ -124,15 +125,15 @@ export function EventFiltersForm({ filters, facets, months, sections, className 
       case "categoria":
         return (
           <FilterFieldset key={section} legend="Categoría">
-            {EVENT_CATEGORIES.map((category) => (
+            {categories.map(({ slug, name }) => (
               <CheckboxOption
-                key={category}
+                key={slug}
                 name="categoria"
-                value={category}
-                label={EVENT_CATEGORY_LABELS[category]}
-                count={facets.categoria[category]}
-                checked={optimistic.categoria?.includes(category) ?? false}
-                onChange={() => apply(toggleFilterValue(optimistic, "categoria", category))}
+                value={slug}
+                label={name}
+                count={facets.categoria[slug]}
+                checked={optimistic.categoria?.includes(slug) ?? false}
+                onChange={() => apply(toggleFilterValue(optimistic, "categoria", slug))}
               />
             ))}
           </FilterFieldset>

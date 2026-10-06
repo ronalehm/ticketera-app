@@ -22,6 +22,7 @@ const ORDER: Order = {
     slug: "noche-de-sintetizadores-lima",
     title: "Noche de Sintetizadores",
     category: "conciertos",
+    categoryName: "Música en vivo",
     startsAt: "2026-11-14T21:00:00-05:00",
     venue: "Estadio",
     city: "Lima",
@@ -94,7 +95,7 @@ describe("OrderConfirmation", () => {
     expect(orderChip.className).toContain("bg-card");
 
     const card = screen.getByRole("article", { name: "Noche de Sintetizadores" });
-    expect(within(card).getByText("Conciertos")).toBeTruthy();
+    expect(within(card).getByText("Música en vivo")).toBeTruthy();
     expect(within(card).getByRole("heading", { name: "Noche de Sintetizadores" })).toBeTruthy();
     expect(within(card).getByText("Zona").nextElementSibling?.textContent).toBe("General, VIP");
     expect(within(card).getByText("Entradas").nextElementSibling?.textContent).toBe("3");

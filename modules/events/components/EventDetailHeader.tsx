@@ -13,7 +13,6 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { EVENT_CATEGORY_LABELS } from "../data/categories";
 import type { EventDetail } from "../types/events.types";
 import { formatEventPrice, formatLongDayMonth, formatTime } from "../utils/formatEvent";
 import { SaveEventButton } from "./SaveEventButton";
@@ -38,7 +37,6 @@ type EventDetailHeaderProps = {
 };
 
 export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProps) {
-  const categoryLabel = EVENT_CATEGORY_LABELS[event.category];
   const ctaLabel =
     event.priceFrom === 0
       ? "Ver entradas · Entrada libre"
@@ -70,7 +68,7 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <Link href={`/eventos?categoria=${event.category}`} className={CRUMB_LINK}>
-              {categoryLabel}
+              {event.categoryName}
             </Link>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -95,7 +93,7 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
         <div className="flex flex-col gap-6 p-6 md:p-8 lg:p-10 xl:p-12">
           <div className="flex flex-col gap-4">
             <Badge variant="outline" className="h-7 border-primary-foreground/30 px-3 text-primary-foreground">
-              {categoryLabel}
+              {event.categoryName}
             </Badge>
             <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance wrap-break-word md:text-5xl lg:text-4xl xl:text-5xl">
               {event.title}

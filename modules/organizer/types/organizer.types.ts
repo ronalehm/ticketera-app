@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { EventCategory, ManagedEventsFilters, ManagedEventStatus } from "@/modules/events";
+import type { ManagedEventsFilters, ManagedEventStatus } from "@/modules/events";
 import type {
   createEventDraftSchema,
   eventDraftTicketTypeSchema,
@@ -26,7 +26,8 @@ export type TicketTypeRowErrors = { name?: string; price?: string };
 /** Borrador listo para la BD (`toEventDraftInput`): lo recibe el servicio. */
 export type EventDraftInput = {
   title: string;
-  category: EventCategory;
+  /** Slug de `categories`. */
+  category: string;
   description: string | null;
   startsAt: Date | null;
   doorsOpenAt: Date | null;
@@ -51,7 +52,8 @@ export type EditableEvent = {
   status: ManagedEventStatus;
   organizerId: string;
   title: string;
-  category: EventCategory;
+  /** Slug de `categories`. */
+  category: string;
   description: string | null;
   startsAt: string | null;
   doorsOpenAt: string | null;
