@@ -1,11 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { listManagedEventsAction } from "../actions/managedEvents.actions";
 import { makeManagedEvent } from "../data/managedEvents.mock";
 import { OrganizerDashboard } from "./OrganizerDashboard";
 
 vi.mock("../actions/managedEvents.actions", () => ({ listManagedEventsAction: vi.fn() }));
+vi.mock("../actions/eventDrafts.actions", () => ({ deleteEventAction: vi.fn() }));
+vi.mock("../actions/eventModeration.actions", () => ({
+  submitForReviewAction: vi.fn(),
+  approveEventAction: vi.fn(),
+  rejectEventAction: vi.fn(),
+  cancelEventAction: vi.fn(),
+}));
 
 const EVENTS = [
   makeManagedEvent("a", { sold: 30, revenueCents: 270_000 }),
@@ -18,7 +25,7 @@ function renderDashboard(props: Partial<React.ComponentProps<typeof OrganizerDas
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OrganizerDashboard userId="user-1" initialEvents={EVENTS} {...props} />
+      <OrganizerDashboard role="organizer" userId="user-1" initialEvents={EVENTS} {...props} />
     </QueryClientProvider>,
   );
 }
@@ -32,7 +39,7 @@ const cards = () => within(screen.getByRole("list", { name: "Mis eventos" }));
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("OrganizerDashboard", () => {
@@ -45,29 +52,45 @@ describe("OrganizerDashboard", () => {
     expect(listManagedEventsAction).not.toHaveBeenCalled();
   });
 
-  it("el filtro solo cambia la lista, en el cliente", () => {
+  it("filtrar cambia el listado (en el servidor) pero no los KPIs", async () => {
+    vi.mocked(listManagedEventsAction).mockResolvedValue([EVENTS[2]]);
     renderDashboard();
 
-    fireEvent.click(screen.getByRole("button", { name: "Borradores" }));
-    expect(cards().getAllByRole("listitem")).toHaveLength(1);
-    expect(cards().getByText("Evento c")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Estado"), { target: { value: "draft" } });
+
+    expect(listManagedEventsAction).toHaveBeenCalledTimes(1);
+    expect(listManagedEventsAction).toHaveBeenCalledWith({ status: "draft", q: "", from: "", to: "" });
+    await waitFor(() => expect(cards().getAllByRole("listitem")).toHaveLength(1));
+    expect(kpi("Ingresos")).toBe("S/ 3,600.00");
+    expect(kpi("Entradas vendidas")).toBe("40");
     expect(kpi("Eventos publicados")).toBe("1");
-    expect(listManagedEventsAction).not.toHaveBeenCalled();
   });
 
-  it("un borrador no muestra ingresos y el resto sí", () => {
-    renderDashboard();
+  it("debajo de los KPIs muestra el listado con filtros y, con canMutate, las acciones de cada fila", () => {
+    renderDashboard({ canMutate: true });
 
-    const draft = cards().getByText("Evento c").closest("li")!;
-    expect(within(draft).getByText("Sin ingresos")).toBeTruthy();
-    const finished = cards().getByText("Evento d").closest("li")!;
-    expect(within(finished).getByText("S/ 900.00")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Mis eventos" })).toBeTruthy();
+    expect(screen.getByRole("search")).toBeTruthy();
+    expect(screen.getByLabelText("Desde")).toBeTruthy();
+    expect(screen.getByLabelText("Hasta")).toBeTruthy();
+    expect(cards().getByRole("link", { name: "Editar Evento c" }).getAttribute("href")).toBe(
+      "/organizador/eventos/c/editar",
+    );
+    expect(cards().getByRole("button", { name: "Eliminar Evento c" })).toBeTruthy();
   });
 
-  it("no tiene acciones por fila (se editan desde Mis eventos)", () => {
+  it("muestra «Crear evento» solo con canCreate (no es una cuenta en solo lectura)", () => {
+    const { unmount } = renderDashboard({ canCreate: true });
+    expect(screen.getByRole("link", { name: "Crear evento" }).getAttribute("href")).toBe("/organizador/eventos/nuevo");
+    unmount();
+
     renderDashboard();
-    expect(screen.queryByRole("link", { name: /Editar/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Eliminar/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Crear evento" })).toBeNull();
+  });
+
+  it("con saved muestra el aviso de guardado", () => {
+    renderDashboard({ saved: "borrador" });
+    expect(screen.getByText("Borrador guardado")).toBeTruthy();
   });
 
   it("sin eventos lo dice", () => {

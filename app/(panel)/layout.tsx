@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 // Shell del panel (organizador y admin): exige `panel:access`; un organizador no aprobado lo ve en solo lectura.
 export default async function PanelLayout({ children }: LayoutProps<"/">) {
   const { user, organizerStatus, readOnly } = await getPanelContext("panel:access", { returnTo: "/organizador" });
-  const sections = buildPanelNav(user.role, organizerStatus);
+  const sections = buildPanelNav(user.role);
   const roleLabel = getPanelRoleLabel(user.role);
 
   return (

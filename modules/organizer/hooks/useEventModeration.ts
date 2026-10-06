@@ -11,7 +11,7 @@ import type { EventDraftActionResult } from "../types/organizer.types";
 import { shouldReloadManagedEvents } from "./useEventDrafts";
 import { managedEventsBaseKey } from "./useManagedEvents";
 
-/** Transición pedida desde Mis eventos; rechazar lleva la nota para el organizador. */
+/** Transición pedida desde el listado de Eventos; rechazar lleva la nota para el organizador. */
 export type ModerationRequest =
   | { transition: "submit" | "approve" | "cancel"; eventId: string }
   | { transition: "reject"; eventId: string; note: string };

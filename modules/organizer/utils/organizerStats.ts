@@ -1,7 +1,7 @@
 import type { ManagedEvent } from "@/modules/events";
 import { formatEventPrice } from "@/modules/events/format";
 
-import type { DashboardKpis, ManagedEventsStatusFilter } from "../types/organizer.types";
+import type { DashboardKpis } from "../types/organizer.types";
 
 /** Suma ingresos y vendidas (ya calculados en la BD con órdenes `paid`) y cuenta los publicados. */
 export function getDashboardKpis(events: ManagedEvent[]): DashboardKpis {
@@ -19,11 +19,6 @@ export function getDashboardKpis(events: ManagedEvent[]): DashboardKpis {
 export function getSoldPercentage(sold: number, capacity: number): number {
   if (capacity <= 0) return 0;
   return Math.min(100, Math.round((sold / capacity) * 100));
-}
-
-export function filterManagedEvents(events: ManagedEvent[], filter: ManagedEventsStatusFilter): ManagedEvent[] {
-  if (filter === "all") return events;
-  return events.filter((event) => event.status === filter);
 }
 
 /** Céntimos → "S/ 1,234.50". */

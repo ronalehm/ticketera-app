@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeManagedEvent as makeEvent } from "../data/managedEvents.mock";
-import { filterManagedEvents, formatRevenue, getDashboardKpis, getSoldPercentage } from "./organizerStats";
+import { formatRevenue, getDashboardKpis, getSoldPercentage } from "./organizerStats";
 
 const published = makeEvent("a", { sold: 120, revenueCents: 1_080_000 });
 const finished = makeEvent("b", { status: "finished", sold: 30, revenueCents: 270_050 });
@@ -26,21 +26,6 @@ describe("getSoldPercentage", () => {
     [10, 5, 100],
   ])("(%i, %i) → %i", (sold, capacity, expected) => {
     expect(getSoldPercentage(sold, capacity)).toBe(expected);
-  });
-});
-
-describe("filterManagedEvents", () => {
-  it("devuelve todos con all", () => {
-    expect(filterManagedEvents(events, "all")).toEqual(events);
-  });
-
-  it.each([
-    ["published", [published]],
-    ["draft", [draft]],
-    ["pending_review", [review]],
-    ["cancelled", []],
-  ] as const)("devuelve solo los de estado %s", (status, expected) => {
-    expect(filterManagedEvents(events, status)).toEqual(expected);
   });
 });
 

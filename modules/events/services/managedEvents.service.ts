@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, ilike, lt, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { db } from "@/lib/db/client";
@@ -42,6 +42,14 @@ function matchesQuery(q: string): SQL | undefined {
   );
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Medianoche de Lima del día `YYYY-MM-DD` (Decisión 2). Perú no tiene horario de verano: el offset es siempre -05:00,
+ * así que el día siguiente empieza exactamente `DAY_MS` después.
+ */
+const limaMidnight = (day: string) => new Date(`${day}T00:00:00-05:00`);
+
 /**
  * Eventos que `actor` gestiona en el panel, con sus ventas, por fecha de inicio (los borradores sin fecha al final).
  * Alcance: con `events:manageAny` (admin, super_admin) todos; si no, solo los suyos (`organizer_id = actor.id`).
@@ -51,7 +59,7 @@ function matchesQuery(q: string): SQL | undefined {
  */
 export async function listManagedEvents(
   actor: Actor,
-  { status = "all", q = "" }: Partial<ManagedEventsFilters> = {},
+  { status = "all", q = "", from = "", to = "" }: Partial<ManagedEventsFilters> = {},
   database: Queryable = db,
 ): Promise<ManagedEvent[]> {
   if (!roleCan(actor.role, "events:manageOwn")) return [];
@@ -85,6 +93,9 @@ export async function listManagedEvents(
         manageAny ? undefined : eq(events.organizerId, actor.id),
         status === "all" ? undefined : eq(events.status, status),
         query ? matchesQuery(query) : undefined,
+        // Con un límite, `starts_at` null no cumple la comparación: los borradores sin fecha quedan fuera.
+        from ? gte(events.startsAt, limaMidnight(from)) : undefined,
+        to ? lt(events.startsAt, new Date(limaMidnight(to).getTime() + DAY_MS)) : undefined,
       ),
     )
     .orderBy(sql`${events.startsAt} asc nulls last`, events.title, events.id);

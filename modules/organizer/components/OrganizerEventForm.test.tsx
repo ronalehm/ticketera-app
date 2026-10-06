@@ -46,6 +46,11 @@ const isDisabled = (element: Element) =>
   element.getAttribute("aria-disabled") === "true" ||
   element.hasAttribute("data-disabled");
 
+/** Trigger del DatePicker de «Fecha» (un botón, no un input). */
+const dateTrigger = () => screen.getByLabelText("Fecha");
+/** Botón de un día del mes visible del calendario; rdp lo nombra con la fecha completa («… 20 de octubre de 2026»). */
+const dayButton = (date: string) => screen.getByRole("button", { name: new RegExp(`\\b${date}`) });
+
 /** Elige una opción de un `Select` de Base UI. */
 async function choose(name: string, option: string) {
   const trigger = combobox(name);
@@ -77,11 +82,11 @@ afterEach(() => {
 });
 
 describe("OrganizerEventForm", () => {
-  it("solo guarda borradores: sin botón de publicar, con Cancelar hacia Mis eventos", () => {
+  it("solo guarda borradores: sin botón de publicar, con Cancelar hacia Eventos", () => {
     renderForm();
     expect(saveButton()).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Publicar|Enviar a revisión/ })).toBeNull();
-    expect(screen.getByRole("link", { name: "Cancelar" }).getAttribute("href")).toBe("/organizador/eventos");
+    expect(screen.getByRole("link", { name: "Cancelar" }).getAttribute("href")).toBe("/organizador");
   });
 
   it("vacío solo pide el nombre, lo enfoca y no guarda", async () => {
@@ -95,15 +100,15 @@ describe("OrganizerEventForm", () => {
     expect(createEventAction).not.toHaveBeenCalled();
   });
 
-  it("con solo el nombre crea el borrador y vuelve a Mis eventos con el aviso", async () => {
+  it("con solo el nombre crea el borrador y vuelve a Eventos con el aviso", async () => {
     renderForm();
     type(input("Nombre del evento"), "  Mi borrador ");
     fireEvent.click(saveButton());
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador/eventos?guardado=borrador"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=borrador"));
     expect(createEventAction).toHaveBeenCalledWith(expect.objectContaining({ title: "Mi borrador", ticketTypes: [] }));
     expect(updateEventAction).not.toHaveBeenCalled();
-    // Sigue deshabilitado hasta que llega Mis eventos: un segundo clic no crea otro borrador.
+    // Sigue deshabilitado hasta que llega Eventos: un segundo clic no crea otro borrador.
     expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -199,10 +204,57 @@ describe("OrganizerEventForm", () => {
   });
 
   describe("fecha y portada", () => {
+    // Hoy en Lima: 5 oct 2026 (10:00). Solo se finge Date: los timers reales siguen para waitFor y Base UI.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-05T15:00:00Z"));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("la Fecha es un DatePicker, sin input type=date", () => {
+      renderForm();
+      expect(dateTrigger().tagName).toBe("BUTTON");
+      expect(document.querySelector("input[type=date]")).toBeNull();
+    });
+
+    it("elegir la fecha en el DatePicker la envía como YYYY-MM-DD", async () => {
+      renderForm();
+      type(input("Nombre del evento"), "Festival");
+      fireEvent.click(dateTrigger());
+      fireEvent.click(dayButton("20 de octubre de 2026"));
+      type(input("Hora de inicio"), "20:00");
+
+      expect(dateTrigger().textContent).toBe("mar 20 oct 2026");
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(createEventAction).toHaveBeenCalled());
+      expect(vi.mocked(createEventAction).mock.calls[0][0]).toMatchObject({ date: "2026-10-20", time: "20:00" });
+    });
+
+    it("no deja elegir días anteriores a hoy en Lima", () => {
+      renderForm();
+      fireEvent.click(dateTrigger());
+
+      expect(dayButton("4 de octubre de 2026").hasAttribute("disabled")).toBe(true);
+      expect(dayButton("5 de octubre de 2026").hasAttribute("disabled")).toBe(false);
+    });
+
+    it("una hora sin fecha marca el error en el trigger de Fecha", () => {
+      renderForm();
+      type(input("Nombre del evento"), "Festival");
+      type(input("Hora de inicio"), "20:00");
+      fireEvent.click(saveButton());
+
+      expect(document.getElementById("organizer-event-date-error")?.textContent).toBe("Elige la fecha del evento");
+      expect(dateTrigger().getAttribute("aria-invalid")).toBe("true");
+      expect(dateTrigger().getAttribute("aria-describedby")).toBe("organizer-event-date-error");
+      expect(createEventAction).not.toHaveBeenCalled();
+    });
+
     it("la apertura de puertas no puede ser después del inicio", () => {
       renderForm();
       type(input("Nombre del evento"), "Festival");
-      type(input("Fecha"), "2030-01-01");
+      fireEvent.click(dateTrigger());
+      fireEvent.click(dayButton("20 de octubre de 2026"));
       type(input("Hora de inicio"), "20:00");
       type(input("Apertura de puertas"), "21:00");
       fireEvent.click(saveButton());
@@ -272,7 +324,7 @@ describe("OrganizerEventForm", () => {
       renderForm({ event, organizers: ORGANIZERS });
 
       expect(input("Nombre del evento").value).toBe("Festival guardado");
-      expect(input("Fecha").value).toBe("2030-01-01");
+      expect(dateTrigger().textContent).toBe("mar 1 ene 2030");
       expect(input("Hora de inicio").value).toBe("20:00");
       expect(input("Apertura de puertas").value).toBe("18:00");
       expect(selectText(combobox("Recinto"))).toBe("Estadio Nacional · Lima");
@@ -284,7 +336,7 @@ describe("OrganizerEventForm", () => {
       type(input("Nombre del evento"), "Festival renombrado");
       fireEvent.click(saveButton());
 
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador/eventos?guardado=borrador"));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=borrador"));
       expect(updateEventAction).toHaveBeenCalledWith(
         event.id,
         expect.objectContaining({ title: "Festival renombrado", organizerId: ORGANIZERS[0].id }),
@@ -316,13 +368,13 @@ describe("OrganizerEventForm", () => {
       expect(isDisabled(sellCheckbox("Campo"))).toBe(true);
       expect(isDisabled(sellCheckbox("Occidente"))).toBe(true);
       // Fecha, categoría y precios siguen editables.
-      expect(isDisabled(input("Fecha"))).toBe(false);
+      expect(isDisabled(dateTrigger())).toBe(false);
       expect(isDisabled(combobox("Categoría"))).toBe(false);
       expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(false);
 
       type(sectionInput("Occidente", "Precio (S/)"), "99");
       fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador/eventos?guardado=cambios"));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/organizador?guardado=cambios"));
       expect(vi.mocked(updateEventAction).mock.calls[0][1]).toMatchObject({
         ticketTypes: expect.arrayContaining([expect.objectContaining({ price: "99" })]),
       });
@@ -331,7 +383,10 @@ describe("OrganizerEventForm", () => {
     it("un evento publicado con ventas solo deja cambiar título, descripción, portada y edad", () => {
       renderForm({ event: { ...event, status: "published", hasSales: true }, organizers: ORGANIZERS });
 
-      for (const label of ["Fecha", "Hora de inicio", "Apertura de puertas"]) expect(isDisabled(input(label))).toBe(true);
+      expect(isDisabled(dateTrigger())).toBe(true);
+      fireEvent.click(dateTrigger());
+      expect(screen.queryByRole("grid")).toBeNull();
+      for (const label of ["Hora de inicio", "Apertura de puertas"]) expect(isDisabled(input(label))).toBe(true);
       for (const name of ["Categoría", "Recinto", "Organizador"]) expect(isDisabled(combobox(name))).toBe(true);
       expect(isDisabled(sectionInput("Occidente", "Nombre del tipo de entrada"))).toBe(true);
       expect(isDisabled(sectionInput("Occidente", "Precio (S/)"))).toBe(true);

@@ -109,7 +109,7 @@ export function TicketTypesField({
             key={row.sectionId}
             role="group"
             aria-labelledby={headingId}
-            className="flex min-w-0 flex-col gap-4 rounded-xl p-4 ring-1 ring-border has-data-checked:ring-primary/40"
+            className="@container flex min-w-0 flex-col gap-4 rounded-xl p-4 ring-1 ring-border has-data-checked:ring-primary/40"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h3 id={headingId} className="font-semibold">
@@ -132,7 +132,8 @@ export function TicketTypesField({
                 Vender entradas en esta sección
               </FieldLabel>
             </Field>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]">
+            {/* Por el ancho de la fila, no del viewport: a 1024 px la columna del formulario es estrecha. */}
+            <div className="grid gap-4 @md:grid-cols-[minmax(0,1fr)_160px]">
               <RowInput
                 sectionId={row.sectionId}
                 field="name"

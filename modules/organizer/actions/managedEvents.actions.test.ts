@@ -38,7 +38,7 @@ describe("listManagedEventsAction", () => {
 
     expect(await listManagedEventsAction({ status: "published", q: "  neón " })).toEqual(EVENTS);
     expect(requirePermission).toHaveBeenCalledWith("events:manageOwn");
-    expect(listManagedEvents).toHaveBeenCalledWith(USER, { status: "published", q: "neón" });
+    expect(listManagedEvents).toHaveBeenCalledWith(USER, { status: "published", q: "neón", from: "", to: "" });
   });
 
   it("sin filtros usa todos los estados y sin búsqueda", async () => {
@@ -46,7 +46,7 @@ describe("listManagedEventsAction", () => {
     vi.mocked(listManagedEvents).mockResolvedValue([]);
 
     await listManagedEventsAction({});
-    expect(listManagedEvents).toHaveBeenCalledWith(USER, { status: "all", q: "" });
+    expect(listManagedEvents).toHaveBeenCalledWith(USER, { status: "all", q: "", from: "", to: "" });
   });
 
   it.each([

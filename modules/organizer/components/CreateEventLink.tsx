@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Enlace con aspecto de botón primario a Crear evento (encabezado de Resumen y Mis eventos). */
+/** Enlace con aspecto de botón primario a Crear evento (cabecera del listado de Eventos). */
 export function CreateEventLink() {
   return (
     <Link

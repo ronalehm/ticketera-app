@@ -303,6 +303,79 @@ describeWithDb("listManagedEvents (Postgres)", () => {
     });
   });
 
+  describe("rango de fechas (días de Lima, -05:00)", () => {
+    // Bordes de Lima: la medianoche del 5 y del 7 de octubre en Lima son las 05:00Z.
+    const DATES = {
+      lastOfOct4: "2026-10-05T04:59:59.999Z",
+      firstOfOct5: "2026-10-05T05:00:00.000Z",
+      lastOfOct6: "2026-10-07T04:59:59.999Z",
+      firstOfOct7: "2026-10-07T05:00:00.000Z",
+    };
+
+    /** Crea un evento por cada fecha y un borrador sin fecha; devuelve cómo leer, de un listado, solo esos (por clave). */
+    async function createDatedEvents(tx: Tx) {
+      const keyById = new Map([[(await createEvent(tx, { general: 5 })).eventId, "undated"]]);
+      for (const [key, iso] of Object.entries(DATES)) {
+        const event = await createEvent(tx, { general: 5 });
+        await publish(tx, event.eventId, new Date(iso));
+        keyById.set(event.eventId, key);
+      }
+      return (list: ManagedEvent[]) => list.flatMap((event) => keyById.get(event.id) ?? []);
+    }
+
+    it("desde y hasta (inclusive)", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const pick = await createDatedEvents(tx);
+        expect(pick(await listManagedEvents(ADMIN, { from: "2026-10-05", to: "2026-10-06" }))).toEqual([
+          "firstOfOct5",
+          "lastOfOct6",
+        ]);
+      });
+    });
+
+    it("solo desde: incluye la medianoche de Lima y excluye el instante anterior y los sin fecha", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const pick = await createDatedEvents(tx);
+        expect(pick(await listManagedEvents(ADMIN, { from: "2026-10-05" }))).toEqual([
+          "firstOfOct5",
+          "lastOfOct6",
+          "firstOfOct7",
+        ]);
+      });
+    });
+
+    it("solo hasta: incluye el último instante del día en Lima y excluye su medianoche siguiente y los sin fecha", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const pick = await createDatedEvents(tx);
+        expect(pick(await listManagedEvents(ADMIN, { to: "2026-10-04" }))).toEqual(["lastOfOct4"]);
+      });
+    });
+
+    it("sin límites incluye los borradores sin fecha", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const pick = await createDatedEvents(tx);
+        expect(pick(await listManagedEvents(ADMIN, { from: "", to: "" }))).toEqual([
+          "lastOfOct4",
+          "firstOfOct5",
+          "lastOfOct6",
+          "firstOfOct7",
+          "undated",
+        ]);
+      });
+    });
+
+    it("se combina con el estado y el alcance del organizador", async () => {
+      await inRolledBackTransaction(async (tx) => {
+        const event = await createEvent(tx, { general: 5 });
+        await publish(tx, event.eventId, new Date("2026-10-05T05:00:00Z"));
+
+        expect(await listManagedEvents(event.organizer, { status: "published", from: "2026-10-05" })).toHaveLength(1);
+        expect(await listManagedEvents(event.organizer, { status: "draft", from: "2026-10-05" })).toEqual([]);
+        expect(await listManagedEvents(event.organizer, { to: "2026-10-04" })).toEqual([]);
+      });
+    });
+  });
+
   it("ordena por fecha de inicio ascendente, con los borradores sin fecha al final", async () => {
     await inRolledBackTransaction(async (tx) => {
       const undated = await createEvent(tx, { general: 5 });

@@ -19,7 +19,7 @@ const OTHER_USER = "user-other";
 const EVENT_ID = "e0000000-0000-4000-8000-000000000001";
 const VALUES = { ...EMPTY_EVENT_DRAFT, title: "Festival" };
 const ALL_KEY = managedEventsQueryKey(USER, DEFAULT_MANAGED_EVENTS_FILTERS);
-const DRAFTS_KEY = managedEventsQueryKey(USER, { status: "draft", q: "" });
+const DRAFTS_KEY = managedEventsQueryKey(USER, { ...DEFAULT_MANAGED_EVENTS_FILTERS, status: "draft" });
 const OTHER_KEY = managedEventsQueryKey(OTHER_USER, DEFAULT_MANAGED_EVENTS_FILTERS);
 
 /** QueryClient con listados en caché del usuario (dos filtros) y de otro usuario. */

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -51,9 +52,9 @@ type SelectField = "category" | "minAge" | "venueId" | "organizerId";
 
 const PREVIEW_TITLE_ID = "organizer-event-preview-title";
 const IMAGE_URL_DESCRIPTION_ID = "organizer-event-imageUrl-description";
-/** Tras guardar, Mis eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
-const SAVED_HREF = "/organizador/eventos?guardado=borrador";
-const SAVED_CHANGES_HREF = "/organizador/eventos?guardado=cambios";
+/** Tras guardar, Eventos muestra "Borrador guardado" o, si se editó un evento publicado, "Cambios guardados". */
+const SAVED_HREF = "/organizador?guardado=borrador";
+const SAVED_CHANGES_HREF = "/organizador?guardado=cambios";
 
 // La fecha de hoy no cambia mientras se ve el formulario: no hay nada a lo que suscribirse.
 const subscribeToToday = () => () => {};
@@ -72,7 +73,7 @@ function FormSection({ title, description, children }: { title: string; descript
 }
 
 type OrganizerEventFormProps = {
-  /** Id del usuario de la sesión: separa la caché de Mis eventos de cada usuario. */
+  /** Id del usuario de la sesión: separa la caché del listado de Eventos de cada usuario. */
   userId: string;
   /** Recintos aprobados con sus secciones (`listApprovedVenuesWithSections`). */
   venues: VenueOption[];
@@ -84,8 +85,8 @@ type OrganizerEventFormProps = {
 
 /**
  * Crear o editar un evento (spec admin-panel, F5a y F5b): se guarda en la BD (`createEventAction`/`updateEventAction`) y
- * vuelve a Mis eventos. En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
- * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Mis eventos.
+ * vuelve a Eventos (`/organizador`). En un borrador solo el nombre es obligatorio; en un evento publicado se bloquean los campos que
+ * ya no se pueden cambiar (`getEventFormLock`, Decisión 11). Enviar a revisión se hace desde Eventos.
  */
 export function OrganizerEventForm({ userId, venues, organizers, event }: OrganizerEventFormProps) {
   const router = useRouter();
@@ -99,7 +100,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   );
   const save = useSaveEventDraft(userId);
   const [serverError, setServerError] = useState<string | null>(null);
-  // Guardado: el botón sigue deshabilitado hasta que llega Mis eventos (un segundo clic crearía otro borrador).
+  // Guardado: el botón sigue deshabilitado hasta que llega Eventos (un segundo clic crearía otro borrador).
   const [saved, setSaved] = useState(false);
   const lock = getEventFormLock(event);
   const structureLocked = lock !== null;
@@ -127,7 +128,8 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
   // useZodForm agrupa los errores de las filas en `ticketTypes`; los mensajes por campo salen de las mismas reglas.
   const ticketTypeErrors = errors.ticketTypes ? getTicketTypeErrors(values.ticketTypes) : null;
 
-  function selectValue<K extends SelectField>(name: K, value: EventDraftFormValues[K] | null) {
+  // Selects y DatePicker: el valor llega ya elegido, así que se revalida en el momento (no hay blur).
+  function selectValue<K extends SelectField | "date">(name: K, value: EventDraftFormValues[K] | null) {
     if (value === null) return;
     setValue(name, value);
     handleBlur(name);
@@ -152,23 +154,23 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
     handleBlur("venueId");
   }
 
-  // Props comunes de los campos de texto: id, valor controlado, revalidación al salir y a11y de la ayuda y del error.
-  const textProps = (name: TextField, descriptionId?: string) => ({
+  // id y a11y de la ayuda y del error, comunes a todos los controles.
+  const fieldProps = (name: TextField | SelectField, descriptionId?: string) => ({
     id: `organizer-event-${name}`,
-    value: values[name],
-    onChange: (changeEvent: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, changeEvent.target.value),
-    onBlur: () => handleBlur(name),
     "aria-invalid": !!errors[name],
     "aria-describedby":
       [descriptionId, errors[name] && `organizer-event-${name}-error`].filter(Boolean).join(" ") || undefined,
   });
 
-  const selectTriggerProps = (name: SelectField) => ({
-    id: `organizer-event-${name}`,
-    "aria-invalid": !!errors[name],
-    "aria-describedby": errors[name] ? `organizer-event-${name}-error` : undefined,
-    className: FORM_SELECT_TRIGGER_CLASS,
+  // Campos de texto: además, valor controlado y revalidación al salir.
+  const textProps = (name: TextField, descriptionId?: string) => ({
+    ...fieldProps(name, descriptionId),
+    value: values[name],
+    onChange: (changeEvent: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValue(name, changeEvent.target.value),
+    onBlur: () => handleBlur(name),
   });
+
+  const selectTriggerProps = (name: SelectField) => ({ ...fieldProps(name), className: FORM_SELECT_TRIGGER_CLASS });
 
   const fieldError = (name: TextField | SelectField) => (
     <FieldError id={`organizer-event-${name}-error`}>{errors[name]}</FieldError>
@@ -191,7 +193,8 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
               {fieldError("title")}
             </Field>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* Por el ancho de la sección: a 1024 px (con sidebar y vista previa) mide ~260 px y van apiladas. */}
+            <div className="grid gap-4 @md/field-group:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="organizer-event-category">Categoría</FieldLabel>
                 <Select
@@ -272,16 +275,24 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
 
         <FormSection title="Fecha y recinto">
           <FieldGroup>
-            {/* Móvil: Fecha | Hora de inicio y, en la segunda línea, Apertura de puertas en la primera columna. */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-              <Field data-invalid={!!errors.date}>
-                <FieldLabel htmlFor="organizer-event-date">Fecha</FieldLabel>
-                <Input
-                  {...textProps("date")}
-                  type="date"
+            {/*
+              Por el ancho de la sección (no del viewport: en lg la columna del formulario mide ~260 px a 1024 px): bajo
+              32rem, Fecha a todo el ancho (el DatePicker necesita ~140 px para «sáb 5 dic 2026») y Hora | Apertura
+              debajo; desde 32rem, las tres en una fila.
+            */}
+            <div className="grid grid-cols-2 gap-4 @lg/field-group:grid-cols-3">
+              <Field data-invalid={!!errors.date} className="col-span-2 @lg/field-group:col-span-1">
+                <FieldLabel id="organizer-event-date-label" htmlFor="organizer-event-date">
+                  Fecha
+                </FieldLabel>
+                <DatePicker
+                  {...fieldProps("date")}
+                  aria-labelledby="organizer-event-date-label"
+                  value={values.date}
+                  onChange={(value) => selectValue("date", value)}
                   min={today}
                   disabled={salesLocked}
-                  className={FORM_INPUT_CLASS}
+                  className={FORM_CONTROL_SCROLL}
                 />
                 {fieldError("date")}
               </Field>
@@ -378,7 +389,7 @@ export function OrganizerEventForm({ userId, venues, organizers, event }: Organi
       {/* Móvil: barra pegada abajo mientras se ve el formulario, sin tapar el footer (sticky). lg: estática. */}
       <div className="sticky bottom-0 z-10 -mx-4 grid grid-cols-2 gap-3 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:-mx-6 md:px-6 lg:static lg:col-start-1 lg:mx-0 lg:flex lg:justify-end lg:border-t-0 lg:p-0">
         <Link
-          href="/organizador/eventos"
+          href="/organizador"
           className={cn(
             buttonVariants({ variant: "outline" }),
             "h-11 cursor-pointer font-semibold duration-200 md:h-12 lg:px-5",
