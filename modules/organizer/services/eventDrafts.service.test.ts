@@ -736,15 +736,15 @@ describeWithDb("eventDrafts.service", () => {
 
     it("crea el evento y un recinto pending_review del organizador con sus zonas generales y tipos de entrada", () =>
       inRolledBackTransaction(async (tx) => {
-        const { owner, venue, eventId, venueId } = await setupManual(tx);
-        const [general, vip] = venue.sections;
+        const { owner, eventId, venueId } = await setupManual(tx);
 
         expect(await getEvent(tx, eventId)).toMatchObject({
           status: "draft",
           venueId,
           searchText: "festival de prueba cafe la esquina lima",
         });
-        expect(await getVenueWithZones(tx, venueId)).toEqual({
+        const saved = await getVenueWithZones(tx, venueId);
+        expect(saved).toEqual({
           name: "Café La Esquina",
           address: "Av. Larco 1150, Miraflores",
           city: "Lima",
@@ -752,10 +752,11 @@ describeWithDb("eventDrafts.service", () => {
           organizerId: owner.id,
           createdBy: owner.id,
           zones: [
-            { id: general.id, slug: "general", name: "General", sortOrder: 0, seating: "general", capacity: 200 },
-            { id: vip.id, slug: "vip", name: "VIP", sortOrder: 1, seating: "general", capacity: 50 },
+            { id: expect.any(String), slug: "general", name: "General", sortOrder: 0, seating: "general", capacity: 200 },
+            { id: expect.any(String), slug: "vip", name: "VIP", sortOrder: 1, seating: "general", capacity: 50 },
           ],
         });
+        const [general, vip] = saved.zones;
         expect((await getTicketTypes(tx, eventId)).map(({ sectionId, slug }) => ({ sectionId, slug }))).toEqual([
           { sectionId: general.id, slug: "general" },
           { sectionId: vip.id, slug: "vip" },
@@ -836,30 +837,53 @@ describeWithDb("eventDrafts.service", () => {
         expect(await getVenueWithZones(tx, venue.id)).toMatchObject({ name: venue.name, status: "approved" });
       }));
 
-    it("un recinto pendiente ajeno no se edita: si el admin cambia el organizador, se crea otro del nuevo", () =>
-      inRolledBackTransaction(async (tx) => {
-        const { owner, eventId, venueId } = await setupManual(tx);
-        const newOwner = await createUser(tx, "approved");
-        const renamed = manualVenueInput({ name: "Otro nombre" });
-        const admin = await createUser(tx, undefined, { role: "admin" });
-        await updateEvent(admin, eventId, manualDraftInput(renamed, { organizerId: newOwner.id }));
+    it.each(["draft", "pending_review"] as const)(
+      "en %s, si el admin cambia el organizador, el recinto pendiente ajeno no se edita: se crea otro del nuevo con zonas nuevas",
+      (status) =>
+        inRolledBackTransaction(async (tx) => {
+          const { owner, eventId, venueId } = await setupManual(tx, status === "draft" ? undefined : status);
+          const before = await getVenueWithZones(tx, venueId);
+          const newOwner = await createUser(tx, "approved");
+          const admin = await createUser(tx, undefined, { role: "admin" });
+          // El formulario reenvía las zonas que cargó, con los ids del recinto anterior.
+          const renamed = manualVenueInput({
+            name: "Otro nombre",
+            sections: before.zones.map(({ id, name, capacity }) => ({ id, name, capacity: capacity ?? 0 })),
+          });
+          expect(
+            await updateEvent(admin, eventId, manualDraftInput(renamed, { organizerId: newOwner.id })),
+          ).toMatchObject({ status });
 
-        const event = await getEvent(tx, eventId);
-        expect(event.venueId).not.toBe(venueId);
-        expect(await getVenueWithZones(tx, event.venueId!)).toMatchObject({ name: "Otro nombre", organizerId: newOwner.id });
-        expect(await getVenueWithZones(tx, venueId)).toMatchObject({ name: "Café La Esquina", organizerId: owner.id });
-      }));
+          const event = await getEvent(tx, eventId);
+          expect(event).toMatchObject({ organizerId: newOwner.id, status });
+          expect(event.venueId).not.toBe(venueId);
+          const created = await getVenueWithZones(tx, event.venueId!);
+          expect(created).toMatchObject({ name: "Otro nombre", status: "pending_review", organizerId: newOwner.id });
+          expect(created.zones.map(({ slug, capacity }) => ({ slug, capacity }))).toEqual(
+            before.zones.map(({ slug, capacity }) => ({ slug, capacity })),
+          );
+          const oldIds = before.zones.map((zone) => zone.id);
+          expect(created.zones.every((zone) => !oldIds.includes(zone.id))).toBe(true);
+          expect((await getTicketTypes(tx, eventId)).map((type) => type.sectionId)).toEqual(
+            created.zones.map((zone) => zone.id),
+          );
+          expect(await getVenueWithZones(tx, venueId)).toEqual(before);
+          expect(await countPendingVenues(tx, owner.id)).toBe(1);
+        }),
+    );
 
     it("publicado (recinto ya aprobado): uno a mano da structure_locked y el recinto no cambia", () =>
       inRolledBackTransaction(async (tx) => {
-        const { owner, venue, eventId, venueId } = await setupManual(tx, "published");
+        const { owner, eventId, venueId } = await setupManual(tx, "published");
         await tx.update(venues).set({ status: "approved" }).where(eq(venues.id, venueId));
         await expect(updateEvent(owner, eventId, manualDraftInput(manualVenueInput({ name: "Cambio" })))).rejects.toEqual(
           domainError("structure_locked"),
         );
         expect(await getVenueWithZones(tx, venueId)).toMatchObject({ name: "Café La Esquina", status: "approved" });
-        // De la lista, el mismo recinto y las mismas zonas: se guarda.
-        const sameStructure = manualDraftInput(venue, { venue: { kind: "existing", id: venueId }, title: "Nuevo título" });
+        // De la lista, el mismo recinto y las mismas zonas (las guardadas): se guarda.
+        const { zones } = await getVenueWithZones(tx, venueId);
+        const saved = manualVenueInput({ sections: zones.map(({ id, name, capacity }) => ({ id, name, capacity: capacity ?? 0 })) });
+        const sameStructure = manualDraftInput(saved, { venue: { kind: "existing", id: venueId }, title: "Nuevo título" });
         expect(await updateEvent(owner, eventId, sameStructure)).toMatchObject({ status: "published" });
       }));
   });

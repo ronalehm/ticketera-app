@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { and, asc, count, DrizzleQueryError, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isActiveSaleOrder } from "@/lib/db/activeSales";
@@ -73,11 +74,13 @@ function uniqueZoneSlug(name: string, taken: Set<string>): string {
 }
 
 /**
- * Guarda el recinto ingresado a mano (spec organizer-manual-venue, Decisiones 4 y 7) y devuelve su id: actualiza el que
+ * Guarda el recinto ingresado a mano (spec organizer-manual-venue, Decisiones 4 y 7) y devuelve su id y `sectionIds`: actualiza el que
  * ya tiene el evento (`currentVenueId`) si sigue `pending_review` y es de `organizerId`; si no (sin recinto, uno
  * `approved` o uno pendiente ajeno, que nunca se editan desde aquí), crea otro `pending_review` de `organizerId`. Sus
- * zonas se reemplazan (delete + insert, como los tipos de entrada) por las del formulario, con sus ids: generales, con
- * su aforo, un slug único y su posición como orden.
+ * zonas se reemplazan (delete + insert, como los tipos de entrada) por las del formulario: generales, con su aforo, un
+ * slug único y su posición como orden. Al actualizar conservan sus ids; un recinto nuevo les da ids nuevos, porque los
+ * del formulario pueden ser de las zonas de otro recinto (el pendiente del organizador anterior) y chocarían con su
+ * clave primaria. `sectionIds` traduce cada id del formulario al de la zona guardada.
  */
 async function saveManualVenue(
   venue: ManualVenueInput,
@@ -85,7 +88,7 @@ async function saveManualVenue(
   createdBy: string,
   currentVenueId: string | null,
   tx: Tx,
-): Promise<string> {
+): Promise<{ id: string; sectionIds: Map<string, string> }> {
   const fields = { name: venue.name, address: venue.address, city: venue.city };
   const [own] = currentVenueId
     ? await tx
@@ -107,10 +110,11 @@ async function saveManualVenue(
       .values({ ...fields, status: "pending_review", organizerId, createdBy })
       .returning({ id: venues.id });
   }
+  const sectionIds = new Map(venue.sections.map((zone) => [zone.id, own ? zone.id : randomUUID()]));
   const slugs = new Set<string>();
   await tx.insert(venueSections).values(
     venue.sections.map((zone, sortOrder) => ({
-      id: zone.id,
+      id: sectionIds.get(zone.id),
       venueId,
       slug: uniqueZoneSlug(zone.name, slugs),
       name: zone.name,
@@ -119,14 +123,18 @@ async function saveManualVenue(
       capacity: zone.capacity,
     })),
   );
-  return venueId;
+  return { id: venueId, sectionIds };
 }
 
+/** Fila de `ticket_types` que escribe el formulario, ya con la sección guardada y su slug. */
+type TicketTypeRow = { sectionId: string; slug: string; name: string; priceCents: number; sortOrder: number };
+
 /**
- * Recinto del borrador y el slug de cada una de sus secciones; `null` sin recinto. De la lista, tiene que estar
+ * Recinto del borrador y sus tipos de entrada listos para guardar; `null` sin recinto. De la lista, tiene que estar
  * `approved` o ser un pendiente del organizador del evento (spec organizer-manual-venue, Decisiones 5 y 8); a mano, se
  * guarda con `saveManualVenue` (`currentVenueId`: el recinto que el evento ya tiene, al editar). Cada tipo de entrada
- * tiene que ser de una sección de ese recinto (y sin recinto no puede haber tipos de entrada).
+ * tiene que ser de una sección de ese recinto (y sin recinto no puede haber tipos de entrada); los de un recinto a mano
+ * nuevo pasan a sus zonas nuevas (`sectionIds`).
  */
 async function resolveVenue(
   input: EventDraftInput,
@@ -134,14 +142,14 @@ async function resolveVenue(
   actor: Actor,
   tx: Tx,
   currentVenueId: string | null = null,
-): Promise<(EventVenue & { sectionSlugs: Map<string, string> }) | null> {
+): Promise<(EventVenue & { ticketTypes: TicketTypeRow[] }) | null> {
   if (!input.venue) {
     if (input.ticketTypes.length > 0) throw new EventDraftError("venue_required");
     return null;
   }
-  const id =
+  const { id, sectionIds } =
     input.venue.kind === "existing"
-      ? input.venue.id
+      ? { id: input.venue.id, sectionIds: undefined }
       : await saveManualVenue(input.venue, organizerId, actor.id, currentVenueId, tx);
   const [venue] = await tx
     .select({ name: venues.name, city: venues.city })
@@ -158,11 +166,13 @@ async function resolveVenue(
     .select({ id: venueSections.id, slug: venueSections.slug })
     .from(venueSections)
     .where(eq(venueSections.venueId, id));
-  const sectionSlugs = new Map(sections.map((section) => [section.id, section.slug]));
-  if (input.ticketTypes.some((ticketType) => !sectionSlugs.has(ticketType.sectionId))) {
-    throw new EventDraftError("section_not_in_venue");
-  }
-  return { id, ...venue, sectionSlugs };
+  const saved = new Map(sections.map((section) => [section.id, section]));
+  const ticketTypes = input.ticketTypes.map(({ sectionId, name, priceCents, sortOrder }) => {
+    const section = saved.get(sectionIds?.get(sectionId) ?? sectionId);
+    if (!section) throw new EventDraftError("section_not_in_venue");
+    return { sectionId: section.id, slug: section.slug, name, priceCents, sortOrder };
+  });
+  return { id, ...venue, ticketTypes };
 }
 
 /** Id de la categoría del borrador; un slug que no está en `categories` → `invalid_category`. */
@@ -219,24 +229,12 @@ function eventColumns(input: EventDraftInput, venue: EventVenue | null) {
   };
 }
 
-async function insertTicketTypes(
-  tx: Tx,
-  eventId: string,
-  input: EventDraftInput,
-  sectionSlugs: Map<string, string> | undefined,
-): Promise<void> {
-  if (input.ticketTypes.length === 0 || !sectionSlugs) return;
+async function insertTicketTypes(tx: Tx, eventId: string, rows: TicketTypeRow[] = []): Promise<void> {
+  if (rows.length === 0) return;
   await tx.insert(ticketTypes).values(
-    input.ticketTypes.map((ticketType) => ({
-      eventId,
-      sectionId: ticketType.sectionId,
-      // Único por evento: un tipo de entrada por sección (UNIQUE(event_id, section_id)) y slugs únicos por recinto.
-      slug: sectionSlugs.get(ticketType.sectionId) ?? ticketType.sectionId,
-      name: ticketType.name,
-      priceCents: ticketType.priceCents,
-      maxPerOrder: MAX_TICKETS_PER_ORDER, // mismo tope que la compra y el seed
-      sortOrder: ticketType.sortOrder,
-    })),
+    // Único por evento: un tipo de entrada por sección (UNIQUE(event_id, section_id)) y slugs únicos por recinto. El
+    // tope por orden es el mismo que el de la compra y el seed.
+    rows.map((row) => ({ ...row, eventId, maxPerOrder: MAX_TICKETS_PER_ORDER })),
   );
 }
 
@@ -324,7 +322,7 @@ export async function createEvent(actor: Actor, input: EventDraftInput, database
         status: "draft",
       })
       .returning({ id: events.id });
-    await insertTicketTypes(tx, id, input, venue?.sectionSlugs);
+    await insertTicketTypes(tx, id, venue?.ticketTypes);
     return { id };
   });
 }
@@ -422,7 +420,7 @@ async function updateDraftEvent(
       categoryId: await getCategoryId(input.category, tx),
     })
     .where(eq(events.id, current.id));
-  await insertTicketTypes(tx, current.id, input, venue?.sectionSlugs);
+  await insertTicketTypes(tx, current.id, venue?.ticketTypes);
   return { slug, venueId: venue?.id ?? null };
 }
 
