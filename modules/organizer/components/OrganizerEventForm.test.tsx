@@ -385,6 +385,7 @@ describe("OrganizerEventForm", () => {
       reviewNote: null,
       featured: false,
       hasSales: false,
+      sold: 0,
     };
 
     it("precarga el borrador y guarda los cambios sobre él", async () => {

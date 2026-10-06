@@ -53,6 +53,8 @@ export const events = pgTable(
     searchText: text("search_text").notNull(),
     cancelledAt: timestamptz("cancelled_at"),
     cancelReason: text("cancel_reason"),
+    // Última vez que cambió la fecha u hora de un evento publicado con ventas (spec event-editing, Decisión 2).
+    scheduleChangedAt: timestamptz("schedule_changed_at"),
     // Configuración del mapa propia del evento (p. ej. fútbol en un estadio cuyo mapa es de concierto);
     // `NULL` = la del recinto. Van juntas (events_map_override_check).
     mapViewBox: text("map_view_box"),

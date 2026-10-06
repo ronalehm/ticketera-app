@@ -71,6 +71,13 @@
       "when": 1791270700736,
       "tag": "0009_new_event_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791294798369,
+      "tag": "0010_event_schedule_changed",
+      "breakpoints": true
     }
   ]
 }

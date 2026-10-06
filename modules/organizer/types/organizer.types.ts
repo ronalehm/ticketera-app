@@ -63,8 +63,10 @@ export type EditableEvent = {
   reviewNote: string | null;
   /** Destacado en la landing (solo lo cambia un admin, `EventFeaturedControl`). */
   featured: boolean;
-  /** Ventas activas (órdenes `paid`, `partially_refunded` o `pending` vigentes, `lib/db/activeSales.ts`): bloquean los cambios sensibles de un evento publicado (Decisión 11). */
+  /** Ventas activas (órdenes `paid`, `partially_refunded` o `pending` vigentes, `lib/db/activeSales.ts`). */
   hasSales: boolean;
+  /** Entradas vendidas (órdenes `paid`): la confirmación al cambiar la fecha de un publicado (spec event-editing). */
+  sold: number;
 };
 
 /**

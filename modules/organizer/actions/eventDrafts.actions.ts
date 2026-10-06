@@ -2,8 +2,8 @@
 
 import { after } from "next/server";
 import { z } from "zod";
-import { roleCan } from "@/modules/auth/permissions";
-import { requirePermission, type SessionUser } from "@/modules/auth/server";
+import { can, roleCan } from "@/modules/auth/permissions";
+import { getSessionUser, requirePermission, type SessionUser } from "@/modules/auth/server";
 import { createEventDraftSchema } from "../schemas/organizer.schema";
 import { deleteOwnCoverBestEffort } from "../services/eventCoverCleanup.service";
 import { createEvent, deleteEvent, getEventForEdit, updateEvent } from "../services/eventDrafts.service";
@@ -40,8 +40,8 @@ export async function createEventAction(input: unknown): Promise<EventDraftActio
 }
 
 /**
- * Guarda los cambios de un evento: libre en borrador, limitada si está publicado (y entonces invalida sus páginas
- * públicas); en revisión, cancelado o finalizado no se edita. Si la portada cambió, borra la anterior (si era nuestra)
+ * Guarda los cambios de un evento: libre en borrador, con los requisitos de revisión si está en revisión, sin tocar su
+ * estructura si está publicado (y entonces invalida sus páginas públicas); cancelado o finalizado no se edita. Si la portada cambió, borra la anterior (si era nuestra)
  * después de guardar y de responder.
  */
 export async function updateEventAction(id: unknown, input: unknown): Promise<EventDraftActionResult> {
@@ -76,4 +76,18 @@ export async function deleteEventAction(id: unknown): Promise<EventDraftActionRe
   } catch (error) {
     return failure("deleteEventAction", error);
   }
+}
+
+/**
+ * Enlace a Editar si quien mira puede editar el evento (organizador dueño, admin o super_admin: mismo alcance que
+ * `getEventForEdit`); `null` sin sesión, sin permiso o si es ajeno. No redirige: la llama el botón del detalle público
+ * tras montar, para que la página siga siendo estática (spec event-editing, Decisión 4).
+ */
+export async function getEventEditHref(eventId: unknown): Promise<string | null> {
+  const parsedId = eventIdSchema.safeParse(eventId);
+  if (!parsedId.success) return null;
+  const actor = await getSessionUser();
+  if (!actor || !can(actor, "events:manageOwn")) return null;
+  const event = await getEventForEdit(actor, parsedId.data);
+  return event ? `/organizador/eventos/${event.id}/editar` : null;
 }

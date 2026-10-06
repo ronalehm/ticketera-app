@@ -1,7 +1,6 @@
-import type { ManagedEventStatus } from "@/modules/events";
 import { formatPublishIssues, type PublishIssue } from "./publishRequirements";
 
-/** Códigos de los errores de dominio de los eventos del panel: CRUD (F5a), moderación y cambios sensibles (F5b). */
+/** Códigos de los errores de dominio de los eventos del panel: CRUD (F5a), edición fuera de borrador y moderación (F5b). */
 export type EventDraftErrorCode =
   | "not_found"
   | "delete_not_draft"
@@ -13,10 +12,9 @@ export type EventDraftErrorCode =
   | "section_not_in_venue"
   | "slug_taken"
   | "invalid_category"
-  // F5b: edición fuera de borrador (Decisión 11; en revisión, cancelado o finalizado, `edit_locked`).
+  // Edición fuera de borrador (spec event-editing, Decisión 1: cancelado o finalizado, `edit_locked`).
   | "edit_locked"
   | "structure_locked"
-  | "sensitive_locked"
   // F5b: moderación.
   | "incomplete"
   | "not_moderator"
@@ -33,8 +31,7 @@ export type EventDraftErrorCode =
 
 /**
  * Error de dominio de los eventos del panel: la acción traduce `code` a un mensaje (`getEventDraftErrorMessage`).
- * `issues` (solo `incomplete`) dice qué le falta al evento para publicarse; `status` (solo `edit_locked`), en qué estado
- * está el evento que no se puede editar.
+ * `issues` (solo `incomplete`) dice qué le falta al evento para publicarse.
  */
 export class EventDraftError extends Error {
   override name = "EventDraftError";
@@ -42,7 +39,6 @@ export class EventDraftError extends Error {
   constructor(
     readonly code: EventDraftErrorCode,
     readonly issues: PublishIssue[] = [],
-    readonly status?: ManagedEventStatus,
   ) {
     super(code);
   }
@@ -73,8 +69,6 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   invalid_category: "Categoría no válida",
   edit_locked: "Un evento cancelado o finalizado ya no se puede editar.",
   structure_locked: "En un evento publicado no se pueden cambiar el recinto, las secciones a la venta ni el organizador.",
-  sensitive_locked:
-    "El evento tiene ventas o reservas en curso: solo puedes cambiar el título, la descripción, la portada y la edad mínima.",
   incomplete: "Faltan datos para publicar el evento.",
   not_moderator: "Solo un administrador puede aprobar, rechazar o cancelar eventos.",
   submit_not_draft: "Solo se pueden enviar a revisión borradores.",
@@ -88,9 +82,8 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   feature_not_allowed: "Solo un administrador puede destacar eventos.",
 } satisfies Record<EventDraftErrorCode, string>;
 
-/** Mensaje de un error de dominio; con `incomplete`, qué falta exactamente; con `edit_locked` en revisión, qué hacer. */
+/** Mensaje de un error de dominio; con `incomplete`, qué falta exactamente. */
 export function getEventDraftErrorMessage(error: EventDraftError): string {
   if (error.code === "incomplete" && error.issues.length > 0) return formatPublishIssues(error.issues);
-  if (error.code === "edit_locked" && error.status === "pending_review") return EDIT_IN_REVIEW_MESSAGE;
   return EVENT_DRAFT_ERROR_MESSAGES[error.code];
 }

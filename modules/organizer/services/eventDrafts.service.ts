@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, DrizzleQueryError, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, DrizzleQueryError, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isActiveSaleOrder } from "@/lib/db/activeSales";
 import { db } from "@/lib/db/client";
@@ -199,7 +199,10 @@ export async function lockManagedEvent(actor: Actor, eventId: string, tx: Tx) {
 /** Evento bloqueado por `lockManagedEvent`. */
 export type LockedEvent = Awaited<ReturnType<typeof lockManagedEvent>>;
 
-/** ¿Tiene el evento ventas activas (`isActiveSaleOrder`)? Bloquean los cambios sensibles y la cancelación (Decisiones 11 y 12). */
+/**
+ * ¿Tiene el evento ventas activas (`isActiveSaleOrder`)? Bloquean la cancelación (Decisión 12) y, al cambiar la fecha de
+ * un publicado, informan `schedule_changed_at` (spec event-editing, Decisión 2).
+ */
 export async function hasActiveSales(eventId: string, database: Queryable): Promise<boolean> {
   const [order] = await database
     .select({ id: orders.id })
@@ -245,13 +248,13 @@ export async function createEvent(actor: Actor, input: EventDraftInput, database
 }
 
 /**
- * Edita un evento según su estado (Decisión 11; spec admin-panel, F5b, requisito 3) y devuelve su estado y su slug (la
- * acción invalida las páginas públicas de un evento publicado):
+ * Edita un evento según su estado (spec event-editing, Decisión 1) y devuelve su estado y su slug (la acción invalida
+ * las páginas públicas de un evento publicado):
  * - `draft`: edición libre.
- * - `published`: `updatePublishedEvent` (sin cambiar recinto, secciones ni organizador; con ventas, solo título,
- *   descripción, portada y edad mínima). Su slug no cambia.
- * - `pending_review`, `cancelled` y `finished`: `edit_locked` (lo que se aprueba es lo que se revisó; para cambiar un
- *   evento en revisión, el admin lo rechaza y vuelve a borrador).
+ * - `pending_review`: como un borrador (aún no tiene inventario), pero sigue cumpliendo los requisitos para enviarlo a
+ *   revisión (`incomplete`) y sigue en revisión: el admin aprueba la versión guardada.
+ * - `published`: `updatePublishedEvent` (sin cambiar recinto, secciones ni organizador). Su slug no cambia.
+ * - `cancelled` y `finished`: `edit_locked`.
  */
 export async function updateEvent(
   actor: Actor,
@@ -259,24 +262,56 @@ export async function updateEvent(
   input: EventDraftInput,
   database: Database = db,
   now: Date = new Date(),
-): Promise<{ status: "draft" | "published"; slug: string }> {
+): Promise<{ status: "draft" | "pending_review" | "published"; slug: string }> {
   return inTransaction(database, async (tx) => {
     await assertActorCanMutate(actor, tx);
     const current = await lockManagedEvent(actor, eventId, tx);
     if (current.status === "draft") {
       return { status: "draft" as const, slug: await updateDraftEvent(actor, current, input, tx) };
     }
+    if (current.status === "pending_review") {
+      // Antes de escribir, lo que exige `events_draft_complete_check`; después, con los tipos guardados, todo (también
+      // que cada sección tenga lugares).
+      const issues = getPublishIssues({ ...input, ticketTypeCount: input.ticketTypes.length }, now);
+      if (issues.length > 0) throw new EventDraftError("incomplete", issues);
+      const slug = await updateDraftEvent(actor, current, input, tx);
+      await assertPublishable({ ...input, id: current.id }, tx, now);
+      return { status: "pending_review" as const, slug };
+    }
     if (current.status === "published") {
       await updatePublishedEvent(actor, current, input, tx, now);
       return { status: "published" as const, slug: current.slug };
     }
-    throw new EventDraftError("edit_locked", [], current.status);
+    throw new EventDraftError("edit_locked");
   });
 }
 
 /**
- * Borrador. Reemplaza sus tipos de entrada (delete + insert): sin órdenes ni inventario (`has_activity`), nada los
- * referencia. Si cambia el slug del título, se regenera (aún no tiene URL pública). Devuelve el slug con que queda.
+ * Requisitos para enviar a revisión y publicar (spec admin-panel, F5b, requisito 4): campos del CHECK, al menos un tipo
+ * de entrada, cada uno con algún lugar que vender (su sección tiene capacidad) y fecha futura. Lee los tipos de entrada
+ * guardados del evento.
+ */
+export async function assertPublishable(
+  event: Pick<LockedEvent, "id" | "venueId" | "description" | "imageUrl" | "startsAt" | "doorsOpenAt">,
+  tx: Tx,
+  now: Date,
+): Promise<void> {
+  const [{ ticketTypeCount, emptyTicketTypeCount }] = await tx
+    .select({
+      ticketTypeCount: count(),
+      emptyTicketTypeCount: sql<number>`count(*) filter (where coalesce(${sectionCapacity}, 0) = 0)`.mapWith(Number),
+    })
+    .from(ticketTypes)
+    .innerJoin(venueSections, eq(venueSections.id, ticketTypes.sectionId))
+    .where(eq(ticketTypes.eventId, event.id));
+  const issues = getPublishIssues({ ...event, ticketTypeCount, emptyTicketTypeCount }, now);
+  if (issues.length > 0) throw new EventDraftError("incomplete", issues);
+}
+
+/**
+ * Borrador (o en revisión). Reemplaza sus tipos de entrada (delete + insert): sin órdenes ni inventario
+ * (`has_activity`), nada los referencia. Si cambia el slug del título, se regenera (aún no tiene URL pública). Devuelve
+ * el slug con que queda.
  */
 async function updateDraftEvent(actor: Actor, current: LockedEvent, input: EventDraftInput, tx: Tx): Promise<string> {
   const organizerId = await resolveOrganizerId(actor, input.organizerId, tx);
@@ -302,11 +337,13 @@ async function updateDraftEvent(actor: Actor, current: LockedEvent, input: Event
 const sameInstant = (a: Date | null, b: Date | null) => (a?.getTime() ?? null) === (b?.getTime() ?? null);
 
 /**
- * Evento publicado (ya tiene inventario y URL pública):
+ * Evento publicado (ya tiene inventario y URL pública), con o sin ventas (spec event-editing, Decisión 1):
  * - nunca cambian el recinto, las secciones a la venta ni el organizador (`structure_locked`): el inventario generado al
  *   aprobar depende de ellos; tampoco el slug;
- * - con ventas (`hasActiveSales`), solo título, descripción, portada y edad mínima (`sensitive_locked`);
- * - sin ventas, además categoría, fecha, nombre y precio de cada tipo de entrada;
+ * - sí cambian textos, portada, edad, categoría, fecha/hora y nombre y precio de cada tipo de entrada. Un precio nuevo
+ *   solo afecta a ventas nuevas: no toca órdenes ni entradas ya creadas;
+ * - con ventas activas (`hasActiveSales`), un cambio de inicio o apertura de puertas informa `schedule_changed_at`
+ *   (aviso «Fecha actualizada» a los compradores, Decisión 2);
  * - sigue cumpliendo los requisitos para publicar (`incomplete`); la fecha tiene que ser futura solo si cambia.
  */
 async function updatePublishedEvent(
@@ -317,41 +354,38 @@ async function updatePublishedEvent(
   now: Date,
 ): Promise<void> {
   const currentTypes = await tx
-    .select({ sectionId: ticketTypes.sectionId, name: ticketTypes.name, priceCents: ticketTypes.priceCents })
+    .select({ sectionId: ticketTypes.sectionId })
     .from(ticketTypes)
     .where(eq(ticketTypes.eventId, current.id));
-  const typeBySection = new Map(currentTypes.map((type) => [type.sectionId, type]));
+  const currentSections = new Set(currentTypes.map((type) => type.sectionId));
   const organizerChanged = roleCan(actor.role, "events:manageAny") && input.organizerId !== current.organizerId;
   const sectionsChanged =
     input.ticketTypes.length !== currentTypes.length ||
-    input.ticketTypes.some((type) => !typeBySection.has(type.sectionId));
+    input.ticketTypes.some((type) => !currentSections.has(type.sectionId));
   if (organizerChanged || input.venueId !== current.venueId || sectionsChanged) {
     throw new EventDraftError("structure_locked");
   }
 
   const categoryId = await getCategoryId(input.category, tx);
-  const sensitiveChanged =
-    categoryId !== current.categoryId ||
-    !sameInstant(input.startsAt, current.startsAt) ||
-    !sameInstant(input.doorsOpenAt, current.doorsOpenAt) ||
-    input.ticketTypes.some((type) => {
-      const saved = typeBySection.get(type.sectionId);
-      return saved?.name !== type.name || saved.priceCents !== type.priceCents;
-    });
-  if (sensitiveChanged && (await hasActiveSales(current.id, tx))) throw new EventDraftError("sensitive_locked");
-
+  const startsAtChanged = !sameInstant(input.startsAt, current.startsAt);
   const issues = getPublishIssues({ ...input, ticketTypeCount: input.ticketTypes.length }, now, {
-    checkFutureDate: !sameInstant(input.startsAt, current.startsAt),
+    checkFutureDate: startsAtChanged,
   });
   if (issues.length > 0) throw new EventDraftError("incomplete", issues);
 
+  const scheduleChanged = startsAtChanged || !sameInstant(input.doorsOpenAt, current.doorsOpenAt);
+  const notifyBuyers = scheduleChanged && (await hasActiveSales(current.id, tx));
   // Con recinto: `getPublishIssues` lo exige y es el mismo de antes.
   const [venue] = input.venueId
     ? await tx.select({ name: venues.name, city: venues.city }).from(venues).where(eq(venues.id, input.venueId))
     : [];
   await tx
     .update(events)
-    .set({ ...eventColumns(input, venue ?? null), categoryId })
+    .set({
+      ...eventColumns(input, venue ?? null),
+      categoryId,
+      ...(notifyBuyers && { scheduleChangedAt: now }),
+    })
     .where(eq(events.id, current.id));
   for (const type of input.ticketTypes) {
     await tx
@@ -375,8 +409,9 @@ export async function deleteEvent(actor: Actor, eventId: string, database: Datab
 
 /**
  * Evento para precargar Editar si `actor` lo gestiona (el suyo o, con `events:manageAny`, cualquiera), en cualquier
- * estado (la página decide qué se puede editar), con la nota del último rechazo y si tiene ventas que bloquean los
- * cambios sensibles. `null` si no existe, es ajeno o el id no es un uuid.
+ * estado (la página decide qué se puede editar), con la nota del último rechazo, si tiene ventas activas y cuántas
+ * entradas vendió (el formulario pide confirmación al cambiar la fecha). `null` si no existe, es ajeno o el id no es un
+ * uuid.
  */
 export async function getEventForEdit(
   actor: Actor,
@@ -420,7 +455,17 @@ export async function getEventForEdit(
     doorsOpenAt: event.doorsOpenAt?.toISOString() ?? null,
     ticketTypes: eventTicketTypes,
     hasSales: await hasActiveSales(eventId, database),
+    sold: await countSoldTickets(eventId, database),
   };
+}
+
+/** Entradas vendidas: suma de `ticket_count` de las órdenes `paid` (como `sold` de `listManagedEvents`). */
+async function countSoldTickets(eventId: string, database: Queryable): Promise<number> {
+  const [{ sold }] = await database
+    .select({ sold: sql<number>`coalesce(sum(${orders.ticketCount}), 0)`.mapWith(Number) })
+    .from(orders)
+    .where(and(eq(orders.eventId, eventId), eq(orders.status, "paid")));
+  return sold;
 }
 
 /** Capacidad de una sección: lugares si es general; sus `venue_seats` si es numerada (como `listManagedEvents`). */

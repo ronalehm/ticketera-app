@@ -1,24 +1,23 @@
 import "server-only";
 
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { insertEventInventory } from "@/lib/db/eventInventory";
-import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
-import { venueSections, venues } from "@/lib/db/schema/venues";
+import { eventSeats, events } from "@/lib/db/schema/events";
+import { venues } from "@/lib/db/schema/venues";
 import { roleCan } from "@/modules/auth/permissions";
 import { getOrganizerStatus } from "@/modules/auth/server";
 import type { ManagedEventStatus } from "@/modules/events";
 import { EventDraftError } from "../utils/eventDraftError";
 import { canTransition } from "../utils/eventTransitions";
-import { getPublishIssues } from "../utils/publishRequirements";
 import {
   type Actor,
   assertActorCanMutate,
+  assertPublishable,
   type Database,
   hasActiveSales,
   type LockedEvent,
   lockManagedEvent,
-  sectionCapacity,
   type Tx,
 } from "./eventDrafts.service";
 
@@ -30,23 +29,6 @@ import {
 /** Exige `events:moderate` antes de abrir la transacción. */
 function assertModerator(actor: Actor): void {
   if (!roleCan(actor.role, "events:moderate")) throw new EventDraftError("not_moderator");
-}
-
-/**
- * Requisitos para publicar (requisito 4): campos del CHECK, al menos un tipo de entrada, cada uno con algún lugar que
- * vender (su sección tiene capacidad) y fecha futura.
- */
-async function assertPublishable(event: LockedEvent, tx: Tx, now: Date): Promise<void> {
-  const [{ ticketTypeCount, emptyTicketTypeCount }] = await tx
-    .select({
-      ticketTypeCount: count(),
-      emptyTicketTypeCount: sql<number>`count(*) filter (where coalesce(${sectionCapacity}, 0) = 0)`.mapWith(Number),
-    })
-    .from(ticketTypes)
-    .innerJoin(venueSections, eq(venueSections.id, ticketTypes.sectionId))
-    .where(eq(ticketTypes.eventId, event.id));
-  const issues = getPublishIssues({ ...event, ticketTypeCount, emptyTicketTypeCount }, now);
-  if (issues.length > 0) throw new EventDraftError("incomplete", issues);
 }
 
 /**

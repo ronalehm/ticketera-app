@@ -111,6 +111,7 @@ describe("toEventDraftFormValues", () => {
     reviewNote: null,
     featured: false,
     hasSales: false,
+    sold: 0,
   };
 
   it("pasa fechas a Lima, nulos a vacíos y precios a soles", () => {
