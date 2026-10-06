@@ -27,7 +27,9 @@ export type EventDraftErrorCode =
   | "inventory_exists"
   | "owner_not_approved"
   | "event_venue_not_approved"
-  | "review_note_required";
+  | "review_note_required"
+  // Destacados (spec events-dynamic-landing).
+  | "feature_not_allowed";
 
 /**
  * Error de dominio de los eventos del panel: la acción traduce `code` a un mensaje (`getEventDraftErrorMessage`).
@@ -83,6 +85,7 @@ export const EVENT_DRAFT_ERROR_MESSAGES = {
   owner_not_approved: "El organizador del evento ya no está aprobado: no se puede publicar hasta que lo esté.",
   event_venue_not_approved: "El recinto del evento ya no está aprobado: no se puede publicar hasta que lo esté.",
   review_note_required: "Escribe el motivo del rechazo.",
+  feature_not_allowed: "Solo un administrador puede destacar eventos.",
 } satisfies Record<EventDraftErrorCode, string>;
 
 /** Mensaje de un error de dominio; con `incomplete`, qué falta exactamente; con `edit_locked` en revisión, qué hacer. */

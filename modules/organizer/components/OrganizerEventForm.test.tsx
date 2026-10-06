@@ -383,6 +383,7 @@ describe("OrganizerEventForm", () => {
       imageUrl: "https://images.unsplash.com/a.jpg",
       ticketTypes: [{ sectionId: STADIUM.sections[1].id, name: "Platea VIP", priceCents: 12050 }],
       reviewNote: null,
+      featured: false,
       hasSales: false,
     };
 

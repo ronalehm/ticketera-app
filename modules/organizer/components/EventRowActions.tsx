@@ -12,10 +12,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { roleCan } from "@/modules/auth/permissions";
 import type { ManagedEvent } from "@/modules/events";
 
 import { CANCEL_WITH_SALES_MESSAGE } from "../utils/eventDraftError";
 import { type EventTransition, getAvailableTransitions } from "../utils/eventTransitions";
+import { FeaturedIcon, featuredLabel, FeaturedToggle } from "./FeaturedToggle";
 
 const ACTION_CLASS = "h-11 cursor-pointer gap-1.5 px-3 font-semibold duration-200";
 // Botones de icono de la tabla: 44 px (MASTER «Targets táctiles»).
@@ -55,31 +57,50 @@ const TONE_HOVER: Record<Tone, string> = {
 
 type Role = Parameters<typeof getAvailableTransitions>[0];
 
-/** ¿Tiene acciones un evento en `status` para `role`? Cancelado y finalizado, ninguna. */
+/**
+ * ¿Tiene acciones un evento en `status` para `role`? Un admin siempre (destacar, en cualquier estado); para el resto,
+ * cancelado y finalizado ninguna.
+ */
 export function hasEventRowActions(status: ManagedEvent["status"], role: Role): boolean {
-  return EDITABLE_STATUSES.has(status) || getAvailableTransitions(role, status).length > 0;
+  return (
+    roleCan(role, "events:manageAny") ||
+    EDITABLE_STATUSES.has(status) ||
+    getAvailableTransitions(role, status).length > 0
+  );
 }
 
 type EventRowActionsProps = {
-  event: Pick<ManagedEvent, "id" | "title" | "status" | "hasActiveSales">;
-  /** Rol de la sesión: decide qué transiciones se ofrecen (`getAvailableTransitions`). */
+  event: Pick<ManagedEvent, "id" | "title" | "status" | "hasActiveSales" | "featured">;
+  /** Rol de la sesión: decide qué transiciones se ofrecen (`getAvailableTransitions`) y si se puede destacar. */
   role: Role;
   layout: EventRowActionsLayout;
   onAction: (action: EventRowAction) => void;
+  /** Destacar o quitar destacado (solo `events:manageAny`); sin diálogo. */
+  onToggleFeatured: () => void;
+  /** Hay un cambio de destacado en curso para este evento: la acción queda deshabilitada. */
+  featuredPending?: boolean;
 };
 
 /**
  * Acciones de un evento según su estado y el rol (spec admin-panel, F5b): Editar (borrador y publicado), Eliminar y
- * Enviar a revisión (borrador), Aprobar y Rechazar (en revisión, admin) y Cancelar evento (publicado, admin;
- * deshabilitado con el motivo si tiene ventas). En revisión, un organizador no tiene acciones; cancelado y finalizado,
- * nadie. En la tabla son compactas (spec organizer-events-view, Requisito 6).
+ * Enviar a revisión (borrador), Aprobar y Rechazar (en revisión, admin), Cancelar evento (publicado, admin;
+ * deshabilitado con el motivo si tiene ventas) y Destacar / Quitar destacado (admin, en cualquier estado; spec
+ * events-dynamic-landing). En revisión, cancelado y finalizado, un organizador no tiene acciones. En la tabla son compactas (spec organizer-events-view, Requisito 6).
  */
-export function EventRowActions({ event, role, layout, onAction }: EventRowActionsProps) {
+export function EventRowActions({
+  event,
+  role,
+  layout,
+  onAction,
+  onToggleFeatured,
+  featuredPending = false,
+}: EventRowActionsProps) {
   if (!hasEventRowActions(event.status, role)) return null;
   const transitions: EventRowAction[] = getAvailableTransitions(role, event.status);
   if (event.status === "draft") transitions.push("delete");
   const items = ACTION_ITEMS.filter(({ action }) => transitions.includes(action));
   const editable = EDITABLE_STATUSES.has(event.status);
+  const canFeature = roleCan(role, "events:manageAny");
   const editHref = `/organizador/eventos/${event.id}/editar`;
 
   if (layout === "table") {
@@ -90,7 +111,7 @@ export function EventRowActions({ event, role, layout, onAction }: EventRowActio
             <Pencil className="size-4" aria-hidden />
           </Link>
         )}
-        {items.length > 0 && (
+        {(items.length > 0 || canFeature) && (
           <DropdownMenu>
             <DropdownMenuTrigger aria-label={`Más acciones de ${event.title}`} className={ICON_ACTION_CLASS}>
               <Ellipsis className="size-4" aria-hidden />
@@ -106,6 +127,12 @@ export function EventRowActions({ event, role, layout, onAction }: EventRowActio
                     {label}
                   </DropdownMenuItem>
                 ),
+              )}
+              {canFeature && (
+                <DropdownMenuItem className={MENU_ITEM_CLASS} disabled={featuredPending} onClick={onToggleFeatured}>
+                  <FeaturedIcon featured={event.featured} />
+                  {featuredLabel(event.featured)}
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -147,6 +174,14 @@ export function EventRowActions({ event, role, layout, onAction }: EventRowActio
             {label}
           </Button>
         ),
+      )}
+      {canFeature && (
+        <FeaturedToggle
+          featured={event.featured}
+          aria-label={`${featuredLabel(event.featured)} ${event.title}`}
+          disabled={featuredPending}
+          onClick={onToggleFeatured}
+        />
       )}
     </>
   );

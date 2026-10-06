@@ -61,6 +61,8 @@ export type EditableEvent = {
   ticketTypes: { sectionId: string; name: string; priceCents: number }[];
   /** Motivo del último rechazo (lo ve el organizador en su borrador); `null` si no lo hay. */
   reviewNote: string | null;
+  /** Destacado en la landing (solo lo cambia un admin, `EventFeaturedControl`). */
+  featured: boolean;
   /** Ventas activas (órdenes `paid`, `partially_refunded` o `pending` vigentes, `lib/db/activeSales.ts`): bloquean los cambios sensibles de un evento publicado (Decisión 11). */
   hasSales: boolean;
 };

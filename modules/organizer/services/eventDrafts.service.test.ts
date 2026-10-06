@@ -597,6 +597,7 @@ describeWithDb("eventDrafts.service", () => {
             { sectionId: venue.plateaId, name: "Platea VIP", priceCents: 12000 },
           ],
           reviewNote: null,
+          featured: false,
           hasSales: false,
         };
         expect(await getEventForEdit(owner, eventId)).toEqual(expected);

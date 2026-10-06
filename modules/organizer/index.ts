@@ -1,6 +1,7 @@
 // API pública: solo la importan las rutas de app/(panel)/organizador/* (servidor). Los archivos internos
 // del módulo se importan entre sí por ruta relativa (Decisión 17). Lecturas de la BD para las rutas: `./server`.
 export { EventEditNotice } from "./components/EventEditNotice";
+export { EventFeaturedControl } from "./components/EventFeaturedControl";
 export { EventFormHeader } from "./components/EventFormHeader";
 export { OrganizerDashboard } from "./components/OrganizerDashboard";
 export { OrganizerEventForm } from "./components/OrganizerEventForm";

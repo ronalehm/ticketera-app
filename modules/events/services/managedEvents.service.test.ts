@@ -221,6 +221,7 @@ describeWithDb("listManagedEvents (Postgres)", () => {
         venue: expect.stringMatching(/^Recinto /),
         city: "Lima",
         imageUrl: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
+        featured: false,
         organizer: organizer.legalName,
         sold: 0,
         hasActiveSales: false,

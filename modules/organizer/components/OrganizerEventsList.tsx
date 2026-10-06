@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type ComponentProps, type FormEvent } from "react";
-import { CircleCheck, Search, X } from "lucide-react";
+import { CircleAlert, CircleCheck, Search, X } from "lucide-react";
 
 import { DatePicker } from "@/components/shared/DatePicker";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,7 +14,9 @@ import type { ManagedEvent, ManagedEventsFilters } from "@/modules/events";
 
 import { MANAGED_EVENT_STATUS_BADGE } from "../data/managedEventStatus";
 import { DEFAULT_MANAGED_EVENTS_FILTERS, useManagedEvents } from "../hooks/useManagedEvents";
+import { useSetEventFeatured } from "../hooks/useSetEventFeatured";
 import type { ManagedEventsStatusFilter, SavedStatus } from "../types/organizer.types";
+import { EVENT_DRAFT_GENERIC_ERROR } from "../utils/eventDraftError";
 import { CreateEventLink } from "./CreateEventLink";
 import { EventActionDialog, type EventActionNotice, type EventActionTarget } from "./EventActionDialog";
 import { EventRowActions, type EventRowActionsLayout, hasEventRowActions } from "./EventRowActions";
@@ -43,6 +45,9 @@ type OrganizerEventsListProps = {
   canCreate?: boolean;
 };
 
+/** Aviso del listado; `error` lo pinta como fallo (destacar no tiene diálogo donde mostrarlo). */
+type ListNotice = EventActionNotice & { error?: boolean };
+
 /** Aviso tras guardar: el evento ya está en la BD y, por tanto, en este listado. */
 const SAVED_NOTICES: Record<NonNullable<SavedStatus>, EventActionNotice> = {
   borrador: {
@@ -68,7 +73,7 @@ export function OrganizerEventsList({
 }: OrganizerEventsListProps) {
   const [filters, setFilters] = useState<ManagedEventsFilters>(DEFAULT_MANAGED_EVENTS_FILTERS);
   const [searchDraft, setSearchDraft] = useState("");
-  const [notice, setNotice] = useState<EventActionNotice | null>(saved ? SAVED_NOTICES[saved] : null);
+  const [notice, setNotice] = useState<ListNotice | null>(saved ? SAVED_NOTICES[saved] : null);
   // Acción en curso; al cerrar el diálogo se conserva para la animación de salida.
   const [target, setTarget] = useState<EventActionTarget | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -88,6 +93,25 @@ export function OrganizerEventsList({
     filters,
     isDefault ? initialEvents : undefined,
   );
+
+  const setFeatured = useSetEventFeatured(userId);
+  const featuredPendingId = setFeatured.isPending ? setFeatured.variables.id : null;
+
+  function toggleFeatured(event: ManagedEvent) {
+    setNotice(null);
+    setFeatured.mutate(
+      { id: event.id, featured: !event.featured },
+      {
+        onSuccess: (result) =>
+          setNotice(
+            result.ok
+              ? { title: result.featured ? "Evento destacado." : "Evento retirado de destacados." }
+              : { title: result.error, error: true },
+          ),
+        onError: () => setNotice({ title: EVENT_DRAFT_GENERIC_ERROR, error: true }),
+      },
+    );
+  }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,6 +136,8 @@ export function OrganizerEventsList({
               setTarget({ action, event });
               setDialogOpen(true);
             }}
+            onToggleFeatured={() => toggleFeatured(event)}
+            featuredPending={featuredPendingId === event.id}
           />
         ) : null
     : undefined;
@@ -122,8 +148,12 @@ export function OrganizerEventsList({
       <div aria-live="polite" aria-atomic="true">
         {notice && (
           // Sin role="alert": la región viva ya lo anuncia.
-          <Alert role={undefined} className="mb-4 py-3 pr-14 pl-4 md:mb-5">
-            <CircleCheck aria-hidden />
+          <Alert
+            role={undefined}
+            variant={notice.error ? "destructive" : "default"}
+            className="mb-4 py-3 pr-14 pl-4 md:mb-5"
+          >
+            {notice.error ? <CircleAlert aria-hidden /> : <CircleCheck aria-hidden />}
             <AlertTitle className="font-bold">{notice.title}</AlertTitle>
             {notice.description && <AlertDescription>{notice.description}</AlertDescription>}
             <AlertAction className="top-1 right-1">

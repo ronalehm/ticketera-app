@@ -400,6 +400,7 @@ export async function getEventForEdit(
       venueId: events.venueId,
       imageUrl: events.imageUrl,
       reviewNote: events.reviewNote,
+      featured: events.featured,
     })
     .from(events)
     .innerJoin(categories, eq(categories.id, events.categoryId))

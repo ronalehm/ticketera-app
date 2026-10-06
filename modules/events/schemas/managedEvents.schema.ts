@@ -33,6 +33,8 @@ export const managedEventSchema = z.object({
   venue: z.string().nullable(), // null: borrador sin recinto
   city: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  /** Destacado en la landing (lo marca un admin, spec events-dynamic-landing). */
+  featured: z.boolean(),
   /** Razón social del organizador o, si aún no la tiene (no aprobado), su nombre. */
   organizer: z.string(),
   /** Entradas de órdenes `paid`. */

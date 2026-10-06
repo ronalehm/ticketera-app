@@ -11,6 +11,7 @@ export function makeManagedEvent(id: string, overrides: Partial<ManagedEvent> = 
     venue: "Estadio Nacional",
     city: "Lima",
     imageUrl: null,
+    featured: false,
     organizer: `Productora ${id}`,
     sold: 0,
     hasActiveSales: false,

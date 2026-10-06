@@ -1,8 +1,12 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-/** Encabezado de Crear y Editar borrador: "Volver a Eventos" pegado sobre el h1 (único de la página). */
-export function EventFormHeader({ title }: { title: string }) {
+/**
+ * Encabezado de Crear y Editar borrador: "Volver a Eventos" pegado sobre el h1 (único de la página). `action`, a la
+ * derecha del h1 (debajo en móvil): Destacar en Editar para un admin.
+ */
+export function EventFormHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <Link
@@ -12,7 +16,10 @@ export function EventFormHeader({ title }: { title: string }) {
         <ArrowLeft className="size-4" aria-hidden />
         Volver a Eventos
       </Link>
-      <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{title}</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{title}</h1>
+        {action}
+      </div>
     </div>
   );
 }
