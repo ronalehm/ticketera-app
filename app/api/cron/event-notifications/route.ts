@@ -25,5 +25,6 @@ export async function GET(request: Request) {
     processed += count;
     if (count < LOT_SIZE) break;
   }
+  console.info("event-notifications cron completed", { processed });
   return Response.json({ processed });
 }
