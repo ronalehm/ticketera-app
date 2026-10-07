@@ -42,10 +42,11 @@ export const eventNotifications = pgTable(
   },
   (t) => [
     index("event_notifications_due_idx").on(t.status, t.sendAfter),
-    // Una sola notificación `update` pendiente por evento (se fusionan los cambios en ella).
+    // Una sola notificación `update` fusionable por evento: `pending` y sin reclamar nunca (`attempts = 0`). Una en
+    // reintento (`attempts > 0`) convive con la nueva (enmienda 1, migración 0012).
     uniqueIndex("event_notifications_one_pending_update_idx")
       .on(t.eventId)
-      .where(sql`${t.kind} = 'update' AND ${t.status} = 'pending'`),
+      .where(sql`${t.kind} = 'update' AND ${t.status} = 'pending' AND ${t.attempts} = 0`),
   ],
 );
 

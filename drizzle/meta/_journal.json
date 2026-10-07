@@ -85,6 +85,13 @@
       "when": 1791308909439,
       "tag": "0011_event_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791348327253,
+      "tag": "0012_event_notifications_merge_index",
+      "breakpoints": true
     }
   ]
 }

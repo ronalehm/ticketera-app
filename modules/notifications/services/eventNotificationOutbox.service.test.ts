@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { events } from "@/lib/db/schema/events";
 import { users } from "@/lib/db/schema/identity";
 import { eventNotifications } from "@/lib/db/schema/notifications";
@@ -104,17 +104,58 @@ describeWithDb("enqueueEventNotification", () => {
       expect(statuses).toEqual({ [first!]: "sending", [second!]: "pending" });
     }));
 
-  it("el índice único impide dos `update` pendientes del mismo evento", () =>
+  it("no fusiona en una `update` `pending` en reintento (`attempts > 0`): crea otra y la vieja no cambia", () =>
     inRolledBackTransaction(async (tx) => {
       const eventId = await eventWithBuyer();
-      const row = { eventId, kind: "update" as const, changes: [TITLE_CHANGE], sendAfter: new Date() };
-      await tx.insert(eventNotifications).values(row);
-      await expect(db.transaction((savepoint) => savepoint.insert(eventNotifications).values(row))).rejects.toMatchObject({
-        cause: { code: "23505", constraint: "event_notifications_one_pending_update_idx" },
+      const retrying = await enqueueEventNotification(tx, { eventId, kind: "update", changes: [TITLE_CHANGE], actorId: null });
+      await tx.update(eventNotifications).set({ attempts: 1 }).where(eq(eventNotifications.id, retrying!));
+      const minAge = { field: "minAge", before: 0, after: 18 };
+
+      const created = await enqueueEventNotification(tx, { eventId, kind: "update", changes: [minAge], actorId: null });
+
+      expect(created).not.toBe(retrying);
+      const rows = await tx
+        .select({
+          id: eventNotifications.id,
+          status: eventNotifications.status,
+          attempts: eventNotifications.attempts,
+          changes: eventNotifications.changes,
+          delaySeconds: sql<number>`extract(epoch from ${eventNotifications.sendAfter} - now())`.mapWith(Number),
+        })
+        .from(eventNotifications)
+        .where(eq(eventNotifications.eventId, eventId));
+      // Misma transacción: `created_at` coincide, así que se comparan por id y no por orden.
+      expect(Object.fromEntries(rows.map(({ id, ...row }) => [id, row]))).toEqual({
+        [retrying!]: { status: "pending", attempts: 1, changes: [TITLE_CHANGE], delaySeconds: 600 },
+        [created!]: { status: "pending", attempts: 0, changes: [minAge], delaySeconds: 600 },
       });
-      // Sí admite otra pendiente de otro tipo.
-      await tx.insert(eventNotifications).values({ ...row, kind: "schedule" });
     }));
+
+  describe("índice `event_notifications_one_pending_update_idx`", () => {
+    const update = (eventId: string) => ({ eventId, kind: "update" as const, changes: [TITLE_CHANGE], sendAfter: new Date() });
+
+    it("impide dos `update` fusionables (`pending`, `attempts = 0`) del mismo evento", () =>
+      inRolledBackTransaction(async (tx) => {
+        const eventId = await eventWithBuyer();
+        await tx.insert(eventNotifications).values(update(eventId));
+        await expect(
+          db.transaction((savepoint) => savepoint.insert(eventNotifications).values(update(eventId))),
+        ).rejects.toMatchObject({ cause: { code: "23505", constraint: "event_notifications_one_pending_update_idx" } });
+        // Sí admite otra pendiente de otro tipo.
+        await tx.insert(eventNotifications).values({ ...update(eventId), kind: "schedule" });
+      }));
+
+    it.each([
+      ["`pending` con `attempts = 1`", { attempts: 1 }],
+      ["`sending`", { status: "sending" as const }],
+    ])("admite una `update` fusionable junto a otra %s del mismo evento", (_, other) =>
+      inRolledBackTransaction(async (tx) => {
+        const eventId = await eventWithBuyer();
+        await tx.insert(eventNotifications).values({ ...update(eventId), ...other });
+        await tx.insert(eventNotifications).values(update(eventId));
+        expect(await notificationsOf(tx, eventId)).toHaveLength(2);
+      }));
+  });
 
   it("no encola nada sin cambios", () =>
     inRolledBackTransaction(async (tx) => {

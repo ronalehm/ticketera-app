@@ -1,0 +1,2 @@
+DROP INDEX "event_notifications_one_pending_update_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "event_notifications_one_pending_update_idx" ON "event_notifications" USING btree ("event_id") WHERE "event_notifications"."kind" = 'update' AND "event_notifications"."status" = 'pending' AND "event_notifications"."attempts" = 0;

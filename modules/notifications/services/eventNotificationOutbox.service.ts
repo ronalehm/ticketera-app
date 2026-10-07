@@ -27,7 +27,7 @@ function mergeChanges(previous: EventChange[], next: EventChange[]): EventChange
 /**
  * Encola la notificación del cambio y devuelve su id, o `null` si no hay nada que avisar (sin cambios o sin compradores
  * `paid`/`partially_refunded`). `schedule` y `cancelled` salen ya (`send_after = now()`); `update` se fusiona con la
- * notificación `update` pendiente del evento o crea una que sale en 10 minutos.
+ * notificación `update` pendiente y nunca reclamada del evento o crea una que sale en 10 minutos.
  */
 export async function enqueueEventNotification(
   tx: Tx,
@@ -43,8 +43,9 @@ export async function enqueueEventNotification(
   if (!buyer) return null;
 
   if (kind === "update") {
-    // Deja de aceptar fusiones en cuanto el procesador la reclama (`sending`): entonces se crea otra. Dos inserciones a
-    // la vez chocan con `event_notifications_one_pending_update_idx` y la segunda transacción se revierte entera.
+    // Deja de aceptar fusiones en cuanto el procesador la reclama por primera vez (`attempts > 0`, aunque vuelva a
+    // `pending` para reintentar): entonces se crea otra. Dos inserciones a la vez chocan con
+    // `event_notifications_one_pending_update_idx` y la segunda transacción se revierte entera.
     const [pending] = await tx
       .select({ id: eventNotifications.id, changes: eventNotifications.changes })
       .from(eventNotifications)
@@ -53,6 +54,7 @@ export async function enqueueEventNotification(
           eq(eventNotifications.eventId, eventId),
           eq(eventNotifications.kind, "update"),
           eq(eventNotifications.status, "pending"),
+          eq(eventNotifications.attempts, 0),
         ),
       )
       .for("update");

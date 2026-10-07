@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { ErrorResponse } from "resend";
 import { db } from "@/lib/db/client";
+import { describeError } from "@/lib/describeError";
 import { env } from "@/lib/env";
 import { events } from "@/lib/db/schema/events";
 import { eventNotificationDeliveries, eventNotifications } from "@/lib/db/schema/notifications";
@@ -14,12 +15,16 @@ import { emailSender, isAllowedRecipient } from "./resendClient";
 // el cron (las vencidas); el reclamo atómico impide que dos procesos envíen la misma notificación a la vez.
 
 const MAX_ATTEMPTS = 5;
-/** Máximo de correos por llamada a `resend.batch.send`. */
+/**
+ * Máximo de correos por llamada a `resend.batch.send` y tamaño de los tramos fijos (`sendLots`). Cambiarlo, o cambiar
+ * el orden por id o la derivación de `batchIdempotencyKey`, cambia las claves de los lotes de las notificaciones en
+ * reintento (un lote aceptado sin respuesta saldría otra vez): drenarlas antes de desplegar ese cambio.
+ */
 const BATCH_SIZE = 100;
 const ALLOWLIST_SKIPPED = "omitido por allowlist";
 
 type Sender = NonNullable<typeof emailSender>;
-type Delivery = { id: string; email: string };
+type Delivery = { id: string; email: string; attempts: number; status: "pending" | "sent" | "failed" };
 type SendError = Pick<ErrorResponse, "message" | "statusCode"> & { name: string };
 type SendResult<T> = { data: T; error: null } | { data: null; error: SendError };
 
@@ -54,7 +59,7 @@ export const deliveryIdempotencyKey = (notificationId: string, deliveryId: strin
  * `batch.send` admite una sola clave por petición: se deriva de los ids del lote (ordenados por id), así un reintento
  * del mismo lote tras una caída repite la clave y Resend no vuelve a enviarlo.
  */
-export const batchIdempotencyKey = (notificationId: string, lot: Delivery[]) =>
+export const batchIdempotencyKey = (notificationId: string, lot: Pick<Delivery, "id">[]) =>
   `event-notification/${notificationId}/batch-${createHash("sha256")
     .update(lot.map((delivery) => delivery.id).join(","))
     .digest("hex")
@@ -67,6 +72,16 @@ function logError(notificationId: string, error: { name: string; message: string
     name: error.name,
     message: error.message.replace(/[^\s<>()@]+@/g, "***@"),
   });
+}
+
+/**
+ * Fallo que no es de Resend (render, BD): solo nombre y SQLSTATE. Nunca `message`, SQL ni `params` (un
+ * `DrizzleQueryError` los lleva con correos de compradores). Devuelve el texto para `last_error`.
+ */
+function logFailure(notificationId: string, error: unknown): string {
+  const described = describeError(error);
+  console.error("[notifications] error al procesar", { notificationId, ...described });
+  return described.code ? `${described.name} (${described.code})` : described.name;
 }
 
 function warnNoSender() {
@@ -99,10 +114,15 @@ async function markSent(lot: Delivery[], messageIds: string[]) {
     WHERE d.id = v.id`);
 }
 
-async function markFailedAttempt(lot: Delivery[], error: SendError, status: "pending" | "failed") {
+/**
+ * Guarda el error de un envío. `attempts` solo sube si el envío fue individual (`countAttempt`): un error de un lote
+ * no lo cambia: las entregas se cortan en tramos fijos de `BATCH_SIZE` (100) ordenados por id, y en el siguiente
+ * intento ese tramo vuelve a formar el mismo lote y repite su clave `batch-<sha256>` (ver `sendLots`).
+ */
+async function markFailedAttempt(lot: Delivery[], error: SendError, status: "pending" | "failed", countAttempt: boolean) {
   await db
     .update(d)
-    .set({ status, lastError: errorText(error), attempts: sql`${d.attempts} + 1` })
+    .set({ status, lastError: errorText(error), ...(countAttempt && { attempts: sql`${d.attempts} + 1` }) })
     .where(inArray(d.id, lot.map((delivery) => delivery.id)));
 }
 
@@ -128,35 +148,35 @@ async function freezeRecipients(notificationId: string, eventId: string) {
 }
 
 /**
- * Envía las entregas `allowed` en lotes; devuelve el último error reintentable, si hubo. Un 429 corta el envío. Un
- * error de validación rechaza el lote entero: se reenvía correo a correo (clave por entrega) para aislar el inválido.
+ * Envía las entregas `pending` permitidas de `deliveries` (todas las de la notificación, ordenadas por id, con el estado
+ * leído al inicio del intento); devuelve el último error reintentable, si hubo. Un 429 corta el envío.
+ * - Tramos fijos: `deliveries` se corta en tramos de `BATCH_SIZE` por su posición. El conjunto está congelado
+ *   (`freezeRecipients`) y no se borra ninguna entrega, así que cada una cae en el mismo tramo en todos los intentos,
+ *   pase lo que pase con las demás. De cada tramo, las nuevas (`attempts = 0`) van en un solo lote con la clave de sus
+ *   ids; un tramo sin ninguna no genera llamada.
+ * - Un error reintentable del lote las deja `pending` sin sumar `attempts`: el siguiente intento forma el mismo lote en
+ *   ese tramo y repite la clave, así que si Resend lo había aceptado (solo se perdió la respuesta) no se duplica. Lo que
+ *   pase en otro tramo (p. ej. un reenvío uno a uno cortado) no desplaza sus límites ni su clave.
+ * - Un error de validación rechaza el lote entero (no salió nada con esa clave): se reenvía correo a correo para aislar
+ *   el inválido; las no intentadas salen en el siguiente intento en lote dentro de su tramo, con una clave nueva.
+ * - `invalid_idempotent_request` (clave ya usada con otro contenido): el lote pudo haber salido, así que sus entregas
+ *   quedan `failed` sin reenviarlas con otra clave. Se prefiere no duplicar.
+ * - Las ya intentadas una a una (`attempts > 0`) van solas con su clave por entrega: un envío individual aceptado sin
+ *   respuesta no se duplica dentro de un lote con otra clave.
  */
 async function sendLots(
   sender: Sender,
   notificationId: string,
-  allowed: Delivery[],
+  deliveries: Delivery[],
   email: { subject: string; html: string; text: string },
 ): Promise<SendError | null> {
   const toEmail = (delivery: Delivery) => ({ from: sender.from, to: delivery.email, ...email });
+  const sendable = (delivery: Delivery) => delivery.status === "pending" && isAllowedRecipient(delivery.email);
   let retryable: SendError | null = null;
 
-  for (let start = 0; start < allowed.length; start += BATCH_SIZE) {
-    const lot = allowed.slice(start, start + BATCH_SIZE);
-    const batch = await safeSend(() =>
-      sender.resend.batch.send(lot.map(toEmail), { idempotencyKey: batchIdempotencyKey(notificationId, lot) }),
-    );
-    if (!batch.error) {
-      await markSent(lot, batch.data.data.map((email) => email.id));
-      continue;
-    }
-    logError(notificationId, batch.error);
-    if (isRetryableSendError(batch.error)) {
-      retryable = batch.error;
-      await markFailedAttempt(lot, batch.error, "pending");
-      if (batch.error.statusCode === 429) return retryable;
-      continue;
-    }
-    for (const delivery of lot) {
+  /** Devuelve `true` si un 429 obliga a cortar el envío. */
+  async function sendOneByOne(targets: Delivery[]): Promise<boolean> {
+    for (const delivery of targets) {
       const single = await safeSend(() =>
         sender.resend.emails.send(toEmail(delivery), {
           idempotencyKey: deliveryIdempotencyKey(notificationId, delivery.id),
@@ -167,14 +187,42 @@ async function sendLots(
         continue;
       }
       const isRetryable = isRetryableSendError(single.error);
-      await markFailedAttempt([delivery], single.error, isRetryable ? "pending" : "failed");
+      await markFailedAttempt([delivery], single.error, isRetryable ? "pending" : "failed", true);
       if (isRetryable) {
         logError(notificationId, single.error);
         retryable = single.error;
-        if (single.error.statusCode === 429) return retryable;
+        if (single.error.statusCode === 429) return true;
       }
     }
+    return false;
   }
+
+  for (let start = 0; start < deliveries.length; start += BATCH_SIZE) {
+    const lot = deliveries
+      .slice(start, start + BATCH_SIZE)
+      .filter((delivery) => sendable(delivery) && delivery.attempts === 0);
+    if (lot.length === 0) continue;
+    const batch = await safeSend(() =>
+      sender.resend.batch.send(lot.map(toEmail), { idempotencyKey: batchIdempotencyKey(notificationId, lot) }),
+    );
+    if (!batch.error) {
+      await markSent(lot, batch.data.data.map((email) => email.id));
+      continue;
+    }
+    logError(notificationId, batch.error);
+    if (isRetryableSendError(batch.error)) {
+      retryable = batch.error;
+      await markFailedAttempt(lot, batch.error, "pending", false);
+      if (batch.error.statusCode === 429) return retryable;
+      continue;
+    }
+    if (batch.error.name === "invalid_idempotent_request") {
+      await markFailedAttempt(lot, batch.error, "failed", false);
+      continue;
+    }
+    if (await sendOneByOne(lot)) return retryable;
+  }
+  await sendOneByOne(deliveries.filter((delivery) => sendable(delivery) && delivery.attempts > 0));
   return retryable;
 }
 
@@ -186,10 +234,17 @@ async function settle(notificationId: string, attempts: number, lastError: strin
     .where(and(eq(d.notificationId, notificationId), eq(d.status, "pending")));
 
   if (pending.length === 0) {
-    await db.update(n).set({ status: "sent", sentAt: sql`now()`, lockedAt: null }).where(eq(n.id, notificationId));
+    await db
+      .update(n)
+      .set({ status: "sent", sentAt: sql`now()`, lockedAt: null, lastError: null })
+      .where(eq(n.id, notificationId));
     return;
   }
-  const error = lastError ?? "entregas pendientes";
+  await retryOrFail(notificationId, attempts, lastError ?? "entregas pendientes");
+}
+
+/** Vuelve a `pending` con backoff o, al agotar los intentos, deja `failed` la notificación y sus entregas pendientes. */
+async function retryOrFail(notificationId: string, attempts: number, error: string) {
   if (attempts >= MAX_ATTEMPTS) {
     await db
       .update(d)
@@ -222,11 +277,28 @@ export async function processEventNotification(id: string): Promise<boolean> {
   const notification = await claim(id);
   if (!notification) return false;
 
+  // Un proceso que cayó tras el reclamo de su 5.º intento la dejó `sending`: al reclamarla de nuevo, se cierra sin
+  // enviar. Ese reclamo suma un intento más, así que queda `failed` con `attempts = 6`; es correcto (solo la cierra).
+  if (notification.attempts > MAX_ATTEMPTS) {
+    await retryOrFail(id, notification.attempts, notification.lastError ?? "intentos agotados");
+    return true;
+  }
+  try {
+    await send(emailSender, notification);
+  } catch (error) {
+    // Fallo tras el reclamo (render, BD): cuenta como intento, igual que un error reintentable de Resend.
+    await retryOrFail(id, notification.attempts, logFailure(id, error));
+  }
+  return true;
+}
+
+async function send(sender: Sender, notification: typeof n.$inferSelect) {
+  const { id } = notification;
   // Cambios que se revirtieron (A → B → A) no se avisan.
   const changes = notification.changes.filter((change) => change.before !== change.after);
   if (changes.length === 0) {
     await settle(id, notification.attempts, null);
-    return true;
+    return;
   }
 
   await freezeRecipients(id, notification.eventId);
@@ -237,23 +309,24 @@ export async function processEventNotification(id: string): Promise<boolean> {
     changes,
     eventUrl: `${env.APP_URL}/eventos/${event.slug}`,
     ticketsUrl: `${env.APP_URL}/mis-entradas`,
-    from: emailSender.from,
+    from: sender.from,
   });
 
+  // Todas, en cualquier estado: los tramos de `sendLots` dependen de la posición en el orden por id.
   const deliveries = await db
-    .select({ id: d.id, email: d.email })
+    .select({ id: d.id, email: d.email, attempts: d.attempts, status: d.status })
     .from(d)
-    .where(and(eq(d.notificationId, id), eq(d.status, "pending")))
+    .where(eq(d.notificationId, id))
     .orderBy(asc(d.id));
-  const allowed = deliveries.filter((delivery) => isAllowedRecipient(delivery.email));
-  const skipped = deliveries.filter((delivery) => !isAllowedRecipient(delivery.email)).map((delivery) => delivery.id);
+  const skipped = deliveries
+    .filter((delivery) => delivery.status === "pending" && !isAllowedRecipient(delivery.email))
+    .map((delivery) => delivery.id);
   if (skipped.length > 0) {
     await db.update(d).set({ status: "failed", lastError: ALLOWLIST_SKIPPED }).where(inArray(d.id, skipped));
   }
 
-  const retryable = await sendLots(emailSender, id, allowed, email);
+  const retryable = await sendLots(sender, id, deliveries, email);
   await settle(id, notification.attempts, retryable && errorText(retryable));
-  return true;
 }
 
 /** Procesa hasta `limit` notificaciones reclamables (vencidas, reintentables o con reclamo vencido); devuelve cuántas. */
@@ -268,8 +341,8 @@ export async function processDueEventNotifications({ limit }: { limit: number })
     try {
       if (await processEventNotification(id)) processed++;
     } catch (error) {
-      // Queda `sending`: se libera sola a los 10 minutos.
-      logError(id, error instanceof Error ? error : { name: "Error", message: String(error) });
+      // Solo si falla hasta el cierre del intento (BD caída): queda `sending` y se libera sola a los 10 minutos.
+      logFailure(id, error);
     }
   }
   return processed;
