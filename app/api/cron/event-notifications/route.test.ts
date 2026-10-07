@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processDueEventNotifications } from "@/modules/notifications/server";
 import { GET } from "./route";
 
@@ -13,9 +13,16 @@ const request = (authorization?: string) =>
     headers: authorization ? { authorization } : {},
   });
 
+const info = () => vi.mocked(console.info);
+
+beforeEach(() => {
+  vi.spyOn(console, "info").mockImplementation(() => {});
+});
+
 afterEach(() => {
   cronEnv.CRON_SECRET = undefined;
   vi.resetAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("GET /api/cron/event-notifications", () => {
@@ -29,6 +36,7 @@ describe("GET /api/cron/event-notifications", () => {
     const response = await GET(request(authorization));
     expect(response.status).toBe(401);
     expect(processDueEventNotifications).not.toHaveBeenCalled();
+    expect(info()).not.toHaveBeenCalled();
   });
 
   it("con el secreto procesa en lotes de 50 hasta que un lote no se llena", async () => {
@@ -39,6 +47,8 @@ describe("GET /api/cron/event-notifications", () => {
     expect(await response.json()).toEqual({ processed: 57 });
     expect(processDueEventNotifications).toHaveBeenCalledTimes(2);
     expect(processDueEventNotifications).toHaveBeenCalledWith({ limit: 50 });
+    expect(info()).toHaveBeenCalledTimes(1);
+    expect(info()).toHaveBeenCalledWith("event-notifications cron completed", { processed: 57 });
   });
 
   it("corta a los 10 lotes aunque sigan llenos (lo demás, en la siguiente ejecución)", async () => {
