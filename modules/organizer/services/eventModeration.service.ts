@@ -8,6 +8,7 @@ import { venues } from "@/lib/db/schema/venues";
 import { roleCan } from "@/modules/auth/permissions";
 import { getOrganizerStatus } from "@/modules/auth/server";
 import type { ManagedEventStatus } from "@/modules/events";
+import { enqueueEventNotification } from "@/modules/notifications/server";
 import { EventDraftError } from "../utils/eventDraftError";
 import { canTransition } from "../utils/eventTransitions";
 import {
@@ -15,6 +16,7 @@ import {
   assertActorCanMutate,
   assertPublishable,
   type Database,
+  type EnqueuedNotification,
   hasActiveSales,
   type LockedEvent,
   lockManagedEvent,
@@ -130,16 +132,28 @@ export async function rejectEvent(actor: Actor, eventId: string, note: string, d
  * con reembolsos: Próximamente"). Repetirlo sobre un evento ya cancelado no hace nada. El inventario se conserva
  * (historial); el catálogo solo muestra eventos `published`. El `FOR UPDATE` del evento se serializa con la reserva del
  * checkout (`FOR SHARE` del evento publicado): una reserva en curso termina antes y cuenta como venta, y una posterior ya
- * encuentra el evento cancelado. Devuelve su slug (la acción invalida sus páginas públicas).
+ * encuentra el evento cancelado. En la misma transacción encola el correo `cancelled` a los compradores (spec
+ * event-change-notifications, Decisión 3; sin compradores no encola nada). Devuelve su slug (la acción invalida sus
+ * páginas públicas) y la notificación encolada, si la hubo.
  */
-export async function cancelEvent(actor: Actor, eventId: string, database: Database = db): Promise<{ slug: string }> {
+export async function cancelEvent(
+  actor: Actor,
+  eventId: string,
+  database: Database = db,
+): Promise<{ slug: string; notification: EnqueuedNotification }> {
   assertModerator(actor);
   return database.transaction(async (tx) => {
     const event = await lockManagedEvent(actor, eventId, tx);
-    if (event.status === "cancelled") return { slug: event.slug };
+    if (event.status === "cancelled") return { slug: event.slug, notification: null };
     if (!canTransition(actor.role, event.status, "cancel")) throw new EventDraftError("cancel_not_published");
     if (await hasActiveSales(eventId, tx)) throw new EventDraftError("has_sales");
     await tx.update(events).set({ status: "cancelled", cancelledAt: sql`now()` }).where(eq(events.id, eventId));
-    return { slug: event.slug };
+    const id = await enqueueEventNotification(tx, {
+      eventId,
+      kind: "cancelled",
+      changes: [{ field: "status", before: event.status, after: "cancelled" }],
+      actorId: actor.id,
+    });
+    return { slug: event.slug, notification: id ? { id, kind: "cancelled" as const } : null };
   });
 }

@@ -54,6 +54,10 @@ export const privacyRequestTypeEnum = pgEnum("privacy_request_type", [
   "cancellation",
   "opposition",
 ]);
+// Notificaciones por correo a compradores (spec event-change-notifications, Decisiones 2 y 4).
+export const eventNotificationKindEnum = pgEnum("event_notification_kind", ["schedule", "cancelled", "update"]);
+export const eventNotificationStatusEnum = pgEnum("event_notification_status", ["pending", "sending", "sent", "failed"]);
+export const emailDeliveryStatusEnum = pgEnum("email_delivery_status", ["pending", "sent", "failed"]);
 
 // Columnas de fecha compartidas por todos los dominios (convención del ERD).
 export const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });

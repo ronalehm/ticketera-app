@@ -16,7 +16,36 @@ const appUrl = z
   .refine((value) => !/[?#]/.test(value), "Sin query ni fragmento: se le concatenan rutas")
   .transform((value) => value.replace(/\/+$/, ""));
 
-export const serverEnvSchema = z.object({
+/** `Nombre <correo@dominio>`, como `Mentec Tickets <notificaciones@ticketera.mentec.dev>`. */
+const emailFrom = z
+  .string()
+  .regex(/^[^<>]+ <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>$/, "Formato esperado: Nombre <correo@dominio>");
+
+/** Correos separados por comas, normalizados a minúsculas y sin vacíos. */
+const emailList = z
+  .string()
+  .transform((value) =>
+    value
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.email()));
+
+export type EmailDeliveryMode = "live" | "allowlist";
+
+/**
+ * Modo de entrega efectivo (spec event-change-notifications, Decisión 1): `live` solo si se pide `live` en Production
+ * de Vercel; en cualquier otro entorno se fuerza `allowlist`.
+ */
+export function effectiveEmailDeliveryMode(input: {
+  EMAIL_DELIVERY_MODE: EmailDeliveryMode;
+  VERCEL_ENV?: string;
+}): EmailDeliveryMode {
+  return input.EMAIL_DELIVERY_MODE === "live" && input.VERCEL_ENV === "production" ? "live" : "allowlist";
+}
+
+const serverEnvObject = z.object({
   APP_URL: appUrl,
   DATABASE_URL: z.url(),
   DATABASE_URL_UNPOOLED: optional(z.url()),
@@ -31,6 +60,33 @@ export const serverEnvSchema = z.object({
   // no haya `onUploadCompleted`.
   BLOB_STORE_ID: optional(z.string()),
   BLOB_WEBHOOK_PUBLIC_KEY: optional(z.string()),
+  // Correo transaccional con Resend (spec event-change-notifications): opcionales; sin RESEND_API_KEY o sin EMAIL_FROM
+  // las notificaciones se encolan y el envío se omite. Solo servidor: nunca con prefijo NEXT_PUBLIC_.
+  RESEND_API_KEY: optional(z.string().startsWith("re_")),
+  EMAIL_FROM: optional(emailFrom),
+  EMAIL_DELIVERY_MODE: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.enum(["live", "allowlist"]).default("allowlist"),
+  ),
+  EMAIL_ALLOWED_RECIPIENTS: optional(emailList),
+  // Vercel lo envía al cron como `Authorization: Bearer <CRON_SECRET>`.
+  CRON_SECRET: optional(z.string().min(16)),
+  // Lo define Vercel (`production`, `preview`, `development`); fuera de Vercel no existe.
+  VERCEL_ENV: optional(z.string()),
+});
+
+export const serverEnvSchema = serverEnvObject.superRefine((value, ctx) => {
+  if (
+    value.RESEND_API_KEY &&
+    effectiveEmailDeliveryMode(value) === "allowlist" &&
+    !value.EMAIL_ALLOWED_RECIPIENTS?.length
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["EMAIL_ALLOWED_RECIPIENTS"],
+      message: "Obligatoria con RESEND_API_KEY en modo allowlist (todo entorno fuera de Production)",
+    });
+  }
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

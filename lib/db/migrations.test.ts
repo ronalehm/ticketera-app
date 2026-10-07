@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,7 +29,9 @@ const DESTRUCTIVE_PATTERNS: { name: string; pattern: RegExp }[] = [
 ];
 
 /** Devuelve las infracciones de la regla aditiva que contiene el SQL de una migración. */
-function findViolations(sql: string): string[] {
+function findViolations(source: string): string[] {
+  // Sin literales de texto: el valor de enum `'update'` (0011) no es la sentencia UPDATE.
+  const sql = source.replace(/'(?:[^']|'')*'/g, "''");
   const violations = DESTRUCTIVE_PATTERNS.filter(({ pattern }) => pattern.test(sql)).map(({ name }) => name);
   // DROP CONSTRAINT "x" solo vale si la misma migración vuelve a crear "x" (redefinir un CHECK).
   for (const [, name] of sql.matchAll(/\bDROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/gi)) {
@@ -56,6 +59,27 @@ describe("migraciones de drizzle/", () => {
 
   it.each(sqlFiles)("%s es aditiva", (file) => {
     expect(findViolations(readFileSync(join(MIGRATIONS_DIR, file), "utf8"))).toEqual(ALLOWED_VIOLATIONS[file] ?? []);
+  });
+});
+
+// Spec event-change-notifications, enmienda 1: 0011 ya está aplicada en dev y en Neon `test`, así que no se edita;
+// 0012 rehace su índice parcial para que solo cuenten las `update` fusionables.
+describe("notificaciones (0011 y 0012)", () => {
+  const read = (file: string) => readFileSync(join(MIGRATIONS_DIR, file), "utf8").replace(/\r\n/g, "\n");
+
+  it("0011_event_notifications.sql no cambia (sha256 con finales LF)", () => {
+    expect(createHash("sha256").update(read("0011_event_notifications.sql")).digest("hex")).toBe(
+      "3999b4ebf351f5f2c9a6f6516f2df194a91ce334018c4721761922c5ddf17715",
+    );
+  });
+
+  it("0012_event_notifications_merge_index.sql rehace el índice con `attempts = 0`", () => {
+    expect(read("0012_event_notifications_merge_index.sql").trim()).toBe(
+      [
+        'DROP INDEX "event_notifications_one_pending_update_idx";--> statement-breakpoint',
+        'CREATE UNIQUE INDEX "event_notifications_one_pending_update_idx" ON "event_notifications" USING btree ("event_id") WHERE "event_notifications"."kind" = \'update\' AND "event_notifications"."status" = \'pending\' AND "event_notifications"."attempts" = 0;',
+      ].join("\n"),
+    );
   });
 });
 

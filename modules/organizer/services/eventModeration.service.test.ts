@@ -4,12 +4,14 @@ import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
 import { organizers, users } from "@/lib/db/schema/identity";
+import { eventNotifications } from "@/lib/db/schema/notifications";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { describeWithDb } from "@/lib/db/testDb";
 import { TEST_EVENT_SLUG_PREFIX } from "@/lib/db/testFixtures";
 import { db, inRolledBackTransaction, type Tx } from "@/lib/db/testTransaction";
 import { OrganizerNotApprovedError } from "@/modules/auth/server";
 import { getEventBySlug } from "@/modules/events/catalog";
+import { enqueueEventNotification } from "@/modules/notifications/server";
 import type { EventDraftInput } from "../types/organizer.types";
 import { createEvent, updateEvent } from "./eventDrafts.service";
 import { approveEvent, cancelEvent, rejectEvent, submitForReview } from "./eventModeration.service";
@@ -27,6 +29,11 @@ import {
 
 // Fuera de `inRolledBackTransaction`, el `db` real; dentro, la transacción (que siempre se revierte).
 vi.mock("@/lib/db/client", () => import("@/lib/db/testTransaction"));
+// El outbox real, espiado para comprobar que la cancelación encola `cancelled`.
+vi.mock("@/modules/notifications/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/notifications/server")>();
+  return { ...actual, enqueueEventNotification: vi.fn(actual.enqueueEventNotification) };
+});
 
 /** Lugares del recinto de prueba (`createVenue`): Campo general de 300 y Platea numerada de 2 × 3. */
 const GENERAL_SEATS = 300;
@@ -369,13 +376,13 @@ describeWithDb("eventModeration.service", () => {
         await approveEvent(admin, eventId);
         const { slug } = await getEvent(tx, eventId);
         // El slug, para que la acción invalide sus páginas públicas.
-        expect(await cancelEvent(admin, eventId)).toEqual({ slug });
+        expect(await cancelEvent(admin, eventId)).toEqual({ slug, notification: null });
 
         const event = await getEvent(tx, eventId);
         expect(event.status).toBe("cancelled");
         expect(event.cancelledAt).toBeInstanceOf(Date);
         // Repetirlo no hace nada; ninguna transición sale de cancelled.
-        expect(await cancelEvent(admin, eventId)).toEqual({ slug });
+        expect(await cancelEvent(admin, eventId)).toEqual({ slug, notification: null });
         expect(await approveEvent(admin, eventId)).toEqual({ status: "cancelled", slug });
         await expect(submitForReview(owner, eventId)).rejects.toEqual(domainError("submit_not_draft"));
         await expect(rejectEvent(admin, eventId, "No")).rejects.toEqual(domainError("not_pending_review"));
@@ -394,6 +401,27 @@ describeWithDb("eventModeration.service", () => {
         await insertOrder(tx, eventId, status, new Date(Date.now() + offsetMs));
         await expect(cancelEvent(await createAdmin(tx), eventId)).rejects.toEqual(domainError("has_sales"));
         expect((await getEvent(tx, eventId)).status).toBe("published");
+      }));
+
+    it("encola `cancelled` en la misma transacción (sin compradores no queda fila); si el encolado falla, no cancela", () =>
+      inRolledBackTransaction(async (tx) => {
+        const admin = await createAdmin(tx);
+        const { eventId } = await setupPending(tx);
+        await setStatus(tx, eventId, "published");
+        vi.mocked(enqueueEventNotification).mockClear();
+
+        vi.mocked(enqueueEventNotification).mockRejectedValueOnce(new Error("outbox caído"));
+        await expect(cancelEvent(admin, eventId)).rejects.toThrow("outbox caído");
+        expect((await getEvent(tx, eventId)).status).toBe("published");
+
+        expect(await cancelEvent(admin, eventId)).toEqual({ slug: expect.any(String), notification: null });
+        expect(enqueueEventNotification).toHaveBeenLastCalledWith(expect.anything(), {
+          eventId,
+          kind: "cancelled",
+          changes: [{ field: "status", before: "published", after: "cancelled" }],
+          actorId: admin.id,
+        });
+        expect(await tx.select().from(eventNotifications).where(eq(eventNotifications.eventId, eventId))).toEqual([]);
       }));
 
     it("una orden pending vencida no bloquea", () =>

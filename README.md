@@ -146,6 +146,117 @@ Tarjetas de prueba (cualquier fecha futura y cualquier CVC):
 | `4000 0000 0000 9995` | Fondos insuficientes |
 | `4000 0025 0000 3155` | Pide autenticación 3D Secure |
 
+## Correo a compradores (Resend)
+
+Cuando se edita un evento **publicado** con compradores (órdenes `paid` o `partially_refunded`) o se cancela, la app avisa por correo a cada dirección distinta, una sola vez (spec `event-change-notifications`). El código vive en `modules/notifications`.
+
+### Configuración
+
+Variables solo de servidor, validadas en `lib/env.ts` y documentadas en `.env.example` (nunca con prefijo `NEXT_PUBLIC_`; la clave nunca va en logs, issues ni documentación):
+
+| Variable | Production | Preview | Local (`.env.local`) |
+|---|---|---|---|
+| `RESEND_API_KEY` | Clave de Production (Sensitive) | Otra clave, distinta de Production (Sensitive) | Clave de prueba/Preview |
+| `EMAIL_FROM` | `Nombre <correo@dominio verificado>` | Igual | Igual |
+| `EMAIL_DELIVERY_MODE` | `live` | `allowlist` | `allowlist` |
+| `EMAIL_ALLOWED_RECIPIENTS` | — | Correos de prueba, separados por comas | Solo tu correo de prueba |
+| `CRON_SECRET` | ≥ 16 caracteres aleatorios | Opcional | Opcional |
+
+- **Modos:** `live` solo tiene efecto si además `VERCEL_ENV=production`; en cualquier otro entorno se fuerza `allowlist` aunque diga `live`. En `allowlist`, los destinatarios fuera de la lista no reciben nada: su entrega queda `failed` con `omitido por allowlist`, sin llamar a Resend.
+- **Sin `RESEND_API_KEY` o sin `EMAIL_FROM`:** la app funciona igual; las notificaciones se encolan y quedan `pending` (se registra un aviso) hasta que haya clave.
+
+### Migraciones: orden de aplicación
+
+`0011_event_notifications` crea las dos tablas y los tres enums; `0012_event_notifications_merge_index` rehace el índice parcial para que solo cuente las `update` `pending` con `attempts = 0`. `0011` no se edita ni se vuelve a aplicar.
+
+- **Dev y Neon `test`:** ya tienen `0011`; solo se les aplica `0012` con `npm run db:migrate` (primero dev, luego `test`).
+- **Production:** en este orden: **(1)** branch de backup de Neon `production`; **(2)** `0011`; **(3)** `0012`. `npm run db:migrate` aplica ambas en el orden del journal. Después comprueba que las dos están en `__drizzle_migrations` y que en `pg_indexes` el índice `event_notifications_one_pending_update_idx` tiene el predicado con `attempts = 0`.
+
+### Cómo funciona
+
+1. **Outbox en la misma transacción.** Al guardar el evento, su servicio (`updateEvent` / `cancelEvent`) escribe una fila en `event_notifications` dentro de la misma transacción: si falla una de las dos cosas, no se guarda ninguna. Borradores y eventos en revisión no avisan (no tienen compradores).
+2. **Tipos:**
+   - `schedule`: cambió el inicio o la apertura de puertas. Sale **ya**. Si en el mismo guardado cambiaron también otros campos, van en ese mismo correo.
+   - `cancelled`: el evento se canceló. Sale **ya**.
+   - `update`: cualquier otro cambio (nombre, descripción, portada, categoría, edad, nombre o precio de un tipo de entrada). Espera **10 minutos** y los cambios de ese intervalo se fusionan en un solo correo (primer «antes», último «después»).
+3. **Envío inmediato con `after()`.** Tras responder al usuario, la acción procesa la notificación `schedule`/`cancelled` y, de paso, hasta 5 notificaciones vencidas de cualquier evento (drenado oportunista). No depende del cron.
+4. **Cron.** `GET /api/cron/event-notifications`, protegido con `Authorization: Bearer <CRON_SECRET>` (401 sin él o sin `CRON_SECRET` configurado), procesa en lotes las `pending` vencidas (agrupadas y reintentos) y libera las `sending` con el reclamo vencido (más de 10 minutos). Vercel solo ejecuta crons en el despliegue de Production.
+5. **Reintentos.** Red, timeout, `429` y `5xx` se reintentan con backoff (1, 2, 4, 8 min como mínimo) hasta 5 intentos; un `4xx` de validación marca esa entrega `failed` sin reintento. Al quinto intento fallido la notificación queda `failed`. Una entrega `sent` nunca se reenvía y cada envío lleva una clave de idempotencia de Resend.
+   - **Lotes:** las entregas `pending` con `attempts = 0` salen en lotes de 100 (`batch.send`, clave `batch-<sha256 de sus ids>`); las de `attempts > 0` (ya intentadas una a una) salen una a una con `emails.send` y su clave por entrega.
+   - **Error reintentable de un lote** (red/timeout, `429`, `5xx`): sus entregas siguen `pending` con `attempts` sin cambios y el siguiente intento repite **el mismo lote con la misma clave**, sin llamadas sueltas a `emails.send`; si Resend lo había aceptado, devuelve la respuesta original y nadie recibe el correo dos veces. Un `429` corta el intento.
+   - **`4xx` de validación de un lote:** no salió nada; se reenvía correo a correo con la clave por entrega y solo la dirección inválida queda `failed`.
+   - **`409 invalid_idempotent_request`** (misma clave con otro contenido, p. ej. cambió el título durante el backoff): el envío original pudo haber salido, así que esas entregas quedan `failed` y **no** se reenvían con otra clave.
+   - El límite de 5 lo marca solo `event_notifications.attempts`; al agotarlo, las entregas aún `pending` pasan a `failed`.
+   - Una `sending` abandonada tras el 5.º intento queda `failed` con `attempts = 6`: el reclamo que la libera cuenta un intento más y solo la cierra, sin enviar nada. Es lo esperado.
+
+### Frecuencia del cron: Hobby y Pro
+
+La frecuencia es solo configuración de `vercel.json` → `crons`; ni la BD ni el código dependen de ella.
+
+| Plan | `schedule` | Consecuencia |
+|---|---|---|
+| Hobby (actual) | `"0 10 * * *"` (05:00 hora de Lima, una vez al día; Vercel no garantiza el minuto) | Fecha y cancelación salen al momento con `after()`. En el peor caso, un cambio agrupado o un reintento sale al día siguiente, salvo que antes lo recoja el drenado de otra acción. |
+| Pro | `"*/10 * * * *"` | Agrupados y reintentos salen en ≤ 10 minutos. |
+
+Para pasar a Pro basta con cambiar esa línea de `vercel.json` y desplegar.
+
+Para ejecutarlo a mano (p. ej. en Preview, donde Vercel no lo lanza), con el `CRON_SECRET` de ese entorno en una variable de tu terminal (no lo pegues en chats ni issues):
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/event-notifications   # → {"processed": N}
+```
+
+### Reprocesar una notificación `failed`
+
+Una notificación queda `failed` al agotar 5 intentos con entregas aún pendientes (p. ej. Resend caído o una clave mal configurada). Corrige primero la causa (`last_error`) y después, en la consola SQL de Neon de esa rama:
+
+```sql
+-- 1. Localizarla y ver por qué falló.
+SELECT id, event_id, kind, attempts, last_error, updated_at
+FROM event_notifications WHERE status = 'failed' ORDER BY updated_at DESC;
+
+SELECT status, last_error, count(*)
+FROM event_notification_deliveries WHERE notification_id = '<id>' GROUP BY status, last_error;
+
+-- 2. Volver a dejarla pendiente. Todas las entregas `failed` por un error reintentable, juntas: las `sent` nunca se
+--    reenvían, y no reactives las omitidas por la allowlist, los 4xx permanentes por entrega (`validation_error`,
+--    `invalid_parameter`, `missing_required_field`) ni las de `invalid_idempotent_request` (pudieron haber salido).
+--    Las entregas conservan su `attempts`: no lo toques.
+--    Ajusta el filtro a lo que viste en el paso 1, pero solo para excluir más errores permanentes: nunca reactives
+--    solo una parte de las entregas reintentables.
+BEGIN;
+UPDATE event_notification_deliveries
+SET status = 'pending', last_error = NULL, updated_at = now()
+WHERE notification_id = '<id>' AND status = 'failed'
+  AND last_error IS DISTINCT FROM 'omitido por allowlist'
+  AND last_error NOT LIKE 'validation_error%'
+  AND last_error NOT LIKE 'invalid_parameter%'
+  AND last_error NOT LIKE 'missing_required_field%'
+  AND last_error NOT LIKE 'invalid_idempotent_request%';
+UPDATE event_notifications
+SET status = 'pending',
+    attempts = CASE WHEN kind = 'update' THEN 1 ELSE 0 END,   -- `update`: siempre 1, nunca 0 (ver abajo)
+    next_attempt_at = NULL, locked_at = NULL, last_error = NULL, updated_at = now()
+WHERE id = '<id>' AND status = 'failed';
+COMMIT;
+```
+
+**Regla firme para `update`: vuelve a `pending` con `attempts = 1`, nunca `0`.** Con `attempts = 0` volvería a aceptar fusiones (los compradores con entrega `sent` no recibirían los cambios fusionados después) y el `UPDATE` chocaría con el índice parcial de `0012` si el evento ya tiene otra `update` fusionable. Con `attempts = 1` le quedan 4 intentos. `schedule` y `cancelled` se siguen reprocesando con `attempts = 0`.
+
+**Las entregas conservan su `attempts`.** El SQL solo cambia `status`, `last_error` y `updated_at` de las entregas. Si una entrega ya intentada una a una (`attempts > 0`) volviera a `0`, saldría dentro de un lote con otra clave y, si Resend había aceptado su envío individual, el comprador lo recibiría dos veces.
+
+**Reactiva juntas todas las entregas reintentables** de la notificación, no solo una parte: así los lotes se recomponen con las mismas entregas y repiten la misma clave de idempotencia.
+
+**No reactives los errores permanentes por entrega.** `last_error` se guarda como `<name>: <message>` del error de Resend. Son permanentes los `4xx` de esa entrega: como mínimo `validation_error`, `invalid_parameter` y `missing_required_field`, además de `invalid_idempotent_request` (pudo haber salido) y `omitido por allowlist`. Si en el paso 1 ves otro `4xx` permanente, añade su `AND last_error NOT LIKE '<name>%'`; ajustar el filtro solo sirve para excluir errores permanentes.
+
+**Resend solo deduplica durante 24 h.** Pasado ese plazo desde el último intento, la clave ya no protege: un lote o envío que Resend aceptó pero cuya respuesta se perdió saldría otra vez.
+
+La recoge el siguiente worker: el cron (o su llamada manual con `curl`) o el drenado de la próxima acción que encole un aviso. Los destinatarios no se recalculan: son los que se congelaron en el primer intento.
+
+### Limitación conocida
+
+Hoy un evento con ventas activas no se puede cancelar (`has_sales`: «Cancelación con reembolsos: Próximamente»), así que el correo `cancelled` solo se enviará cuando se habilite cancelar con compradores; la integración ya está en `cancelEvent`.
+
 ## Estructura
 
 ```
