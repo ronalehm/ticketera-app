@@ -1,5 +1,6 @@
 export { CategoryFilter } from "./components/CategoryFilter";
 export { CategoryGrid } from "./components/CategoryGrid";
+export { EventActionBar } from "./components/EventActionBar";
 export { EventCard } from "./components/EventCard";
 export { EventDetailHeader } from "./components/EventDetailHeader";
 export { EventDetailInfo } from "./components/EventDetailInfo";
