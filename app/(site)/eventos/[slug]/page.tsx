@@ -13,7 +13,7 @@ import {
   RelatedEvents,
   TicketSelector,
 } from "@/modules/events";
-import { getVenueMapBySlug, hasVenueMap, MobileBuyBar, ZonePricesCard } from "@/modules/seating";
+import { getVenueMapBySlug, MobileBuyBar, ZonePricesCard } from "@/modules/seating";
 
 export async function generateStaticParams() {
   const events = await getEvents();
@@ -34,7 +34,6 @@ export default async function EventDetailPage({ params }: PageProps<"/eventos/[s
   ]);
   if (!event) notFound();
 
-  const purchaseHref = hasVenueMap(slug) ? `/eventos/${slug}/entradas` : "#entradas";
   const selectorProps = {
     slug: event.slug,
     status: event.status,
@@ -50,7 +49,7 @@ export default async function EventDetailPage({ params }: PageProps<"/eventos/[s
   return (
     <>
       <div className="mx-auto max-w-7xl px-4 pt-4 md:px-6 md:pt-8 lg:px-8">
-        <EventDetailHeader event={event} purchaseHref={purchaseHref} />
+        <EventDetailHeader event={event} />
       </div>
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 md:px-6 md:py-12 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:px-8">
         <div id="entradas" className="scroll-mt-24 lg:col-start-2 lg:row-start-1">

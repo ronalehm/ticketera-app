@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 import type { EventDetail } from "../types/events.types";
 import { getCoverAlt } from "../utils/eventMetadata";
-import { formatEventPrice, formatLongDayMonth, formatTime } from "../utils/formatEvent";
+import { formatLongDayMonth, formatTime } from "../utils/formatEvent";
 import { EventEditLink } from "./EventEditLink";
 import { SaveEventButton } from "./SaveEventButton";
 import { ShareEventButton } from "./ShareEventButton";
@@ -35,14 +35,12 @@ const HERO_ICON_BUTTON = cn(
 
 type EventDetailHeaderProps = {
   event: EventDetail;
-  purchaseHref: string;
 };
 
-export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProps) {
-  const ctaLabel =
-    event.priceFrom === 0
-      ? "Ver entradas · Entrada libre"
-      : `Comprar entradas · desde ${formatEventPrice(event.priceFrom)}`;
+// Sin CTA de compra en el hero: la tarjeta de entradas (justo debajo en móvil, a la derecha en lg) y la barra móvil
+// ya la ofrecen; repetirla aquí era ruido visual.
+export function EventDetailHeader({ event }: EventDetailHeaderProps) {
+  const soldOut = event.status === "sold-out";
 
   return (
     <header className="flex flex-col gap-4 md:gap-6">
@@ -137,21 +135,8 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
             )}
           </div>
 
-          <div className="mt-auto flex items-center gap-3">
-            {event.status === "sold-out" ? (
-              <p className="flex h-12 flex-1 items-center font-bold">Entradas agotadas</p>
-            ) : (
-              <Link
-                href={purchaseHref}
-                className={cn(
-                  buttonVariants(),
-                  "h-auto min-h-12 flex-1 cursor-pointer px-6 py-2 text-center text-base font-semibold whitespace-normal duration-200 hover:bg-primary-strong",
-                  HERO_FOCUS,
-                )}
-              >
-                {ctaLabel}
-              </Link>
-            )}
+          <div className={cn("mt-auto items-center gap-3", soldOut ? "flex" : "hidden lg:flex")}>
+            {soldOut && <p className="flex h-12 flex-1 items-center font-bold">Entradas agotadas</p>}
             <div className="hidden items-center gap-3 lg:flex">
               <SaveEventButton slug={event.slug} className={HERO_ICON_BUTTON} />
               <ShareEventButton title={event.title} className={HERO_ICON_BUTTON} />
