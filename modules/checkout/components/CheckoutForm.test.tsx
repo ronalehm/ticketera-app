@@ -6,10 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { payOrder } from "../actions/checkout.actions";
 import type { CheckoutOrder } from "../types/checkout.types";
 import { CheckoutForm } from "./CheckoutForm";
-
-const session = vi.hoisted(() => ({
-  user: null as { firstName: string; lastName: string; email: string } | null,
-}));
+import type { BuyerProfile } from "./CheckoutForm";
 
 // Stripe falso: nunca se carga Stripe.js real. `paymentElement` decide qué avisa el Payment Element al montar.
 const stripeMock = vi.hoisted(() => ({
@@ -18,10 +15,6 @@ const stripeMock = vi.hoisted(() => ({
   paymentElementOptions: undefined as unknown,
   submit: vi.fn(),
   confirmPayment: vi.fn(),
-}));
-
-vi.mock("@/modules/auth/session", () => ({
-  useSessionUser: () => ({ isLoaded: true, user: session.user && { ...session.user }, signOut: vi.fn() }),
 }));
 
 vi.mock("@stripe/stripe-js", () => ({ loadStripe: vi.fn(() => Promise.resolve({})) }));
@@ -86,7 +79,14 @@ const BUYER = {
   acceptTerms: true,
 } as const;
 
-const SESSION_USER = { firstName: "Ana", lastName: "Quispe", email: "ana@correo.pe" };
+const FULL_PROFILE: BuyerProfile = {
+  firstName: "Ana",
+  lastName: "Quispe",
+  email: "ana@correo.pe",
+  phone: "987654321",
+  documentType: "dni",
+  documentNumber: "87654321",
+};
 
 const DECLINED_MESSAGE = "Tu tarjeta fue rechazada.";
 const UNEXPECTED_ERROR = "Ocurrió un error inesperado al procesar el pago. Inténtalo de nuevo.";
@@ -106,7 +106,7 @@ const summaryPanel = () => screen.getByRole("complementary", { name: "Resumen de
 // Tiempo restante de la reserva que da la BD (p. ej. al recargar a los 7 minutos).
 const REMAINING_MS = 180_000;
 
-function formElement(order: CheckoutOrder = ORDER) {
+function formElement(order: CheckoutOrder = ORDER, buyerProfile: BuyerProfile | null = null) {
   return (
     <CheckoutForm
       order={order}
@@ -115,11 +115,22 @@ function formElement(order: CheckoutOrder = ORDER) {
       remainingMs={REMAINING_MS}
       changeHref="/eventos/noche-de-sintetizadores-lima"
       publishableKey="pk_test_unused"
+      buyerProfile={buyerProfile}
     />
   );
 }
 
 const renderForm = (order?: CheckoutOrder) => render(formElement(order));
+const renderWithProfile = (profile: BuyerProfile) => render(formElement(ORDER, profile));
+const changeDataButton = () => screen.getByRole("button", { name: "Cambiar datos" });
+const showSummaryButton = () => screen.getByRole("button", { name: "Ver resumen" });
+const buyerToggle = () => screen.queryByRole("button", { name: /^(Cambiar datos|Ver resumen)$/ });
+const documentTypeSelect = () => screen.getByRole("combobox", { name: "Tipo de documento" });
+/** Pares término → detalle del resumen `dl` del comprador. */
+const buyerSummary = () =>
+  Object.fromEntries(
+    screen.getAllByRole("term").map((term) => [term.textContent, term.nextElementSibling?.textContent]),
+  );
 
 function fillBuyer() {
   type("Nombres", BUYER.firstName);
@@ -141,7 +152,6 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.useRealTimers();
-  session.user = null;
   stripeMock.paymentElement = "ready";
 });
 
@@ -392,35 +402,122 @@ describe("CheckoutForm", () => {
     }
   });
 
-  it("con sesión precarga Nombres, Apellidos y Correo", () => {
-    session.user = SESSION_USER;
-    renderForm();
-    expect(input("Nombres").value).toBe("Ana");
-    expect(input("Apellidos").value).toBe("Quispe");
-    expect(input("Correo electrónico").value).toBe("ana@correo.pe");
-  });
+  describe("precarga del perfil", () => {
+    it("perfil completo: resumen legible sin inputs y el envío manda los 6 datos del perfil", async () => {
+      mockSuccessfulPayment();
+      renderWithProfile(FULL_PROFILE);
 
-  it("sin sesión los campos quedan vacíos y la precarga no sobrescribe lo ya escrito", () => {
-    const { rerender } = renderForm();
-    expect(input("Nombres").value).toBe("");
+      expect(buyerSummary()).toEqual({
+        Nombre: "Ana Quispe",
+        "Correo electrónico": "ana@correo.pe",
+        Celular: "+51 987654321",
+        Documento: "DNI 87654321",
+      });
+      expect(screen.queryByRole("textbox", { name: "Nombres" })).toBeNull();
+      expect(screen.queryByRole("textbox", { name: "Número de documento" })).toBeNull();
+      const toggle = changeDataButton();
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(document.getElementById(toggle.getAttribute("aria-controls")!)?.hidden).toBe(true);
 
-    type("Nombres", "Luis");
-    session.user = SESSION_USER;
-    rerender(formElement());
+      toggleTerms();
+      pay();
 
-    expect(input("Nombres").value).toBe("Luis");
-    expect(input("Apellidos").value).toBe("Quispe");
-    expect(input("Correo electrónico").value).toBe("ana@correo.pe");
-  });
+      await waitFor(() => expect(stripeMock.confirmPayment).toHaveBeenCalledTimes(1));
+      expect(payOrder).toHaveBeenCalledWith({ orderId: ORDER_ID, buyer: { ...FULL_PROFILE, acceptTerms: true } });
+      const [{ confirmParams }] = stripeMock.confirmPayment.mock.calls[0];
+      expect(confirmParams.payment_method_data.billing_details).toEqual({
+        name: "Ana Quispe",
+        email: "ana@correo.pe",
+        phone: "+51987654321",
+      });
+    });
 
-  it("con sesión, vaciar un campo precargado no lo vuelve a rellenar en el siguiente render", () => {
-    session.user = SESSION_USER;
-    renderForm();
+    it("«Cambiar datos» despliega los campos precargados, enfoca el primero y lo editado solo cambia esta compra", () => {
+      const { rerender } = renderWithProfile(FULL_PROFILE);
 
-    type("Nombres", "");
-    type("Apellidos", "Ramos");
+      fireEvent.click(changeDataButton());
 
-    expect(input("Nombres").value).toBe("");
+      // Abierto, el mismo botón pasa a «Ver resumen» y conserva `aria-controls`.
+      expect(showSummaryButton().getAttribute("aria-expanded")).toBe("true");
+      expect(showSummaryButton().getAttribute("aria-controls")).toBe("checkout-buyer-fields");
+      expect(document.activeElement).toBe(input("Nombres"));
+      expect(screen.queryAllByRole("term")).toHaveLength(0);
+      expect(input("Nombres").value).toBe("Ana");
+      expect(input("Apellidos").value).toBe("Quispe");
+      expect(input("Correo electrónico").value).toBe("ana@correo.pe");
+      expect(input("Celular").value).toBe("987654321");
+      expect(documentTypeSelect().textContent).toMatch(/^DNI/);
+      expect(input("Número de documento").value).toBe("87654321");
+
+      // Lo escrito no se sobrescribe aunque la página vuelva a renderizar con el perfil.
+      type("Nombres", "Luis");
+      rerender(formElement(ORDER, FULL_PROFILE));
+      expect(input("Nombres").value).toBe("Luis");
+
+      fireEvent.click(showSummaryButton());
+      expect(changeDataButton().getAttribute("aria-expanded")).toBe("false");
+      expect(buyerSummary().Nombre).toBe("Luis Quispe");
+    });
+
+    it("perfil completo con datos inválidos: al pagar despliega los campos y enfoca el primer error", async () => {
+      renderWithProfile({ ...FULL_PROFILE, phone: "123" });
+
+      toggleTerms();
+      pay();
+
+      expect(showSummaryButton().getAttribute("aria-expanded")).toBe("true");
+      await waitFor(() => expect(document.activeElement).toBe(input("Celular")));
+      expect(input("Celular").getAttribute("aria-invalid")).toBe("true");
+      expect(payOrder).not.toHaveBeenCalled();
+    });
+
+    it("perfil parcial sin documento: muestra todos los campos, precarga lo que hay y deja DNI con el número vacío", () => {
+      renderWithProfile({ ...FULL_PROFILE, documentType: null, documentNumber: null });
+
+      expect(buyerToggle()).toBeNull();
+      expect(screen.queryAllByRole("term")).toHaveLength(0);
+      expect(input("Nombres").value).toBe("Ana");
+      expect(input("Apellidos").value).toBe("Quispe");
+      expect(input("Correo electrónico").value).toBe("ana@correo.pe");
+      expect(input("Celular").value).toBe("987654321");
+      expect(documentTypeSelect().textContent).toMatch(/^DNI/);
+      expect(input("Número de documento").value).toBe("");
+    });
+
+    it("perfil parcial: el tipo de documento solo se aplica con su número; sin celular, el campo queda vacío", () => {
+      cleanup();
+      renderWithProfile({ ...FULL_PROFILE, phone: null, documentType: "ce", documentNumber: null });
+      expect(documentTypeSelect().textContent).toMatch(/^DNI/);
+      expect(input("Celular").value).toBe("");
+
+      cleanup();
+      renderWithProfile({ ...FULL_PROFILE, phone: null, documentType: "ce", documentNumber: "001234567" });
+      expect(documentTypeSelect().textContent).toMatch(/^CE/);
+      expect(input("Número de documento").value).toBe("001234567");
+    });
+
+    it("perfil parcial: vaciar un campo precargado no lo vuelve a rellenar en el siguiente render", () => {
+      const profile = { ...FULL_PROFILE, phone: null };
+      const { rerender } = renderWithProfile(profile);
+
+      type("Nombres", "");
+      type("Apellidos", "Ramos");
+      rerender(formElement(ORDER, profile));
+
+      expect(input("Nombres").value).toBe("");
+      expect(input("Apellidos").value).toBe("Ramos");
+    });
+
+    it("invitado: todos los campos visibles y vacíos, sin resumen ni «Cambiar datos»", () => {
+      renderForm();
+
+      expect(buyerToggle()).toBeNull();
+      expect(screen.queryAllByRole("term")).toHaveLength(0);
+      for (const label of ["Nombres", "Apellidos", "Correo electrónico", "Celular", "Número de documento"]) {
+        expect(input(label).value).toBe("");
+      }
+      expect(documentTypeSelect().textContent).toMatch(/^DNI/);
+    });
   });
 
   it("el botón del resumen alterna aria-expanded", () => {

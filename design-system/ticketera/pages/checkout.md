@@ -100,11 +100,19 @@ Barra inferior (< lg)  [Pagar S/ X]  (botón a todo el ancho; aviso de Términos
 
 ### Datos del comprador
 
-- Descripción (`CardDescription`), con texto por ancho (`display: none`: nada se anuncia dos veces):
+- **Precarga del perfil.** La página lee la fila de `users` en el servidor (`getSessionUser`; si falla, se compra como invitado) y pasa a `CheckoutForm` solo `buyerProfile` (`firstName`, `lastName`, `email`, `phone`, `documentType`, `documentNumber`; `null` sin sesión). Es el estado inicial del formulario: nunca sobrescribe lo que el comprador escribe o vacía. El tipo de documento del perfil solo se aplica si viene con su número; si no, DNI y número vacío. Un valor que no cumpla el schema se precarga igual y la validación lo marca al pagar.
+- **Perfil completo** (los 6 datos): en lugar de los campos, un `dl` en `sm:grid-cols-2` con Nombre ("Ana Quispe"), Correo electrónico, Celular ("+51 987654321") y Documento ("DNI 87654321", abreviatura del tipo); `dt` en `text-sm text-muted-foreground`, `dd` en `font-medium wrap-anywhere`. Descripción: "Usamos los datos de tu cuenta. Si los cambias, solo se aplican a esta compra."
+  - Botón `outline` `h-11` en `CardAction`: "Cambiar datos" con los campos plegados y "Ver resumen" con los campos abiertos, con `aria-expanded` y `aria-controls="checkout-buyer-fields"`. Por debajo de `sm` baja a su propia fila bajo la descripción (alineado a la izquierda); desde `sm`, a la derecha del título.
+  - Los campos no se desmontan: el contenedor `checkout-buyer-fields` lleva el atributo `hidden` mientras se ve el resumen. Al abrir, el foco va a "Nombres"; al volver al resumen, este muestra lo editado.
+  - Lo editado vale solo para esta compra (no se guarda en el perfil); viaja igual a `payOrder` y a `billing_details`.
+  - Si se paga con los campos plegados y un dato no valida, se despliegan y el foco va al primer error.
+- **Perfil parcial:** todos los campos visibles, con lo que exista precargado; sin resumen ni botón.
+- **Invitado:** todos los campos visibles y vacíos (DNI por defecto), como antes.
+- Descripción (`CardDescription`) con los campos visibles (perfil parcial o invitado), con texto por ancho (`display: none`: nada se anuncia dos veces):
   - por debajo de `sm`: "Asociaremos tus entradas a este correo. Los campos con * son obligatorios." (`<span className="sm:hidden">`);
   - desde `sm`: "Asociaremos tus entradas al correo que indiques. Los campos con * son obligatorios." (`<span className="max-sm:hidden">`).
   - "Asociaremos", no "Enviaremos": en F3 no se envían correos; la compra queda en Mis entradas de la cuenta con sesión o, si se compra como invitado, de la cuenta con ese correo verificado.
-  - La leyenda de los `*` va en todos los anchos (el diseño no tiene `*`; la app sí).
+  - La leyenda de los `*` va en todos los anchos (el diseño no tiene `*`; la app sí), y solo mientras los campos están visibles: con el resumen del perfil completo no aparece; al pulsar "Cambiar datos" se añade tras la descripción.
 - **Placeholders:** Nombres y Apellidos, "Como figura en tu documento"; Correo electrónico, "tu@email.com"; Celular, "Número de celular" (a la derecha de "+51"); número de documento, "Número". Caben sin cortarse a 375 px.
 - Grilla `sm:grid-cols-2`, sin huecos:
 

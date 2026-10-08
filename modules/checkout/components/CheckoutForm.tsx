@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import Link from "next/link";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
@@ -10,7 +11,7 @@ import { CircleAlert, Lock } from "lucide-react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import { useZodForm } from "@/hooks/useZodForm";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES } from "@/lib/formFields";
 import { INLINE_LINK } from "@/lib/linkStyles";
 import { cn } from "@/lib/utils";
-import { useSessionUser } from "@/modules/auth/session";
+import type { SessionUser } from "@/modules/auth/server";
 import { formatEventPrice } from "@/modules/events/format";
 import { payOrder } from "../actions/checkout.actions";
 import { checkoutBuyerSchema } from "../schemas/payment.schema";
@@ -66,7 +67,7 @@ const PAYMENT_ELEMENT_OPTIONS: StripePaymentElementOptions = {
 
 // Una sola instancia de Stripe por pestaña: la clave publicable no cambia en tiempo de ejecución.
 let stripePromise: Promise<Stripe | null> | null = null;
-const PREFILL_FIELDS = ["firstName", "lastName", "email"] as const;
+const BUYER_FIELDS_ID = "checkout-buyer-fields";
 
 type TextField = "firstName" | "lastName" | "email" | "phone" | "documentNumber";
 
@@ -86,6 +87,29 @@ const INITIAL_VALUES: CheckoutFormValues = {
   documentNumber: "",
   acceptTerms: false,
 };
+
+/** Datos del comprador de la fila de `users` (la BD manda). Solo estos campos viajan al cliente. */
+export type BuyerProfile = Pick<
+  SessionUser,
+  "firstName" | "lastName" | "email" | "phone" | "documentType" | "documentNumber"
+>;
+
+// Precarga del perfil: llega del servidor con la página, así que solo fija el estado inicial y nunca sobrescribe lo
+// que el comprador escriba o vacíe. Un valor que no cumpla el schema se precarga igual y la validación lo marca al
+// pagar (vaciarlo en silencio sorprendería más). Invitado: todo vacío.
+function toInitialValues(profile: BuyerProfile | null): CheckoutFormValues {
+  if (!profile) return INITIAL_VALUES;
+  const { phone, documentType, documentNumber, ...names } = profile;
+  // El tipo solo acompaña a su número: sin los dos, queda el DNI por defecto y el número vacío.
+  const document = documentType && documentNumber ? { documentType, documentNumber } : {};
+  return { ...INITIAL_VALUES, ...names, phone: phone ?? "", ...document };
+}
+
+// Misma regla que `isProfileComplete` (modules/auth/utils) más nombre y correo: si una cambia, cambia la otra.
+const isFullProfile = (profile: BuyerProfile | null) =>
+  !!profile &&
+  !!(profile.firstName && profile.lastName && profile.email) &&
+  !!(profile.phone && profile.documentType && profile.documentNumber);
 
 type PayButtonProps = {
   totalLabel: string;
@@ -141,6 +165,8 @@ type CheckoutFormProps = {
   changeHref: string;
   /** `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (la página la lee de `publicEnv`). */
   publishableKey: string;
+  /** Perfil del comprador con sesión (`getSessionUser`); `null` si compra como invitado. */
+  buyerProfile: BuyerProfile | null;
 };
 
 /** Checkout con Stripe: Elements en modo diferido (el PaymentIntent se crea al pulsar "Pagar"). */
@@ -171,10 +197,15 @@ function CheckoutFormContent({
   orderId,
   remainingMs,
   changeHref,
+  buyerProfile,
 }: Omit<CheckoutFormProps, "amountCents" | "publishableKey">) {
   const stripe = useStripe();
   const elements = useElements();
-  const { user } = useSessionUser();
+  // Perfil completo: resumen en lugar de los campos; «Cambiar datos» los despliega (solo para esta compra, no se
+  // guardan en el perfil). Perfil parcial o invitado: todos los campos visibles, con lo que haya precargado.
+  const hasFullProfile = isFullProfile(buyerProfile);
+  const [buyerFieldsOpen, setBuyerFieldsOpen] = useState(!hasFullProfile);
+  const firstNameRef = useRef<HTMLInputElement>(null);
   const [paymentElementStatus, setPaymentElementStatus] = useState<PaymentElementStatus>("loading");
   const [isExpired, setIsExpired] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -187,25 +218,17 @@ function CheckoutFormContent({
   const termsRef = useRef<HTMLElement>(null);
   const { values, errors, isSubmitting, setValue, handleBlur, handleSubmit } = useZodForm(
     checkoutBuyerSchema,
-    INITIAL_VALUES,
+    toInitialValues(buyerProfile),
   );
   const isDni = values.documentType === "dni";
   const totalLabel = formatEventPrice(order.total);
 
-  // Precarga desde la sesión solo en los campos vacíos: nunca sobrescribe lo ya escrito. Sin sesión (invitado) no hace nada.
-  const prefillFromSession = useEffectEvent(() => {
-    if (!user) return;
-    for (const name of PREFILL_FIELDS) {
-      if (!values[name]) setValue(name, user[name]);
-    }
-  });
-
-  // Depende del correo, no de `user`: el hook devuelve un objeto nuevo en cada render y la precarga
-  // volvería a rellenar un campo que el comprador vació a propósito.
-  const sessionEmail = user?.email;
-  useEffect(() => {
-    if (sessionEmail) prefillFromSession();
-  }, [sessionEmail]);
+  const toggleBuyerFields = () => {
+    if (buyerFieldsOpen) return setBuyerFieldsOpen(false);
+    // Se pinta antes de enfocar: el primer campo estaba oculto.
+    flushSync(() => setBuyerFieldsOpen(true));
+    firstNameRef.current?.focus();
+  };
 
   useEffect(() => {
     if (paymentError) paymentErrorRef.current?.focus();
@@ -226,6 +249,9 @@ function CheckoutFormContent({
       termsRef.current?.focus();
       return;
     }
+    // Con los campos ocultos y datos inválidos se despliegan en el mismo render que los errores, así `useZodForm`
+    // puede enfocar el primero.
+    if (!checkoutBuyerSchema.safeParse(values).success) setBuyerFieldsOpen(true);
     handleSubmit(async (buyer) => {
       // useZodForm invoca este callback de forma síncrona dentro del submit: la ref queda marcada antes del siguiente.
       paymentInFlightRef.current = true;
@@ -301,12 +327,51 @@ function CheckoutFormContent({
           <CardHeader>
             <h2 className="text-xl font-bold">Datos del comprador</h2>
             <CardDescription className="text-base">
-              <span className="sm:hidden">Asociaremos tus entradas a este correo.</span>
-              <span className="max-sm:hidden">Asociaremos tus entradas al correo que indiques.</span> Los campos con *
-              son obligatorios.
+              {hasFullProfile ? (
+                "Usamos los datos de tu cuenta. Si los cambias, solo se aplican a esta compra."
+              ) : (
+                <>
+                  <span className="sm:hidden">Asociaremos tus entradas a este correo.</span>
+                  <span className="max-sm:hidden">Asociaremos tus entradas al correo que indiques.</span>
+                </>
+              )}
+              {buyerFieldsOpen && " Los campos con * son obligatorios."}
             </CardDescription>
+            {hasFullProfile && (
+              // Por debajo de `sm`, en su propia fila bajo la descripción para no apretar título y texto.
+              <CardAction className="max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-3 max-sm:justify-self-start">
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-expanded={buyerFieldsOpen}
+                  aria-controls={BUYER_FIELDS_ID}
+                  onClick={toggleBuyerFields}
+                  className="h-11 cursor-pointer"
+                >
+                  {buyerFieldsOpen ? "Ver resumen" : "Cambiar datos"}
+                </Button>
+              </CardAction>
+            )}
           </CardHeader>
-          <CardContent className="grid gap-5 sm:grid-cols-2 sm:gap-4">
+          {!buyerFieldsOpen && (
+            <CardContent>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                {[
+                  ["Nombre", `${values.firstName} ${values.lastName}`],
+                  ["Correo electrónico", values.email],
+                  ["Celular", `+51 ${values.phone}`],
+                  ["Documento", `${DOCUMENT_TYPE_SHORT_LABELS[values.documentType]} ${values.documentNumber}`],
+                ].map(([term, detail]) => (
+                  <div key={term} className="min-w-0">
+                    <dt className="text-sm text-muted-foreground">{term}</dt>
+                    <dd className="font-medium wrap-anywhere">{detail}</dd>
+                  </div>
+                ))}
+              </dl>
+            </CardContent>
+          )}
+          {/* Oculto con `hidden` (no desmontado): `aria-controls` siempre apunta a un elemento existente. */}
+          <CardContent id={BUYER_FIELDS_ID} hidden={!buyerFieldsOpen} className="grid gap-5 sm:grid-cols-2 sm:gap-4">
             <Field data-invalid={!!errors.firstName}>
               <FieldLabel htmlFor="checkout-firstName">
                 <span>
@@ -315,6 +380,7 @@ function CheckoutFormContent({
                 </span>
               </FieldLabel>
               <Input
+                ref={firstNameRef}
                 {...textProps("firstName")}
                 autoComplete="given-name"
                 placeholder="Como figura en tu documento"

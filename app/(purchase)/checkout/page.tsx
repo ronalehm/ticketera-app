@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { publicEnv } from "@/lib/env";
+import { getSessionUser } from "@/modules/auth/server";
 import { buildChangeTicketsHref, CheckoutForm, CheckoutStatusMessage } from "@/modules/checkout";
 import { getPendingCheckout } from "@/modules/checkout/server";
 import { hasVenueMap } from "@/modules/seating/seats";
@@ -10,7 +11,11 @@ import { hasVenueMap } from "@/modules/seating/seats";
 export const metadata: Metadata = { title: "Finalizar compra | Mentec Tickets" };
 
 export default async function CheckoutPage({ searchParams }: PageProps<"/checkout">) {
-  const result = await getPendingCheckout((await searchParams).orden);
+  const [result, user] = await Promise.all([
+    getPendingCheckout((await searchParams).orden),
+    // Misma regla que `payOrder` (checkout.actions.ts): si falla la sesión, se compra como invitado.
+    getSessionUser().catch(() => null),
+  ]);
   if (result.status === "closed") redirect(`/checkout/confirmacion?orden=${result.orderId}`);
   if (result.status !== "ok") {
     return (
@@ -38,6 +43,17 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
           publishableKey={publicEnv.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
           remainingMs={remainingMs}
           changeHref={changeHref}
+          // Solo los datos del comprador viajan al cliente: ni id, ni rol, ni fechas.
+          buyerProfile={
+            user && {
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              phone: user.phone,
+              documentType: user.documentType,
+              documentNumber: user.documentNumber,
+            }
+          }
         />
       </div>
     </PurchaseShell>
