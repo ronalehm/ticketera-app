@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CalendarClock, Clock, ExternalLink, QrCode, Users } from "lucide-react";
+import { Clock, ExternalLink, QrCode, Users } from "lucide-react";
 
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,8 +33,6 @@ function InfoItem({ icon: Icon, label, children }: { icon: LucideIcon; label: st
 
 export function EventDetailInfo({ event }: { event: EventDetail }) {
   const location = { venue: event.venue, address: event.address, city: event.city };
-  // Un partido no es un show.
-  const startLabel = event.category === "deportes" ? "Inicio del partido" : "Inicio del show";
 
   return (
     <div className="flex flex-col gap-12 md:gap-16">
@@ -51,10 +49,8 @@ export function EventDetailInfo({ event }: { event: EventDetail }) {
       <section>
         <SectionHeader title="Información importante" />
         <dl className="grid grid-cols-2 gap-3 md:gap-4">
-          <InfoItem icon={Clock} label="Apertura de puertas">
-            <time dateTime={event.doorsOpenAt}>{`${formatTime(event.doorsOpenAt)} h`}</time>
-          </InfoItem>
-          <InfoItem icon={CalendarClock} label={startLabel}>
+          {/* Sin «Apertura de puertas» (Ronald, 2026-10-08): el horario es inicio y fin; «Hora de fin» llega con la Fase 1B. */}
+          <InfoItem icon={Clock} label="Hora de inicio">
             <time dateTime={event.startsAt}>{`${formatTime(event.startsAt)} h`}</time>
           </InfoItem>
           <InfoItem icon={Users} label="Edad mínima">

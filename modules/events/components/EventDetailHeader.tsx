@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarClock, CalendarDays, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, MapPin } from "lucide-react";
 
 import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import {
@@ -104,15 +104,6 @@ export function EventDetailHeader({ event }: EventDetailHeaderProps) {
             </span>
           </li>
         </ul>
-        {event.scheduleChangedAt && (
-          <p className="inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground">
-            <CalendarClock className="size-4 shrink-0" aria-hidden />
-            <span>
-              Fecha actualizada el{" "}
-              <time dateTime={event.scheduleChangedAt}>{formatLongDayMonth(event.scheduleChangedAt)}</time>
-            </span>
-          </p>
-        )}
         {soldOut && <p className="font-bold">Entradas agotadas</p>}
       </div>
     </header>

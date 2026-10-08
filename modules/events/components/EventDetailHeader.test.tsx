@@ -48,19 +48,10 @@ describe("EventDetailHeader", () => {
     expect(getByText("Entradas agotadas")).toBeTruthy();
   });
 
-  it("sin cambio de fecha no hay aviso", () => {
-    const { queryByText } = render(<EventDetailHeader event={event} />);
-    expect(queryByText(/Fecha actualizada/)).toBeNull();
-  });
-
-  it("con schedule_changed_at muestra «Fecha actualizada el …» en hora de Lima", () => {
-    // 03:30 UTC del 6 de octubre = 22:30 del lunes 5 de octubre en Lima.
-    const scheduleChangedAt = "2026-10-06T03:30:00.000Z";
-    const { getByText } = render(
-      <EventDetailHeader event={{ ...event, scheduleChangedAt }} />,
+  it("no muestra el aviso «Fecha actualizada» aunque el evento haya cambiado de horario (Ronald, 2026-10-08)", () => {
+    const { queryByText } = render(
+      <EventDetailHeader event={{ ...event, scheduleChangedAt: "2026-10-06T03:30:00.000Z" }} />,
     );
-    const notice = getByText(/Fecha actualizada el/);
-    expect(notice.textContent).toBe("Fecha actualizada el lunes 5 de octubre");
-    expect(notice.querySelector("time")?.getAttribute("dateTime")).toBe(scheduleChangedAt);
+    expect(queryByText(/Fecha actualizada/)).toBeNull();
   });
 });
