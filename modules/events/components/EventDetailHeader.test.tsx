@@ -54,4 +54,11 @@ describe("EventDetailHeader", () => {
     );
     expect(queryByText(/Fecha actualizada/)).toBeNull();
   });
+
+  it("muestra la edad mínima debajo del título: «Todo público» o «Edad mínima: +N»", () => {
+    const { getByText, rerender } = render(<EventDetailHeader event={{ ...event, minAge: 0 }} />);
+    expect(getByText("Todo público")).toBeTruthy();
+    rerender(<EventDetailHeader event={{ ...event, minAge: 18 }} />);
+    expect(getByText("Edad mínima: +18")).toBeTruthy();
+  });
 });

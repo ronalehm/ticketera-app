@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, MapPin, Users } from "lucide-react";
 
 import { EventCoverImage } from "@/components/shared/EventCoverImage";
 import {
@@ -102,6 +102,10 @@ export function EventDetailHeader({ event }: EventDetailHeaderProps) {
             <span>
               {event.venue}, {event.city}
             </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Users className="size-4 shrink-0" aria-hidden />
+            <span>{event.minAge === 0 ? "Todo público" : `Edad mínima: +${event.minAge}`}</span>
           </li>
         </ul>
         {soldOut && <p className="font-bold">Entradas agotadas</p>}
