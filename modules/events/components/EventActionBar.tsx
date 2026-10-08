@@ -36,7 +36,7 @@ type EventActionBarProps = {
     EventDetail,
     "slug" | "title" | "startsAt" | "venue" | "address" | "city" | "status"
   >;
-  /** Con mapa del recinto, la página de entradas; sin mapa, el selector de la misma página (`#entradas`). */
+  /** Pantalla de entradas (`/eventos/<slug>/entradas`): zonas y asientos con mapa; tipos y cantidades sin él. */
   purchaseHref: string;
 };
 

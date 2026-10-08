@@ -5,7 +5,6 @@ import { PurchaseShell } from "@/components/shared/PurchaseShell";
 import { publicEnv } from "@/lib/env";
 import { buildChangeTicketsHref, CheckoutForm, CheckoutStatusMessage } from "@/modules/checkout";
 import { getPendingCheckout } from "@/modules/checkout/server";
-import { hasVenueMap } from "@/modules/seating/seats";
 
 export const metadata: Metadata = { title: "Finalizar compra | Mentec Tickets" };
 
@@ -25,7 +24,7 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   }
 
   const { order, orderId, amountCents, remainingMs } = result;
-  const changeHref = buildChangeTicketsHref(order, hasVenueMap(order.event.slug));
+  const changeHref = buildChangeTicketsHref(order);
 
   return (
     <PurchaseShell currentStep={2} back={{ href: changeHref, label: "Volver a entradas" }}>

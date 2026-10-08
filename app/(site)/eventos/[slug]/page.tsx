@@ -70,9 +70,7 @@ export default async function EventDetailPage({
               city: event.city,
               status: event.status,
             }}
-            purchaseHref={
-              venueMap ? `/eventos/${event.slug}/entradas` : "#entradas"
-            }
+            purchaseHref={`/eventos/${event.slug}/entradas`}
           />
         </div>
       </div>
