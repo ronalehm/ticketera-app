@@ -1,13 +1,23 @@
 import "server-only";
 
-import { and, desc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { categories, eventSeats, events, ticketTypes } from "@/lib/db/schema/events";
+import {
+  categories,
+  eventSeats,
+  events,
+  ticketTypes,
+} from "@/lib/db/schema/events";
 import { orders, tickets } from "@/lib/db/schema/sales";
 import { venueSeats, venueSections, venues } from "@/lib/db/schema/venues";
 import { stripe } from "@/lib/stripe";
-import type { CheckoutOrder, Order, OrderConfirmationResult, PendingCheckoutResult } from "../types/checkout.types";
+import type {
+  CheckoutOrder,
+  Order,
+  OrderConfirmationResult,
+  PendingCheckoutResult,
+} from "../types/checkout.types";
 import { getConfirmationState } from "../utils/orderRules";
 import { buildOrderView, buildPendingCheckoutOrder } from "../utils/orderViews";
 
@@ -15,7 +25,8 @@ const orderIdSchema = z.uuid();
 
 /** Columnas nullable solo en `draft`: una orden de un evento publicado nunca las trae `null`. */
 function required<T>(value: T | null, slug: string): T {
-  if (value === null) throw new Error(`Evento incompleto en una orden: ${slug}`);
+  if (value === null)
+    throw new Error(`Evento incompleto en una orden: ${slug}`);
   return value;
 }
 
@@ -30,7 +41,10 @@ function selectOrdersWithEvent(database: typeof db) {
       status: orders.status,
       code: orders.code,
       subtotalCents: orders.subtotalCents,
-      remainingMs: sql<number>`extract(epoch from (${orders.expiresAt} - now())) * 1000`.mapWith(Number),
+      remainingMs:
+        sql<number>`extract(epoch from (${orders.expiresAt} - now())) * 1000`.mapWith(
+          Number,
+        ),
       paidAt: orders.paidAt,
       buyerName: orders.buyerName,
       buyerEmail: orders.buyerEmail,
@@ -52,11 +66,15 @@ function selectOrdersWithEvent(database: typeof db) {
 }
 
 async function selectOrderWithEvent(database: typeof db, orderId: string) {
-  const [row] = await selectOrdersWithEvent(database).where(eq(orders.id, orderId));
+  const [row] = await selectOrdersWithEvent(database).where(
+    eq(orders.id, orderId),
+  );
   return row;
 }
 
-type OrderWithEvent = NonNullable<Awaited<ReturnType<typeof selectOrderWithEvent>>>;
+type OrderWithEvent = NonNullable<
+  Awaited<ReturnType<typeof selectOrderWithEvent>>
+>;
 
 /** Entradas de un lote de órdenes en una sola consulta, ordenadas por código. */
 function selectTicketRows(database: typeof db, orderIds: string[]) {
@@ -106,7 +124,9 @@ function toEventView(row: OrderWithEvent): CheckoutOrder["event"] {
     venue: row.venue,
     city: row.city,
     imageUrl: required(row.imageUrl, row.slug),
-    ...(row.scheduleChangedAt && { scheduleChangedAt: row.scheduleChangedAt.toISOString() }),
+    ...(row.scheduleChangedAt && {
+      scheduleChangedAt: row.scheduleChangedAt.toISOString(),
+    }),
   };
 }
 
@@ -114,14 +134,19 @@ function toEventView(row: OrderWithEvent): CheckoutOrder["event"] {
  * Orden `pending` vigente de `/checkout?orden=<uuid>` con su pedido leído de la BD. `remainingMs` sale del reloj
  * de la BD. Id inválido o inexistente → `not-found`; vencida o `expired` → `expired`; pagada o reembolsada → `closed`.
  */
-export async function getPendingCheckout(orderId: unknown, database = db): Promise<PendingCheckoutResult> {
+export async function getPendingCheckout(
+  orderId: unknown,
+  database = db,
+): Promise<PendingCheckoutResult> {
   const id = orderIdSchema.safeParse(orderId);
   if (!id.success) return { status: "not-found" };
 
   const row = await selectOrderWithEvent(database, id.data);
   if (!row) return { status: "not-found" };
-  if (row.status !== "pending" && row.status !== "expired") return { status: "closed", orderId: id.data };
-  if (row.status === "expired" || row.remainingMs <= 0) return { status: "expired", eventSlug: row.slug };
+  if (row.status !== "pending" && row.status !== "expired")
+    return { status: "closed", orderId: id.data };
+  if (row.status === "expired" || row.remainingMs <= 0)
+    return { status: "expired", eventSlug: row.slug };
 
   const seats = await database
     .select({
@@ -137,14 +162,24 @@ export async function getPendingCheckout(orderId: unknown, database = db): Promi
     .leftJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
     .leftJoin(venueSections, eq(venueSections.id, venueSeats.sectionId))
     .where(eq(eventSeats.orderId, id.data))
-    .orderBy(ticketTypes.sortOrder, sql`length(${venueSeats.rowLabel})`, venueSeats.rowLabel, venueSeats.number, eventSeats.id);
+    .orderBy(
+      ticketTypes.sortOrder,
+      sql`length(${venueSeats.rowLabel})`,
+      venueSeats.rowLabel,
+      venueSeats.number,
+      eventSeats.id,
+    );
 
   return {
     status: "ok",
     orderId: id.data,
     amountCents: row.subtotalCents,
     remainingMs: Math.floor(row.remainingMs),
-    order: buildPendingCheckoutOrder(toEventView(row), seats, row.subtotalCents),
+    order: buildPendingCheckoutOrder(
+      toEventView(row),
+      seats,
+      row.subtotalCents,
+    ),
   };
 }
 
@@ -154,7 +189,10 @@ async function retrievePaymentIntentStatus(paymentIntentId: string | null) {
   try {
     return (await stripe.paymentIntents.retrieve(paymentIntentId)).status;
   } catch (error) {
-    console.error("No se pudo consultar el PaymentIntent", { paymentIntentId, error: error instanceof Error ? error.name : typeof error });
+    console.error("No se pudo consultar el PaymentIntent", {
+      paymentIntentId,
+      error: error instanceof Error ? error.name : typeof error,
+    });
     return null;
   }
 }
@@ -163,48 +201,121 @@ async function retrievePaymentIntentStatus(paymentIntentId: string | null) {
  * Confirmación de `/checkout/confirmacion?orden=<uuid>`: el estado sale de la BD y, si la orden sigue `pending`,
  * del PaymentIntent (el webhook puede no haber llegado). `paid` trae la vista `Order` con sus entradas.
  */
-export async function getOrderConfirmation(orderId: unknown, database = db): Promise<OrderConfirmationResult> {
+export async function getOrderConfirmation(
+  orderId: unknown,
+  database = db,
+): Promise<OrderConfirmationResult> {
   const id = orderIdSchema.safeParse(orderId);
   if (!id.success) return { status: "not-found" };
 
   const row = await selectOrderWithEvent(database, id.data);
   if (!row) return { status: "not-found" };
 
-  const paymentIntentStatus = row.status === "pending" ? await retrievePaymentIntentStatus(row.stripePaymentIntentId) : null;
-  const state = getConfirmationState({ status: row.status, isExpired: row.remainingMs <= 0 }, paymentIntentStatus);
+  const paymentIntentStatus =
+    row.status === "pending"
+      ? await retrievePaymentIntentStatus(row.stripePaymentIntentId)
+      : null;
+  const state = getConfirmationState(
+    { status: row.status, isExpired: row.remainingMs <= 0 },
+    paymentIntentStatus,
+  );
 
-  if (state === "refunded" || state === "expired") return { status: state, eventSlug: row.slug };
+  if (state === "refunded" || state === "expired")
+    return { status: state, eventSlug: row.slug };
   if (state === "payment-failed") return { status: state, orderId: id.data };
   if (state !== "paid") return { status: "processing" };
 
-  return { status: "paid", order: toPaidOrderView(row, await selectTicketRows(database, [id.data])) };
+  return {
+    status: "paid",
+    order: toPaidOrderView(row, await selectTicketRows(database, [id.data])),
+  };
 }
 
 /**
  * Órdenes `paid` del usuario con al menos una entrada (las demo del seed no tienen), de la más reciente a la más
  * antigua. Dos consultas en total: órdenes con su evento y todas sus entradas.
  */
-export async function getUserPaidOrders(userId: string, database = db): Promise<Order[]> {
+export async function getUserPaidOrders(
+  userId: string,
+  database = db,
+): Promise<Order[]> {
   const rows = await selectOrdersWithEvent(database)
     .where(
       and(
         eq(orders.userId, userId),
         eq(orders.status, "paid"),
-        exists(database.select({ id: tickets.id }).from(tickets).where(eq(tickets.orderId, orders.id))),
+        exists(
+          database
+            .select({ id: tickets.id })
+            .from(tickets)
+            .where(eq(tickets.orderId, orders.id)),
+        ),
       ),
     )
     .orderBy(desc(orders.paidAt), orders.id);
   if (rows.length === 0) return [];
 
-  const ticketsByOrder = Map.groupBy(await selectTicketRows(database, rows.map((row) => row.id)), (ticket) => ticket.orderId);
-  return rows.map((row) => toPaidOrderView(row, ticketsByOrder.get(row.id) ?? []));
+  const ticketsByOrder = Map.groupBy(
+    await selectTicketRows(
+      database,
+      rows.map((row) => row.id),
+    ),
+    (ticket) => ticket.orderId,
+  );
+  return rows.map((row) =>
+    toPaidOrderView(row, ticketsByOrder.get(row.id) ?? []),
+  );
+}
+
+/**
+ * ¿El usuario tiene entradas pagadas para el evento? Cuenta sus órdenes y, con `email` verificado, las de invitado
+ * con ese correo aún sin reclamar (las reclama `/mis-entradas`). Solo lectura: decide el botón principal del detalle.
+ */
+export async function hasPaidTicketsForEvent(
+  eventSlug: string,
+  userId: string,
+  email: string | null,
+  database = db,
+): Promise<boolean> {
+  const owner = email
+    ? or(
+        eq(orders.userId, userId),
+        and(
+          isNull(orders.userId),
+          sql`lower(${orders.buyerEmail}) = ${email.trim().toLowerCase()}`,
+        ),
+      )
+    : eq(orders.userId, userId);
+  const rows = await database
+    .select({ id: orders.id })
+    .from(orders)
+    .innerJoin(events, eq(events.id, orders.eventId))
+    .where(
+      and(
+        eq(events.slug, eventSlug),
+        eq(orders.status, "paid"),
+        owner,
+        exists(
+          database
+            .select({ id: tickets.id })
+            .from(tickets)
+            .where(eq(tickets.orderId, orders.id)),
+        ),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**
  * Asigna al usuario las órdenes de invitado (`user_id IS NULL`) ya cerradas compradas con su correo verificado, sin
  * distinguir mayúsculas. Nunca toca órdenes con dueño; idempotente. El llamador garantiza que el correo está verificado.
  */
-export async function claimGuestOrders(userId: string, email: string, database = db): Promise<void> {
+export async function claimGuestOrders(
+  userId: string,
+  email: string,
+  database = db,
+): Promise<void> {
   // ponytail: `lower(buyer_email)` no usa `orders_buyer_email_idx`; índice por expresión si la tabla crece mucho.
   await database
     .update(orders)

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   CalendarPlus,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buildIcsEvent, downloadIcs } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
+import { hasTicketsForEvent } from "@/modules/checkout/eventTickets";
 
 import type { EventDetail } from "../types/events.types";
 import { buildDirectionsUrl } from "../utils/venueMap";
@@ -26,6 +28,8 @@ const ACTION = cn(
   buttonVariants({ variant: "outline" }),
   "h-11 flex-1 cursor-pointer gap-2 px-4 font-semibold duration-200 sm:flex-none sm:px-6",
 );
+const PRIMARY =
+  "border-transparent bg-primary text-primary-foreground hover:bg-primary-strong hover:text-primary-foreground";
 
 type EventActionBarProps = {
   event: Pick<
@@ -40,6 +44,20 @@ type EventActionBarProps = {
 // «Mi entrada» pide iniciar sesión (proxy de /mis-entradas); comprar sigue abierto a invitados.
 export function EventActionBar({ event, purchaseHref }: EventActionBarProps) {
   const soldOut = event.status === "sold-out";
+  // Con entradas del evento, «Mi entrada» pasa a ser el principal; si no, «Comprar». Se pide tras montar porque la
+  // página es estática; mientras tanto (y sin sesión) el principal es «Comprar».
+  const [hasTickets, setHasTickets] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    hasTicketsForEvent(event.slug).then(
+      (value) => active && setHasTickets(value),
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [event.slug]);
 
   function handleAddToCalendar() {
     downloadIcs(
@@ -55,7 +73,7 @@ export function EventActionBar({ event, purchaseHref }: EventActionBarProps) {
 
   return (
     <nav aria-label="Acciones del evento" className="flex gap-2 sm:gap-3">
-      <Link href="/mis-entradas" className={ACTION}>
+      <Link href="/mis-entradas" className={cn(ACTION, hasTickets && PRIMARY)}>
         <Ticket aria-hidden className="size-4" />
         Mi entrada
       </Link>
@@ -69,10 +87,7 @@ export function EventActionBar({ event, purchaseHref }: EventActionBarProps) {
       ) : (
         <Link
           href={purchaseHref}
-          className={cn(
-            ACTION,
-            "border-transparent bg-primary text-primary-foreground hover:bg-primary-strong hover:text-primary-foreground",
-          )}
+          className={cn(ACTION, !hasTickets && PRIMARY)}
         >
           <ShoppingCart aria-hidden className="size-4" />
           Comprar

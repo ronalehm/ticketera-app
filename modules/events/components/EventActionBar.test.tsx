@@ -1,7 +1,16 @@
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { hasTicketsForEvent } from "@/modules/checkout/eventTickets";
 
 import { EventActionBar } from "./EventActionBar";
+
+vi.mock("@/modules/checkout/eventTickets", () => ({
+  hasTicketsForEvent: vi.fn(),
+}));
+const hasTickets = vi.mocked(hasTicketsForEvent);
+const isPrimary = (element: HTMLElement) =>
+  element.className.includes("bg-primary ");
 
 const event = {
   slug: "noche-de-sintetizadores-lima",
@@ -13,10 +22,14 @@ const event = {
   status: "available" as const,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  hasTickets.mockReset();
+});
 
 describe("EventActionBar", () => {
   it("muestra Mi entrada, Comprar y Más en ese orden, con sus destinos", () => {
+    hasTickets.mockResolvedValue(false);
     const { getByRole } = render(
       <EventActionBar event={event} purchaseHref="#entradas" />,
     );
@@ -32,6 +45,7 @@ describe("EventActionBar", () => {
   });
 
   it("agotado: sin enlace de compra", () => {
+    hasTickets.mockResolvedValue(false);
     const { queryByRole, getByText } = render(
       <EventActionBar
         event={{ ...event, status: "sold-out" }}
@@ -40,5 +54,35 @@ describe("EventActionBar", () => {
     );
     expect(queryByRole("link", { name: "Comprar" })).toBeNull();
     expect(getByText("Agotado").getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("sin entradas del evento, el principal es «Comprar»", async () => {
+    hasTickets.mockResolvedValue(false);
+    const { getByRole } = render(
+      <EventActionBar event={event} purchaseHref="#entradas" />,
+    );
+    await waitFor(() => expect(hasTickets).toHaveBeenCalledWith(event.slug));
+    expect(isPrimary(getByRole("link", { name: "Comprar" }))).toBe(true);
+    expect(isPrimary(getByRole("link", { name: "Mi entrada" }))).toBe(false);
+  });
+
+  it("con entradas del evento, el principal pasa a ser «Mi entrada»", async () => {
+    hasTickets.mockResolvedValue(true);
+    const { getByRole } = render(
+      <EventActionBar event={event} purchaseHref="#entradas" />,
+    );
+    await waitFor(() =>
+      expect(isPrimary(getByRole("link", { name: "Mi entrada" }))).toBe(true),
+    );
+    expect(isPrimary(getByRole("link", { name: "Comprar" }))).toBe(false);
+  });
+
+  it("si la consulta falla, se queda «Comprar» como principal", async () => {
+    hasTickets.mockRejectedValue(new Error("red"));
+    const { getByRole } = render(
+      <EventActionBar event={event} purchaseHref="#entradas" />,
+    );
+    await waitFor(() => expect(hasTickets).toHaveBeenCalled());
+    expect(isPrimary(getByRole("link", { name: "Comprar" }))).toBe(true);
   });
 });

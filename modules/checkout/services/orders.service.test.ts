@@ -1,7 +1,15 @@
 // @vitest-environment node
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { db } from "@/lib/db/client";
 import { eventSeats, events } from "@/lib/db/schema/events";
 import { users } from "@/lib/db/schema/identity";
@@ -11,11 +19,19 @@ import { stripe } from "@/lib/stripe";
 import { describeWithDb } from "@/lib/db/testDb";
 import { createTestEvent, type TestEvent } from "@/lib/db/testFixtures";
 import type { CheckoutOrder, CheckoutOrderItem } from "../types/checkout.types";
-import { claimGuestOrders, getOrderConfirmation, getPendingCheckout, getUserPaidOrders } from "./orders.service";
+import {
+  claimGuestOrders,
+  getOrderConfirmation,
+  getPendingCheckout,
+  getUserPaidOrders,
+  hasPaidTicketsForEvent,
+} from "./orders.service";
 import { reserveCheckoutOrder } from "./reservation.service";
 
 // Nunca hay llamadas reales a Stripe.
-vi.mock("@/lib/stripe", () => ({ stripe: { paymentIntents: { retrieve: vi.fn() } } }));
+vi.mock("@/lib/stripe", () => ({
+  stripe: { paymentIntents: { retrieve: vi.fn() } },
+}));
 const retrieve = vi.mocked(stripe.paymentIntents.retrieve);
 
 // Lejana, como la de `createTestEvent`: el evento publicado queda al final del catálogo que leen otros tests.
@@ -29,30 +45,51 @@ const BUYER = {
   buyerDocumentNumber: "12345678",
 };
 
-const general = (quantity: number): CheckoutOrderItem => ({ ticketTypeId: "general", name: "General", unitPrice: 50, quantity });
+const general = (quantity: number): CheckoutOrderItem => ({
+  ticketTypeId: "general",
+  name: "General",
+  unitPrice: 50,
+  quantity,
+});
 
 let testEvent: TestEvent;
 const createdUsers: string[] = [];
 
 async function reserve(items: CheckoutOrderItem[]): Promise<string> {
-  const order = { event: { slug: testEvent.slug }, items, quantities: {}, ticketCount: 0, total: 0 } as unknown as CheckoutOrder;
+  const order = {
+    event: { slug: testEvent.slug },
+    items,
+    quantities: {},
+    ticketCount: 0,
+    total: 0,
+  } as unknown as CheckoutOrder;
   const result = await reserveCheckoutOrder(order, null);
-  if (result.status !== "reserved") throw new Error(`Reserva fallida: ${result.status}`);
+  if (result.status !== "reserved")
+    throw new Error(`Reserva fallida: ${result.status}`);
   return result.orderId;
 }
 
 /** Orden de 1 general con comprador, PaymentIntent y los campos indicados (lo que dejan payOrder y el webhook). */
-async function orderWith(fields: Partial<typeof orders.$inferInsert>): Promise<string> {
+async function orderWith(
+  fields: Partial<typeof orders.$inferInsert>,
+): Promise<string> {
   const orderId = await reserve([general(1)]);
   await db
     .update(orders)
-    .set({ ...BUYER, stripePaymentIntentId: `pi_test_${randomUUID()}`, ...fields })
+    .set({
+      ...BUYER,
+      stripePaymentIntentId: `pi_test_${randomUUID()}`,
+      ...fields,
+    })
     .where(eq(orders.id, orderId));
   return orderId;
 }
 
 /** Orden pagada como la deja el webhook: lugares `sold` y una entrada por lugar (general primero). */
-async function paidOrder(items: CheckoutOrderItem[], fields: Partial<typeof orders.$inferInsert>): Promise<string> {
+async function paidOrder(
+  items: CheckoutOrderItem[],
+  fields: Partial<typeof orders.$inferInsert>,
+): Promise<string> {
   const orderId = await reserve(items);
   const [order] = await db
     .update(orders)
@@ -64,7 +101,9 @@ async function paidOrder(items: CheckoutOrderItem[], fields: Partial<typeof orde
     .set({ status: "sold", heldUntil: null })
     .where(eq(eventSeats.orderId, orderId))
     .returning({ id: eventSeats.id, venueSeatId: eventSeats.venueSeatId });
-  seats.sort((a, b) => Number(a.venueSeatId !== null) - Number(b.venueSeatId !== null));
+  seats.sort(
+    (a, b) => Number(a.venueSeatId !== null) - Number(b.venueSeatId !== null),
+  );
   await db.insert(tickets).values(
     seats.map((seat, index) => ({
       orderId,
@@ -80,16 +119,29 @@ async function paidOrder(items: CheckoutOrderItem[], fields: Partial<typeof orde
 
 /** `qr_token` real de cada entrada de la orden, por código. */
 async function qrTokensOf(orderId: string): Promise<Record<string, string>> {
-  const rows = await db.select({ code: tickets.code, qrToken: tickets.qrToken }).from(tickets).where(eq(tickets.orderId, orderId));
+  const rows = await db
+    .select({ code: tickets.code, qrToken: tickets.qrToken })
+    .from(tickets)
+    .where(eq(tickets.orderId, orderId));
   return Object.fromEntries(rows.map((row) => [row.code, row.qrToken]));
 }
 
 const userIdOf = async (orderId: string) =>
-  (await db.select({ userId: orders.userId }).from(orders).where(eq(orders.id, orderId)))[0].userId;
+  (
+    await db
+      .select({ userId: orders.userId })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+  )[0].userId;
 
 describeWithDb("orders.service", () => {
   beforeAll(async () => {
-    testEvent = await createTestEvent({ general: 40, numbered: { rows: ["A", "B"], seatsPerRow: 2 }, priceCents: 5000, status: "published" });
+    testEvent = await createTestEvent({
+      general: 40,
+      numbered: { rows: ["A", "B"], seatsPerRow: 2 },
+      priceCents: 5000,
+      status: "published",
+    });
     // Fecha e imagen propias para comprobar que la confirmación y "Mis entradas" las leen del evento.
     await db
       .update(events)
@@ -100,7 +152,8 @@ describeWithDb("orders.service", () => {
   afterAll(async () => {
     await testEvent?.cleanup();
     // Después del evento: sus órdenes apuntan a estos usuarios.
-    if (createdUsers.length > 0) await db.delete(users).where(inArray(users.id, createdUsers));
+    if (createdUsers.length > 0)
+      await db.delete(users).where(inArray(users.id, createdUsers));
   });
 
   beforeEach(() => {
@@ -118,22 +171,37 @@ describeWithDb("orders.service", () => {
 
   it("orden vencida → expired con eventSlug", async () => {
     const orderId = await reserve([general(1)]);
-    await db.update(orders).set({ expiresAt: sql`now() - interval '1 second'` }).where(eq(orders.id, orderId));
+    await db
+      .update(orders)
+      .set({ expiresAt: sql`now() - interval '1 second'` })
+      .where(eq(orders.id, orderId));
 
-    expect(await getPendingCheckout(orderId)).toEqual({ status: "expired", eventSlug: testEvent.slug });
+    expect(await getPendingCheckout(orderId)).toEqual({
+      status: "expired",
+      eventSlug: testEvent.slug,
+    });
   });
 
   it("orden con estado expired → expired con eventSlug", async () => {
     const orderId = await orderWith({ status: "expired" });
 
-    expect(await getPendingCheckout(orderId)).toEqual({ status: "expired", eventSlug: testEvent.slug });
+    expect(await getPendingCheckout(orderId)).toEqual({
+      status: "expired",
+      eventSlug: testEvent.slug,
+    });
   });
 
-  it.each(["paid", "refunded", "partially_refunded"] as const)("orden %s → closed", async (status) => {
-    const orderId = await orderWith({ status, paidAt: new Date() });
+  it.each(["paid", "refunded", "partially_refunded"] as const)(
+    "orden %s → closed",
+    async (status) => {
+      const orderId = await orderWith({ status, paidAt: new Date() });
 
-    expect(await getPendingCheckout(orderId)).toEqual({ status: "closed", orderId });
-  });
+      expect(await getPendingCheckout(orderId)).toEqual({
+        status: "closed",
+        orderId,
+      });
+    },
+  );
 
   it("orden vigente → ok con líneas en el orden de sort_order, asientos, total, amountCents y remainingMs", async () => {
     const orderId = await reserve([
@@ -170,7 +238,12 @@ describeWithDb("orders.service", () => {
         imageUrl: IMAGE_URL,
       },
       items: [
-        { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 2 },
+        {
+          ticketTypeId: "general",
+          name: "General",
+          unitPrice: 50,
+          quantity: 2,
+        },
         {
           ticketTypeId: "numbered",
           name: "Platea",
@@ -193,13 +266,21 @@ describeWithDb("orders.service", () => {
       ["no UUID", "abc"],
       ["UUID inexistente", randomUUID()],
     ])("%s → not-found", async (_, orderId) => {
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "not-found" });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "not-found",
+      });
     });
 
     it("orden paid → vista Order con sus entradas en orden de código, sin consultar Stripe", async () => {
       const orderId = await reserve([
         general(1),
-        { ticketTypeId: "numbered", name: "Platea", unitPrice: 50, quantity: 1, seats: [{ id: "numbered-B-1", label: "" }] },
+        {
+          ticketTypeId: "numbered",
+          name: "Platea",
+          unitPrice: 50,
+          quantity: 1,
+          seats: [{ id: "numbered-B-1", label: "" }],
+        },
       ]);
       const [order] = await db
         .update(orders)
@@ -213,7 +294,10 @@ describeWithDb("orders.service", () => {
         .leftJoin(venueSeats, eq(venueSeats.id, eventSeats.venueSeatId))
         .where(eq(eventSeats.orderId, orderId))
         .orderBy(sql`${venueSeats.number} nulls first`);
-      await db.update(eventSeats).set({ status: "sold", heldUntil: null }).where(eq(eventSeats.orderId, orderId));
+      await db
+        .update(eventSeats)
+        .set({ status: "sold", heldUntil: null })
+        .where(eq(eventSeats.orderId, orderId));
       await db.insert(tickets).values(
         seats.map((seat, index) => ({
           orderId,
@@ -233,22 +317,38 @@ describeWithDb("orders.service", () => {
         order: {
           code: order.code,
           createdAt: order.paidAt!.toISOString(),
-          event: expect.objectContaining({ slug: testEvent.slug, startsAt: STARTS_AT.toISOString(), imageUrl: IMAGE_URL }),
+          event: expect.objectContaining({
+            slug: testEvent.slug,
+            startsAt: STARTS_AT.toISOString(),
+            imageUrl: IMAGE_URL,
+          }),
           items: [
-            { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 1 },
+            {
+              ticketTypeId: "general",
+              name: "General",
+              unitPrice: 50,
+              quantity: 1,
+            },
             {
               ticketTypeId: "numbered",
               name: "Platea",
               unitPrice: 50,
               quantity: 1,
-              seats: [{ id: "numbered-B-1", label: "Platea · Fila B · Asiento 1" }],
+              seats: [
+                { id: "numbered-B-1", label: "Platea · Fila B · Asiento 1" },
+              ],
             },
           ],
           ticketCount: 2,
           total: 100,
           buyer: { name: BUYER.buyerName, email: BUYER.buyerEmail },
           tickets: [
-            { code: `${order.code}-01`, ticketTypeName: "General", holderName: BUYER.buyerName, qrToken: qr[`${order.code}-01`] },
+            {
+              code: `${order.code}-01`,
+              ticketTypeName: "General",
+              holderName: BUYER.buyerName,
+              qrToken: qr[`${order.code}-01`],
+            },
             {
               code: `${order.code}-02`,
               ticketTypeName: "Platea",
@@ -265,14 +365,20 @@ describeWithDb("orders.service", () => {
     it("orden refunded → refunded con eventSlug, sin consultar Stripe", async () => {
       const orderId = await orderWith({ status: "refunded" });
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "refunded", eventSlug: testEvent.slug });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "refunded",
+        eventSlug: testEvent.slug,
+      });
       expect(retrieve).not.toHaveBeenCalled();
     });
 
     it("orden con estado expired → expired, sin consultar Stripe", async () => {
       const orderId = await orderWith({ status: "expired" });
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "expired", eventSlug: testEvent.slug });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "expired",
+        eventSlug: testEvent.slug,
+      });
       expect(retrieve).not.toHaveBeenCalled();
     });
 
@@ -280,38 +386,63 @@ describeWithDb("orders.service", () => {
       const orderId = await orderWith({});
       retrieve.mockResolvedValue({ status: "succeeded" } as never);
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "processing" });
-      const [{ stripePaymentIntentId }] = await db.select().from(orders).where(eq(orders.id, orderId));
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "processing",
+      });
+      const [{ stripePaymentIntentId }] = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
       expect(retrieve).toHaveBeenCalledWith(stripePaymentIntentId);
     });
 
     it("pending vigente con requires_payment_method → payment-failed con orderId", async () => {
       const orderId = await orderWith({});
-      retrieve.mockResolvedValue({ status: "requires_payment_method" } as never);
+      retrieve.mockResolvedValue({
+        status: "requires_payment_method",
+      } as never);
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "payment-failed", orderId });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "payment-failed",
+        orderId,
+      });
     });
 
     it("pending vencida con requires_payment_method → expired", async () => {
-      const orderId = await orderWith({ expiresAt: new Date(Date.now() - 60_000) });
-      retrieve.mockResolvedValue({ status: "requires_payment_method" } as never);
+      const orderId = await orderWith({
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+      retrieve.mockResolvedValue({
+        status: "requires_payment_method",
+      } as never);
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "expired", eventSlug: testEvent.slug });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "expired",
+        eventSlug: testEvent.slug,
+      });
     });
 
     it("pending sin PaymentIntent → payment-failed sin consultar Stripe", async () => {
       const orderId = await reserve([general(1)]);
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "payment-failed", orderId });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "payment-failed",
+        orderId,
+      });
       expect(retrieve).not.toHaveBeenCalled();
     });
 
     it("pending con Stripe fallando → payment-failed", async () => {
       const orderId = await orderWith({});
       retrieve.mockRejectedValue(new Error("red"));
-      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
-      expect(await getOrderConfirmation(orderId)).toEqual({ status: "payment-failed", orderId });
+      expect(await getOrderConfirmation(orderId)).toEqual({
+        status: "payment-failed",
+        orderId,
+      });
       consoleError.mockRestore();
     });
   });
@@ -321,7 +452,11 @@ describeWithDb("orders.service", () => {
       const suffix = randomUUID().slice(0, 8);
       const [{ id }] = await db
         .insert(users)
-        .values({ email: `cliente.${suffix}@example.com`, firstName: "Cliente", lastName: suffix })
+        .values({
+          email: `cliente.${suffix}@example.com`,
+          firstName: "Cliente",
+          lastName: suffix,
+        })
         .returning({ id: users.id });
       createdUsers.push(id);
       return id;
@@ -330,9 +465,21 @@ describeWithDb("orders.service", () => {
     it("devuelve solo las órdenes paid con entradas del usuario, de la más reciente a la más antigua", async () => {
       const userId = await createUser();
       const otherUserId = await createUser();
-      const older = await paidOrder([general(1)], { userId, paidAt: new Date("2026-10-01T10:00:00.000Z") });
+      const older = await paidOrder([general(1)], {
+        userId,
+        paidAt: new Date("2026-10-01T10:00:00.000Z"),
+      });
       const newer = await paidOrder(
-        [general(1), { ticketTypeId: "numbered", name: "Platea", unitPrice: 50, quantity: 1, seats: [{ id: "numbered-A-2", label: "" }] }],
+        [
+          general(1),
+          {
+            ticketTypeId: "numbered",
+            name: "Platea",
+            unitPrice: 50,
+            quantity: 1,
+            seats: [{ id: "numbered-A-2", label: "" }],
+          },
+        ],
         { userId, paidAt: new Date("2026-10-02T10:00:00.000Z") },
       );
       await orderWith({ userId }); // pending
@@ -342,30 +489,52 @@ describeWithDb("orders.service", () => {
 
       const result = await getUserPaidOrders(userId);
 
-      const codes = await db.select({ id: orders.id, code: orders.code }).from(orders).where(inArray(orders.id, [newer, older]));
+      const codes = await db
+        .select({ id: orders.id, code: orders.code })
+        .from(orders)
+        .where(inArray(orders.id, [newer, older]));
       const codeOf = (id: string) => codes.find((row) => row.id === id)!.code;
-      expect(result.map((order) => order.code)).toEqual([codeOf(newer), codeOf(older)]);
+      expect(result.map((order) => order.code)).toEqual([
+        codeOf(newer),
+        codeOf(older),
+      ]);
       const qr = await qrTokensOf(newer);
       expect(new Set(Object.values(qr)).size).toBe(2);
       expect(result[0]).toEqual({
         code: codeOf(newer),
         createdAt: "2026-10-02T10:00:00.000Z",
-        event: expect.objectContaining({ slug: testEvent.slug, startsAt: STARTS_AT.toISOString(), imageUrl: IMAGE_URL }),
+        event: expect.objectContaining({
+          slug: testEvent.slug,
+          startsAt: STARTS_AT.toISOString(),
+          imageUrl: IMAGE_URL,
+        }),
         items: [
-          { ticketTypeId: "general", name: "General", unitPrice: 50, quantity: 1 },
+          {
+            ticketTypeId: "general",
+            name: "General",
+            unitPrice: 50,
+            quantity: 1,
+          },
           {
             ticketTypeId: "numbered",
             name: "Platea",
             unitPrice: 50,
             quantity: 1,
-            seats: [{ id: "numbered-A-2", label: "Platea · Fila A · Asiento 2" }],
+            seats: [
+              { id: "numbered-A-2", label: "Platea · Fila A · Asiento 2" },
+            ],
           },
         ],
         ticketCount: 2,
         total: 100,
         buyer: { name: BUYER.buyerName, email: BUYER.buyerEmail },
         tickets: [
-          { code: `${codeOf(newer)}-01`, ticketTypeName: "General", holderName: BUYER.buyerName, qrToken: qr[`${codeOf(newer)}-01`] },
+          {
+            code: `${codeOf(newer)}-01`,
+            ticketTypeName: "General",
+            holderName: BUYER.buyerName,
+            qrToken: qr[`${codeOf(newer)}-01`],
+          },
           {
             code: `${codeOf(newer)}-02`,
             ticketTypeName: "Platea",
@@ -375,7 +544,11 @@ describeWithDb("orders.service", () => {
           },
         ],
       });
-      expect(result[1].tickets).toEqual([expect.objectContaining({ qrToken: Object.values(await qrTokensOf(older))[0] })]);
+      expect(result[1].tickets).toEqual([
+        expect.objectContaining({
+          qrToken: Object.values(await qrTokensOf(older))[0],
+        }),
+      ]);
     });
 
     it("usuario sin órdenes → []", async () => {
@@ -389,15 +562,22 @@ describeWithDb("orders.service", () => {
       const email = `invitado.${suffix}@example.com`;
       const guestEmail = `Invitado.${suffix}@Example.com`;
       const guest = await paidOrder([general(1)], { buyerEmail: guestEmail });
-      const otherEmail = await paidOrder([general(1)], { buyerEmail: `otro.${email}` });
-      const owned = await paidOrder([general(1)], { buyerEmail: email, userId: otherUserId });
+      const otherEmail = await paidOrder([general(1)], {
+        buyerEmail: `otro.${email}`,
+      });
+      const owned = await paidOrder([general(1)], {
+        buyerEmail: email,
+        userId: otherUserId,
+      });
 
       await claimGuestOrders(userId, email);
 
       expect(await userIdOf(guest)).toBe(userId);
       expect(await userIdOf(otherEmail)).toBeNull();
       expect(await userIdOf(owned)).toBe(otherUserId);
-      expect((await getUserPaidOrders(userId)).map((order) => order.buyer.email)).toEqual([guestEmail]);
+      expect(
+        (await getUserPaidOrders(userId)).map((order) => order.buyer.email),
+      ).toEqual([guestEmail]);
 
       await claimGuestOrders(userId, email);
 
@@ -415,6 +595,45 @@ describeWithDb("orders.service", () => {
       await claimGuestOrders(userId, email);
 
       expect(await userIdOf(pending)).toBeNull();
+    });
+
+    it("hasPaidTicketsForEvent: sus órdenes paid con entradas y las de invitado de su correo; nada más", async () => {
+      const userId = await createUser();
+      const email = `tiene.${randomUUID().slice(0, 8)}@example.com`;
+      expect(await hasPaidTicketsForEvent(testEvent.slug, userId, email)).toBe(
+        false,
+      );
+
+      await orderWith({ userId }); // pending
+      await orderWith({ userId, status: "paid", paidAt: new Date() }); // paid sin entradas
+      await paidOrder([general(1)], {
+        buyerEmail: email,
+        userId: await createUser(),
+      }); // su correo, otro dueño
+      expect(await hasPaidTicketsForEvent(testEvent.slug, userId, email)).toBe(
+        false,
+      );
+
+      await paidOrder([general(1)], { buyerEmail: email.toUpperCase() }); // invitado con su correo
+      expect(await hasPaidTicketsForEvent(testEvent.slug, userId, email)).toBe(
+        true,
+      );
+      expect(await hasPaidTicketsForEvent(testEvent.slug, userId, null)).toBe(
+        false,
+      );
+      expect(
+        await hasPaidTicketsForEvent(
+          "otro-evento-que-no-existe",
+          userId,
+          email,
+        ),
+      ).toBe(false);
+
+      const ownerId = await createUser();
+      await paidOrder([general(1)], { userId: ownerId });
+      expect(await hasPaidTicketsForEvent(testEvent.slug, ownerId, null)).toBe(
+        true,
+      );
     });
   });
 });
