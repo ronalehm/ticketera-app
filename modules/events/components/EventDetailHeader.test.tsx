@@ -22,13 +22,20 @@ describe("EventDetailHeader", () => {
     expect(img.getAttribute("srcset")).toBeNull();
   });
 
-  it("muestra el nombre de la categoría en la miga y la badge, y enlaza al filtro por slug", () => {
-    const { getAllByText } = render(
-      <EventDetailHeader event={{ ...event, category: "bar-shop", categoryName: "Bares" }} />,
-    );
+  it("muestra el nombre de la categoría en la miga y enlaza al filtro por slug", () => {
+    const { getAllByText } = render(<EventDetailHeader event={{ ...event, category: "bar-shop", categoryName: "Bares" }} />);
     const labels = getAllByText("Bares");
-    expect(labels).toHaveLength(2);
+    expect(labels).toHaveLength(1);
     expect(labels[0].closest("a")?.getAttribute("href")).toBe("/eventos?categoria=bar-shop");
+  });
+
+  it("portada limpia: el título, la fecha y Guardar/Compartir quedan fuera del contenedor de la imagen", () => {
+    const { container, getByRole } = render(<EventDetailHeader event={event} />);
+    const cover = (container.querySelector("img") as HTMLImageElement).parentElement as HTMLElement;
+    expect(cover.querySelector("h1, time, button")).toBeNull();
+    const title = getByRole("heading", { level: 1, name: event.title });
+    const row = title.parentElement as HTMLElement;
+    expect(row.querySelector('[aria-label="Guardar evento"]')).not.toBeNull();
   });
 
   it("no repite el CTA de compra en el hero: la tarjeta de entradas ya lo ofrece", () => {

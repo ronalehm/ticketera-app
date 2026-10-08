@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowLeft, CalendarClock, CalendarDays, Clock, MapPin } from "lucide-react";
 
 import { EventCoverImage } from "@/components/shared/EventCoverImage";
-import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,27 +23,18 @@ import { ShareEventButton } from "./ShareEventButton";
 const CRUMB_LINK =
   "rounded-sm transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-// Anillo de foco claro: el ring-ring/50 por defecto apenas contrasta sobre el bloque navy.
-const HERO_FOCUS = "focus-visible:border-primary-foreground focus-visible:ring-primary-foreground";
-
-// Guardar y Compartir en `lg`: outline sobre el bloque navy.
-const HERO_ICON_BUTTON = cn(
-  "size-12 border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground",
-  HERO_FOCUS,
-);
-
 type EventDetailHeaderProps = {
   event: EventDetail;
 };
 
 // Sin CTA de compra en el hero: la tarjeta de entradas (justo debajo en móvil, a la derecha en lg) y la barra móvil
-// ya la ofrecen; repetirla aquí era ruido visual.
+// ya la ofrecen. Debajo de la portada: título con Guardar y Compartir a la derecha, y luego fecha, hora y recinto.
 export function EventDetailHeader({ event }: EventDetailHeaderProps) {
   const soldOut = event.status === "sold-out";
 
   return (
     <header className="flex flex-col gap-4 md:gap-6">
-      <div className="-mx-2 flex items-center justify-between lg:hidden">
+      <div className="-mx-2 flex items-center lg:hidden">
         <Link
           href="/eventos"
           aria-label="Volver a eventos"
@@ -52,10 +42,6 @@ export function EventDetailHeader({ event }: EventDetailHeaderProps) {
         >
           <ArrowLeft aria-hidden className="size-5" />
         </Link>
-        <div className="flex items-center gap-1">
-          <SaveEventButton slug={event.slug} />
-          <ShareEventButton title={event.title} />
-        </div>
       </div>
 
       <Breadcrumb className="hidden lg:flex">
@@ -78,71 +64,56 @@ export function EventDetailHeader({ event }: EventDetailHeaderProps) {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="grid overflow-hidden rounded-3xl bg-brand-navy text-primary-foreground lg:min-h-[28rem] lg:grid-cols-2">
-        <div className="relative aspect-[16/9] lg:order-last lg:aspect-auto">
-          <EventCoverImage
-            src={event.imageUrl}
-            alt={getCoverAlt(event)}
-            fill
-            preload
-            sizes="(min-width: 1280px) 608px, (min-width: 1024px) 50vw, 100vw"
-            className="object-cover"
-          />
-        </div>
+      {/* Portada limpia (Ronald, 2026-10-08): sin texto, botones ni bloque de color encima. */}
+      <div className="relative aspect-[16/9] overflow-hidden rounded-3xl md:aspect-[21/8]">
+        <EventCoverImage
+          src={event.imageUrl}
+          alt={getCoverAlt(event)}
+          fill
+          preload
+          sizes="(min-width: 1280px) 1216px, 100vw"
+          className="object-cover"
+        />
+      </div>
 
-        <div className="flex flex-col gap-6 p-6 md:p-8 lg:p-10 xl:p-12">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3">
-              <Badge variant="outline" className="h-7 border-primary-foreground/30 px-3 text-primary-foreground">
-                {event.categoryName}
-              </Badge>
-              {/* Solo para el organizador dueño y admins; se resuelve en el cliente para no romper la página estática. */}
-              <EventEditLink
-                eventId={event.id}
-                className={cn(
-                  "border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground",
-                  HERO_FOCUS,
-                )}
-              />
-            </div>
-            <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance wrap-break-word md:text-5xl lg:text-4xl xl:text-5xl">
-              {event.title}
-            </h1>
-            <ul className="flex flex-col gap-2 text-base font-medium text-primary-foreground/80">
-              <li className="flex items-center gap-2">
-                <CalendarDays className="size-4 shrink-0" aria-hidden />
-                <time dateTime={event.startsAt}>{formatLongDayMonth(event.startsAt)}</time>
-              </li>
-              <li className="flex items-center gap-2">
-                <Clock className="size-4 shrink-0" aria-hidden />
-                <span>{`${formatTime(event.startsAt)} h`}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <MapPin className="size-4 shrink-0" aria-hidden />
-                <span>
-                  {event.venue}, {event.city}
-                </span>
-              </li>
-            </ul>
-            {event.scheduleChangedAt && (
-              <p className="inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground">
-                <CalendarClock className="size-4 shrink-0" aria-hidden />
-                <span>
-                  Fecha actualizada el{" "}
-                  <time dateTime={event.scheduleChangedAt}>{formatLongDayMonth(event.scheduleChangedAt)}</time>
-                </span>
-              </p>
-            )}
-          </div>
-
-          <div className={cn("mt-auto items-center gap-3", soldOut ? "flex" : "hidden lg:flex")}>
-            {soldOut && <p className="flex h-12 flex-1 items-center font-bold">Entradas agotadas</p>}
-            <div className="hidden items-center gap-3 lg:flex">
-              <SaveEventButton slug={event.slug} className={HERO_ICON_BUTTON} />
-              <ShareEventButton title={event.title} className={HERO_ICON_BUTTON} />
-            </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-3xl leading-tight font-extrabold tracking-tight text-balance wrap-break-word md:text-4xl lg:text-5xl">
+            {event.title}
+          </h1>
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Solo para el organizador dueño y admins; se resuelve en el cliente para no romper la página estática. */}
+            <EventEditLink eventId={event.id} />
+            <SaveEventButton slug={event.slug} />
+            <ShareEventButton title={event.title} />
           </div>
         </div>
+        <ul className="flex flex-col gap-1 text-base font-medium text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-5">
+          <li className="flex items-center gap-2">
+            <CalendarDays className="size-4 shrink-0" aria-hidden />
+            <time dateTime={event.startsAt}>{formatLongDayMonth(event.startsAt)}</time>
+          </li>
+          <li className="flex items-center gap-2">
+            <Clock className="size-4 shrink-0" aria-hidden />
+            <span>{`${formatTime(event.startsAt)} h`}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <MapPin className="size-4 shrink-0" aria-hidden />
+            <span>
+              {event.venue}, {event.city}
+            </span>
+          </li>
+        </ul>
+        {event.scheduleChangedAt && (
+          <p className="inline-flex w-fit items-center gap-2 rounded-full bg-highlight px-3 py-1 text-sm font-semibold text-highlight-foreground">
+            <CalendarClock className="size-4 shrink-0" aria-hidden />
+            <span>
+              Fecha actualizada el{" "}
+              <time dateTime={event.scheduleChangedAt}>{formatLongDayMonth(event.scheduleChangedAt)}</time>
+            </span>
+          </p>
+        )}
+        {soldOut && <p className="font-bold">Entradas agotadas</p>}
       </div>
     </header>
   );
