@@ -65,7 +65,7 @@ Footer
 - Bloque `rounded-3xl overflow-hidden bg-brand-navy text-primary-foreground`.
   - `lg`: grilla de 2 columnas, texto a la izquierda e imagen a la derecha (`next/image fill object-cover`, `preload`), `min-h-[28rem]`.
   - Móvil: imagen arriba (`aspect-[16/9]`) y texto debajo.
-  - Alt de la imagen: "<Título> en <Lugar>, <Ciudad>".
+  - Alt de la imagen: "<Título> en <Lugar>, <Ciudad>" (`getCoverAlt`, el mismo texto que `og:image:alt`; sin alt editable).
 - Texto:
   - `Badge` outline con la categoría (`border-primary-foreground/30`).
   - h1 (Display) con tamaño propio, un paso más pequeño que el del MASTER: `text-4xl md:text-5xl lg:text-4xl xl:text-5xl` (36 / 48 / 36 / 48 px; peso, interlineado y tracking como el Display). A 1440 px un título largo ("Noche de Sintetizadores: Gira Neón 2026") ocupa como máximo 3 líneas en la columna de texto; a 375 px no desborda.
@@ -168,5 +168,11 @@ Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver 
 - **Anti-patrón: cargos ocultos.** Bajo el total siempre "Precio final, sin cargos ocultos"; el total mostrado es el que se paga.
 - Targets táctiles ≥ 44px en la barra móvil, Guardar, Compartir, "Ver mapa", "Cómo llegar" y "Ver más en…".
 - Sin scroll horizontal de página a 375 px (el carrusel de relacionados tiene su propio scroll).
-- Metadata: `<Título del evento> | Mentec Tickets`, descripción = primer párrafo.
+- **Metadata y vista previa al compartir** (`buildEventMetadata`, spec `events-detail-landing`, Fase 1A): `metadataBase` = `APP_URL` en el layout raíz; las URLs relativas se resuelven contra él.
+  - `<title>`: `<Título del evento> | Mentec Tickets`.
+  - Descripción (`description`, `og:description`, `twitter:description`): "<Lugar>, <Ciudad> · <sábado 14 de noviembre>, <21:00> h. <primer párrafo>" (hora de Lima).
+  - `canonical` y `og:url`: `/eventos/<slug>` (absoluta con `APP_URL`).
+  - Open Graph: `type` `website`, `site_name` "Mentec Tickets", `locale` `es_PE`, `og:title` = título del evento (sin sufijo), `og:image` = la portada (`image_url`) con `og:image:alt` = el alt del hero.
+  - X: `summary_large_image` con título, descripción, imagen y alt iguales a Open Graph.
+  - Sin `robots`: la página se indexa. La metadata va en el `<head>` inicial (página prerenderizada; los bots sin JavaScript, como `facebookexternalhit`, la reciben bloqueante).
 - 404 propio: h1 "No encontramos este evento" + "Volver al inicio" (botón primario).

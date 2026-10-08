@@ -33,6 +33,7 @@ export type {
   ManagedEventStatus,
   TicketType,
 } from "./types/events.types";
+export { buildEventMetadata } from "./utils/eventMetadata";
 export { filterEvents, getActiveFilterChips, getEventMonths, getFacetCounts, parseEventFilters } from "./utils/eventFilters";
 export { formatEventDate, formatEventPrice } from "./utils/formatEvent";
 export { getOrderTotal, MAX_TICKETS_PER_ORDER } from "./utils/ticketOrder";

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import {
+  buildEventMetadata,
   EventDetailHeader,
   EventDetailInfo,
   getEventBySlug,
@@ -21,12 +22,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps<"/eventos/[slug]">): Promise<Metadata> {
   const event = await getEventBySlug((await params).slug);
-  if (!event) return {};
-
-  return {
-    title: `${event.title} | Mentec Tickets`,
-    description: event.description.split("\n\n")[0],
-  };
+  return event ? buildEventMetadata(event) : {};
 }
 
 export default async function EventDetailPage({ params }: PageProps<"/eventos/[slug]">) {

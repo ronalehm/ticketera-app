@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import type { EventDetail } from "../types/events.types";
+import { getCoverAlt } from "../utils/eventMetadata";
 import { formatEventPrice, formatLongDayMonth, formatTime } from "../utils/formatEvent";
 import { EventEditLink } from "./EventEditLink";
 import { SaveEventButton } from "./SaveEventButton";
@@ -83,7 +84,7 @@ export function EventDetailHeader({ event, purchaseHref }: EventDetailHeaderProp
         <div className="relative aspect-[16/9] lg:order-last lg:aspect-auto">
           <EventCoverImage
             src={event.imageUrl}
-            alt={`${event.title} en ${event.venue}, ${event.city}`}
+            alt={getCoverAlt(event)}
             fill
             preload
             sizes="(min-width: 1280px) 608px, (min-width: 1024px) 50vw, 100vw"
