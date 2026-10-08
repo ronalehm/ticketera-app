@@ -1,6 +1,8 @@
 # Página: detalle de evento `/eventos/[slug]`
 
 > **Hero, 2026-10-08 (Ronald; prevalece sobre los diagramas de abajo):** portada limpia a todo el ancho (`aspect-[16/9]`, `md:aspect-[21/8]`, `rounded-3xl`, sin texto, botones ni bloque navy encima). Debajo: el `h1` con Editar (solo dueño/admin), Guardar (♥) y Compartir a la derecha; luego una línea `text-muted-foreground` con fecha, hora de inicio, recinto y ciudad, y edad mínima («Todo público» o «Edad mínima: +N»); «Entradas agotadas» si aplica. Sin CTA de compra, sin badge de categoría (la categoría queda en la miga) y sin aviso «Fecha actualizada». En móvil la barra superior solo tiene la flecha «Volver a eventos».
+>
+> **Barra de acciones (`EventActionBar`, bajo el hero y encima de «Acerca del evento»):** tres botones `h-11` en fila: «Mi entrada» (outline, `/mis-entradas`, pide sesión), «Comprar» (primario; página de asientos con mapa o `#entradas` sin mapa; «Agotado» deshabilitado si no hay stock) y «Más» (menú: «Agregar al calendario» `.ics`, «Cómo llegar» en Google Maps). En móvil ocupan el ancho a partes iguales; desde `sm`, ancho natural.
 
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
 > Spec: `docs/specs/events-ui-refresh.md` (Fases 2 y 5); la sección "Lugar" (mapa y "Cómo llegar") la redefine `docs/specs/events-venue-map.md`. Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
