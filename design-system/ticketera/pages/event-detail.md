@@ -1,5 +1,9 @@
 # Página: detalle de evento `/eventos/[slug]`
 
+> **Hero, 2026-10-08 (Ronald; prevalece sobre los diagramas de abajo):** portada limpia a todo el ancho (`aspect-[16/9]`, `md:aspect-[21/8]`, `rounded-3xl`, sin texto, botones ni bloque navy encima). Debajo: el `h1` con Editar (solo dueño/admin), Guardar (♥) y Compartir a la derecha; luego una línea `text-muted-foreground` con fecha, hora de inicio, recinto y ciudad, y edad mínima («Todo público» o «Edad mínima: +N»); «Entradas agotadas» si aplica. Sin CTA de compra, sin badge de categoría (la categoría queda en la miga) y sin aviso «Fecha actualizada». En móvil la barra superior solo tiene la flecha «Volver a eventos».
+>
+> **Barra de acciones (`EventActionBar`, bajo el hero y encima de «Acerca del evento»):** tres botones `h-11` en fila: «Mi entrada» (`/mis-entradas`, pide sesión), «Comprar» (página de compra; página de asientos con mapa o `#entradas` sin mapa; «Agotado» deshabilitado si no hay stock) y «Más» (menú: «Agregar al calendario» `.ics`, «Cómo llegar» en Google Maps). Botón principal (relleno `bg-primary`): «Mi entrada» si quien navega tiene entradas pagadas del evento (server action `hasTicketsForEvent`, tras montar), si no «Comprar»; el otro va outline. En móvil ocupan el ancho a partes iguales; desde `sm`, ancho natural.
+
 > Override de `../MASTER.md` para esta página. Lo no indicado aquí sigue el MASTER.
 > Spec: `docs/specs/events-ui-refresh.md` (Fases 2 y 5); la sección "Lugar" (mapa y "Cómo llegar") la redefine `docs/specs/events-venue-map.md`. Reemplaza la cabecera anterior (imagen 16:9 sobre el título), la sección "Detalles" y "Ubicación". El aside y la barra de compra de los eventos con mapa vienen de `docs/specs/seating-ticket-selection.md` (contrato H); esta spec no los rehace, pero su diseño sigue documentado aquí ("Aside con mapa" y "Barra inferior móvil").
 > Aviso «Fecha actualizada» y botón «Editar evento» del hero: `docs/specs/event-editing.md` (Decisiones 2 y 4).
@@ -22,7 +26,6 @@ Breadcrumb      Inicio › Categoría › Título
 └───────────────────────────────────────────┴────────────────────────────────────┘
 ┌──────────────────────────────────────────┬──────────────┐
 │ Acerca del evento · Organiza: …          │ Aside compra │  columna derecha 380px,
-│ Información importante (2×2)             │ (sticky)     │  sticky lg:top-24
 │ Lugar (mapa · dirección · Cómo llegar)   │              │
 └──────────────────────────────────────────┴──────────────┘
 También te puede interesar · Ver más en <Categoría> →   (bg-muted, ancho completo, grilla 3/4 col.)
@@ -42,7 +45,7 @@ Header sticky
 │ [ Comprar entradas · desde ] │
 └──────────────────────────────┘
 Aside de compra  (id="entradas")
-Acerca del evento · Información importante (2×2) · Lugar
+Acerca del evento · Lugar
 También te puede interesar  → carrusel con scroll-snap (< sm)
 Barra inferior  (< lg, solo con mapa y no agotado)  Desde S/ X   [Comprar entradas →]
 Footer
@@ -65,7 +68,7 @@ Footer
 - Bloque `rounded-3xl overflow-hidden bg-brand-navy text-primary-foreground`.
   - `lg`: grilla de 2 columnas, texto a la izquierda e imagen a la derecha (`next/image fill object-cover`, `preload`), `min-h-[28rem]`.
   - Móvil: imagen arriba (`aspect-[16/9]`) y texto debajo.
-  - Alt de la imagen: "<Título> en <Lugar>, <Ciudad>".
+  - Alt de la imagen: "<Título> en <Lugar>, <Ciudad>" (`getCoverAlt`, el mismo texto que `og:image:alt`; sin alt editable).
 - Texto:
   - `Badge` outline con la categoría (`border-primary-foreground/30`).
   - h1 (Display) con tamaño propio, un paso más pequeño que el del MASTER: `text-4xl md:text-5xl lg:text-4xl xl:text-5xl` (36 / 48 / 36 / 48 px; peso, interlineado y tracking como el Display). A 1440 px un título largo ("Noche de Sintetizadores: Gira Neón 2026") ocupa como máximo 3 líneas en la columna de texto; a 375 px no desborda.
@@ -140,10 +143,7 @@ Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver 
 ## Información (`EventDetailInfo`)
 
 - **Acerca del evento:** párrafos de la descripción y, al final, "Organiza: <organizador>" (`text-muted-foreground`).
-- **Información importante:** `dl` en grilla 2×2 a cualquier ancho (`grid-cols-2 gap-3 md:gap-4`).
-  - Celda: `rounded-2xl ring-1 ring-border p-4`; icono en `size-11 rounded-xl bg-accent text-primary-strong` (encima del texto en móvil, a la izquierda desde `md`); `dt` `text-sm text-muted-foreground`, `dd` `font-bold`.
-  - Celdas: "Apertura de puertas" (`Clock`, hora con " h": "18:00 h"), "Inicio del show" (`CalendarClock`, hora con " h": "21:00 h"; en la categoría deportes se llama "Inicio del partido", porque un partido no es un show), "Edad mínima" (`Users`, "Todo público" o "+N"), "Ingreso" (`QrCode`, "Entrada digital con QR").
-  - Las horas (hero e información) siempre llevan el sufijo " h" separado por un espacio ("21:00 h"); en "Información importante" siguen dentro de `<time dateTime>`.
+- **Información importante: eliminada** (Ronald, 2026-10-08). La edad mínima pasa a la línea de datos bajo el título (ver «Hero, 2026-10-08»), la hora de inicio ya está ahí, «Apertura de puertas» desaparece (el horario es inicio y fin; la hora de fin llega con la Fase 1B de `events-detail-landing`) e «Ingreso: entrada digital con QR» se quita.
 - **Lugar:** tarjeta `rounded-2xl ring-1 ring-border overflow-hidden`.
   - Bloque del mapa (`VenueMap`): `relative aspect-[4/3] md:aspect-[16/7] overflow-hidden bg-accent` (4:3 en móvil, unos 343 × 257 px a 375 px; 16:7 desde `md`). La fachada y el iframe ocupan la caja entera (`size-full`), así que cargar el mapa no desplaza el contenido (sin CLS). Depende de `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` (vía `publicEnv` de `@/lib/env`):
     - **Sin clave:** marcador con `MapPin` (`size-8 text-primary`) centrado, decorativo y entero `aria-hidden` (no es un mapa real). Sin botón ni iframe.
@@ -168,5 +168,11 @@ Para los eventos con mapa, la compra se hace en `/eventos/<slug>/entradas` (ver 
 - **Anti-patrón: cargos ocultos.** Bajo el total siempre "Precio final, sin cargos ocultos"; el total mostrado es el que se paga.
 - Targets táctiles ≥ 44px en la barra móvil, Guardar, Compartir, "Ver mapa", "Cómo llegar" y "Ver más en…".
 - Sin scroll horizontal de página a 375 px (el carrusel de relacionados tiene su propio scroll).
-- Metadata: `<Título del evento> | Mentec Tickets`, descripción = primer párrafo.
+- **Metadata y vista previa al compartir** (`buildEventMetadata`, spec `events-detail-landing`, Fase 1A): `metadataBase` = `APP_URL` en el layout raíz; las URLs relativas se resuelven contra él.
+  - `<title>`: `<Título del evento> | Mentec Tickets`.
+  - Descripción (`description`, `og:description`, `twitter:description`): "<Lugar>, <Ciudad> · <sábado 14 de noviembre>, <21:00> h. <primer párrafo>" (hora de Lima).
+  - `canonical` y `og:url`: `/eventos/<slug>` (absoluta con `APP_URL`).
+  - Open Graph: `type` `website`, `site_name` "Mentec Tickets", `locale` `es_PE`, `og:title` = título del evento (sin sufijo), `og:image` = la portada (`image_url`) con `og:image:alt` = el alt del hero.
+  - X: `summary_large_image` con título, descripción, imagen y alt iguales a Open Graph.
+  - Sin `robots`: la página se indexa. La metadata va en el `<head>` inicial (página prerenderizada; los bots sin JavaScript, como `facebookexternalhit`, la reciben bloqueante).
 - 404 propio: h1 "No encontramos este evento" + "Volver al inicio" (botón primario).

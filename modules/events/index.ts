@@ -1,5 +1,6 @@
 export { CategoryFilter } from "./components/CategoryFilter";
 export { CategoryGrid } from "./components/CategoryGrid";
+export { EventActionBar } from "./components/EventActionBar";
 export { EventCard } from "./components/EventCard";
 export { EventDetailHeader } from "./components/EventDetailHeader";
 export { EventDetailInfo } from "./components/EventDetailInfo";
@@ -33,6 +34,7 @@ export type {
   ManagedEventStatus,
   TicketType,
 } from "./types/events.types";
+export { buildEventMetadata } from "./utils/eventMetadata";
 export { filterEvents, getActiveFilterChips, getEventMonths, getFacetCounts, parseEventFilters } from "./utils/eventFilters";
 export { formatEventDate, formatEventPrice } from "./utils/formatEvent";
 export { getOrderTotal, MAX_TICKETS_PER_ORDER } from "./utils/ticketOrder";

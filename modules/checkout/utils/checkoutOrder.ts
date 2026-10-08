@@ -25,16 +25,15 @@ export function parseTicketQuantities(
 /**
  * Enlace de "Cambiar entradas" al paso 1 con la selección del pedido (inversa de `parseTicketQuantities`):
  * `<ticketTypeId>=<quantity>` en el orden de `items` y, si hay asientos, `asientos` al final con sus ids unidos
- * por `,`. Con mapa va a `/eventos/<slug>/entradas`; sin mapa, al ancla `#entradas` del detalle.
+ * por `,`. Siempre a la pantalla `/eventos/<slug>/entradas` (con o sin mapa del recinto).
  */
-export function buildChangeTicketsHref(order: Pick<CheckoutOrder, "event" | "items">, hasMap: boolean): string {
+export function buildChangeTicketsHref(order: Pick<CheckoutOrder, "event" | "items">): string {
   const params = new URLSearchParams();
   for (const { ticketTypeId, quantity } of order.items) params.append(ticketTypeId, String(quantity));
   const seatIds = order.items.flatMap((item) => item.seats?.map((seat) => seat.id) ?? []);
   if (seatIds.length > 0) params.append("asientos", seatIds.join(","));
 
-  const { slug } = order.event;
-  return hasMap ? `/eventos/${slug}/entradas?${params}` : `/eventos/${slug}?${params}#entradas`;
+  return `/eventos/${order.event.slug}/entradas?${params}`;
 }
 
 /**

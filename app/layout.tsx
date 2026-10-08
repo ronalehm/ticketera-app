@@ -4,6 +4,7 @@ import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import { Providers } from "./providers";
 
@@ -20,6 +21,7 @@ const creatoDisplay = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(env.APP_URL),
   title: "Mentec Tickets — Entradas para conciertos, teatro y más",
   description:
     "Compra entradas para conciertos, teatro, deportes, festivales y más en Perú. Pago seguro y entrada digital con Mentec Tickets.",
